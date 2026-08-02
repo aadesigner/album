@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db } from "@workspace/db";
+import { db } from "@workspace/db-tsconfig";
 import {
   usersTable,
   ordersTable,
@@ -11,8 +11,8 @@ import {
   bookSizesTable,
   appSettingsTable,
   siteAnalyticsTable,
-} from "@workspace/db";
-import { ipBlocklistTable } from "@workspace/db";
+} from "@workspace/db-tsconfig";
+import { ipBlocklistTable } from "@workspace/db-tsconfig";
 import { eq, count, sql, desc, ilike, and, or, ne, inArray } from "drizzle-orm";
 import { requireAdmin, invalidateCachedUser } from "../lib/auth";
 import { invalidatePendingBooksLimitCache } from "./projects";

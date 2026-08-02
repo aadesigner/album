@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db } from "@workspace/db";
-import { ordersTable, projectsTable, appSettingsTable } from "@workspace/db";
+import { db } from "@workspace/db-tsconfig";
+import { ordersTable, projectsTable, appSettingsTable } from "@workspace/db-tsconfig";
 import { eq, and, gte, count } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { queueProjectPdfGeneration } from "../lib/generateProjectPdf";

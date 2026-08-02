@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { useListCategories, useListBookSizes, useCreateProject, useGetAppSettings } from '@workspace/api-client-react';
+import { useListCategories, useListBookSizes, useCreateProject, useGetAppSettings } from '@workspace/api-client-react-tsconfig';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, ChevronRight, BookHeart, Check, BookX, Phone } from 'lucide-react';
 import { useLocation } from 'wouter';

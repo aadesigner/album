@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AdminLayout } from '@/components/layout/AdminLayout';
-import { useGetAdminSettings, useUpdateAdminSettings } from '@workspace/api-client-react';
+import { useGetAdminSettings, useUpdateAdminSettings } from '@workspace/api-client-react-tsconfig';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useForm } from 'react-hook-form';

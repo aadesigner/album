@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { AdminLayout } from '@/components/layout/AdminLayout';
-import { useGetAdminStats, useListAdminOrders, useUpdateAdminOrder } from '@workspace/api-client-react';
+import { useGetAdminStats, useListAdminOrders, useUpdateAdminOrder } from '@workspace/api-client-react-tsconfig';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar, Legend,

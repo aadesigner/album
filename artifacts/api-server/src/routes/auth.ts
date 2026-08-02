@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db } from "@workspace/db";
-import { usersTable } from "@workspace/db";
+import { db } from "@workspace/db-tsconfig";
+import { usersTable } from "@workspace/db-tsconfig";
 import { eq } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import {

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AdminLayout } from '@/components/layout/AdminLayout';
-import { useListAdminOrders, useUpdateAdminOrder } from '@workspace/api-client-react';
+import { useListAdminOrders, useUpdateAdminOrder } from '@workspace/api-client-react-tsconfig';
 import { format } from 'date-fns';
 import { RefreshCw, Eye, FileX, ExternalLink, X, Download, StickyNote } from 'lucide-react';
 import { Button } from '@/components/ui/button';

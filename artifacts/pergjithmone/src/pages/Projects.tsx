@@ -3,7 +3,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import {
   useListProjects, useDeleteProject, useUpdateProject,
   getListProjectsQueryKey,
-} from '@workspace/api-client-react';
+} from '@workspace/api-client-react-tsconfig';
 import { Link, useLocation } from 'wouter';
 import { format } from 'date-fns';
 import { sq as sqLocale } from 'date-fns/locale';

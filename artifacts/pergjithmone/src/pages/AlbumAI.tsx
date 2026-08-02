@@ -4,7 +4,7 @@ import { SEOMeta } from '@/components/SEOMeta';
 import {
   useListCategories, useListBookSizes, useGetAppSettings,
   useCreateProject, useAddProjectPage, getProject,
-} from '@workspace/api-client-react';
+} from '@workspace/api-client-react-tsconfig';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Sparkles, UploadCloud, X, Check, ChevronRight, ArrowLeft,

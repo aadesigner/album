@@ -1,5 +1,5 @@
-import { db } from "@workspace/db";
-import { siteAnalyticsTable } from "@workspace/db";
+import { db } from "@workspace/db-tsconfig";
+import { siteAnalyticsTable } from "@workspace/db-tsconfig";
 import { logger } from "./logger";
 
 export type SecurityEventType = "rate_limited" | "blocked_ip";

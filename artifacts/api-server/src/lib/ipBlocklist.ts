@@ -1,5 +1,5 @@
-import { db } from "@workspace/db";
-import { ipBlocklistTable } from "@workspace/db";
+import { db } from "@workspace/db-tsconfig";
+import { ipBlocklistTable } from "@workspace/db-tsconfig";
 
 // Short-TTL in-memory cache of blocked IPs so the early-middleware check in
 // app.ts doesn't hit the DB on every single request. Structured as a plain

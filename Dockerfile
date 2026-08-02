@@ -18,6 +18,7 @@ COPY scripts ./scripts
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @workspace/api-server build
 
+RUN chmod +x /app/artifacts/api-server/start.sh
 WORKDIR /app/artifacts/api-server
 EXPOSE 8080
-CMD ["node", "--enable-source-maps", "dist/index.mjs"]
+CMD ["./start.sh"]

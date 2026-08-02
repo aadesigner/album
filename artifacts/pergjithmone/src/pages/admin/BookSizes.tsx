@@ -3,7 +3,7 @@ import { AdminLayout } from '@/components/layout/AdminLayout';
 import {
   useListAdminBookSizes, useCreateAdminBookSize, useUpdateAdminBookSize, useDeleteAdminBookSize,
   getListAdminBookSizesQueryKey, getListBookSizesQueryKey,
-} from '@workspace/api-client-react';
+} from '@workspace/api-client-react-tsconfig';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Plus, Edit2, Trash2, SquareSquare } from 'lucide-react';

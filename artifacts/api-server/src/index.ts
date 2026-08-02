@@ -1,6 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { seedSuperAdmin } from "./lib/seedSuperAdmin";
+import { seedCatalog } from "./lib/seedCatalog";
 
 // ── Catch unhandled promise rejections so the process doesn't silently crash
 process.on("unhandledRejection", (reason) => {
@@ -33,7 +34,7 @@ app.listen(port, (err) => {
 
   logger.info({ port }, "Server listening");
 
-  seedSuperAdmin().catch((seedErr) => {
-    logger.error({ err: seedErr }, "Failed to provision super-admin account");
+  Promise.all([seedCatalog(), seedSuperAdmin()]).catch((seedErr) => {
+    logger.error({ err: seedErr }, "Failed during startup seed");
   });
 });

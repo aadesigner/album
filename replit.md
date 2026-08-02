@@ -8,8 +8,8 @@ Albanian-language photobook SaaS — customers pick a category/style/size, desig
 - `pnpm --filter @workspace/pergjithmone run dev` — run the web frontend (previewPath `/`)
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from `lib/api-spec/openapi.yaml` (never hand-edit generated files in `lib/api-client-react` / `lib/api-zod`)
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
+- `pnpm --filter @workspace/api-spec-tsconfig run codegen` — regenerate API hooks and Zod schemas from `lib/api-spec/openapi.yaml` (never hand-edit generated files in `lib/api-client-react` / `lib/api-zod`)
+- `pnpm --filter @workspace/db-tsconfig run push` — push DB schema changes (dev only)
 - Required env: `DATABASE_URL` (PostgreSQL connection string). Recommended: `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` (falls back to insecure dev defaults if unset — set real values before going to production). Optional: `RECAPTCHA_SITE_KEY` / `RECAPTCHA_SECRET_KEY` (auth forms degrade gracefully without them). In production set `CORS_ORIGINS` to a comma-separated list of your allowed `https://` origins.
 
 ## Stack
@@ -52,8 +52,8 @@ _Populate as you build — explicit user instructions worth remembering across s
 
 ## Gotchas
 
-- After editing `lib/api-spec/openapi.yaml`, always regenerate with `pnpm --filter @workspace/api-spec run codegen` — never hand-edit generated files. See `.agents/memory/orval-codegen-quirks.md` for OpenAPI constraints (Orval 8.21 / Zod v3 collisions).
-- After editing DB schema in `lib/db`, run `pnpm --filter @workspace/db run push`, then restart the API server workflow.
+- After editing `lib/api-spec/openapi.yaml`, always regenerate with `pnpm --filter @workspace/api-spec-tsconfig run codegen` — never hand-edit generated files. See `.agents/memory/orval-codegen-quirks.md` for OpenAPI constraints (Orval 8.21 / Zod v3 collisions).
+- After editing DB schema in `lib/db`, run `pnpm --filter @workspace/db-tsconfig run push`, then restart the API server workflow.
 - All `/admin/*` API routes must use the `requireAdmin` middleware — see `.agents/memory/admin-controls-architecture.md`.
 
 ## Pointers

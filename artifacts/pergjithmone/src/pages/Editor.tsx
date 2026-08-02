@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Stage, Layer, Rect, Text as KonvaText, Image as KonvaImage, Transformer } from 'react-konva';
-import { useGetProject, useCreateOrder, useGetOrderWhatsapp, useListBookSizes, getGetProjectQueryKey, getGetOrderWhatsappQueryKey, getListProjectsQueryKey } from '@workspace/api-client-react';
+import { useGetProject, useCreateOrder, useGetOrderWhatsapp, useListBookSizes, getGetProjectQueryKey, getGetOrderWhatsappQueryKey, getListProjectsQueryKey } from '@workspace/api-client-react-tsconfig';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, ShoppingBag, LayoutTemplate, Image as ImageIcon, Type,

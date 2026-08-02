@@ -1,6 +1,6 @@
 import React from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { useListOrders } from '@workspace/api-client-react';
+import { useListOrders } from '@workspace/api-client-react-tsconfig';
 import { Link } from 'wouter';
 import { format } from 'date-fns';
 import { sq as sqLocale } from 'date-fns/locale';

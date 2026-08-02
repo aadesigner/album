@@ -1,6 +1,6 @@
 import { Helmet } from 'react-helmet-async';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { useGetAppSettings } from '@workspace/api-client-react';
+import { useGetAppSettings } from '@workspace/api-client-react-tsconfig';
 
 const SITE_URL = import.meta.env.VITE_SITE_URL ?? 'https://pergjithmone.al';
 const DEFAULT_OG = `${SITE_URL}/og-default.jpg`;

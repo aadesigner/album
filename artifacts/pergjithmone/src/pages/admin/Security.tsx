@@ -5,7 +5,7 @@ import {
   useCreateAdminIpBlocklistEntry,
   useDeleteAdminIpBlocklistEntry,
   useListAdminSecurityEvents,
-} from '@workspace/api-client-react';
+} from '@workspace/api-client-react-tsconfig';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ShieldAlert, ShieldBan, Trash2, Ban, AlertOctagon, Clock } from 'lucide-react';

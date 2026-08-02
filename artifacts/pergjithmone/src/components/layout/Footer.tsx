@@ -1,7 +1,7 @@
 import React from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Link } from 'wouter';
-import { useGetAppSettings } from '@workspace/api-client-react';
+import { useGetAppSettings } from '@workspace/api-client-react-tsconfig';
 import { Instagram } from 'lucide-react';
 
 const INSTAGRAM_URL = 'https://www.instagram.com/pergjithmone.al/';

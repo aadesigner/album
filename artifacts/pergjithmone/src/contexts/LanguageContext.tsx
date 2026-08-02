@@ -78,7 +78,7 @@ const translations: Translations = {
   'wizard.s3.title': { sq: 'Zgjidhni Madhësinë', en: 'Choose Your Size' },
   'wizard.s3.subtitle': { sq: 'Madhësia nuk mund të ndryshohet pasi të keni krijuar albumin.', en: 'The size cannot be changed after you create the album.' },
   'wizard.s3.basePages': { sq: 'faqe bazë të përfshira', en: 'base pages included' },
-  'wizard.s3.extraPage': { sq: 'LEK / 2 faqe shtesë', en: 'LEK / 2 extra pages' },
+  'wizard.s3.extraPage': { sq: 'LEK / fletë shtesë', en: 'LEK / extra sheet' },
   'wizard.s3.paper': { sq: 'Letër premium mat 200g', en: 'Premium matte 200g paper' },
   'wizard.s3.layflat': { sq: 'Hapje e sheshtë (layflat)', en: 'Lay-flat binding' },
   'wizard.s3.create': { sq: 'Krijo Albumin', en: 'Create Album' },
@@ -100,11 +100,16 @@ interface LanguageContextType {
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
-// Albanian-speaking countries for geo-routing
-const ALBANIAN_COUNTRIES = new Set(['AL', 'XK', 'MK']); // Albania, Kosovo, North Macedonia
+// Only Albania + Kosovo auto-select Albanian. Everyone else gets English.
+const ALBANIAN_COUNTRIES = new Set(['AL', 'XK']);
+
+function langFromCountry(country: string): Language {
+  return ALBANIAN_COUNTRIES.has(country.toUpperCase()) ? 'sq' : 'en';
+}
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
-  const [lang, setLangState] = useState<Language>('sq');
+  // Default English until geo resolves so international visitors never flash Albanian.
+  const [lang, setLangState] = useState<Language>('en');
 
   useEffect(() => {
     const saved = localStorage.getItem('pergjithmone_lang');
@@ -114,24 +119,22 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // No preference saved: try geo detection first, fallback to browser lang
+    // No preference saved: Cloudflare country via /api/geo (handled on the
+    // frontend edge so CF-IPCountry is available even when the API is separate).
     const base = (import.meta as any).env?.BASE_URL?.replace(/\/$/, '') || '';
     fetch(`${base}/api/geo`, { signal: AbortSignal.timeout(3000) })
       .then(r => r.json())
       .then((data: { country?: string }) => {
         const country = (data.country || '').toUpperCase();
-        if (ALBANIAN_COUNTRIES.has(country)) {
-          setLangState('sq');
-        } else if (country && country !== 'XX') {
-          setLangState('en');
-        } else {
-          // Geo inconclusive — fall back to browser language
-          const browserLang = navigator.language.toLowerCase();
-          setLangState(browserLang.startsWith('sq') ? 'sq' : 'en');
+        if (country && country !== 'XX' && country !== 'T1') {
+          setLangState(langFromCountry(country));
+          return;
         }
+        // Geo inconclusive — English for everyone except Albanian browser locale
+        const browserLang = navigator.language.toLowerCase();
+        setLangState(browserLang.startsWith('sq') ? 'sq' : 'en');
       })
       .catch(() => {
-        // Geo failed — fall back to browser language
         const browserLang = navigator.language.toLowerCase();
         setLangState(browserLang.startsWith('sq') ? 'sq' : 'en');
       });

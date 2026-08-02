@@ -1,0 +1,18 @@
+# Railway → api-server → Settings:
+#   Root Directory     = /
+#   Config-as-code     = /artifacts/api-server/railway.toml
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+watchPatterns = [
+  "/artifacts/api-server/**",
+  "/lib/**",
+  "/package.json",
+  "/pnpm-lock.yaml",
+  "/pnpm-workspace.yaml",
+  "/Dockerfile",
+]
+
+[deploy]
+restartPolicyType = "ON_FAILURE"

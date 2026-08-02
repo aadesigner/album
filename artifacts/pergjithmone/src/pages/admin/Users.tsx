@@ -4,7 +4,7 @@ import {
   useListAdminUsers, useUpdateAdminUser, useDeleteAdminUser,
   useListAdminOrders, useUpdateAdminOrder,
   getListAdminUsersQueryKey,
-} from '@workspace/api-client-react';
+} from '@workspace/api-client-react-tsconfig';
 import { format } from 'date-fns';
 import { Search, UserPlus, Trash2, ShieldBan, ShieldCheck, RefreshCw, Images, Eye, ExternalLink, Download, X, Pencil } from 'lucide-react';
 import { PhoneInput } from '@/components/ui/PhoneInput';

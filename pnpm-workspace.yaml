@@ -35,7 +35,11 @@ minimumReleaseAgeExclude:
   - stripe-replit-sync
 
 packages:
-  - artifacts/*
+  # Only real apps are under artifacts/ and intentionally listed.
+  # Libraries live under lib/* and are named *-tsconfig so Railway's
+  # monorepo importer treats them as non-deployable config packages.
+  - artifacts/api-server
+  - artifacts/pergjithmone
   - lib/*
   - lib/integrations/*
   - scripts

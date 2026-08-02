@@ -8,8 +8,8 @@ import {
   getGetMeQueryKey,
   setAuthTokenGetter,
   setUnauthorizedHandler,
-} from '@workspace/api-client-react';
-import type { LoginInput, RegisterInput, User } from '@workspace/api-client-react';
+} from '@workspace/api-client-react-tsconfig';
+import type { LoginInput, RegisterInput, User } from '@workspace/api-client-react-tsconfig';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';

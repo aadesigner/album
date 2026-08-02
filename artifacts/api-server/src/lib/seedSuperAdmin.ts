@@ -1,5 +1,5 @@
-import { db } from "@workspace/db";
-import { usersTable } from "@workspace/db";
+import { db } from "@workspace/db-tsconfig";
+import { usersTable } from "@workspace/db-tsconfig";
 import { eq } from "drizzle-orm";
 import { hashPassword } from "./auth";
 import { logger } from "./logger";

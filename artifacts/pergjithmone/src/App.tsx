@@ -8,7 +8,7 @@ import { Route, Switch, Router as WouterRouter, useLocation } from 'wouter';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { LanguageProvider } from '@/contexts/LanguageContext';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
-import { useGetAppSettings } from '@workspace/api-client-react';
+import { useGetAppSettings } from '@workspace/api-client-react-tsconfig';
 import { useAuth } from '@/contexts/AuthContext';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -52,13 +52,13 @@ const AdminSecurity   = lazy(() => import('@/pages/admin/Security'));
 // Shown by Suspense while a heavy page chunk (editor, AI album, admin, etc.)
 // is downloading — branded instead of a bare spinner so the wait feels intentional.
 function PageLoader() {
-  let lang: 'sq' | 'en' = 'sq';
+  let lang: 'sq' | 'en' = 'en';
   try {
     // useLanguage requires LanguageProvider; PageLoader always renders inside it
     // via <Suspense> in <Router />, but guard anyway since Suspense fallbacks
     // can theoretically render before providers mount during fast refresh.
     lang = useLanguage().lang;
-  } catch { /* fall back to sq */ }
+  } catch { /* fall back to en */ }
 
   return (
     <div style={{

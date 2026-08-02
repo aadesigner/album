@@ -1,11 +1,11 @@
 import { Router, type IRouter } from "express";
-import { db } from "@workspace/db";
+import { db } from "@workspace/db-tsconfig";
 import {
   projectsTable,
   projectPagesTable,
   bookSizesTable,
   appSettingsTable,
-} from "@workspace/db";
+} from "@workspace/db-tsconfig";
 import { eq, and, ne, inArray, count } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { v4 as uuidv4 } from "uuid";

@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db } from "@workspace/db";
-import { siteAnalyticsTable } from "@workspace/db";
+import { db } from "@workspace/db-tsconfig";
+import { siteAnalyticsTable } from "@workspace/db-tsconfig";
 import { sql } from "drizzle-orm";
 import { requireAdmin } from "../lib/auth";
 

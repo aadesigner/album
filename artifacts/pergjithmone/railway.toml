@@ -1,15 +1,26 @@
-# In Railway → pergjithmone → Settings:
-#   Root Directory     = /   (repo root)
+# Railway → pergjithmone → Settings:
+#   Root Directory     = /
 #   Config-as-code     = /artifacts/pergjithmone/railway.toml
 #
-# Variables:
+# Variables (required):
 #   BASE_PATH=/
 #   PORT=8080
-#   API_URL=https://YOUR-API-SERVER.up.railway.app   (no trailing slash)
+#   API_URL=https://YOUR-API-SERVER.up.railway.app
+#     or private: http://${{api-server.RAILWAY_PRIVATE_DOMAIN}}:${{api-server.PORT}}
+#     (no trailing slash — Create Album hangs without this)
 
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile.web"
+watchPatterns = [
+  "/artifacts/pergjithmone/**",
+  "/lib/**",
+  "/attached_assets/**",
+  "/package.json",
+  "/pnpm-lock.yaml",
+  "/pnpm-workspace.yaml",
+  "/Dockerfile.web",
+]
 
 [deploy]
 restartPolicyType = "ON_FAILURE"

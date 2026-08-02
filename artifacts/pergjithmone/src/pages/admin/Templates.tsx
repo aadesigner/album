@@ -5,7 +5,7 @@ import {
   useCreateAdminTemplate, useUpdateAdminTemplate, useDeleteAdminTemplate,
   getListAdminTemplatesQueryKey, getListTemplatesQueryKey,
   getListSubcategoriesQueryOptions,
-} from '@workspace/api-client-react';
+} from '@workspace/api-client-react-tsconfig';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ImageUploadInput } from '@/components/admin/ImageUploadInput';

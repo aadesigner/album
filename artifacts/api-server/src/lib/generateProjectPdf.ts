@@ -1,7 +1,7 @@
 import path from "path";
 import fs from "fs";
-import { db } from "@workspace/db";
-import { projectsTable, projectPagesTable, bookSizesTable } from "@workspace/db";
+import { db } from "@workspace/db-tsconfig";
+import { projectsTable, projectPagesTable, bookSizesTable } from "@workspace/db-tsconfig";
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
 import { uploadsDir } from "../routes/uploads";

@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db } from "@workspace/db";
-import { categoriesTable, subcategoriesTable } from "@workspace/db";
+import { db } from "@workspace/db-tsconfig";
+import { categoriesTable, subcategoriesTable } from "@workspace/db-tsconfig";
 import { eq, asc } from "drizzle-orm";
 
 const router: IRouter = Router();

@@ -10,15 +10,29 @@ const GEO_TTL = 5 * 60 * 1000; // 5 minutes
 // Returns { country: "AL" | "XK" | ... } using Cloudflare header first,
 // then ipapi.co as fallback.
 router.get("/geo", async (req, res): Promise<void> => {
-  // Cloudflare sets CF-IPCountry on every request (our reverse proxy runs behind Cloudflare)
-  const cfCountry = (req.headers["cf-ipcountry"] as string | undefined)?.trim().toUpperCase();
-  if (cfCountry && cfCountry !== "XX" && cfCountry !== "T1") {
-    res.json({ country: cfCountry });
+  // Cloudflare sets CF-IPCountry when the request passed through CF (or was
+  // forwarded by the frontend proxy). Also accept common CDN equivalents.
+  const headerCountry = [
+    req.headers["cf-ipcountry"],
+    req.headers["cloudfront-viewer-country"],
+    req.headers["x-vercel-ip-country"],
+    req.headers["x-country-code"],
+  ]
+    .map((v) => (typeof v === "string" ? v.trim().toUpperCase() : ""))
+    .find((v) => /^[A-Z]{2}$/.test(v) && v !== "XX" && v !== "T1");
+
+  if (headerCountry) {
+    res.json({ country: headerCountry });
     return;
   }
 
-  // Fallback: ipapi.co free tier (no key required, 1k req/day)
-  const ip = (req.ip || "127.0.0.1").replace(/^::ffff:/, "");
+  // Prefer Cloudflare's connecting IP, then X-Forwarded-For, then socket IP.
+  const forwarded = (req.headers["cf-connecting-ip"] as string | undefined)
+    || (req.headers["x-real-ip"] as string | undefined)
+    || (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim()
+    || req.ip
+    || "127.0.0.1";
+  const ip = forwarded.replace(/^::ffff:/, "");
 
   // Skip lookup for loopback / private ranges
   if (ip === "127.0.0.1" || ip.startsWith("192.168.") || ip.startsWith("10.") || ip === "::1") {

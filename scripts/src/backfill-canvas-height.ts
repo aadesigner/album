@@ -7,11 +7,11 @@
 // artifacts/pergjithmone/src/lib/designs.ts) — this script aligns existing
 // rows with that convention.
 //
-// Run once via: pnpm --filter @workspace/scripts exec tsx src/backfill-canvas-height.ts
+// Run once via: pnpm --filter @workspace/scripts-tsconfig exec tsx src/backfill-canvas-height.ts
 // (add --apply to actually write; without it, runs as a dry-run report only)
 
-import { db } from "@workspace/db";
-import { projectsTable, projectPagesTable, bookSizesTable } from "@workspace/db/schema";
+import { db } from "@workspace/db-tsconfig";
+import { projectsTable, projectPagesTable, bookSizesTable } from "@workspace/db-tsconfig/schema";
 import { eq } from "drizzle-orm";
 
 const DESIGN_W = 600;

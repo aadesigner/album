@@ -1,4 +1,4 @@
-import { type User } from "@workspace/db";
+import { type User } from "@workspace/db-tsconfig";
 
 declare global {
   namespace Express {

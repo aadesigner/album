@@ -1,8 +1,8 @@
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { type Request, type Response, type NextFunction } from "express";
-import { db } from "@workspace/db";
-import { usersTable } from "@workspace/db";
+import { db } from "@workspace/db-tsconfig";
+import { usersTable } from "@workspace/db-tsconfig";
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
 

@@ -1,5 +1,5 @@
-import { db } from "@workspace/db";
-import { appSettingsTable } from "@workspace/db";
+import { db } from "@workspace/db-tsconfig";
+import { appSettingsTable } from "@workspace/db-tsconfig";
 
 // ── Security & abuse-limit settings ─────────────────────────────────────────
 // Every threshold in this file used to be a hardcoded constant. They now live
