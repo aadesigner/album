@@ -3,27 +3,20 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 
-const rawPort = process.env.PORT;
-
-if (!rawPort) {
-  throw new Error(
-    'PORT environment variable is required but was not provided.',
-  );
-}
-
+// Defaults so Railway/production builds work without Replit-style env injection.
+// Set BASE_PATH=/ for a root domain; use e.g. /app/ if hosting under a subpath.
+const basePath = process.env.BASE_PATH || '/';
+const rawPort = process.env.PORT || '4173';
 const port = Number(rawPort);
 
 if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-const basePath = process.env.BASE_PATH;
-
-if (!basePath) {
-  throw new Error(
-    'BASE_PATH environment variable is required but was not provided.',
-  );
-}
+const apiTarget =
+  process.env.API_URL ||
+  process.env.VITE_API_URL ||
+  'http://localhost:8787';
 
 export default defineConfig({
   base: basePath,
@@ -75,7 +68,7 @@ export default defineConfig({
     proxy: {
       '/api': {
         // 8080 is often taken on Windows by EDB/Apache; local API uses 8787.
-        target: 'http://localhost:8787',
+        target: apiTarget,
         changeOrigin: true,
       },
     },
@@ -84,5 +77,12 @@ export default defineConfig({
     port,
     host: '0.0.0.0',
     allowedHosts: true,
+    // Production preview on Railway: forward /api to the api-server service.
+    proxy: {
+      '/api': {
+        target: apiTarget,
+        changeOrigin: true,
+      },
+    },
   },
 });

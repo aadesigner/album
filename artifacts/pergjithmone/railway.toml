@@ -1,0 +1,15 @@
+# In Railway → pergjithmone → Settings:
+#   Root Directory     = /   (repo root)
+#   Config-as-code     = /artifacts/pergjithmone/railway.toml
+#
+# Variables:
+#   BASE_PATH=/
+#   PORT=8080
+#   API_URL=https://YOUR-API-SERVER.up.railway.app   (no trailing slash)
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile.web"
+
+[deploy]
+restartPolicyType = "ON_FAILURE"

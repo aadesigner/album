@@ -11,6 +11,5 @@
 **/*.md
 .agents
 .cursor
-attached_assets
 artifacts/mockup-sandbox
 artifacts/pergjithmone/e2e
