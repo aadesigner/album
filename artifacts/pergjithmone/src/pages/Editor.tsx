@@ -165,6 +165,7 @@ function KShapeEl({el,isSelected,onSelect,onChange,onGestureStart,onDragActive,s
     cornerRadius={cr} rotation={el.rotation} opacity={el.opacity??1}
     perfectDrawEnabled={false}
     onClick={onSelect} onTap={onSelect} draggable={isSelected}
+    dragDistance={14}
     dragBoundFunc={(pos:any)=>dragBoundBox(pos,el.w,el.h,canvasH)}
     onDragStart={()=>{onGestureStart?.();onDragActive?.(true);}}
     onDragEnd={(e:any)=>{
@@ -220,6 +221,7 @@ function KImgEl({el,isSelected,onSelect,onChange,onGestureStart,onDragActive,sha
     crop={coverCrop}
     onClick={onSelect} onTap={onSelect} draggable={isSelected}
     perfectDrawEnabled={false}
+    dragDistance={14}
     dragBoundFunc={(pos:any)=>dragBoundBox(pos,el.w,el.h,canvasH)}
     onDragStart={()=>{onGestureStart?.();onDragActive?.(true);}}
     onDragEnd={(e:any)=>{
@@ -252,7 +254,7 @@ function KTxtEl({el,onSelect,onChange,onStartEdit,onGestureStart,onDragActive,is
     opacity={isEditing?0:(el.opacity??1)}
     wrap="word" perfectDrawEnabled={false} shadowForStrokeEnabled={false}
     transformsEnabled="all"
-    dragDistance={2}
+    dragDistance={14}
     onClick={onSelect} onTap={onSelect} onDblClick={onStartEdit} onDblTap={onStartEdit}
     draggable={isSelected && !isEditing}
     dragBoundFunc={(pos:any)=>dragBoundBox(pos,el.w,el.h,canvasH)}
@@ -293,10 +295,11 @@ function KPlaceholderEl({el,isSelected,onSelect,onOpenPhotos,shapeRefs}: {
 // Page Canvas
 // ─────────────────────────────────────────────────────────────────────────────
 
-function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos,onDelete,onGestureStart,editRequestId,onEditRequestHandled,isActive,pageW,pageH,canvasH,shapeRefs,side,isMobile}: {
+function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos,onDelete,onGestureStart,onElementDragActive,editRequestId,onEditRequestHandled,isActive,pageW,pageH,canvasH,shapeRefs,side,isMobile}: {
   page:PageDef; elements:EditorElement[]; selectedId:string|null;
   onSelectId:(id:string|null)=>void; onChangeEl:(id:string,c:Partial<EditorElement>)=>void;
   onOpenPhotos?:()=>void; onDelete?:()=>void; onGestureStart?:()=>void;
+  onElementDragActive?:(active:boolean)=>void;
   editRequestId?:string|null; onEditRequestHandled?:()=>void;
   isActive:boolean; pageW:number; pageH:number; canvasH:number;
   shapeRefs:React.MutableRefObject<Record<string,any>>; side:'left'|'right'|'solo'; isMobile?:boolean;
@@ -316,6 +319,7 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
   // Hide transformer + delete chip without setState (avoids Stage re-render mid-drag).
   const setDragActive=useCallback((active:boolean)=>{
     draggingRef.current=active;
+    onElementDragActive?.(active);
     if (deleteBtnRef.current) deleteBtnRef.current.style.visibility=active?'hidden':'visible';
     if (!trRef.current) return;
     if (active) {
@@ -326,7 +330,7 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
       trRef.current.nodes(node?[node]:[]);
       trRef.current.getLayer()?.batchDraw();
     }
-  },[selectedId,editId,shapeRefs]);
+  },[selectedId,editId,shapeRefs,onElementDragActive]);
 
   const startEdit=useCallback((el:EditorElement)=>{
     setEditId(el.id); setEditText(el.text||''); editMinHRef.current=el.h; onSelectId(el.id);
@@ -664,11 +668,12 @@ function LockedPageView({pageW,pageH,role,side}: {pageW:number;pageH:number;role
 // Spread View — realistic book
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SpreadView = React.memo(function SpreadView({spread,spreadContent,selectedId,activeSide,onActiveSide,onSelectId,onChangeEl,onOpenPhotos,onDelete,onGestureStart,editRequestId,onEditRequestHandled,pageW,pageH,canvasH,shapeRefs,isMobile}: {
+const SpreadView = React.memo(function SpreadView({spread,spreadContent,selectedId,activeSide,onActiveSide,onSelectId,onChangeEl,onOpenPhotos,onDelete,onGestureStart,onElementDragActive,editRequestId,onEditRequestHandled,pageW,pageH,canvasH,shapeRefs,isMobile}: {
   spread:SpreadDef; spreadContent:Record<number,EditorElement[]>;
   selectedId:string|null; activeSide:'left'|'right'; onActiveSide:(s:'left'|'right')=>void;
   onSelectId:(id:string|null)=>void; onChangeEl:(pid:number,eid:string,c:Partial<EditorElement>)=>void;
   onOpenPhotos?:()=>void; onDelete?:()=>void; onGestureStart?:()=>void;
+  onElementDragActive?:(active:boolean)=>void;
   editRequestId?:string|null; onEditRequestHandled?:()=>void;
   pageW:number; pageH:number; canvasH:number;
   shapeRefs:React.MutableRefObject<Record<string,any>>; isMobile?:boolean;
@@ -683,7 +688,8 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
         selectedId={selectedId}
         onSelectId={(id)=>{ onActiveSide(side); onSelectId(id); }}
         onChangeEl={(eid,c)=>onChangeEl(page.dbId,eid,c)} onOpenPhotos={onOpenPhotos} onDelete={onDelete}
-        onGestureStart={onGestureStart} editRequestId={editRequestId} onEditRequestHandled={onEditRequestHandled}
+        onGestureStart={onGestureStart} onElementDragActive={onElementDragActive}
+        editRequestId={editRequestId} onEditRequestHandled={onEditRequestHandled}
         isActive={activeSide===side} pageW={pageW} pageH={pageH} canvasH={canvasH} shapeRefs={shapeRefs} side={side} isMobile={isMobile}/>
     </div>;
   };
@@ -701,7 +707,8 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
         <PageCanvas page={soloPage} elements={spreadContent[soloPage.dbId]??[]}
           selectedId={selectedId} onSelectId={onSelectId}
           onChangeEl={(eid,c)=>onChangeEl(soloPage.dbId,eid,c)} onOpenPhotos={onOpenPhotos} onDelete={onDelete}
-          onGestureStart={onGestureStart} editRequestId={editRequestId} onEditRequestHandled={onEditRequestHandled}
+          onGestureStart={onGestureStart} onElementDragActive={onElementDragActive}
+          editRequestId={editRequestId} onEditRequestHandled={onEditRequestHandled}
           isActive={true} pageW={pageW} pageH={pageH} canvasH={canvasH} shapeRefs={shapeRefs} side="solo" isMobile={isMobile}/>
       </div>
     );
@@ -741,7 +748,8 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
                 onSelectId={id=>{ onActiveSide(activeSide); onSelectId(id); }}
                 onChangeEl={(eid,c)=>onChangeEl(page.dbId,eid,c)}
                 onOpenPhotos={onOpenPhotos} onDelete={onDelete}
-                onGestureStart={onGestureStart} editRequestId={editRequestId} onEditRequestHandled={onEditRequestHandled}
+                onGestureStart={onGestureStart} onElementDragActive={onElementDragActive}
+                editRequestId={editRequestId} onEditRequestHandled={onEditRequestHandled}
                 isActive={true} pageW={pageW} pageH={pageH} canvasH={canvasH} shapeRefs={shapeRefs} side="solo" isMobile={true}/>
           }
         </div>
@@ -954,10 +962,10 @@ const SpreadNav = React.memo(function SpreadNav({spreads,current,onChange,onAddS
     const dy=e.changedTouches[0].clientY-swipeRef.current.y;
     const dt=Math.max(1,Date.now()-swipeRef.current.t);
     swipeRef.current=null;
-    // Must be more horizontal than vertical, and either fast (>0.45 px/ms) or long (>65 px)
+    // Must be more horizontal than vertical, and either quick or a short flick.
     if(Math.abs(dx)<=Math.abs(dy)) return;
     const velocity=Math.abs(dx)/dt;
-    if(Math.abs(dx)<65&&velocity<0.45) return;
+    if(Math.abs(dx)<36&&velocity<0.28) return;
     if(dx<0&&current<spreads.length-1) onChange(current+1); // swipe left → next spread
     else if(dx>0&&current>0)           onChange(current-1); // swipe right → prev spread
   };
@@ -1719,15 +1727,19 @@ export default function Editor() {
   },[]);
 
   // Native canvas swipe — React onTouch* on the wrapper often never fires because
-  // Konva owns the canvas. Elements are only draggable when selected, so an
-  // unselected page can swipe left/right to change page/spread.
+  // Konva owns the canvas. Block only while an element is mid-drag/transform so
+  // soft left/right flicks still change page/spread even with a selection.
+  const elementDragActiveRef=useRef(false);
+  const onElementDragActive=useCallback((active:boolean)=>{
+    elementDragActiveRef.current=active;
+  },[]);
   const pageSwipeRef=useRef({
     spreadIdx, spreadsLen:spreads.length, isSolo:!!currentSpread?.isSolo,
-    activeSide, selectedId, isMobile,
+    activeSide, isMobile,
   });
   pageSwipeRef.current={
     spreadIdx, spreadsLen:spreads.length, isSolo:!!currentSpread?.isSolo,
-    activeSide, selectedId, isMobile,
+    activeSide, isMobile,
   };
 
   useEffect(()=>{
@@ -1735,35 +1747,44 @@ export default function Editor() {
     if(!el) return;
     let start:{x:number;y:number;t:number}|null=null;
     let armed=false;
+    const onCancel=()=>{ start=null; armed=false; };
+
+    const isFormTarget=(t:EventTarget|null)=>{
+      const n=t as HTMLElement|null;
+      if(!n||typeof n.closest!=='function') return false;
+      return Boolean(n.closest('textarea,input,select,[contenteditable="true"]'));
+    };
 
     const onStart=(e:TouchEvent)=>{
-      if(e.touches.length!==1){ start=null; armed=false; return; }
-      // Never compete with element drag/transform — that made text feel sluggish.
-      if(pageSwipeRef.current.selectedId){ start=null; armed=false; return; }
+      if(e.touches.length!==1||elementDragActiveRef.current||isFormTarget(e.target)){
+        onCancel(); return;
+      }
       start={x:e.touches[0].clientX,y:e.touches[0].clientY,t:Date.now()};
       armed=false;
     };
     const onMove=(e:TouchEvent)=>{
       if(!start||e.touches.length!==1) return;
+      // If Konva already started an element drag before we armed, yield to it.
+      if(elementDragActiveRef.current){ onCancel(); return; }
       const dx=e.touches[0].clientX-start.x;
       const dy=e.touches[0].clientY-start.y;
-      if(!armed && Math.abs(dx)>14 && Math.abs(dx)>Math.abs(dy)*1.2) armed=true;
-      if(armed) e.preventDefault();
+      // Arm early; stopPropagation in capture so Konva never starts a drag on this flick.
+      if(!armed && Math.abs(dx)>6 && Math.abs(dx)>=Math.abs(dy)) armed=true;
+      if(armed){ e.preventDefault(); e.stopPropagation(); }
     };
     const finish=(e:TouchEvent)=>{
       if(!start) return;
+      if(elementDragActiveRef.current){ onCancel(); return; }
       const dx=e.changedTouches[0].clientX-start.x;
       const dy=e.changedTouches[0].clientY-start.y;
       const dt=Math.max(1,Date.now()-start.t);
-      const wasArmed=armed;
       start=null; armed=false;
-      if(Math.abs(dx)<=Math.abs(dy)*1.15) return;
+      // Mostly horizontal; accept soft flicks (~24px or quick velocity).
+      if(Math.abs(dx)<=Math.abs(dy)) return;
       const vel=Math.abs(dx)/dt;
-      if(!wasArmed && Math.abs(dx)<40 && vel<0.35) return;
-      if(Math.abs(dx)<36 && vel<0.32) return;
+      if(Math.abs(dx)<24 && vel<0.20) return;
 
       const s=pageSwipeRef.current;
-      // Clear selection when changing pages so the next swipe is easier.
       const next=()=>{ if(s.spreadIdx<s.spreadsLen-1){ setSpreadIdx(s.spreadIdx+1); setSelectedId(null); setActiveSide('left'); } };
       const prev=()=>{ if(s.spreadIdx>0){ setSpreadIdx(s.spreadIdx-1); setSelectedId(null); setActiveSide(s.isMobile?'right':'left'); } };
 
@@ -1784,11 +1805,12 @@ export default function Editor() {
     el.addEventListener('touchstart',onStart,{passive:true,capture:true});
     el.addEventListener('touchmove',onMove,{passive:false,capture:true});
     el.addEventListener('touchend',finish,{passive:true,capture:true});
-    el.addEventListener('touchcancel',()=>{start=null;armed=false;},{passive:true,capture:true});
+    el.addEventListener('touchcancel',onCancel,{passive:true,capture:true});
     return ()=>{
       el.removeEventListener('touchstart',onStart,true);
       el.removeEventListener('touchmove',onMove,true);
       el.removeEventListener('touchend',finish,true);
+      el.removeEventListener('touchcancel',onCancel,true);
     };
   },[]);
 
@@ -2346,7 +2368,7 @@ export default function Editor() {
           <div ref={canvasRef}
             className="flex-1 min-h-0 flex items-center justify-center"
             style={isMobile
-              ? {overflow:'hidden',padding:'12px',touchAction:'pan-y'}
+              ? {overflow:'hidden',padding:'12px',touchAction:'none'}
               : {padding:'32px 40px',overflowY:'auto',display:'flex',alignItems:'center',justifyContent:'center',touchAction:'pan-y'}}>
             {currentSpread ? (
               <SpreadView spread={currentSpread} spreadContent={spreadContent}
@@ -2354,6 +2376,7 @@ export default function Editor() {
                 onActiveSide={setActiveSide}
                 onSelectId={setSelectedId} onChangeEl={changeEl} onOpenPhotos={openPhotos} onDelete={deleteSelected}
                 onGestureStart={beginHistoryGesture}
+                onElementDragActive={onElementDragActive}
                 editRequestId={editRequestId} onEditRequestHandled={clearEditRequest}
                 pageW={pageW} pageH={pageH} canvasH={canvasH} shapeRefs={shapeRefs} isMobile={isMobile}/>
             ) : <p className="text-neutral-400 text-sm">No pages found</p>}
