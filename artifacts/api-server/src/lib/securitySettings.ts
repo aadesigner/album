@@ -79,25 +79,30 @@ export function invalidateSecuritySettingsCache(): void {
 export async function getSecuritySettings(): Promise<SecuritySettings> {
   if (_cache && _cache.expiresAt > Date.now()) return _cache.data;
 
-  const rows = await db.select().from(appSettingsTable);
-  const map: Record<string, string> = {};
-  for (const row of rows) map[row.key] = row.value;
+  try {
+    const rows = await db.select().from(appSettingsTable);
+    const map: Record<string, string> = {};
+    for (const row of rows) map[row.key] = row.value;
 
-  const data: SecuritySettings = { ...SECURITY_SETTINGS_DEFAULTS };
-  for (const key of Object.keys(SECURITY_SETTINGS_KEY_MAP) as (keyof SecuritySettings)[]) {
-    const dbKey = SECURITY_SETTINGS_KEY_MAP[key];
-    const raw = map[dbKey];
-    if (raw === undefined || raw === "") continue;
-    if (key === "allowedUploadMimeTypes") {
-      const list = raw.split(",").map((s) => s.trim()).filter(Boolean);
-      if (list.length > 0) data.allowedUploadMimeTypes = list;
-    } else {
-      const n = parseInt(raw, 10);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if (!isNaN(n) && n >= 0) (data as any)[key] = n;
+    const data: SecuritySettings = { ...SECURITY_SETTINGS_DEFAULTS };
+    for (const key of Object.keys(SECURITY_SETTINGS_KEY_MAP) as (keyof SecuritySettings)[]) {
+      const dbKey = SECURITY_SETTINGS_KEY_MAP[key];
+      const raw = map[dbKey];
+      if (raw === undefined || raw === "") continue;
+      if (key === "allowedUploadMimeTypes") {
+        const list = raw.split(",").map((s) => s.trim()).filter(Boolean);
+        if (list.length > 0) data.allowedUploadMimeTypes = list;
+      } else {
+        const n = parseInt(raw, 10);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if (!isNaN(n) && n >= 0) (data as any)[key] = n;
+      }
     }
-  }
 
-  _cache = { data, expiresAt: Date.now() + TTL_MS };
-  return data;
+    _cache = { data, expiresAt: Date.now() + TTL_MS };
+    return data;
+  } catch {
+    // Fresh DB before schema push — use safe defaults instead of 500ing every request.
+    return { ...SECURITY_SETTINGS_DEFAULTS };
+  }
 }

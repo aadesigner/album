@@ -113,11 +113,15 @@ app.use(cookieParser());
 // Enforced before any route (including auth/login) so a blocked IP can't
 // reach anything, not even endpoints that would otherwise be public.
 app.use(async (req, res, next) => {
-  const ip = (req.ip || "unknown").replace(/^::ffff:/, "");
-  if (await isIpBlocked(ip)) {
-    logSecurityEvent("blocked_ip", ip, req.path);
-    res.status(403).json({ error: "Access denied." });
-    return;
+  try {
+    const ip = (req.ip || "unknown").replace(/^::ffff:/, "");
+    if (await isIpBlocked(ip)) {
+      logSecurityEvent("blocked_ip", ip, req.path);
+      res.status(403).json({ error: "Access denied." });
+      return;
+    }
+  } catch {
+    // Never block the whole API if blocklist/DB is unavailable.
   }
   next();
 });

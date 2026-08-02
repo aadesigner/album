@@ -13,9 +13,15 @@ export function invalidateIpBlocklistCache(): void {
 }
 
 export async function isIpBlocked(ip: string): Promise<boolean> {
-  if (!_cache || _cache.expiresAt <= Date.now()) {
-    const rows = await db.select({ ip: ipBlocklistTable.ip }).from(ipBlocklistTable);
-    _cache = { ips: new Set(rows.map((r) => r.ip)), expiresAt: Date.now() + TTL_MS };
+  try {
+    if (!_cache || _cache.expiresAt <= Date.now()) {
+      const rows = await db.select({ ip: ipBlocklistTable.ip }).from(ipBlocklistTable);
+      _cache = { ips: new Set(rows.map((r) => r.ip)), expiresAt: Date.now() + TTL_MS };
+    }
+    return _cache.ips.has(ip);
+  } catch {
+    // Fail open if the table isn't migrated yet (fresh Railway DB) so
+    // /api/healthz and the rest of the app still respond.
+    return false;
   }
-  return _cache.ips.has(ip);
 }
