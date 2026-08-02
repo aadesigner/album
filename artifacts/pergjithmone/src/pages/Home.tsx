@@ -3,8 +3,14 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { SEOMeta } from '@/components/SEOMeta';
 import { Link } from 'wouter';
 import { motion, useMotionValue, useSpring, useTransform, AnimatePresence } from 'framer-motion';
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { DESIGNS } from '@/lib/designs';
+import { useListCategories } from '@workspace/api-client-react-tsconfig';
+import {
+  getCategoryImage,
+  getCategorySpine,
+  getCategorySublabel,
+} from '@/lib/categoryImages';
 
 // ── Hero slides ────────────────────────────────────────────────────────────────
 
@@ -583,59 +589,15 @@ function Book3DShowcase({ lang }: { lang: 'sq' | 'en' }) {
 
 // ── Data ───────────────────────────────────────────────────────────────────────
 
-const CATEGORIES = [
-  {
-    key: 'wedding',
-    label: { sq: 'Dasmë', en: 'Wedding' },
-    sublabel: { sq: 'Kujtime të çmuara për gjithë jetën', en: 'Cherished memories for life' },
-    img: 'https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=900&q=85&fit=crop',
-    spine: '#8B6F47',
-    badge: { sq: 'bestseller', en: 'bestseller' },
-    pages: { sq: '30–80 faqe', en: '30–80 pages' },
-    accent: '#f5ede3',
-  },
-  {
-    key: 'travel',
-    label: { sq: 'Udhëtim', en: 'Travel' },
-    sublabel: { sq: 'Aventurat tuaja, të fiksuara', en: 'Your adventures, captured' },
-    img: 'https://images.unsplash.com/photo-1509316785289-025f5b846b35?w=900&q=85&fit=crop',
-    spine: '#C47A30',
-    badge: { sq: 'e re', en: 'new' },
-    pages: { sq: '30–60 faqe', en: '30–60 pages' },
-    accent: '#f3e6d1',
-  },
-  {
-    key: 'family',
-    label: { sq: 'Familje', en: 'Family' },
-    sublabel: { sq: 'Momentet e vogla, mëdha', en: 'Small moments, big meaning' },
-    img: 'https://images.unsplash.com/photo-1609220136736-443140cffec6?w=900&q=85&fit=crop&crop=center',
-    spine: '#5C7A5A',
-    badge: null,
-    pages: { sq: '30–50 faqe', en: '30–50 pages' },
-    accent: '#e5ede4',
-  },
-  {
-    key: 'birthday',
-    label: { sq: 'Ditëlindje', en: 'Birthday' },
-    sublabel: { sq: 'Dhurata perfekte, e personalizuar', en: 'The perfect personalised gift' },
-    img: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=900&q=85&fit=crop',
-    spine: '#7A5C7A',
-    badge: null,
-    pages: { sq: '30–40 faqe', en: '30–40 pages' },
-    accent: '#ede3f0',
-  },
-];
-
-const MINI_OCCASIONS = [
-  { sq: 'Miqësi', en: 'Friendship' },
-  { sq: 'Festim', en: 'Celebration' },
-  { sq: 'Diplomim', en: 'Graduation' },
-  { sq: 'Fëmijëri', en: 'Childhood' },
-  { sq: 'Natyrë', en: 'Nature' },
-  { sq: 'Dashuri', en: 'Romance' },
-  { sq: 'Kafshë shtëpie', en: 'Pets' },
-  { sq: 'Viti i Ri', en: 'New Year' },
-];
+type HomeCategoryCard = {
+  key: string;
+  label: { sq: string; en: string };
+  sublabel: { sq: string; en: string };
+  img: string;
+  spine: string;
+  badge: { sq: string; en: string } | null;
+  pages: { sq: string; en: string };
+};
 
 const MATERIALS = [
   {
@@ -798,7 +760,7 @@ function CategoryCard({
   lang,
   featured = false,
 }: {
-  cat: typeof CATEGORIES[0];
+  cat: HomeCategoryCard;
   lang: 'sq' | 'en';
   featured?: boolean;
 }) {
@@ -955,6 +917,21 @@ function AIAlbumPromo({ lang }: { lang: 'sq' | 'en' }) {
 export default function Home() {
   const { lang } = useLanguage();
   const [activeStep, setActiveStep] = useState<number | null>(null);
+  const { data: apiCategories } = useListCategories();
+
+  // Same list + backgrounds as /krijo choose-category (API + shared image map).
+  const categories = useMemo<HomeCategoryCard[]>(() => {
+    if (!apiCategories?.length) return [];
+    return apiCategories.map((cat, i) => ({
+      key: cat.slug,
+      label: { sq: cat.nameAl, en: cat.nameEn },
+      sublabel: getCategorySublabel(cat.slug),
+      img: getCategoryImage(cat.nameAl, cat.coverImage),
+      spine: getCategorySpine(cat.slug),
+      badge: i === 0 ? { sq: 'bestseller', en: 'bestseller' } : null,
+      pages: { sq: '30–80 faqe', en: '30–80 pages' },
+    }));
+  }, [apiCategories]);
 
   const tickerItems = [
     lang === 'sq' ? 'letër mat 200g' : 'matte 200g paper',
@@ -1059,54 +1036,19 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Cards — featured large + 3 small */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
-            {/* Featured card — spans 2 columns */}
-            <motion.div
-              className="col-span-2 lg:col-span-2 lg:row-span-1"
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: '-40px' }}
-              transition={{ duration: 0.6 }}
-            >
-              <CategoryCard cat={CATEGORIES[0]} lang={lang} featured />
-            </motion.div>
-
-            {/* Three smaller cards */}
-            {CATEGORIES.slice(1).map((cat, i) => (
+          {/* Same categories + photos as choose-category flow */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-5">
+            {categories.map((cat, i) => (
               <motion.div
                 key={cat.key}
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: '-40px' }}
-                transition={{ delay: (i + 1) * 0.1, duration: 0.6 }}
+                transition={{ delay: i * 0.08, duration: 0.55 }}
               >
                 <CategoryCard cat={cat} lang={lang} />
               </motion.div>
             ))}
-          </div>
-
-          {/* Mini occasion pills */}
-          <div className="mt-12 pt-10 border-t border-neutral-200/70">
-            <p className="text-[10px] uppercase tracking-[0.28em] text-neutral-400 mb-4">
-              {lang === 'sq' ? 'edhe për:' : 'also for:'}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {MINI_OCCASIONS.map((occ, i) => (
-                <Link key={i} href="/krijo">
-                  <motion.button
-                    className="px-4 py-2 rounded-full border border-neutral-300 text-[13px] text-neutral-600 hover:border-neutral-900 hover:bg-white hover:text-neutral-900 transition-all bg-[#f7f4f0]"
-                    initial={{ opacity: 0, scale: 0.92 }}
-                    whileInView={{ opacity: 1, scale: 1 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: i * 0.04 }}
-                    whileTap={{ scale: 0.96 }}
-                  >
-                    {occ[lang]}
-                  </motion.button>
-                </Link>
-              ))}
-            </div>
           </div>
         </div>
       </section>

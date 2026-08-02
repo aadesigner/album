@@ -18,6 +18,7 @@ import { DB_CAT_TO_DESIGN_CAT } from '@/lib/designMeta';
 import { generateAlbum } from '@/lib/albumGenerator';
 import { compressImageFile } from '@/lib/imageCompression';
 import { SizeCard } from './Wizard';
+import { getCategoryImage } from '@/lib/categoryImages';
 
 // Minimum photos required before generation is allowed. Kept as a single
 // named constant so the UI copy, validation, and progress bar all agree.
@@ -28,17 +29,6 @@ const MAX_PHOTOS = 40;
 // against a single-file endpoint has no backpressure and tends to trip
 // network/proxy limits — a small pool keeps things fast without flooding.
 const UPLOAD_CONCURRENCY = 5;
-
-// Reuse the same category imagery as the manual Wizard.
-const CAT_IMG: Record<string, string> = {
-  'Dasmë': 'https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=700&q=88&fit=crop&crop=top',
-  'Udhëtime': 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=700&q=88&fit=crop&crop=center',
-  'Familje': 'https://images.unsplash.com/photo-1581952976147-5a2d15560349?w=700&q=88&fit=crop&crop=top',
-  'Ditëlindje': 'https://images.unsplash.com/photo-1530103862676-de8c9debad1d?w=700&q=88&fit=crop',
-  'Miqësi': 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=700&q=88&fit=crop&crop=top',
-  'Festash': 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=700&q=88&fit=crop',
-};
-const CAT_IMG_DEFAULT = 'https://images.unsplash.com/photo-1474552226712-ac0f0961a954?w=700&q=88&fit=crop&crop=center';
 
 type UploadStatus = 'pending' | 'uploading' | 'done' | 'error';
 interface PhotoItem {
@@ -578,7 +568,7 @@ export default function AlbumAI() {
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {categories?.map((cat: any, i: number) => {
-                      const imgSrc = CAT_IMG[cat.nameAl] || CAT_IMG_DEFAULT;
+                      const imgSrc = getCategoryImage(cat.nameAl, cat.coverImage);
                       return (
                         <motion.button
                           key={cat.id}

@@ -31,7 +31,7 @@ const DEMO: Record<number, DE[]> = {
     { id:'i1', type:'image', x:0,y:0,w:DW,h:DH,
       src:'https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=900&q=82&fit=crop&crop=center' },
     { id:'t1', type:'text', x:40,y:630,w:520,h:55,
-      text:'Arta & Erjon', fill:'rgba(255,255,255,0.95)',
+      text:'Ana & Erjon', fill:'rgba(255,255,255,0.95)',
       fontFamily:'Georgia, serif', fontSize:32, align:'center', fontStyle:'italic' },
     { id:'t2', type:'text', x:40,y:688,w:520,h:28,
       text:'12 Qershor 2023  ·  Sarandë', fill:'rgba(255,255,255,0.48)',
@@ -67,7 +67,7 @@ const DEMO: Record<number, DE[]> = {
       fill:'#111111', fontFamily:'Georgia, serif', fontSize:22,
       align:'center', fontStyle:'italic' },
     { id:'t2', type:'text', x:70,y:510,w:460,h:30,
-      text:'— Vera 2023', fill:'#aaaaaa',
+      text:'— Ana & Erjon', fill:'#aaaaaa',
       fontFamily:'Georgia, serif', fontSize:13, align:'center' },
     { id:'rule2', type:'text', x:200,y:560,w:200,h:20,
       text:'────────────', fill:'rgba(0,0,0,0.13)',
@@ -89,7 +89,7 @@ const DEMO: Record<number, DE[]> = {
     { id:'i1', type:'image', x:0,y:0,w:DW,h:DH,
       src:'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=900&q=82&fit=crop&crop=center' },
     { id:'t1', type:'text', x:30,y:680,w:540,h:34,
-      text:'Sarandë · Gusht 2023', fill:'rgba(255,255,255,0.55)',
+      text:'Ana & Erjon · Sarandë', fill:'rgba(255,255,255,0.55)',
       fontFamily:'Georgia, serif', fontSize:12, align:'center' },
   ],
 
@@ -103,7 +103,7 @@ const DEMO: Record<number, DE[]> = {
     { id:'i3', type:'image', x:18,y:410,w:274,h:372,
       src:'https://images.unsplash.com/photo-1528360983277-13d401cdc186?w=600&q=80&fit=crop' },
     { id:'i4', type:'image', x:308,y:410,w:274,h:372,
-      src:'https://images.unsplash.com/photo-1536939736-6e463d620c17?w=600&q=80&fit=crop&crop=center' },
+      src:'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=600&q=80&fit=crop&crop=center' },
   ],
 
   // Back cover — dark & elegant, echoes the front cover instead of plain white
@@ -191,7 +191,7 @@ function DemoSpine({ D, H, bgColor }: { D: number; H: number; bgColor: string })
           fontFamily: 'Georgia, serif', fontStyle: 'italic',
           color: 'rgba(255,255,255,0.45)', letterSpacing: '0.08em',
           maxWidth: H * 0.7, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          Arta & Erjon · 2023
+          Ana & Erjon · 2023
         </div>
       </div>
     </div>
@@ -502,21 +502,21 @@ function SpreadBrowserDemo({ lang }: { lang: 'sq' | 'en' }) {
 // Mini two-page spread previews — shows actual photobook layouts
 const ALBUMS = [
   {
-    title: { sq: 'Dasma jonë', en: 'Our Wedding Day' },
+    title: { sq: 'Ana & Erjon', en: 'Ana & Erjon' },
     category: { sq: 'Dasmë', en: 'Wedding' },
     pages: 48,
     leftId: 2, rightId: 3,
     spine: '#5C3D2A',
   },
   {
-    title: { sq: 'Kujtime 2023', en: 'Memories 2023' },
+    title: { sq: 'Kujtime · Ana & Erjon', en: 'Memories · Ana & Erjon' },
     category: { sq: 'Familje', en: 'Family' },
     pages: 36,
     leftId: 4, rightId: 5,
     spine: '#3A5240',
   },
   {
-    title: { sq: 'Vera në Jug', en: 'Summer in the South' },
+    title: { sq: 'Ana & Erjon · Vera në Jug', en: 'Ana & Erjon · Summer in the South' },
     category: { sq: 'Udhëtim', en: 'Travel' },
     pages: 32,
     leftId: 6, rightId: 7,
@@ -642,7 +642,7 @@ export default function Examples() {
               {/* Album byline */}
               <p className="text-center mb-8 md:mb-10" style={{ fontSize: 10, letterSpacing: '0.28em',
                 textTransform: 'uppercase', color: 'rgba(0,0,0,0.28)', fontFamily: 'Georgia, serif' }}>
-                {lang === 'sq' ? 'Arta & Erjon · Dasmë 2023' : 'Arta & Erjon · Wedding 2023'}
+                {lang === 'sq' ? 'Ana & Erjon · Dasmë 2023' : 'Ana & Erjon · Wedding 2023'}
               </p>
 
               <div className="flex flex-col lg:flex-row items-center gap-8 lg:gap-14">
@@ -725,7 +725,7 @@ export default function Examples() {
             </p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-5">
               {[
-                { text: { sq: '"Albumi doli saktësisht ashtu si e imagjinova. Cilësia e letrës është e mahnitshme."', en: '"The album turned out exactly as I imagined. The paper quality is stunning."' }, name: 'Arta M.', occasion: { sq: 'Dasmë', en: 'Wedding' } },
+                { text: { sq: '"Albumi doli saktësisht ashtu si e imagjinova. Cilësia e letrës është e mahnitshme."', en: '"The album turned out exactly as I imagined. The paper quality is stunning."' }, name: 'Ana M.', occasion: { sq: 'Dasmë', en: 'Wedding' } },
                 { text: { sq: '"Procesi ishte shumë i lehtë. E rekomandoj me zemër të plotë."', en: '"The process was so easy. I wholeheartedly recommend it for any occasion."' }, name: 'Erjon B.', occasion: { sq: 'Udhëtim', en: 'Travel' } },
                 { text: { sq: '"Dhurata më e bukur që mund t\'i bësh dikujt. Mbeti pa fjalë."', en: '"The most beautiful gift you can give. They were absolutely speechless."' }, name: 'Mirela K.', occasion: { sq: 'Ditëlindje', en: 'Birthday' } },
               ].map((t, i) => (

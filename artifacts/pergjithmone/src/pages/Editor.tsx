@@ -151,7 +151,7 @@ function KShapeEl({el,isSelected,onSelect,onChange,shapeRefs,canvasH}: {
     x={el.x} y={el.y} width={el.w} height={el.h} fill={el.fill||'transparent'}
     stroke={el.strokeColor} strokeWidth={el.strokeWidth||0} dash={el.strokeDash}
     cornerRadius={cr} rotation={el.rotation} opacity={el.opacity??1}
-    onClick={onSelect} onTap={onSelect} draggable
+    onClick={onSelect} onTap={onSelect} draggable={isSelected}
     onDragEnd={(e:any)=>{
       const nx=Math.min(Math.max(e.target.x(),0),DESIGN_W-el.w);
       const ny=Math.min(Math.max(e.target.y(),0),canvasH-el.h);
@@ -201,7 +201,7 @@ function KImgEl({el,isSelected,onSelect,onChange,shapeRefs,canvasH}: {
     <KonvaImage ref={(n:any)=>{if(n) shapeRefs.current[el.id]=n;}}
     image={img} x={el.x} y={el.y} width={el.w} height={el.h} rotation={el.rotation}
     crop={coverCrop}
-    onClick={onSelect} onTap={onSelect} draggable
+    onClick={onSelect} onTap={onSelect} draggable={isSelected}
     onDragEnd={(e:any)=>{
       // Clamp to page bounds — otherwise dragging past the edge lets the canvas
       // cut the photo off, making a fully-covering image look "cropped".
@@ -222,9 +222,10 @@ function KImgEl({el,isSelected,onSelect,onChange,shapeRefs,canvasH}: {
   </>;
 }
 
-function KTxtEl({el,onSelect,onChange,onStartEdit,isEditing,shapeRefs,canvasH}: {
+function KTxtEl({el,onSelect,onChange,onStartEdit,isEditing,isSelected,shapeRefs,canvasH}: {
   el: EditorElement; onSelect:()=>void; onChange:(c:Partial<EditorElement>)=>void;
-  onStartEdit:()=>void; isEditing:boolean; shapeRefs:React.MutableRefObject<Record<string,any>>; canvasH:number;
+  onStartEdit:()=>void; isEditing:boolean; isSelected:boolean;
+  shapeRefs:React.MutableRefObject<Record<string,any>>; canvasH:number;
 }) {
   return <KonvaText ref={(n:any)=>{if(n) shapeRefs.current[el.id]=n;}}
     text={el.text||'Double-tap to edit'} x={el.x} y={el.y} width={el.w} height={el.h}
@@ -232,7 +233,7 @@ function KTxtEl({el,onSelect,onChange,onStartEdit,isEditing,shapeRefs,canvasH}: 
     fill={el.fill||'#1a1a1a'} align={el.align||'center'} fontStyle={el.fontStyle||'normal'}
     lineHeight={el.lineHeight??1.2} letterSpacing={el.letterSpacing??0} padding={6}
     opacity={isEditing?0:(el.opacity??1)}
-    onClick={onSelect} onTap={onSelect} onDblClick={onStartEdit} onDblTap={onStartEdit} draggable
+    onClick={onSelect} onTap={onSelect} onDblClick={onStartEdit} onDblTap={onStartEdit} draggable={isSelected && !isEditing}
     onDragEnd={(e:any)=>{
       const nx=Math.min(Math.max(e.target.x(),0),DESIGN_W-el.w);
       const ny=Math.min(Math.max(e.target.y(),0),canvasH-el.h);
@@ -342,6 +343,7 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
           {imgs.map(el => <KImgEl key={el.id} el={el} isSelected={selectedId===el.id}
             onSelect={()=>{if(editId)commitEdit();onSelectId(el.id);}} onChange={c=>onChangeEl(el.id,c)} shapeRefs={shapeRefs} canvasH={canvasH}/>)}
           {txts.map(el => <KTxtEl key={el.id} el={el} isEditing={editId===el.id}
+            isSelected={selectedId===el.id}
             onSelect={()=>{if(editId&&editId!==el.id)commitEdit();onSelectId(el.id);}}
             onChange={c=>onChangeEl(el.id,c)}
             onStartEdit={()=>startEdit(el)} shapeRefs={shapeRefs} canvasH={canvasH}/>)}
@@ -1460,8 +1462,6 @@ export default function Editor() {
 
   const shapeRefs=useRef<Record<string,any>>({});
   const canvasRef=useRef<HTMLDivElement>(null);
-  // Swipe-to-navigate on the main canvas area (mobile)
-  const canvasSwipeRef=useRef<{x:number;y:number;t:number}|null>(null);
   const headerSwipeRef=useRef<{y:number}|null>(null);
   const [headerCollapsed,setHeaderCollapsed]=useState(false);
   const saveTimer=useRef<ReturnType<typeof setTimeout>|undefined>(undefined);
@@ -1629,6 +1629,78 @@ export default function Editor() {
 
   const onSpreadChange=useCallback((i:number)=>{
     setSpreadIdx(i); setSelectedId(null); setActiveSide('right');
+  },[]);
+
+  // Native canvas swipe — React onTouch* on the wrapper often never fires because
+  // Konva owns the canvas. Elements are only draggable when selected, so an
+  // unselected page can swipe left/right to change page/spread.
+  const pageSwipeRef=useRef({
+    spreadIdx, spreadsLen:spreads.length, isSolo:!!currentSpread?.isSolo,
+    activeSide, selectedId, isMobile,
+  });
+  pageSwipeRef.current={
+    spreadIdx, spreadsLen:spreads.length, isSolo:!!currentSpread?.isSolo,
+    activeSide, selectedId, isMobile,
+  };
+
+  useEffect(()=>{
+    const el=canvasRef.current;
+    if(!el) return;
+    let start:{x:number;y:number;t:number}|null=null;
+    let armed=false;
+
+    const onStart=(e:TouchEvent)=>{
+      if(e.touches.length!==1){ start=null; armed=false; return; }
+      // Don't steal gestures while an element is selected (drag / transform).
+      if(pageSwipeRef.current.selectedId){ start=null; return; }
+      start={x:e.touches[0].clientX,y:e.touches[0].clientY,t:Date.now()};
+      armed=false;
+    };
+    const onMove=(e:TouchEvent)=>{
+      if(!start||e.touches.length!==1) return;
+      const dx=e.touches[0].clientX-start.x;
+      const dy=e.touches[0].clientY-start.y;
+      if(!armed && Math.abs(dx)>14 && Math.abs(dx)>Math.abs(dy)*1.15) armed=true;
+      if(armed) e.preventDefault();
+    };
+    const finish=(e:TouchEvent)=>{
+      if(!start) return;
+      const dx=e.changedTouches[0].clientX-start.x;
+      const dy=e.changedTouches[0].clientY-start.y;
+      const dt=Math.max(1,Date.now()-start.t);
+      const wasArmed=armed;
+      start=null; armed=false;
+      if(Math.abs(dx)<=Math.abs(dy)*1.1) return;
+      const vel=Math.abs(dx)/dt;
+      if(!wasArmed && Math.abs(dx)<40 && vel<0.3) return;
+      if(Math.abs(dx)<36 && vel<0.28) return;
+
+      const s=pageSwipeRef.current;
+      const next=()=>{ if(s.spreadIdx<s.spreadsLen-1){ setSpreadIdx(s.spreadIdx+1); setSelectedId(null); setActiveSide('left'); } };
+      const prev=()=>{ if(s.spreadIdx>0){ setSpreadIdx(s.spreadIdx-1); setSelectedId(null); setActiveSide(s.isMobile?'right':'left'); } };
+
+      if(s.isMobile && !s.isSolo){
+        if(dx<0){
+          if(s.activeSide==='left'){ setActiveSide('right'); setSelectedId(null); }
+          else next();
+        } else {
+          if(s.activeSide==='right'){ setActiveSide('left'); setSelectedId(null); }
+          else prev();
+        }
+      } else {
+        if(dx<0) next(); else prev();
+      }
+    };
+
+    el.addEventListener('touchstart',onStart,{passive:true});
+    el.addEventListener('touchmove',onMove,{passive:false});
+    el.addEventListener('touchend',finish,{passive:true});
+    el.addEventListener('touchcancel',()=>{start=null;armed=false;},{passive:true});
+    return ()=>{
+      el.removeEventListener('touchstart',onStart);
+      el.removeEventListener('touchmove',onMove);
+      el.removeEventListener('touchend',finish);
+    };
   },[]);
 
   // The actual network save, shared by the debounced auto-save and by
@@ -2164,38 +2236,12 @@ export default function Editor() {
             </div>
           )}
 
-          {/* Canvas area */}
+          {/* Canvas area — page swipe via native listeners (see useEffect on canvasRef) */}
           <div ref={canvasRef}
             className="flex-1 min-h-0 flex items-center justify-center"
             style={isMobile
-              ? {overflow:'hidden',padding:'12px'}
-              : {padding:'32px 40px',overflowY:'auto',display:'flex',alignItems:'center',justifyContent:'center'}}
-            onTouchStart={isMobile ? e=>{
-              canvasSwipeRef.current={x:e.touches[0].clientX,y:e.touches[0].clientY,t:Date.now()};
-            } : undefined}
-            onTouchEnd={isMobile ? e=>{
-              if(!canvasSwipeRef.current) return;
-              const dx=e.changedTouches[0].clientX-canvasSwipeRef.current.x;
-              const dy=e.changedTouches[0].clientY-canvasSwipeRef.current.y;
-              const dt=Math.max(1,Date.now()-canvasSwipeRef.current.t);
-              canvasSwipeRef.current=null;
-              if(Math.abs(dx)<=Math.abs(dy)*1.2) return;
-              const vel=Math.abs(dx)/dt;
-              if(Math.abs(dx)<50&&vel<0.35) return;
-              // On a 2-page spread: flip page first, change spread only at edges
-              if(currentSpread&&!currentSpread.isSolo){
-                if(dx<0){
-                  if(activeSide==='left') { setActiveSide('right'); setSelectedId(null); }
-                  else if(spreadIdx<spreads.length-1) onSpreadChange(spreadIdx+1);
-                } else {
-                  if(activeSide==='right') { setActiveSide('left'); setSelectedId(null); }
-                  else if(spreadIdx>0) onSpreadChange(spreadIdx-1);
-                }
-              } else {
-                if(dx<0&&spreadIdx<spreads.length-1) onSpreadChange(spreadIdx+1);
-                else if(dx>0&&spreadIdx>0) onSpreadChange(spreadIdx-1);
-              }
-            } : undefined}>
+              ? {overflow:'hidden',padding:'12px',touchAction:'pan-y'}
+              : {padding:'32px 40px',overflowY:'auto',display:'flex',alignItems:'center',justifyContent:'center',touchAction:'pan-y'}}>
             {currentSpread ? (
               <SpreadView spread={currentSpread} spreadContent={spreadContent}
                 selectedId={selectedId} activeSide={activeSide}
