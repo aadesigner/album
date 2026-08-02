@@ -1,0 +1,706 @@
+You are a senior software architect, UI/UX designer, and full-stack engineer.
+
+Your task is to build a production-ready SaaS web application for creating and ordering premium printed photobooks.
+
+This project will initially be developed inside Replit, but EVERYTHING must remain completely independent from Replit.
+
+Never use Replit authentication, Replit database features, Replit storage, or any Replit-specific APIs.
+
+The application must be exportable to any VPS or cloud provider with zero code changes.
+
+====================================================
+PROJECT OVERVIEW
+====================================================
+
+The website is a premium photobook creation platform for the Albanian market.
+
+It should have the same overall concept as Pixory but it MUST NOT copy their design, code, branding or user experience.
+
+Instead create a completely original product with a much more modern interface.
+
+The overall feeling should be
+
+• premium
+• elegant
+• emotional
+• travel inspired
+• feminine but not childish
+• luxury printing company
+• mobile-first
+• extremely easy to understand
+
+Target audience
+
+Mostly women
+Couples
+Families
+Travel lovers
+Gift buyers
+
+The website should feel like Apple + Airbnb + Notion + Pinterest instead of a typical ecommerce website.
+
+Avoid generic UI.
+
+Everything must feel custom designed.
+
+====================================================
+LANGUAGES
+====================================================
+
+Primary language:
+Albanian
+
+Secondary language:
+English
+
+Automatically detect visitor country.
+
+If visitor is from
+
+Albania
+Kosovo
+
+default language = Albanian
+
+Every other country
+
+default language = English
+
+Allow manual language switching.
+
+All text throughout the project must support localization.
+
+Never hardcode text inside components.
+
+====================================================
+RESPONSIVE DESIGN
+====================================================
+
+This project is mobile-first.
+
+The mobile experience is MORE IMPORTANT than desktop.
+
+Everything must work perfectly on
+
+320px
+
+375px
+
+390px
+
+414px
+
+768px
+
+1024px
+
+1440px
+
+No horizontal scrolling.
+
+Large touch targets.
+
+Simple navigation.
+
+Fast loading.
+
+====================================================
+MARKETING WEBSITE
+====================================================
+
+Build a complete marketing website.
+
+Pages include
+
+Home
+
+How it works
+
+Photobook examples
+
+Pricing
+
+FAQ
+
+About
+
+Contact
+
+Privacy
+
+Terms
+
+Beautiful hero section.
+
+Large emotional photography.
+
+Subtle gradients.
+
+Soft shadows.
+
+Rounded corners.
+
+Beautiful animations.
+
+Not too flashy.
+
+Very premium.
+
+====================================================
+AUTHENTICATION
+====================================================
+
+Build our own authentication.
+
+Email + Password
+
+Password reset
+
+Email verification
+
+JWT authentication
+
+Refresh tokens
+
+Secure cookies
+
+Role based permissions
+
+Remember me
+
+No third party authentication required.
+
+====================================================
+PHOTBOOK CREATOR
+====================================================
+
+The photobook builder is the heart of the application.
+
+User flow
+
+Choose category
+
+Choose design
+
+Choose book size
+
+Open editor
+
+Customize
+
+Generate PDF
+
+Place order
+
+====================================================
+MAIN CATEGORIES
+====================================================
+
+Udhëtime
+
+Dasmë
+
+Ditëlindje
+
+Familje
+
+Miqësi
+
+Festash
+
+====================================================
+SUB CATEGORIES
+====================================================
+
+Each category contains many design templates.
+
+Example
+
+Travel
+
+Paris
+
+Rome
+
+London
+
+Tokyo
+
+Alps
+
+Beach
+
+New York
+
+etc.
+
+Each design contains
+
+Front cover
+
+Back cover
+
+Theme colors
+
+Decorations
+
+Fonts
+
+Icons
+
+Backgrounds
+
+====================================================
+BOOK SIZES
+====================================================
+
+Two sizes
+
+21 x 21 cm
+
+21 x 28 cm
+
+Display illustrations showing the physical size.
+
+Changing the size changes the editing canvas.
+
+====================================================
+BOOK STRUCTURE
+====================================================
+
+Editable Front Cover
+
+Inside Cover page
+
+30 minimum inside pages
+
+Editable Back Cover
+
+Users may add additional pages in pairs.
+
+====================================================
+PAGE EDITOR
+====================================================
+
+Users can
+
+Upload photos
+
+Drag photos
+
+Resize
+
+Rotate
+
+Crop
+
+Zoom
+
+Double click to edit
+
+Delete
+
+Duplicate
+
+Add text
+
+Change font
+
+Bold
+
+Italic
+
+Underline
+
+Alignment
+
+Opacity
+
+Letter spacing
+
+Line spacing
+
+Colors
+
+Gradients
+
+Stickers
+
+Icons
+
+Shapes
+
+Background colors
+
+Background images
+
+====================================================
+LAYOUTS
+====================================================
+
+Every page has predefined layouts.
+
+Examples
+
+Single photo
+
+2 columns
+
+3 columns
+
+4 grid
+
+70/30 split
+
+30/70 split
+
+50/50
+
+Top banner
+
+Bottom banner
+
+Collage
+
+Magazine
+
+Timeline
+
+The user can switch layouts instantly.
+
+Existing images should automatically reposition.
+
+====================================================
+IMAGE HANDLING
+====================================================
+
+Never stretch images.
+
+Never distort aspect ratio.
+
+Always use object-cover behaviour.
+
+Allow zooming inside frames.
+
+High quality rendering.
+
+====================================================
+PAGE MANAGEMENT
+====================================================
+
+Users can
+
+Duplicate pages
+
+Delete pages
+
+Move page spreads
+
+Drag & drop page order
+
+Only inside pages can move.
+
+Front cover
+
+Inside cover
+
+Back cover
+
+cannot change order.
+
+====================================================
+PRICE
+====================================================
+
+Base price
+
+3100 LEK
+
+30 pages included.
+
+Additional page pairs should be configurable from the admin panel.
+
+====================================================
+AUTO SAVE
+====================================================
+
+Every few seconds
+
+Automatically save
+
+No data loss
+
+Recover unfinished projects.
+
+====================================================
+PDF GENERATION
+====================================================
+
+This is extremely important.
+
+The generated PDF must be print-ready.
+
+No quality loss.
+
+No incorrect scaling.
+
+No missing fonts.
+
+No missing images.
+
+No layout shifts.
+
+High resolution.
+
+CMYK-ready architecture where possible.
+
+Correct bleed support.
+
+Correct margins.
+
+Every page exported exactly as designed.
+
+====================================================
+ORDER FLOW
+====================================================
+
+After PDF generation
+
+Generate final PDF.
+
+Store project.
+
+Allow preview.
+
+Create order.
+
+Then open WhatsApp.
+
+Default number
+
++355688755833
+
+If Albanian
+
+Message
+
+"Përshëndetje, dua të porosis këtë album."
+
+If English
+
+"Hello, I would like to order this photobook."
+
+Attach or reference the generated project appropriately (for example, upload to server and include a share link if direct attachment is not possible via WhatsApp).
+
+====================================================
+ADMIN PANEL
+====================================================
+
+URL
+
+/heyadmin
+
+Completely separate interface.
+
+Dashboard
+
+Orders
+
+Customers
+
+Projects
+
+Photobook templates
+
+Cover templates
+
+Layouts
+
+Fonts
+
+Icons
+
+Backgrounds
+
+Categories
+
+Subcategories
+
+Pricing
+
+Book sizes
+
+Application settings
+
+Languages
+
+Users
+
+Analytics
+
+====================================================
+ADMIN FEATURES
+====================================================
+
+Create templates
+
+Edit templates
+
+Delete templates
+
+Upload covers
+
+Manage page layouts
+
+Manage decorations
+
+Manage stickers
+
+Manage fonts
+
+Manage icons
+
+Manage backgrounds
+
+Manage categories
+
+Manage translations
+
+Manage pricing
+
+Manage page limits
+
+Manage WhatsApp number
+
+Manage SEO
+
+====================================================
+SEO
+====================================================
+
+Server-side rendered metadata where appropriate.
+
+Custom titles.
+
+Custom descriptions.
+
+OpenGraph.
+
+Twitter cards.
+
+Schema.org.
+
+Automatic sitemap.
+
+Robots.txt.
+
+Clean URLs.
+
+====================================================
+PERFORMANCE
+====================================================
+
+Lazy loading
+
+Image optimization
+
+Compression
+
+Caching
+
+Code splitting
+
+Optimized rendering
+
+Excellent Core Web Vitals
+
+====================================================
+SECURITY
+====================================================
+
+CSRF protection
+
+XSS protection
+
+Rate limiting
+
+Password hashing
+
+Input validation
+
+SQL injection protection
+
+JWT rotation
+
+====================================================
+TECH STACK
+====================================================
+
+React
+
+TypeScript
+
+Node.js
+
+Express
+
+PostgreSQL
+
+Prisma ORM
+
+TailwindCSS
+
+React DnD
+
+Fabric.js or Konva.js for canvas editing (whichever provides the best performance and precision)
+
+PDF generation using a high-precision print-capable solution suitable for professional photobook export
+
+No vendor lock-in.
+
+====================================================
+CODE QUALITY
+====================================================
+
+Strict TypeScript
+
+Reusable components
+
+Feature-based architecture
+
+Clean folder structure
+
+No duplicated code
+
+Well documented
+
+Scalable
+
+Production ready
+
+====================================================
+CLIENT DOCUMENT
+====================================================
+
+I have uploaded documentation from my client in both Albanian and English, along with the project logo.
+
+Read every uploaded file before writing any code.
+
+Treat the uploaded documentation as the primary source of truth for business rules, user flow, terminology, and design requirements. If anything in the documentation conflicts with assumptions, follow the documentation.
+
+====================================================
+IMPORTANT
+====================================================
+
+Before generating code:
+
+1. Analyze all uploaded files.
+2. Produce a complete architecture plan.
+3. Design the database schema.
+4. Define the API.
+5. Design the UI component hierarchy.
+6. Describe the folder structure.
+7. Identify any missing requirements and propose sensible defaults.
+8. Wait for approval before implementing.
+
+Throughout development, prioritize reliability, mobile usability, print accuracy, maintainability, and a polished user experience suitable for a premium commercial product.

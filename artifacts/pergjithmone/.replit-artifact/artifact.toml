@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "Përgjithmonë"
+version = "1.0.0"
+id = "artifacts/pergjithmone"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19324
+
+[services.development]
+run = "pnpm --filter @workspace/pergjithmone run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/pergjithmone", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/pergjithmone/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19324"
+BASE_PATH = "/"

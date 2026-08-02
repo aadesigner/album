@@ -1,0 +1,2282 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: Përgjithmonë Photobook Platform API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+  - name: auth
+  - name: categories
+  - name: templates
+  - name: projects
+  - name: orders
+  - name: uploads
+  - name: admin
+  - name: settings
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  # ─── AUTH ─────────────────────────────────────────────────────────────────
+
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterInput"
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Logout current user
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /auth/refresh:
+    post:
+      operationId: refreshToken
+      tags: [auth]
+      summary: Refresh access token
+      responses:
+        "200":
+          description: Token refreshed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current authenticated user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/change-password:
+    post:
+      operationId: changePassword
+      tags: [auth]
+      summary: Change the current user's password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordInput"
+      responses:
+        "200":
+          description: Password changed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChangePasswordResult"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Current password incorrect / not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/forgot-password:
+    post:
+      operationId: forgotPassword
+      tags: [auth]
+      summary: Request password reset email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForgotPasswordInput"
+      responses:
+        "200":
+          description: Reset email sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /auth/reset-password:
+    post:
+      operationId: resetPassword
+      tags: [auth]
+      summary: Reset password using token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordInput"
+      responses:
+        "200":
+          description: Password reset successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: Invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/verify-email:
+    post:
+      operationId: verifyEmail
+      tags: [auth]
+      summary: Verify email address
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyEmailInput"
+      responses:
+        "200":
+          description: Email verified
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  # ─── CATEGORIES ──────────────────────────────────────────────────────────
+
+  /categories:
+    get:
+      operationId: listCategories
+      tags: [categories]
+      summary: List all main categories
+      responses:
+        "200":
+          description: List of categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Category"
+
+  /categories/{categoryId}/subcategories:
+    get:
+      operationId: listSubcategories
+      tags: [categories]
+      summary: List subcategories for a category
+      parameters:
+        - name: categoryId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of subcategories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Subcategory"
+
+  # ─── TEMPLATES ───────────────────────────────────────────────────────────
+
+  /templates:
+    get:
+      operationId: listTemplates
+      tags: [templates]
+      summary: List templates, optionally filtered
+      parameters:
+        - name: subcategoryId
+          in: query
+          schema:
+            type: integer
+        - name: categoryId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Template"
+
+  /templates/{templateId}:
+    get:
+      operationId: getTemplate
+      tags: [templates]
+      summary: Get a single template
+      parameters:
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Template details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Template"
+
+  # ─── BOOK SIZES ──────────────────────────────────────────────────────────
+
+  /book-sizes:
+    get:
+      operationId: listBookSizes
+      tags: [settings]
+      summary: List available book sizes
+      responses:
+        "200":
+          description: Available book sizes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BookSize"
+
+  # ─── LAYOUTS ─────────────────────────────────────────────────────────────
+
+  /layouts:
+    get:
+      operationId: listLayouts
+      tags: [settings]
+      summary: List available page layouts
+      responses:
+        "200":
+          description: Layouts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Layout"
+
+  # ─── PUBLIC CONFIG ───────────────────────────────────────────────────────
+
+  /config:
+    get:
+      operationId: getPublicConfig
+      tags: [settings]
+      summary: Get public frontend configuration (reCAPTCHA keys, feature flags)
+      responses:
+        "200":
+          description: Public config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicConfig"
+
+  # ─── APP SETTINGS ────────────────────────────────────────────────────────
+
+  /settings:
+    get:
+      operationId: getAppSettings
+      tags: [settings]
+      summary: Get public app settings
+      responses:
+        "200":
+          description: App settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppSettings"
+
+  # ─── PROJECTS ────────────────────────────────────────────────────────────
+
+  /projects:
+    get:
+      operationId: listProjects
+      tags: [projects]
+      summary: List current user's projects
+      responses:
+        "200":
+          description: List of projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Project"
+
+    post:
+      operationId: createProject
+      tags: [projects]
+      summary: Create a new photobook project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectInput"
+      responses:
+        "201":
+          description: Project created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+
+  /projects/{projectId}:
+    get:
+      operationId: getProject
+      tags: [projects]
+      summary: Get a project with all its pages
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Project with pages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectDetail"
+
+    patch:
+      operationId: updateProject
+      tags: [projects]
+      summary: Update project metadata
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectUpdate"
+      responses:
+        "200":
+          description: Project updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+
+    delete:
+      operationId: deleteProject
+      tags: [projects]
+      summary: Delete a project
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /projects/{projectId}/pages:
+    post:
+      operationId: addProjectPage
+      tags: [projects]
+      summary: Add a page to a project
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectPageInput"
+      responses:
+        "201":
+          description: Page added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectPage"
+
+  /projects/{projectId}/pages/{pageId}:
+    patch:
+      operationId: updateProjectPage
+      tags: [projects]
+      summary: Update a page's content
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: pageId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectPageUpdate"
+      responses:
+        "200":
+          description: Page updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectPage"
+
+    delete:
+      operationId: deleteProjectPage
+      tags: [projects]
+      summary: Delete a page
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: pageId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /projects/{projectId}/auto-save:
+    post:
+      operationId: autoSaveProject
+      tags: [projects]
+      summary: Auto-save project state
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AutoSaveInput"
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /projects/{projectId}/generate-pdf:
+    post:
+      operationId: generateProjectPdf
+      tags: [projects]
+      summary: Generate print-ready PDF for a project
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: PDF generation started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PdfGenerationResponse"
+
+  /projects/{projectId}/pdf-status:
+    get:
+      operationId: getProjectPdfStatus
+      tags: [projects]
+      summary: Check PDF generation status
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: PDF status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PdfGenerationResponse"
+
+  # ─── ORDERS ──────────────────────────────────────────────────────────────
+
+  /orders:
+    get:
+      operationId: listOrders
+      tags: [orders]
+      summary: List current user's orders
+      responses:
+        "200":
+          description: List of orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Order"
+
+    post:
+      operationId: createOrder
+      tags: [orders]
+      summary: Create an order from a project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderInput"
+      responses:
+        "201":
+          description: Order created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+
+  /orders/{orderId}:
+    get:
+      operationId: getOrder
+      tags: [orders]
+      summary: Get order details
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Order details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+
+  /orders/{orderId}/whatsapp:
+    get:
+      operationId: getOrderWhatsapp
+      tags: [orders]
+      summary: Get WhatsApp ordering link for an order
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: WhatsApp link
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WhatsappLinkResponse"
+
+  # ─── UPLOADS ─────────────────────────────────────────────────────────────
+
+  /uploads/image:
+    post:
+      operationId: uploadImage
+      tags: [uploads]
+      summary: Upload an image
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/ImageUpload"
+      responses:
+        "200":
+          description: Upload successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadResponse"
+
+  # ─── ADMIN ───────────────────────────────────────────────────────────────
+
+  /admin/stats:
+    get:
+      operationId: getAdminStats
+      tags: [admin]
+      summary: Get admin dashboard stats
+      responses:
+        "200":
+          description: Dashboard stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminStats"
+
+  /admin/users:
+    get:
+      operationId: listAdminUsers
+      tags: [admin]
+      summary: List all users
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Paginated users list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedUsers"
+
+  /admin/users/{userId}:
+    patch:
+      operationId: updateAdminUser
+      tags: [admin]
+      summary: Update user
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminUserUpdate"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+    delete:
+      operationId: deleteAdminUser
+      tags: [admin]
+      summary: Delete user
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /admin/orders:
+    get:
+      operationId: listAdminOrders
+      tags: [admin]
+      summary: List all orders
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: userId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Paginated orders
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedOrders"
+
+  /admin/orders/{orderId}:
+    patch:
+      operationId: updateAdminOrder
+      tags: [admin]
+      summary: Update order status
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminOrderUpdate"
+      responses:
+        "200":
+          description: Updated order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+
+  /admin/categories:
+    get:
+      operationId: listAdminCategories
+      tags: [admin]
+      summary: List all categories
+      responses:
+        "200":
+          description: Categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Category"
+
+    post:
+      operationId: createAdminCategory
+      tags: [admin]
+      summary: Create a category
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategoryInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+
+  /admin/categories/{categoryId}:
+    patch:
+      operationId: updateAdminCategory
+      tags: [admin]
+      summary: Update a category
+      parameters:
+        - name: categoryId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategoryUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+
+    delete:
+      operationId: deleteAdminCategory
+      tags: [admin]
+      summary: Delete a category
+      parameters:
+        - name: categoryId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /admin/subcategories:
+    post:
+      operationId: createAdminSubcategory
+      tags: [admin]
+      summary: Create a subcategory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubcategoryInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subcategory"
+
+  /admin/subcategories/{subcategoryId}:
+    patch:
+      operationId: updateAdminSubcategory
+      tags: [admin]
+      summary: Update subcategory
+      parameters:
+        - name: subcategoryId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubcategoryUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subcategory"
+
+    delete:
+      operationId: deleteAdminSubcategory
+      tags: [admin]
+      summary: Delete subcategory
+      parameters:
+        - name: subcategoryId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /admin/templates:
+    get:
+      operationId: listAdminTemplates
+      tags: [admin]
+      summary: List all templates
+      responses:
+        "200":
+          description: Templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Template"
+
+    post:
+      operationId: createAdminTemplate
+      tags: [admin]
+      summary: Create a template
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TemplateInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Template"
+
+  /admin/templates/{templateId}:
+    patch:
+      operationId: updateAdminTemplate
+      tags: [admin]
+      summary: Update a template
+      parameters:
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TemplateUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Template"
+
+    delete:
+      operationId: deleteAdminTemplate
+      tags: [admin]
+      summary: Delete a template
+      parameters:
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /admin/settings:
+    get:
+      operationId: getAdminSettings
+      tags: [admin]
+      summary: Get all admin settings
+      responses:
+        "200":
+          description: All settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppSettings"
+
+    patch:
+      operationId: updateAdminSettings
+      tags: [admin]
+      summary: Update admin settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AppSettingsUpdate"
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppSettings"
+
+  /admin/layouts:
+    get:
+      operationId: listAdminLayouts
+      tags: [admin]
+      summary: List page layouts
+      responses:
+        "200":
+          description: Layouts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Layout"
+
+    post:
+      operationId: createAdminLayout
+      tags: [admin]
+      summary: Create a page layout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LayoutInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Layout"
+
+  /admin/layouts/{layoutId}:
+    patch:
+      operationId: updateAdminLayout
+      tags: [admin]
+      summary: Update a layout
+      parameters:
+        - name: layoutId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LayoutUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Layout"
+
+    delete:
+      operationId: deleteAdminLayout
+      tags: [admin]
+      summary: Delete a layout
+      parameters:
+        - name: layoutId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /admin/book-sizes:
+    get:
+      operationId: listAdminBookSizes
+      tags: [admin]
+      summary: List all book sizes (including inactive)
+      responses:
+        "200":
+          description: Book sizes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BookSize"
+
+    post:
+      operationId: createAdminBookSize
+      tags: [admin]
+      summary: Create a book size
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BookSizeInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BookSize"
+
+  /admin/book-sizes/{sizeId}:
+    patch:
+      operationId: updateAdminBookSize
+      tags: [admin]
+      summary: Update a book size
+      parameters:
+        - name: sizeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BookSizeUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BookSize"
+
+    delete:
+      operationId: deleteAdminBookSize
+      tags: [admin]
+      summary: Delete a book size
+      parameters:
+        - name: sizeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /admin/projects:
+    get:
+      operationId: listAdminProjects
+      tags: [admin]
+      summary: List all projects
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Paginated projects
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedProjects"
+
+  /admin/ip-blocklist:
+    get:
+      operationId: listAdminIpBlocklist
+      tags: [admin]
+      summary: List blocked IPs
+      responses:
+        "200":
+          description: Blocklist entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/IpBlocklistEntry"
+
+    post:
+      operationId: createAdminIpBlocklistEntry
+      tags: [admin]
+      summary: Block an IP address
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IpBlocklistInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IpBlocklistEntry"
+
+  /admin/ip-blocklist/{id}:
+    delete:
+      operationId: deleteAdminIpBlocklistEntry
+      tags: [admin]
+      summary: Unblock an IP address
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /admin/security/events:
+    get:
+      operationId: listAdminSecurityEvents
+      tags: [admin]
+      summary: Recent rate-limit and blocked-IP hits
+      responses:
+        "200":
+          description: Recent security events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SecurityEvent"
+
+# ─── SCHEMAS ──────────────────────────────────────────────────────────────
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+
+    SuccessResponse:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+        message:
+          type: ["string", "null"]
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    # ── Auth ──────────────────────────────────────────────────────────────
+
+    User:
+      type: object
+      required: [id, email, role, emailVerified, createdAt]
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+        phone:
+          type: ["string", "null"]
+        name:
+          type: ["string", "null"]
+        role:
+          type: string
+          enum: [user, admin]
+        emailVerified:
+          type: boolean
+        lastLoginAt:
+          type: ["string", "null"]
+        adminNote:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: ["string", "null"]
+
+    AuthResponse:
+      type: object
+      required: [user, accessToken]
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        accessToken:
+          type: string
+
+    RegisterInput:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+          minLength: 8
+        name:
+          type: string
+        recaptchaToken:
+          type: string
+
+    LoginInput:
+      type: object
+      required: [password]
+      properties:
+        email:
+          type: string
+        phone:
+          type: string
+        password:
+          type: string
+        rememberMe:
+          type: boolean
+        recaptchaToken:
+          type: string
+
+    PublicConfig:
+      type: object
+      required: [recaptcha]
+      properties:
+        recaptcha:
+          type: object
+          required: [siteKey, loginEnabled, registerEnabled]
+          properties:
+            siteKey:
+              type: string
+            loginEnabled:
+              type: boolean
+            registerEnabled:
+              type: boolean
+
+    ForgotPasswordInput:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+
+    ResetPasswordInput:
+      type: object
+      required: [token, password]
+      properties:
+        token:
+          type: string
+        password:
+          type: string
+          minLength: 8
+
+    VerifyEmailInput:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+
+    # ── Categories ────────────────────────────────────────────────────────
+
+    Category:
+      type: object
+      required: [id, slug, nameAl, nameEn, iconEmoji, sortOrder, isActive]
+      properties:
+        id:
+          type: integer
+        slug:
+          type: string
+        nameAl:
+          type: string
+        nameEn:
+          type: string
+        iconEmoji:
+          type: string
+        coverImage:
+          type: ["string", "null"]
+        sortOrder:
+          type: integer
+        isActive:
+          type: boolean
+
+    CategoryInput:
+      type: object
+      required: [slug, nameAl, nameEn, iconEmoji]
+      properties:
+        slug:
+          type: string
+        nameAl:
+          type: string
+        nameEn:
+          type: string
+        iconEmoji:
+          type: string
+        coverImage:
+          type: string
+        sortOrder:
+          type: integer
+        isActive:
+          type: boolean
+
+    CategoryUpdate:
+      type: object
+      properties:
+        slug:
+          type: string
+        nameAl:
+          type: string
+        nameEn:
+          type: string
+        iconEmoji:
+          type: string
+        coverImage:
+          type: string
+        sortOrder:
+          type: integer
+        isActive:
+          type: boolean
+
+    Subcategory:
+      type: object
+      required: [id, categoryId, slug, nameAl, nameEn, sortOrder, isActive]
+      properties:
+        id:
+          type: integer
+        categoryId:
+          type: integer
+        slug:
+          type: string
+        nameAl:
+          type: string
+        nameEn:
+          type: string
+        previewImage:
+          type: ["string", "null"]
+        sortOrder:
+          type: integer
+        isActive:
+          type: boolean
+
+    SubcategoryInput:
+      type: object
+      required: [categoryId, slug, nameAl, nameEn]
+      properties:
+        categoryId:
+          type: integer
+        slug:
+          type: string
+        nameAl:
+          type: string
+        nameEn:
+          type: string
+        previewImage:
+          type: string
+        sortOrder:
+          type: integer
+        isActive:
+          type: boolean
+
+    SubcategoryUpdate:
+      type: object
+      properties:
+        categoryId:
+          type: integer
+        slug:
+          type: string
+        nameAl:
+          type: string
+        nameEn:
+          type: string
+        previewImage:
+          type: string
+        sortOrder:
+          type: integer
+        isActive:
+          type: boolean
+
+    # ── Templates ─────────────────────────────────────────────────────────
+
+    Template:
+      type: object
+      required: [id, subcategoryId, nameAl, nameEn, coverImageUrl, isActive]
+      properties:
+        id:
+          type: integer
+        subcategoryId:
+          type: integer
+        nameAl:
+          type: string
+        nameEn:
+          type: string
+        coverImageUrl:
+          type: string
+        backCoverImageUrl:
+          type: ["string", "null"]
+        themeColors:
+          type: array
+          items:
+            type: string
+        fonts:
+          type: array
+          items:
+            type: string
+        isActive:
+          type: boolean
+
+    TemplateInput:
+      type: object
+      required: [subcategoryId, nameAl, nameEn, coverImageUrl]
+      properties:
+        subcategoryId:
+          type: integer
+        nameAl:
+          type: string
+        nameEn:
+          type: string
+        coverImageUrl:
+          type: string
+        backCoverImageUrl:
+          type: string
+        themeColors:
+          type: array
+          items:
+            type: string
+        fonts:
+          type: array
+          items:
+            type: string
+        isActive:
+          type: boolean
+
+    TemplateUpdate:
+      type: object
+      properties:
+        subcategoryId:
+          type: integer
+        nameAl:
+          type: string
+        nameEn:
+          type: string
+        coverImageUrl:
+          type: string
+        backCoverImageUrl:
+          type: string
+        themeColors:
+          type: array
+          items:
+            type: string
+        fonts:
+          type: array
+          items:
+            type: string
+        isActive:
+          type: boolean
+
+    # ── Book Sizes ────────────────────────────────────────────────────────
+
+    BookSize:
+      type: object
+      required: [id, widthCm, heightCm, label, priceBase, minPages, isActive]
+      properties:
+        id:
+          type: integer
+        widthCm:
+          type: number
+        heightCm:
+          type: number
+        label:
+          type: string
+        priceBase:
+          type: integer
+        pricePerExtraSpread:
+          type: integer
+        minPages:
+          type: integer
+        isActive:
+          type: boolean
+
+    BookSizeInput:
+      type: object
+      required: [widthCm, heightCm, label, priceBase, minPages]
+      properties:
+        widthCm:
+          type: number
+        heightCm:
+          type: number
+        label:
+          type: string
+        priceBase:
+          type: integer
+        pricePerExtraSpread:
+          type: integer
+        minPages:
+          type: integer
+        isActive:
+          type: boolean
+
+    BookSizeUpdate:
+      type: object
+      properties:
+        widthCm:
+          type: number
+        heightCm:
+          type: number
+        label:
+          type: string
+        priceBase:
+          type: integer
+        pricePerExtraSpread:
+          type: integer
+        minPages:
+          type: integer
+        isActive:
+          type: boolean
+
+    # ── Layouts ───────────────────────────────────────────────────────────
+
+    Layout:
+      type: object
+      required: [id, slug, nameAl, nameEn, gridDefinitionJson, isActive]
+      properties:
+        id:
+          type: integer
+        slug:
+          type: string
+        nameAl:
+          type: string
+        nameEn:
+          type: string
+        previewIcon:
+          type: ["string", "null"]
+        gridDefinitionJson:
+          type: string
+          description: JSON string defining the grid layout cells
+        isActive:
+          type: boolean
+
+    LayoutInput:
+      type: object
+      required: [slug, nameAl, nameEn, gridDefinitionJson]
+      properties:
+        slug:
+          type: string
+        nameAl:
+          type: string
+        nameEn:
+          type: string
+        previewIcon:
+          type: string
+        gridDefinitionJson:
+          type: string
+        isActive:
+          type: boolean
+
+    LayoutUpdate:
+      type: object
+      properties:
+        slug:
+          type: string
+        nameAl:
+          type: string
+        nameEn:
+          type: string
+        previewIcon:
+          type: string
+        gridDefinitionJson:
+          type: string
+        isActive:
+          type: boolean
+
+    # ── Projects ──────────────────────────────────────────────────────────
+
+    Project:
+      type: object
+      required: [id, userId, title, status, bookSizeId, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        templateId:
+          type: ["integer", "null"]
+        bookSizeId:
+          type: integer
+        title:
+          type: string
+        status:
+          type: string
+          enum: [draft, pdf_generating, pdf_ready, ordered]
+        pdfUrl:
+          type: ["string", "null"]
+        shareToken:
+          type: ["string", "null"]
+        pageCount:
+          type: integer
+        totalPriceLek:
+          type: integer
+        frontCoverJson:
+          type: ["string", "null"]
+          description: JSON-serialized element array for the front cover page, used to render a thumbnail without a separate pages fetch.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ProjectInput:
+      type: object
+      required: [bookSizeId, title]
+      properties:
+        templateId:
+          type: integer
+        bookSizeId:
+          type: integer
+        title:
+          type: string
+
+    ProjectUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+        bookSizeId:
+          type: integer
+
+    ProjectPage:
+      type: object
+      required: [id, projectId, pageNumber, pageType]
+      properties:
+        id:
+          type: integer
+        projectId:
+          type: integer
+        pageNumber:
+          type: integer
+        pageType:
+          type: string
+          enum: [front_cover, inside_cover, inner, back_cover]
+        layoutId:
+          type: ["integer", "null"]
+        contentJson:
+          type: string
+          description: JSON string of page canvas content
+        updatedAt:
+          type: string
+          format: date-time
+
+    ProjectPageInput:
+      type: object
+      required: [pageNumber, pageType]
+      properties:
+        pageNumber:
+          type: integer
+        pageType:
+          type: string
+          enum: [front_cover, inside_cover, inner, back_cover]
+        layoutId:
+          type: integer
+        contentJson:
+          type: string
+
+    ProjectPageUpdate:
+      type: object
+      properties:
+        layoutId:
+          type: integer
+        contentJson:
+          type: string
+        pageNumber:
+          type: integer
+
+    ProjectDetail:
+      type: object
+      required: [id, userId, title, status, bookSizeId, createdAt, updatedAt, pages]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        templateId:
+          type: ["integer", "null"]
+        bookSizeId:
+          type: integer
+        title:
+          type: string
+        status:
+          type: string
+          enum: [draft, pdf_generating, pdf_ready, ordered]
+        pdfUrl:
+          type: ["string", "null"]
+        shareToken:
+          type: ["string", "null"]
+        pageCount:
+          type: integer
+        totalPriceLek:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        pages:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProjectPage"
+
+    AutoSaveInput:
+      type: object
+      required: [pagesJson]
+      properties:
+        pagesJson:
+          type: string
+          description: JSON string of all page states
+
+    PdfGenerationResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [pending, generating, ready, error]
+        pdfUrl:
+          type: ["string", "null"]
+        shareToken:
+          type: ["string", "null"]
+        error:
+          type: ["string", "null"]
+
+    # ── Orders ────────────────────────────────────────────────────────────
+
+    Order:
+      type: object
+      required: [id, userId, projectId, status, priceLek, createdAt]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        projectId:
+          type: integer
+        status:
+          type: string
+          enum: [pending, confirmed, printing, shipped, delivered, cancelled]
+        priceLek:
+          type: integer
+        notes:
+          type: ["string", "null"]
+        adminNote:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: ["string", "null"]
+
+    OrderInput:
+      type: object
+      required: [projectId]
+      properties:
+        projectId:
+          type: integer
+        notes:
+          type: string
+
+    WhatsappLinkResponse:
+      type: object
+      required: [url, message]
+      properties:
+        url:
+          type: string
+        message:
+          type: string
+
+    # ── Uploads ───────────────────────────────────────────────────────────
+
+    ImageUpload:
+      type: object
+      required: [file]
+      properties:
+        file:
+          type: string
+          description: Base64 encoded image data
+
+    UploadResponse:
+      type: object
+      required: [url, filename]
+      properties:
+        url:
+          type: string
+        filename:
+          type: string
+        width:
+          type: ["integer", "null"]
+        height:
+          type: ["integer", "null"]
+
+    # ── App Settings ──────────────────────────────────────────────────────
+
+    AppSettings:
+      type: object
+      required: [whatsappNumber, basePriceLek, minPages, extraSpreadPriceLek, siteName]
+      properties:
+        whatsappNumber:
+          type: string
+        basePriceLek:
+          type: integer
+        minPages:
+          type: integer
+        extraSpreadPriceLek:
+          type: integer
+        siteName:
+          type: string
+        siteTaglineAl:
+          type: string
+        siteTaglineEn:
+          type: string
+        maintenanceMode:
+          type: boolean
+        pendingBooksLimitEnabled:
+          type: boolean
+        pendingBooksLimit:
+          type: integer
+        rateLimitGeneralWindowMs:
+          type: integer
+        rateLimitGeneralMax:
+          type: integer
+        rateLimitAuthWindowMs:
+          type: integer
+        rateLimitAuthMax:
+          type: integer
+        rateLimitAnalyticsWindowMs:
+          type: integer
+        rateLimitAnalyticsMax:
+          type: integer
+        rateLimitUploadsWindowMs:
+          type: integer
+        rateLimitUploadsMax:
+          type: integer
+        loginLockoutThreshold:
+          type: integer
+        loginLockoutMinutes:
+          type: integer
+        maxAlbumsPerUser:
+          type: integer
+        maxPhotosPerAlbum:
+          type: integer
+        maxOrdersPerDay:
+          type: integer
+        maxConcurrentPdfGenerations:
+          type: integer
+        maxUploadFileSizeMb:
+          type: integer
+        allowedUploadMimeTypes:
+          type: array
+          items:
+            type: string
+
+    AppSettingsUpdate:
+      type: object
+      properties:
+        whatsappNumber:
+          type: string
+        basePriceLek:
+          type: integer
+        minPages:
+          type: integer
+        extraSpreadPriceLek:
+          type: integer
+        siteName:
+          type: string
+        siteTaglineAl:
+          type: string
+        siteTaglineEn:
+          type: string
+        maintenanceMode:
+          type: boolean
+        pendingBooksLimitEnabled:
+          type: boolean
+        pendingBooksLimit:
+          type: integer
+        rateLimitGeneralWindowMs:
+          type: integer
+        rateLimitGeneralMax:
+          type: integer
+        rateLimitAuthWindowMs:
+          type: integer
+        rateLimitAuthMax:
+          type: integer
+        rateLimitAnalyticsWindowMs:
+          type: integer
+        rateLimitAnalyticsMax:
+          type: integer
+        rateLimitUploadsWindowMs:
+          type: integer
+        rateLimitUploadsMax:
+          type: integer
+        loginLockoutThreshold:
+          type: integer
+        loginLockoutMinutes:
+          type: integer
+        maxAlbumsPerUser:
+          type: integer
+        maxPhotosPerAlbum:
+          type: integer
+        maxOrdersPerDay:
+          type: integer
+        maxConcurrentPdfGenerations:
+          type: integer
+        maxUploadFileSizeMb:
+          type: integer
+        allowedUploadMimeTypes:
+          type: array
+          items:
+            type: string
+
+    # ── Admin ─────────────────────────────────────────────────────────────
+
+    AdminStats:
+      type: object
+      required: [totalUsers, totalOrders, totalProjects, ordersThisMonth, revenue, recentOrders]
+      properties:
+        totalUsers:
+          type: integer
+        totalOrders:
+          type: integer
+        totalProjects:
+          type: integer
+        ordersThisMonth:
+          type: integer
+        revenue:
+          type: integer
+        recentOrders:
+          type: array
+          items:
+            $ref: "#/components/schemas/Order"
+
+    AdminUserUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        role:
+          type: string
+          enum: [user, admin]
+        emailVerified:
+          type: boolean
+        isBanned:
+          type: boolean
+        adminNote:
+          type: string
+
+    ChangePasswordInput:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword:
+          type: string
+        newPassword:
+          type: string
+          minLength: 8
+
+    ChangePasswordResult:
+      type: object
+      required: [success, accessToken]
+      properties:
+        success:
+          type: boolean
+        accessToken:
+          type: string
+
+    AdminOrderUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [pending, confirmed, printing, shipped, delivered, cancelled]
+        notes:
+          type: string
+        adminNote:
+          type: string
+
+    PaginatedUsers:
+      type: object
+      required: [data, total, page, limit]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+
+    PaginatedOrders:
+      type: object
+      required: [data, total, page, limit]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Order"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+
+    IpBlocklistEntry:
+      type: object
+      required: [id, ip, createdAt]
+      properties:
+        id:
+          type: integer
+        ip:
+          type: string
+        reason:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    IpBlocklistInput:
+      type: object
+      required: [ip]
+      properties:
+        ip:
+          type: string
+        reason:
+          type: string
+
+    SecurityEvent:
+      type: object
+      required: [id, path, event, createdAt]
+      properties:
+        id:
+          type: integer
+        ip:
+          type: ["string", "null"]
+        path:
+          type: string
+        event:
+          type: string
+        createdAt:
+          type: string
+
+    PaginatedProjects:
+      type: object
+      required: [data, total, page, limit]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Project"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer

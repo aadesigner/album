@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Disallow: /projektet
+Disallow: /porositë
+Disallow: /editor/
+Disallow: /heyadmin
+Disallow: /hyr
+Disallow: /regjistrohu
+Disallow: /fjalekale-harruar
+
+Sitemap: https://pergjithmone.al/sitemap.xml
