@@ -8,8 +8,7 @@ ENV CI=true \
     NODE_ENV=production \
     PNPM_HOME="/pnpm" \
     PATH="/pnpm:$PATH" \
-    BASE_PATH=/ \
-    PORT=8080
+    BASE_PATH=/
 
 RUN corepack enable && corepack prepare pnpm@11.8.0 --activate
 
@@ -25,5 +24,5 @@ RUN pnpm --filter @workspace/pergjithmone build
 
 WORKDIR /app/artifacts/pergjithmone
 EXPOSE 8080
-# Serves the static build; /api is proxied via vite preview → API_URL
-CMD ["pnpm", "exec", "vite", "preview", "--config", "vite.config.ts", "--host", "0.0.0.0", "--port", "8080"]
+# Use Railway's injected PORT (do not hardcode).
+CMD ["node", "server.mjs"]
