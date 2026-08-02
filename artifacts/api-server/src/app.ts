@@ -158,6 +158,9 @@ app.use("/api/analytics", analyticsLimiter);
 app.use("/api/uploads", uploadsLimiter);
 
 // ── Routes ─────────────────────────────────────────────────────────────────
+app.get("/", (_req, res) => {
+  res.json({ ok: true, service: "api-server", health: "/api/healthz" });
+});
 app.use("/api", router);
 
 // ── Global error handler ────────────────────────────────────────────────────
@@ -184,10 +187,27 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     return;
   }
 
+  // Undefined table / relation — schema was never pushed to this database.
+  if (pgCode === "42P01") {
+    logger.error({ err }, "Database table missing — run drizzle-kit push");
+    res.status(503).json({
+      error: "Database is not initialized. Redeploy api-server so schema push can run.",
+    });
+    return;
+  }
+
   const status = err.status ?? err.statusCode ?? 500;
   const message = status < 500 ? err.message : "Internal server error";
-  if (status >= 500) logger.error({ err }, "Unhandled route error");
-  res.status(status).json({ error: message });
+  if (status >= 500) {
+    logger.error({ err, pgCode, detail: err?.message ?? err?.cause?.message }, "Unhandled route error");
+  }
+  res.status(status).json({
+    error: message,
+    // Help diagnose Railway deploys without leaking stacks to clients in prod.
+    ...(process.env.NODE_ENV !== "production" || process.env.DEBUG_API === "true"
+      ? { detail: err?.message ?? err?.cause?.message }
+      : {}),
+  });
 });
 
 export default app;

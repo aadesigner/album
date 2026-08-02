@@ -1,9 +1,8 @@
-# Railway: set Root Directory to "/" (monorepo root) for the api-server service.
+# Railway: Root Directory = /  |  Config-as-code = /artifacts/api-server/railway.toml
 FROM node:22-bookworm-slim
 WORKDIR /app
 
 ENV CI=true \
-    NODE_ENV=production \
     PNPM_HOME="/pnpm" \
     PATH="/pnpm:$PATH"
 
@@ -15,8 +14,12 @@ COPY artifacts ./artifacts
 COPY lib ./lib
 COPY scripts ./scripts
 
+# Install ALL deps (including drizzle-kit / esbuild). NODE_ENV=production here
+# would skip devDependencies and break build + schema push.
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @workspace/api-server build
+
+ENV NODE_ENV=production
 
 RUN chmod +x /app/artifacts/api-server/start.sh
 WORKDIR /app/artifacts/api-server
