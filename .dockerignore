@@ -1,0 +1,16 @@
+**/node_modules
+**/.git
+**/.local
+**/.cache
+**/dist
+**/coverage
+**/playwright-report
+**/test-results
+**/.env
+**/.env.*
+**/*.md
+.agents
+.cursor
+attached_assets
+artifacts/mockup-sandbox
+artifacts/pergjithmone/e2e
