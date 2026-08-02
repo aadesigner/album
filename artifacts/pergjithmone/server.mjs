@@ -7,12 +7,24 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { Readable } from "node:stream";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const distDir = path.join(__dirname, "dist", "public");
+const distDir = path.resolve(__dirname, "dist", "public");
 const port = Number(process.env.PORT || 8080);
-const apiUrl = (process.env.API_URL || process.env.VITE_API_URL || "").replace(/\/$/, "");
+
+function normalizeApiUrl(raw) {
+  const value = String(raw || "").trim().replace(/\/$/, "");
+  if (!value) return "";
+  try {
+    const u = new URL(value);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return "";
+    return u.origin + (u.pathname === "/" ? "" : u.pathname.replace(/\/$/, ""));
+  } catch {
+    return "";
+  }
+}
+
+const apiUrl = normalizeApiUrl(process.env.API_URL || process.env.VITE_API_URL);
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -34,10 +46,11 @@ const MIME = {
 };
 
 function sendJson(res, status, body) {
+  if (res.headersSent) return;
   const payload = JSON.stringify(body);
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
-    "Cache-Control": "private, max-age=0",
+    "Cache-Control": "no-store",
     "Content-Length": Buffer.byteLength(payload),
   });
   res.end(payload);
@@ -50,10 +63,25 @@ function sendFile(res, filePath) {
     "Content-Type": type,
     "Cache-Control": ext === ".html" ? "no-cache" : "public, max-age=31536000, immutable",
   });
-  fs.createReadStream(filePath).pipe(res);
+  fs.createReadStream(filePath)
+    .on("error", (err) => {
+      console.error("[static]", filePath, err.message);
+      if (!res.headersSent) sendJson(res, 500, { error: "Failed to read file" });
+      else res.end();
+    })
+    .pipe(res);
 }
 
-async function proxyApi(req, res, url) {
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on("data", (c) => chunks.push(c));
+    req.on("end", () => resolve(Buffer.concat(chunks)));
+    req.on("error", reject);
+  });
+}
+
+async function proxyApi(req, res, pathname, search) {
   if (!apiUrl) {
     sendJson(res, 503, {
       error: "API_URL is not set on the frontend service. Point it at api-server.",
@@ -61,99 +89,128 @@ async function proxyApi(req, res, url) {
     return;
   }
 
-  const target = `${apiUrl}${url.pathname}${url.search}`;
-  const headers = new Headers();
+  const target = `${apiUrl}${pathname}${search}`;
+  const headers = {};
   for (const [key, value] of Object.entries(req.headers)) {
     if (value == null) continue;
     const lower = key.toLowerCase();
-    if (lower === "host" || lower === "connection" || lower === "content-length") continue;
-    if (Array.isArray(value)) headers.set(key, value.join(","));
-    else headers.set(key, value);
+    if (
+      lower === "host" ||
+      lower === "connection" ||
+      lower === "content-length" ||
+      lower === "transfer-encoding" ||
+      lower === "keep-alive"
+    ) {
+      continue;
+    }
+    headers[key] = Array.isArray(value) ? value.join(",") : value;
   }
-  headers.set("host", new URL(apiUrl).host);
+  headers.host = new URL(apiUrl).host;
 
-  const hasBody = req.method !== "GET" && req.method !== "HEAD";
+  const method = req.method || "GET";
+  const body =
+    method === "GET" || method === "HEAD" ? undefined : await readBody(req);
+
   try {
     const upstream = await fetch(target, {
-      method: req.method,
+      method,
       headers,
-      body: hasBody ? Readable.toWeb(req) : undefined,
-      duplex: hasBody ? "half" : undefined,
+      body,
       redirect: "manual",
     });
 
-    res.writeHead(upstream.status, Object.fromEntries(upstream.headers));
-    if (!upstream.body) {
-      res.end();
-      return;
-    }
-    Readable.fromWeb(upstream.body).pipe(res);
+    const outHeaders = {};
+    upstream.headers.forEach((value, key) => {
+      const lower = key.toLowerCase();
+      if (lower === "transfer-encoding" || lower === "connection") return;
+      outHeaders[key] = value;
+    });
+
+    const buf = Buffer.from(await upstream.arrayBuffer());
+    outHeaders["content-length"] = String(buf.byteLength);
+    res.writeHead(upstream.status, outHeaders);
+    res.end(buf);
   } catch (err) {
-    console.error("[proxy]", req.method, url.pathname, err);
-    sendJson(res, 502, { error: "Bad gateway — could not reach API_URL" });
+    console.error("[proxy]", method, pathname, err?.message || err);
+    sendJson(res, 502, {
+      error: "Bad gateway — could not reach API_URL",
+      detail: String(err?.message || err),
+      apiUrl,
+    });
   }
 }
 
 function resolveStatic(pathname) {
-  const safe = path.normalize(decodeURIComponent(pathname)).replace(/^(\.\.[/\\])+/, "");
-  const filePath = path.join(distDir, safe);
-  if (!filePath.startsWith(distDir)) return null;
-  if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) return filePath;
+  let decoded = pathname;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {
+    return null;
+  }
+  const safe = path.normalize(decoded).replace(/^(\.\.[/\\])+/, "");
+  const filePath = path.resolve(distDir, "." + (safe.startsWith("/") ? safe : `/${safe}`));
+  if (!filePath.startsWith(distDir + path.sep) && filePath !== distDir) return null;
+  try {
+    if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) return filePath;
+  } catch {
+    return null;
+  }
   return null;
 }
 
-if (!fs.existsSync(path.join(distDir, "index.html"))) {
-  console.error(`[pergjithmone] Missing ${path.join(distDir, "index.html")} — run build first`);
+const indexHtml = path.join(distDir, "index.html");
+if (!fs.existsSync(indexHtml)) {
+  console.error(`[pergjithmone] Missing ${indexHtml} — run build first`);
   process.exit(1);
 }
 
-if (!apiUrl) {
-  console.warn(
-    "[pergjithmone] API_URL is not set. /api requests (except /api/geo) will return 503.",
-  );
-}
+console.log(`[pergjithmone] dist=${distDir}`);
+console.log(`[pergjithmone] API_URL=${apiUrl || "(unset — /api will 503)"}`);
 
-const server = http.createServer(async (req, res) => {
-  try {
-    const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+const server = http.createServer((req, res) => {
+  void (async () => {
+    try {
+      const host = req.headers.host || "localhost";
+      const url = new URL(req.url || "/", `http://${host}`);
 
-    if (url.pathname === "/api/geo" || url.pathname === "/api/geo/") {
-      const raw = String(req.headers["cf-ipcountry"] ?? "XX").trim().toUpperCase();
-      const country = /^[A-Z]{2}$/.test(raw) ? raw : "XX";
-      sendJson(res, 200, { country });
-      return;
-    }
-
-    if (url.pathname.startsWith("/api/") || url.pathname === "/api") {
-      await proxyApi(req, res, url);
-      return;
-    }
-
-    const exact = resolveStatic(url.pathname === "/" ? "/index.html" : url.pathname);
-    if (exact) {
-      sendFile(res, exact);
-      return;
-    }
-
-    // SPA fallback for client routes like /krijo, /hyr (no file extension).
-    if (!path.extname(url.pathname)) {
-      const index = resolveStatic("/index.html");
-      if (index) {
-        sendFile(res, index);
+      if (url.pathname === "/api/geo" || url.pathname === "/api/geo/") {
+        const raw = String(req.headers["cf-ipcountry"] ?? "XX").trim().toUpperCase();
+        const country = /^[A-Z]{2}$/.test(raw) ? raw : "XX";
+        sendJson(res, 200, { country });
         return;
       }
+
+      if (url.pathname.startsWith("/api/") || url.pathname === "/api") {
+        await proxyApi(req, res, url.pathname, url.search);
+        return;
+      }
+
+      // Health for Railway
+      if (url.pathname === "/healthz") {
+        sendJson(res, 200, { ok: true });
+        return;
+      }
+
+      const exact = resolveStatic(url.pathname === "/" ? "/index.html" : url.pathname);
+      if (exact) {
+        sendFile(res, exact);
+        return;
+      }
+
+      // SPA fallback for client routes like /krijo, /hyr
+      if (!path.extname(url.pathname)) {
+        sendFile(res, indexHtml);
+        return;
+      }
+
+      sendJson(res, 404, { error: "Not found" });
+    } catch (err) {
+      console.error("[server]", err);
+      sendJson(res, 500, { error: "Internal server error" });
     }
-
-    sendJson(res, 404, { error: "Not found" });
-
-  } catch (err) {
-    console.error("[server]", err);
-    if (!res.headersSent) sendJson(res, 500, { error: "Internal server error" });
-    else res.end();
-  }
+  })();
 });
 
 server.listen(port, "0.0.0.0", () => {
   console.log(`[pergjithmone] listening on 0.0.0.0:${port}`);
-  console.log(`[pergjithmone] API_URL=${apiUrl || "(unset)"}`);
 });
