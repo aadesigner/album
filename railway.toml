@@ -1,0 +1,12 @@
+# Used by the api-server service.
+# In Railway → api-server → Settings:
+#   Root Directory = /   (repo root, not a subfolder)
+#   Config-as-code path = /railway.toml  (optional if auto-detected)
+
+[build]
+builder = "RAILPACK"
+buildCommand = "pnpm --filter @workspace/api-server build"
+
+[deploy]
+startCommand = "pnpm --filter @workspace/api-server start"
+restartPolicyType = "ON_FAILURE"
