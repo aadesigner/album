@@ -2340,7 +2340,7 @@ export default function Editor() {
                 onClick={()=>{ setActiveSide('left'); setSelectedId(null); }}
                 className={`flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
                   activeSide==='left'
-                    ? 'text-neutral-500 active:bg-neutral-100'
+                    ? 'text-neutral-300 active:bg-neutral-100'
                     : 'bg-neutral-900 text-white'
                 }`}>
                 <ChevronLeft size={14}/>{lang==='sq'?'E majtë':'Left'}
@@ -2356,7 +2356,7 @@ export default function Editor() {
                 onClick={()=>{ setActiveSide('right'); setSelectedId(null); }}
                 className={`flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
                   activeSide==='right'
-                    ? 'text-neutral-500 active:bg-neutral-100'
+                    ? 'text-neutral-300 active:bg-neutral-100'
                     : 'bg-neutral-900 text-white'
                 }`}>
                 {lang==='sq'?'E djathtë':'Right'}<ChevronRight size={14}/>
