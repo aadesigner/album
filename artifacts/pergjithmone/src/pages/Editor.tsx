@@ -295,16 +295,18 @@ function KPlaceholderEl({el,isSelected,onSelect,onOpenPhotos,shapeRefs}: {
 // Page Canvas
 // ─────────────────────────────────────────────────────────────────────────────
 
-function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos,onDelete,onGestureStart,onElementDragActive,editRequestId,onEditRequestHandled,isActive,pageW,pageH,canvasH,shapeRefs,side,isMobile}: {
+function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos,onDelete,onGestureStart,onElementDragActive,onPageSwipe,editRequestId,onEditRequestHandled,isActive,pageW,pageH,canvasH,shapeRefs,side,isMobile}: {
   page:PageDef; elements:EditorElement[]; selectedId:string|null;
   onSelectId:(id:string|null)=>void; onChangeEl:(id:string,c:Partial<EditorElement>)=>void;
   onOpenPhotos?:()=>void; onDelete?:()=>void; onGestureStart?:()=>void;
   onElementDragActive?:(active:boolean)=>void;
+  onPageSwipe?:(dir:1|-1)=>void;
   editRequestId?:string|null; onEditRequestHandled?:()=>void;
   isActive:boolean; pageW:number; pageH:number; canvasH:number;
   shapeRefs:React.MutableRefObject<Record<string,any>>; side:'left'|'right'|'solo'; isMobile?:boolean;
 }) {
   const trRef = useRef<any>(null);
+  const stageRef = useRef<any>(null);
   const scX = pageW/DESIGN_W, scY = pageH/canvasH;
 
   const [editId,setEditId]=useState<string|null>(null);
@@ -312,6 +314,8 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
   const textareaRef=useRef<HTMLTextAreaElement>(null);
   const deleteBtnRef=useRef<HTMLDivElement>(null);
   const draggingRef=useRef(false);
+  const onPageSwipeRef=useRef(onPageSwipe);
+  onPageSwipeRef.current=onPageSwipe;
   // The box never shrinks below whatever height it started editing at
   // (the template's design height), but grows to fit longer text.
   const editMinHRef=useRef(0);
@@ -354,6 +358,50 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
     onEditRequestHandled?.();
   },[editRequestId,elements,isActive,startEdit,onEditRequestHandled]);
 
+  // Page swipe on Konva's own container — attaches after the stage paints.
+  useEffect(()=>{
+    if(!isMobile||!onPageSwipe) return;
+    let cancelled=false;
+    let el:HTMLElement|null=null;
+    let start:{x:number;y:number;t:number}|null=null;
+
+    const onStart=(e:TouchEvent)=>{
+      if(e.touches.length!==1||draggingRef.current||editId){ start=null; return; }
+      start={x:e.touches[0].clientX,y:e.touches[0].clientY,t:Date.now()};
+    };
+    const onEnd=(e:TouchEvent)=>{
+      if(!start||draggingRef.current){ start=null; return; }
+      const dx=e.changedTouches[0].clientX-start.x;
+      const dy=e.changedTouches[0].clientY-start.y;
+      const dt=Math.max(1,Date.now()-start.t);
+      start=null;
+      if(Math.abs(dx)<=Math.abs(dy)) return;
+      const vel=Math.abs(dx)/dt;
+      if(Math.abs(dx)<24 && vel<0.2) return;
+      onPageSwipeRef.current?.(dx<0 ? 1 : -1);
+    };
+    const onCancel=()=>{ start=null; };
+
+    const attach=()=>{
+      if(cancelled) return;
+      const stage=stageRef.current;
+      el=(stage?.container?.() as HTMLElement|undefined)??null;
+      if(!el){ requestAnimationFrame(attach); return; }
+      el.style.touchAction='pan-y';
+      el.addEventListener('touchstart',onStart,{passive:true});
+      el.addEventListener('touchend',onEnd,{passive:true});
+      el.addEventListener('touchcancel',onCancel,{passive:true});
+    };
+    attach();
+    return ()=>{
+      cancelled=true;
+      if(!el) return;
+      el.removeEventListener('touchstart',onStart);
+      el.removeEventListener('touchend',onEnd);
+      el.removeEventListener('touchcancel',onCancel);
+    };
+  },[isMobile,onPageSwipe,editId,pageW,pageH]);
+
   useEffect(()=>{
     if (!trRef.current) return;
     const node=(isActive&&selectedId&&selectedId!==editId)?shapeRefs.current[selectedId]:null;
@@ -386,7 +434,7 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
 
   return (
     <div style={{position:'relative',width:pageW,height:pageH,flexShrink:0}}>
-      <Stage width={pageW} height={pageH} scaleX={scX} scaleY={scY}
+      <Stage ref={stageRef} width={pageW} height={pageH} scaleX={scX} scaleY={scY}
         pixelRatio={isMobile ? Math.min(window.devicePixelRatio ?? 1, 1.5) : window.devicePixelRatio ?? 1}
         onMouseDown={(e:any)=>{if(e.target===e.target.getStage()){if(editId)commitEdit();onSelectId(null);}}}
         onTouchStart={(e:any)=>{if(e.target===e.target.getStage()){if(editId)commitEdit();onSelectId(null);}}}>
@@ -668,17 +716,36 @@ function LockedPageView({pageW,pageH,role,side}: {pageW:number;pageH:number;role
 // Spread View — realistic book
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SpreadView = React.memo(function SpreadView({spread,spreadContent,selectedId,activeSide,onActiveSide,onSelectId,onChangeEl,onOpenPhotos,onDelete,onGestureStart,onElementDragActive,editRequestId,onEditRequestHandled,pageW,pageH,canvasH,shapeRefs,isMobile}: {
+const SpreadView = React.memo(function SpreadView({spread,spreadContent,selectedId,activeSide,onActiveSide,onSelectId,onChangeEl,onOpenPhotos,onDelete,onGestureStart,onElementDragActive,onPageSwipe,editRequestId,onEditRequestHandled,pageW,pageH,canvasH,shapeRefs,isMobile}: {
   spread:SpreadDef; spreadContent:Record<number,EditorElement[]>;
   selectedId:string|null; activeSide:'left'|'right'; onActiveSide:(s:'left'|'right')=>void;
   onSelectId:(id:string|null)=>void; onChangeEl:(pid:number,eid:string,c:Partial<EditorElement>)=>void;
   onOpenPhotos?:()=>void; onDelete?:()=>void; onGestureStart?:()=>void;
   onElementDragActive?:(active:boolean)=>void;
+  onPageSwipe?:(dir:1|-1)=>void;
   editRequestId?:string|null; onEditRequestHandled?:()=>void;
   pageW:number; pageH:number; canvasH:number;
   shapeRefs:React.MutableRefObject<Record<string,any>>; isMobile?:boolean;
 }) {
   const effectiveSpineW = SPINE_W;
+  // DOM swipe for locked/empty pages (no Konva stage). Editable pages swipe via PageCanvas.
+  const swipeStartRef=useRef<{x:number;y:number;t:number}|null>(null);
+  const onDomSwipeStart=(e:React.TouchEvent)=>{
+    if(!onPageSwipe) return;
+    swipeStartRef.current={x:e.touches[0].clientX,y:e.touches[0].clientY,t:Date.now()};
+  };
+  const onDomSwipeEnd=(e:React.TouchEvent)=>{
+    if(!onPageSwipe||!swipeStartRef.current) return;
+    const dx=e.changedTouches[0].clientX-swipeStartRef.current.x;
+    const dy=e.changedTouches[0].clientY-swipeStartRef.current.y;
+    const dt=Math.max(1,Date.now()-swipeStartRef.current.t);
+    swipeStartRef.current=null;
+    if(Math.abs(dx)<=Math.abs(dy)) return;
+    const vel=Math.abs(dx)/dt;
+    if(Math.abs(dx)<24 && vel<0.2) return;
+    onPageSwipe(dx<0 ? 1 : -1);
+  };
+
   const renderSide=(page:PageDef|null,side:'left'|'right')=>{
     if (!page) return <div style={{width:pageW,height:pageH,flexShrink:0,background:'#EAE5DC'}}/>;
     const locked=page.role==='locked_left'||page.role==='locked_right';
@@ -688,7 +755,7 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
         selectedId={selectedId}
         onSelectId={(id)=>{ onActiveSide(side); onSelectId(id); }}
         onChangeEl={(eid,c)=>onChangeEl(page.dbId,eid,c)} onOpenPhotos={onOpenPhotos} onDelete={onDelete}
-        onGestureStart={onGestureStart} onElementDragActive={onElementDragActive}
+        onGestureStart={onGestureStart} onElementDragActive={onElementDragActive} onPageSwipe={onPageSwipe}
         editRequestId={editRequestId} onEditRequestHandled={onEditRequestHandled}
         isActive={activeSide===side} pageW={pageW} pageH={pageH} canvasH={canvasH} shapeRefs={shapeRefs} side={side} isMobile={isMobile}/>
     </div>;
@@ -707,7 +774,7 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
         <PageCanvas page={soloPage} elements={spreadContent[soloPage.dbId]??[]}
           selectedId={selectedId} onSelectId={onSelectId}
           onChangeEl={(eid,c)=>onChangeEl(soloPage.dbId,eid,c)} onOpenPhotos={onOpenPhotos} onDelete={onDelete}
-          onGestureStart={onGestureStart} onElementDragActive={onElementDragActive}
+          onGestureStart={onGestureStart} onElementDragActive={onElementDragActive} onPageSwipe={onPageSwipe}
           editRequestId={editRequestId} onEditRequestHandled={onEditRequestHandled}
           isActive={true} pageW={pageW} pageH={pageH} canvasH={canvasH} shapeRefs={shapeRefs} side="solo" isMobile={isMobile}/>
       </div>
@@ -733,10 +800,16 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
   // Mobile: show one page at a time using activeSide as the selector
   if (isMobile) {
     const page = activeSide === 'left' ? spread.left : spread.right;
-    if (!page) return <div style={{width:pageW,height:pageH,background:'#EAE5DC'}}/>;
+    if (!page) {
+      return (
+        <div style={{width:pageW,height:pageH,background:'#EAE5DC',touchAction:'pan-y'}}
+          onTouchStart={onDomSwipeStart} onTouchEnd={onDomSwipeEnd}/>
+      );
+    }
     const locked = page.role === 'locked_left' || page.role === 'locked_right';
     return (
-      <div className="flex items-center justify-center">
+      <div className="flex items-center justify-center"
+        {...(locked ? {onTouchStart:onDomSwipeStart,onTouchEnd:onDomSwipeEnd,style:{touchAction:'pan-y' as const}} : {})}>
         <div style={{
           boxShadow:'0 28px 72px rgba(0,0,0,0.34), 0 10px 22px rgba(0,0,0,0.20), 0 3px 6px rgba(0,0,0,0.12)',
           outline:'1.5px solid rgba(0,0,0,0.72)',outlineOffset:0,
@@ -748,7 +821,7 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
                 onSelectId={id=>{ onActiveSide(activeSide); onSelectId(id); }}
                 onChangeEl={(eid,c)=>onChangeEl(page.dbId,eid,c)}
                 onOpenPhotos={onOpenPhotos} onDelete={onDelete}
-                onGestureStart={onGestureStart} onElementDragActive={onElementDragActive}
+                onGestureStart={onGestureStart} onElementDragActive={onElementDragActive} onPageSwipe={onPageSwipe}
                 editRequestId={editRequestId} onEditRequestHandled={onEditRequestHandled}
                 isActive={true} pageW={pageW} pageH={pageH} canvasH={canvasH} shapeRefs={shapeRefs} side="solo" isMobile={true}/>
           }
@@ -1535,7 +1608,6 @@ export default function Editor() {
 
   const shapeRefs=useRef<Record<string,any>>({});
   const canvasRef=useRef<HTMLDivElement>(null);
-  const swipeCleanupRef=useRef<(()=>void)|null>(null);
   const headerSwipeRef=useRef<{y:number}|null>(null);
   const [headerCollapsed,setHeaderCollapsed]=useState(false);
   const saveTimer=useRef<ReturnType<typeof setTimeout>|undefined>(undefined);
@@ -1728,88 +1800,39 @@ export default function Editor() {
     setSpreadIdx(i); setSelectedId(null); setActiveSide('right');
   },[]);
 
-  // Page swipe: attach via callback ref so listeners bind AFTER the loading
-  // skeleton unmounts (a mount-only useEffect saw canvasRef=null and never ran).
-  const elementDragActiveRef=useRef(false);
-  const onElementDragActive=useCallback((active:boolean)=>{
-    elementDragActiveRef.current=active;
+  const onElementDragActive=useCallback((_active:boolean)=>{
+    // Page swipe yields via PageCanvas draggingRef while transforming.
   },[]);
-  const pageSwipeRef=useRef({
-    spreadIdx, spreadsLen:spreads.length, isSolo:!!currentSpread?.isSolo,
-    activeSide, isMobile,
-  });
-  pageSwipeRef.current={
-    spreadIdx, spreadsLen:spreads.length, isSolo:!!currentSpread?.isSolo,
-    activeSide, isMobile,
-  };
-  const bindCanvasRef=useCallback((node:HTMLDivElement|null)=>{
-    canvasRef.current=node;
-    swipeCleanupRef.current?.();
-    swipeCleanupRef.current=null;
-    if(!node) return;
 
-    let start:{x:number;y:number;t:number}|null=null;
-    let armed=false;
-    const cancel=()=>{ start=null; armed=false; };
-
-    const isFormTarget=(t:EventTarget|null)=>{
-      const n=t as HTMLElement|null;
-      return Boolean(n && typeof n.closest==='function' && n.closest('textarea,input,select,[contenteditable="true"]'));
-    };
-
-    const go=(dx:number)=>{
-      const s=pageSwipeRef.current;
-      const next=()=>{ if(s.spreadIdx<s.spreadsLen-1){ setSpreadIdx(s.spreadIdx+1); setSelectedId(null); setActiveSide('left'); } };
-      const prev=()=>{ if(s.spreadIdx>0){ setSpreadIdx(s.spreadIdx-1); setSelectedId(null); setActiveSide(s.isMobile?'right':'left'); } };
-      if(s.isMobile && !s.isSolo){
-        if(dx<0){
-          if(s.activeSide==='left'){ setActiveSide('right'); setSelectedId(null); }
-          else next();
-        } else {
-          if(s.activeSide==='right'){ setActiveSide('left'); setSelectedId(null); }
-          else prev();
-        }
+  // Flat page steps so mobile swipe walks cover → every page → back cover.
+  const pageSteps=useMemo(()=>{
+    const steps:{spreadIdx:number;side:'left'|'right'}[]=[];
+    spreads.forEach((sp,i)=>{
+      if(sp.isSolo){
+        steps.push({spreadIdx:i,side:sp.left?'left':'right'});
       } else {
-        if(dx<0) next(); else prev();
+        if(sp.left) steps.push({spreadIdx:i,side:'left'});
+        if(sp.right) steps.push({spreadIdx:i,side:'right'});
       }
-    };
+    });
+    return steps;
+  },[spreads]);
 
-    const onStart=(e:TouchEvent)=>{
-      if(e.touches.length!==1||elementDragActiveRef.current||isFormTarget(e.target)){ cancel(); return; }
-      start={x:e.touches[0].clientX,y:e.touches[0].clientY,t:Date.now()};
-      armed=false;
-    };
-    const onMove=(e:TouchEvent)=>{
-      if(!start||e.touches.length!==1) return;
-      if(elementDragActiveRef.current){ cancel(); return; }
-      const dx=e.touches[0].clientX-start.x;
-      const dy=e.touches[0].clientY-start.y;
-      if(!armed && Math.abs(dx)>6 && Math.abs(dx)>=Math.abs(dy)) armed=true;
-      if(armed){ e.preventDefault(); e.stopPropagation(); }
-    };
-    const onEnd=(e:TouchEvent)=>{
-      if(!start) return;
-      if(elementDragActiveRef.current){ cancel(); return; }
-      const dx=e.changedTouches[0].clientX-start.x;
-      const dy=e.changedTouches[0].clientY-start.y;
-      const dt=Math.max(1,Date.now()-start.t);
-      cancel();
-      if(Math.abs(dx)<=Math.abs(dy)) return;
-      const vel=Math.abs(dx)/dt;
-      if(Math.abs(dx)<20 && vel<0.18) return;
-      go(dx);
-    };
+  const pageNavRef=useRef({pageSteps,spreadIdx,activeSide});
+  pageNavRef.current={pageSteps,spreadIdx,activeSide};
 
-    node.addEventListener('touchstart',onStart,{passive:true,capture:true});
-    node.addEventListener('touchmove',onMove,{passive:false,capture:true});
-    node.addEventListener('touchend',onEnd,{passive:true,capture:true});
-    node.addEventListener('touchcancel',cancel,{passive:true,capture:true});
-    swipeCleanupRef.current=()=>{
-      node.removeEventListener('touchstart',onStart,true);
-      node.removeEventListener('touchmove',onMove,true);
-      node.removeEventListener('touchend',onEnd,true);
-      node.removeEventListener('touchcancel',cancel,true);
-    };
+  const onPageSwipe=useCallback((dir:1|-1)=>{
+    const {pageSteps:steps,spreadIdx:si,activeSide:side}=pageNavRef.current;
+    if(!steps.length) return;
+    const cur=steps.findIndex(s=>s.spreadIdx===si && s.side===side);
+    const from=cur>=0 ? cur : steps.findIndex(s=>s.spreadIdx===si);
+    if(from<0) return;
+    const next=from+dir;
+    if(next<0||next>=steps.length) return;
+    const step=steps[next];
+    setSpreadIdx(step.spreadIdx);
+    setActiveSide(step.side);
+    setSelectedId(null);
   },[]);
 
   // The actual network save, shared by the debounced auto-save and by
@@ -2362,11 +2385,11 @@ export default function Editor() {
             </div>
           )}
 
-          {/* Canvas area — page swipe via bindCanvasRef (native touch listeners) */}
-          <div ref={bindCanvasRef}
+          {/* Canvas area — page swipe handled on Konva stage (PageCanvas) */}
+          <div ref={canvasRef}
             className="flex-1 min-h-0 flex items-center justify-center"
             style={isMobile
-              ? {overflow:'hidden',padding:'12px',touchAction:'none'}
+              ? {overflow:'hidden',padding:'12px',touchAction:'pan-y'}
               : {padding:'32px 40px',overflowY:'auto',display:'flex',alignItems:'center',justifyContent:'center',touchAction:'pan-y'}}>
             {currentSpread ? (
               <SpreadView spread={currentSpread} spreadContent={spreadContent}
@@ -2375,6 +2398,7 @@ export default function Editor() {
                 onSelectId={setSelectedId} onChangeEl={changeEl} onOpenPhotos={openPhotos} onDelete={deleteSelected}
                 onGestureStart={beginHistoryGesture}
                 onElementDragActive={onElementDragActive}
+                onPageSwipe={isMobile ? onPageSwipe : undefined}
                 editRequestId={editRequestId} onEditRequestHandled={clearEditRequest}
                 pageW={pageW} pageH={pageH} canvasH={canvasH} shapeRefs={shapeRefs} isMobile={isMobile}/>
             ) : <p className="text-neutral-400 text-sm">No pages found</p>}
