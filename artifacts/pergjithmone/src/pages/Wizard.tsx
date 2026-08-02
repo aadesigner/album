@@ -386,7 +386,7 @@ export default function Wizard() {
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
                     {categories?.map((cat: any, idx: number) => {
-                      const imgSrc = getCategoryImage(cat.nameAl, cat.coverImage);
+                      const imgSrc = getCategoryImage(cat.nameAl, cat.coverImage, cat.slug);
                       return (
                         <motion.button
                           key={cat.id}

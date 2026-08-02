@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo, useDeferredValue, startTransition } from 'react';
 import { Stage, Layer, Rect, Text as KonvaText, Image as KonvaImage, Transformer } from 'react-konva';
 import { useGetProject, useCreateOrder, useGetOrderWhatsapp, useListBookSizes, getGetProjectQueryKey, getGetOrderWhatsappQueryKey, getListProjectsQueryKey } from '@workspace/api-client-react-tsconfig';
 import { useQueryClient } from '@tanstack/react-query';
@@ -38,6 +38,16 @@ import { compressImageFile, ImageTooLargeError } from '@/lib/imageCompression';
 const PAPER_COLOR = '#FEFDF9';
 const SPINE_W = 1;
 const PAPER_TEXTURE = `url("data:image/svg+xml,<svg viewBox='0 0 300 300' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/></filter><rect width='300' height='300' filter='url(%23n)'/></svg>")`;
+
+/** Live clamp while dragging so elements don't jump on release. */
+function dragBoundBox(pos: { x: number; y: number }, w: number, h: number, canvasH: number) {
+  const maxX = Math.max(0, DESIGN_W - w);
+  const maxY = Math.max(0, canvasH - h);
+  return {
+    x: Math.min(Math.max(pos.x, 0), maxX),
+    y: Math.min(Math.max(pos.y, 0), maxY),
+  };
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -142,33 +152,40 @@ function KBgEl({el,canvasH}: {el: EditorElement; canvasH:number}) {
   return <Rect x={0} y={0} width={DESIGN_W} height={canvasH} fill={el.bgColor||PAPER_COLOR} listening={false}/>;
 }
 
-function KShapeEl({el,isSelected,onSelect,onChange,shapeRefs,canvasH}: {
+function KShapeEl({el,isSelected,onSelect,onChange,onGestureStart,onDragActive,shapeRefs,canvasH}: {
   el: EditorElement; isSelected: boolean; onSelect:()=>void;
-  onChange:(c:Partial<EditorElement>)=>void; shapeRefs:React.MutableRefObject<Record<string,any>>; canvasH:number;
+  onChange:(c:Partial<EditorElement>)=>void; onGestureStart?:()=>void;
+  onDragActive?:(active:boolean)=>void;
+  shapeRefs:React.MutableRefObject<Record<string,any>>; canvasH:number;
 }) {
   const cr = el.shapeKind==='circle' ? Math.min(el.w,el.h)/2 : (el.cornerRadius??0);
   return <Rect ref={(n:any)=>{if(n) shapeRefs.current[el.id]=n;}}
     x={el.x} y={el.y} width={el.w} height={el.h} fill={el.fill||'transparent'}
     stroke={el.strokeColor} strokeWidth={el.strokeWidth||0} dash={el.strokeDash}
     cornerRadius={cr} rotation={el.rotation} opacity={el.opacity??1}
+    perfectDrawEnabled={false}
     onClick={onSelect} onTap={onSelect} draggable={isSelected}
+    dragBoundFunc={(pos:any)=>dragBoundBox(pos,el.w,el.h,canvasH)}
+    onDragStart={()=>{onGestureStart?.();onDragActive?.(true);}}
     onDragEnd={(e:any)=>{
-      const nx=Math.min(Math.max(e.target.x(),0),DESIGN_W-el.w);
-      const ny=Math.min(Math.max(e.target.y(),0),canvasH-el.h);
-      e.target.x(nx);e.target.y(ny);onChange({x:nx,y:ny});
+      onDragActive?.(false);
+      const b=dragBoundBox({x:e.target.x(),y:e.target.y()},el.w,el.h,canvasH);
+      e.target.position(b); onChange(b);
     }}
+    onTransformStart={()=>onGestureStart?.()}
     onTransformEnd={(e:any)=>{
       const n=e.target,sx=n.scaleX(),sy=n.scaleY(); n.scaleX(1); n.scaleY(1);
       const nw=n.width()*sx,nh=n.height()*sy;
-      const nx=Math.min(Math.max(n.x(),0),DESIGN_W-nw);
-      const ny=Math.min(Math.max(n.y(),0),canvasH-nh);
-      n.x(nx);n.y(ny);onChange({x:nx,y:ny,w:nw,h:nh,rotation:n.rotation()});
+      const b=dragBoundBox({x:n.x(),y:n.y()},nw,nh,canvasH);
+      n.position(b); onChange({...b,w:nw,h:nh,rotation:n.rotation()});
     }}/>;
 }
 
-function KImgEl({el,isSelected,onSelect,onChange,shapeRefs,canvasH}: {
+function KImgEl({el,isSelected,onSelect,onChange,onGestureStart,onDragActive,shapeRefs,canvasH}: {
   el: EditorElement; isSelected:boolean; onSelect:()=>void;
-  onChange:(c:Partial<EditorElement>)=>void; shapeRefs:React.MutableRefObject<Record<string,any>>; canvasH:number;
+  onChange:(c:Partial<EditorElement>)=>void; onGestureStart?:()=>void;
+  onDragActive?:(active:boolean)=>void;
+  shapeRefs:React.MutableRefObject<Record<string,any>>; canvasH:number;
 }) {
   const [img,setImg]=useState<HTMLImageElement>();
   useEffect(()=>{
@@ -202,29 +219,29 @@ function KImgEl({el,isSelected,onSelect,onChange,shapeRefs,canvasH}: {
     image={img} x={el.x} y={el.y} width={el.w} height={el.h} rotation={el.rotation}
     crop={coverCrop}
     onClick={onSelect} onTap={onSelect} draggable={isSelected}
+    perfectDrawEnabled={false}
+    dragBoundFunc={(pos:any)=>dragBoundBox(pos,el.w,el.h,canvasH)}
+    onDragStart={()=>{onGestureStart?.();onDragActive?.(true);}}
     onDragEnd={(e:any)=>{
-      // Clamp to page bounds — otherwise dragging past the edge lets the canvas
-      // cut the photo off, making a fully-covering image look "cropped".
-      const nx=Math.min(Math.max(e.target.x(),0),Math.max(0,DESIGN_W-el.w));
-      const ny=Math.min(Math.max(e.target.y(),0),Math.max(0,canvasH-el.h));
-      e.target.x(nx);e.target.y(ny);
-      onChange({x:nx,y:ny});
+      onDragActive?.(false);
+      const b=dragBoundBox({x:e.target.x(),y:e.target.y()},el.w,el.h,canvasH);
+      e.target.position(b); onChange(b);
     }}
+    onTransformStart={()=>onGestureStart?.()}
     onTransformEnd={(e:any)=>{
       const n=e.target,sx=n.scaleX(),sy=n.scaleY(); n.scaleX(1); n.scaleY(1);
       const nw=Math.max(20,n.width()*sx),nh=Math.max(20,n.height()*sy);
-      const nx=Math.min(Math.max(n.x(),0),Math.max(0,DESIGN_W-nw));
-      const ny=Math.min(Math.max(n.y(),0),Math.max(0,canvasH-nh));
-      n.x(nx);n.y(ny);
-      onChange({x:nx,y:ny,w:nw,h:nh,rotation:n.rotation()});
+      const b=dragBoundBox({x:n.x(),y:n.y()},nw,nh,canvasH);
+      n.position(b); onChange({...b,w:nw,h:nh,rotation:n.rotation()});
     }}/>
     {selectionStroke}
   </>;
 }
 
-function KTxtEl({el,onSelect,onChange,onStartEdit,isEditing,isSelected,shapeRefs,canvasH}: {
+function KTxtEl({el,onSelect,onChange,onStartEdit,onGestureStart,onDragActive,isEditing,isSelected,shapeRefs,canvasH}: {
   el: EditorElement; onSelect:()=>void; onChange:(c:Partial<EditorElement>)=>void;
-  onStartEdit:()=>void; isEditing:boolean; isSelected:boolean;
+  onStartEdit:()=>void; onGestureStart?:()=>void; onDragActive?:(active:boolean)=>void;
+  isEditing:boolean; isSelected:boolean;
   shapeRefs:React.MutableRefObject<Record<string,any>>; canvasH:number;
 }) {
   return <KonvaText ref={(n:any)=>{if(n) shapeRefs.current[el.id]=n;}}
@@ -233,18 +250,22 @@ function KTxtEl({el,onSelect,onChange,onStartEdit,isEditing,isSelected,shapeRefs
     fill={el.fill||'#1a1a1a'} align={el.align||'center'} fontStyle={el.fontStyle||'normal'}
     lineHeight={el.lineHeight??1.2} letterSpacing={el.letterSpacing??0} padding={6}
     opacity={isEditing?0:(el.opacity??1)}
-    onClick={onSelect} onTap={onSelect} onDblClick={onStartEdit} onDblTap={onStartEdit} draggable={isSelected && !isEditing}
+    wrap="word" perfectDrawEnabled={false} shadowForStrokeEnabled={false}
+    onClick={onSelect} onTap={onSelect} onDblClick={onStartEdit} onDblTap={onStartEdit}
+    draggable={isSelected && !isEditing}
+    dragBoundFunc={(pos:any)=>dragBoundBox(pos,el.w,el.h,canvasH)}
+    onDragStart={()=>{onGestureStart?.();onDragActive?.(true);}}
     onDragEnd={(e:any)=>{
-      const nx=Math.min(Math.max(e.target.x(),0),DESIGN_W-el.w);
-      const ny=Math.min(Math.max(e.target.y(),0),canvasH-el.h);
-      e.target.x(nx);e.target.y(ny);onChange({x:nx,y:ny});
+      onDragActive?.(false);
+      const b=dragBoundBox({x:e.target.x(),y:e.target.y()},el.w,el.h,canvasH);
+      e.target.position(b); onChange(b);
     }}
+    onTransformStart={()=>onGestureStart?.()}
     onTransformEnd={(e:any)=>{
       const n=e.target,sx=n.scaleX(); n.scaleX(1); n.scaleY(1);
       const nw=Math.max(50,n.width()*sx);
-      const nx=Math.min(Math.max(n.x(),0),DESIGN_W-nw);
-      const ny=Math.min(Math.max(n.y(),0),canvasH-el.h);
-      n.x(nx);n.y(ny);onChange({x:nx,y:ny,w:nw,rotation:n.rotation()});
+      const b=dragBoundBox({x:n.x(),y:n.y()},nw,el.h,canvasH);
+      n.position(b); onChange({...b,w:nw,rotation:n.rotation()});
     }}/>;
 }
 
@@ -268,10 +289,12 @@ function KPlaceholderEl({el,isSelected,onSelect,onOpenPhotos,shapeRefs}: {
 // Page Canvas
 // ─────────────────────────────────────────────────────────────────────────────
 
-function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos,onDelete,isActive,pageW,pageH,canvasH,shapeRefs,side,isMobile}: {
+function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos,onDelete,onGestureStart,editRequestId,onEditRequestHandled,isActive,pageW,pageH,canvasH,shapeRefs,side,isMobile}: {
   page:PageDef; elements:EditorElement[]; selectedId:string|null;
   onSelectId:(id:string|null)=>void; onChangeEl:(id:string,c:Partial<EditorElement>)=>void;
-  onOpenPhotos?:()=>void; onDelete?:()=>void; isActive:boolean; pageW:number; pageH:number; canvasH:number;
+  onOpenPhotos?:()=>void; onDelete?:()=>void; onGestureStart?:()=>void;
+  editRequestId?:string|null; onEditRequestHandled?:()=>void;
+  isActive:boolean; pageW:number; pageH:number; canvasH:number;
   shapeRefs:React.MutableRefObject<Record<string,any>>; side:'left'|'right'|'solo'; isMobile?:boolean;
 }) {
   const trRef = useRef<any>(null);
@@ -279,6 +302,7 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
 
   const [editId,setEditId]=useState<string|null>(null);
   const [editText,setEditText]=useState('');
+  const [dragging,setDragging]=useState(false);
   const textareaRef=useRef<HTMLTextAreaElement>(null);
   // The box never shrinks below whatever height it started editing at
   // (the template's design height), but grows to fit longer text.
@@ -296,6 +320,15 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
   },[editText,onChangeEl]);
 
   useEffect(()=>{ if(editId) setTimeout(()=>textareaRef.current?.focus(),30); },[editId]);
+
+  // Newly added text opens the editor immediately (desktop + mobile).
+  useEffect(()=>{
+    if(!editRequestId||!isActive) return;
+    const el=elements.find(e=>e.id===editRequestId&&e.type==='text');
+    if(!el) return;
+    startEdit(el);
+    onEditRequestHandled?.();
+  },[editRequestId,elements,isActive,startEdit,onEditRequestHandled]);
 
   useEffect(()=>{
     if (!trRef.current) return;
@@ -337,15 +370,19 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
           <Rect x={0} y={0} width={DESIGN_W} height={canvasH} fill={PAPER_COLOR} listening={false}/>
           {bgs.map(el => <KBgEl key={el.id} el={el} canvasH={canvasH}/>)}
           {shapes.map(el => <KShapeEl key={el.id} el={el} isSelected={selectedId===el.id}
-            onSelect={()=>{if(editId)commitEdit();onSelectId(el.id);}} onChange={c=>onChangeEl(el.id,c)} shapeRefs={shapeRefs} canvasH={canvasH}/>)}
+            onSelect={()=>{if(editId)commitEdit();onSelectId(el.id);}}
+            onChange={c=>onChangeEl(el.id,c)} onGestureStart={onGestureStart} onDragActive={setDragging}
+            shapeRefs={shapeRefs} canvasH={canvasH}/>)}
           {phs.map(el => <KPlaceholderEl key={el.id} el={el} isSelected={selectedId===el.id}
             onSelect={()=>{if(editId)commitEdit();onSelectId(el.id);}} onOpenPhotos={onOpenPhotos} shapeRefs={shapeRefs}/>)}
           {imgs.map(el => <KImgEl key={el.id} el={el} isSelected={selectedId===el.id}
-            onSelect={()=>{if(editId)commitEdit();onSelectId(el.id);}} onChange={c=>onChangeEl(el.id,c)} shapeRefs={shapeRefs} canvasH={canvasH}/>)}
+            onSelect={()=>{if(editId)commitEdit();onSelectId(el.id);}}
+            onChange={c=>onChangeEl(el.id,c)} onGestureStart={onGestureStart} onDragActive={setDragging}
+            shapeRefs={shapeRefs} canvasH={canvasH}/>)}
           {txts.map(el => <KTxtEl key={el.id} el={el} isEditing={editId===el.id}
             isSelected={selectedId===el.id}
             onSelect={()=>{if(editId&&editId!==el.id)commitEdit();onSelectId(el.id);}}
-            onChange={c=>onChangeEl(el.id,c)}
+            onChange={c=>onChangeEl(el.id,c)} onGestureStart={onGestureStart} onDragActive={setDragging}
             onStartEdit={()=>startEdit(el)} shapeRefs={shapeRefs} canvasH={canvasH}/>)}
           {page.pageNumber!==undefined && (
             <KonvaText x={0} y={canvasH-26} width={DESIGN_W} text={String(page.pageNumber)}
@@ -535,8 +572,8 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
         </div>
       )}
 
-      {/* ── Delete / replace button — appears on selected image, text, or placeholder ── */}
-      {isActive && selectedId && !editId && (()=>{
+      {/* ── Delete button — hidden while dragging so it doesn't stick at the old spot ── */}
+      {isActive && selectedId && !editId && !dragging && (()=>{
         const sel=elements.find(e=>e.id===selectedId&&(e.type==='image'||e.type==='text'||e.type==='placeholder'));
         if (!sel) return null;
         // Position at top-right corner of the element (screen coords)
@@ -607,11 +644,13 @@ function LockedPageView({pageW,pageH,role,side}: {pageW:number;pageH:number;role
 // Spread View — realistic book
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SpreadView = React.memo(function SpreadView({spread,spreadContent,selectedId,activeSide,onActiveSide,onSelectId,onChangeEl,onOpenPhotos,onDelete,pageW,pageH,canvasH,shapeRefs,isMobile}: {
+const SpreadView = React.memo(function SpreadView({spread,spreadContent,selectedId,activeSide,onActiveSide,onSelectId,onChangeEl,onOpenPhotos,onDelete,onGestureStart,editRequestId,onEditRequestHandled,pageW,pageH,canvasH,shapeRefs,isMobile}: {
   spread:SpreadDef; spreadContent:Record<number,EditorElement[]>;
   selectedId:string|null; activeSide:'left'|'right'; onActiveSide:(s:'left'|'right')=>void;
   onSelectId:(id:string|null)=>void; onChangeEl:(pid:number,eid:string,c:Partial<EditorElement>)=>void;
-  onOpenPhotos?:()=>void; onDelete?:()=>void; pageW:number; pageH:number; canvasH:number;
+  onOpenPhotos?:()=>void; onDelete?:()=>void; onGestureStart?:()=>void;
+  editRequestId?:string|null; onEditRequestHandled?:()=>void;
+  pageW:number; pageH:number; canvasH:number;
   shapeRefs:React.MutableRefObject<Record<string,any>>; isMobile?:boolean;
 }) {
   const effectiveSpineW = SPINE_W;
@@ -624,6 +663,7 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
         selectedId={selectedId}
         onSelectId={(id)=>{ onActiveSide(side); onSelectId(id); }}
         onChangeEl={(eid,c)=>onChangeEl(page.dbId,eid,c)} onOpenPhotos={onOpenPhotos} onDelete={onDelete}
+        onGestureStart={onGestureStart} editRequestId={editRequestId} onEditRequestHandled={onEditRequestHandled}
         isActive={activeSide===side} pageW={pageW} pageH={pageH} canvasH={canvasH} shapeRefs={shapeRefs} side={side} isMobile={isMobile}/>
     </div>;
   };
@@ -652,7 +692,8 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
                 <PageCanvas page={soloPage} elements={spreadContent[soloPage.dbId]??[]}
                   selectedId={selectedId} onSelectId={onSelectId}
                   onChangeEl={(eid,c)=>onChangeEl(soloPage.dbId,eid,c)} onOpenPhotos={onOpenPhotos} onDelete={onDelete}
-                  isActive={true} pageW={pageW} pageH={pageH} canvasH={canvasH} shapeRefs={shapeRefs} side="solo"/>
+                  onGestureStart={onGestureStart} editRequestId={editRequestId} onEditRequestHandled={onEditRequestHandled}
+                  isActive={true} pageW={pageW} pageH={pageH} canvasH={canvasH} shapeRefs={shapeRefs} side="solo" isMobile={isMobile}/>
               </div>
             )}
           </div>
@@ -679,6 +720,7 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
                 onSelectId={id=>{ onActiveSide(activeSide); onSelectId(id); }}
                 onChangeEl={(eid,c)=>onChangeEl(page.dbId,eid,c)}
                 onOpenPhotos={onOpenPhotos} onDelete={onDelete}
+                onGestureStart={onGestureStart} editRequestId={editRequestId} onEditRequestHandled={onEditRequestHandled}
                 isActive={true} pageW={pageW} pageH={pageH} canvasH={canvasH} shapeRefs={shapeRefs} side="solo" isMobile={true}/>
           }
         </div>
@@ -1426,6 +1468,8 @@ export default function Editor() {
   const currentSpread=spreads[spreadIdx];
 
   const [pagesContent,setPagesContent]=useState<Record<number,EditorElement[]>>({});
+  // Filmstrip thumbs can lag a frame behind — keeps drag/edit on the canvas snappy.
+  const deferredPagesContent=useDeferredValue(pagesContent);
   const [selectedId,setSelectedId]=useState<string|null>(null);
   const [activeSide,setActiveSide]=useState<'left'|'right'>('right');
   const [tab,setTab]=useState<SideTab>('designs');
@@ -1520,12 +1564,26 @@ export default function Editor() {
   },[redoKey]);
 
   const pushHistory=useCallback(()=>{
-    const snap=liveContent.current;
+    // Clone page arrays (element objects are replaced immutably on edit, never mutated).
+    const cur=liveContent.current;
+    const snap:Record<number,EditorElement[]>={};
+    for (const key of Object.keys(cur)) {
+      const pid=Number(key);
+      snap[pid]=cur[pid].slice();
+    }
     const stack=[...historyRef.current,snap].slice(-MAX_HISTORY);
     historyRef.current=stack; setHistoryLen(stack.length); persistHistory(stack);
     // Any new edit forks a new timeline — the old "forward" states no longer apply.
     clearRedo();
   },[persistHistory,clearRedo]);
+
+  // Drag/transform: push undo once at gesture start, not again on every release.
+  const gestureHistoryRef=useRef(false);
+  const beginHistoryGesture=useCallback(()=>{
+    if (gestureHistoryRef.current) return;
+    gestureHistoryRef.current=true;
+    pushHistory();
+  },[pushHistory]);
 
 
   const [isMobile,setIsMobile]=useState(false);
@@ -1801,12 +1859,16 @@ export default function Editor() {
   },[triggerSave,pushHistory]);
 
   const changeEl=useCallback((pid:number,eid:string,changes:Partial<EditorElement>)=>{
-    pushHistory();
+    if (gestureHistoryRef.current) gestureHistoryRef.current=false;
+    else pushHistory();
     const prev=liveContent.current;
     const els=prev[pid]??[];
     const next={...prev,[pid]:els.map(e=>e.id===eid?{...e,...changes}:e)};
     liveContent.current=next;
-    setPagesContent(next); dirtyPages.current.add(pid); triggerSave();
+    dirtyPages.current.add(pid);
+    // Defer React paint so Konva can finish the gesture without hitching.
+    startTransition(()=>setPagesContent(next));
+    triggerSave();
   },[triggerSave,pushHistory]);
 
   const deleteSelected=useCallback(()=>{
@@ -1942,6 +2004,9 @@ export default function Editor() {
     finally{setAddingSpread(false);}
   },[project,addingSpread,getToken,projectId,lang,refetchProject]);
 
+  const [editRequestId,setEditRequestId]=useState<string|null>(null);
+  const clearEditRequest=useCallback(()=>setEditRequestId(null),[]);
+
   const addText=useCallback((style?:{fontSize?:number;fontStyle?:string;align?:'left'|'center'|'right'})=>{
     if (!activePageId) return;
     const el:EditorElement={id:`txt-${Date.now()}`,type:'text',
@@ -1949,9 +2014,11 @@ export default function Editor() {
       x:60,y:canvasH/2-40,w:DESIGN_W-120,h:100,rotation:0,
       fontSize:style?.fontSize??22,fontFamily:'Georgia, serif',fill:'#1a1a1a',
       align:style?.align??'center',fontStyle:style?.fontStyle??'normal'};
-    const els=pagesContent[activePageId]??[];
-    updatePage(activePageId,[...els,el]); setSelectedId(el.id);
-  },[activePageId,pagesContent,lang,updatePage,canvasH]);
+    const els=liveContent.current[activePageId]??[];
+    updatePage(activePageId,[...els,el]);
+    setSelectedId(el.id);
+    setEditRequestId(el.id);
+  },[activePageId,lang,updatePage,canvasH]);
 
   const applyLayout=useCallback((layoutId:string)=>{
     if (!activePageId) return;
@@ -2247,6 +2314,8 @@ export default function Editor() {
                 selectedId={selectedId} activeSide={activeSide}
                 onActiveSide={setActiveSide}
                 onSelectId={setSelectedId} onChangeEl={changeEl} onOpenPhotos={openPhotos} onDelete={deleteSelected}
+                onGestureStart={beginHistoryGesture}
+                editRequestId={editRequestId} onEditRequestHandled={clearEditRequest}
                 pageW={pageW} pageH={pageH} canvasH={canvasH} shapeRefs={shapeRefs} isMobile={isMobile}/>
             ) : <p className="text-neutral-400 text-sm">No pages found</p>}
           </div>
@@ -2254,7 +2323,7 @@ export default function Editor() {
             onChange={onSpreadChange}
             onAddSpread={addSpread} addingSpread={addingSpread}
             onReorder={reorderSpreads}
-            pagesContent={pagesContent} canvasH={canvasH}/>
+            pagesContent={deferredPagesContent} canvasH={canvasH}/>
           {isMobile && (
             <div className="flex items-center border-t border-neutral-200 bg-white py-1 px-1 flex-shrink-0" style={{gap:2}}>
               {([

@@ -1,3 +1,11 @@
-<svg width="180" height="180" viewBox="0 0 180 180" fill="none" xmlns="http://www.w3.org/2000/svg">
-<rect width="180" height="180" rx="36" fill="#FF3C00"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <rect width="32" height="32" rx="8" fill="#1A1814"/>
+  <!-- Open photobook -->
+  <path d="M6.5 8.5c3.2-.9 6.2-.3 9.5 1.6v13.2c-3.3-1.9-6.3-2.5-9.5-1.6V8.5Z" fill="#F4EFE6"/>
+  <path d="M25.5 8.5c-3.2-.9-6.2-.3-9.5 1.6v13.2c3.3-1.9 6.3-2.5 9.5-1.6V8.5Z" fill="#EDE6DA"/>
+  <!-- Spine -->
+  <path d="M16 10.1v13.2" stroke="#C4A574" stroke-width="1.1" stroke-linecap="round"/>
+  <!-- Soft page lines -->
+  <path d="M9 13.2h4.2M9 16h4.2M9 18.8h3.2" stroke="#1A1814" stroke-opacity="0.12" stroke-width="0.9" stroke-linecap="round"/>
+  <path d="M18.8 13.2H23M18.8 16H23M18.8 18.8h3.2" stroke="#1A1814" stroke-opacity="0.1" stroke-width="0.9" stroke-linecap="round"/>
 </svg>

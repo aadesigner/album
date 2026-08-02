@@ -7,6 +7,7 @@ import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import { DESIGNS } from '@/lib/designs';
 import { useListCategories } from '@workspace/api-client-react-tsconfig';
 import {
+  DEFAULT_CATEGORIES,
   getCategoryImage,
   getCategorySpine,
   getCategorySublabel,
@@ -919,14 +920,22 @@ export default function Home() {
   const [activeStep, setActiveStep] = useState<number | null>(null);
   const { data: apiCategories } = useListCategories();
 
-  // Same list + backgrounds as /krijo choose-category (API + shared image map).
+  // Prefer live API list; fall back to seeded defaults so images always show.
   const categories = useMemo<HomeCategoryCard[]>(() => {
-    if (!apiCategories?.length) return [];
-    return apiCategories.map((cat, i) => ({
+    const source = apiCategories?.length
+      ? apiCategories.map(c => ({
+          slug: c.slug,
+          nameAl: c.nameAl,
+          nameEn: c.nameEn,
+          coverImage: c.coverImage,
+        }))
+      : DEFAULT_CATEGORIES.map(c => ({ ...c, coverImage: null as string | null }));
+
+    return source.map((cat, i) => ({
       key: cat.slug,
       label: { sq: cat.nameAl, en: cat.nameEn },
       sublabel: getCategorySublabel(cat.slug),
-      img: getCategoryImage(cat.nameAl, cat.coverImage),
+      img: getCategoryImage(cat.nameAl, cat.coverImage, cat.slug),
       spine: getCategorySpine(cat.slug),
       badge: i === 0 ? { sq: 'bestseller', en: 'bestseller' } : null,
       pages: { sq: '30–80 faqe', en: '30–80 pages' },

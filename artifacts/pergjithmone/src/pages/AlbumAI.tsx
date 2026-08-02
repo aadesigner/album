@@ -568,7 +568,7 @@ export default function AlbumAI() {
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {categories?.map((cat: any, i: number) => {
-                      const imgSrc = getCategoryImage(cat.nameAl, cat.coverImage);
+                      const imgSrc = getCategoryImage(cat.nameAl, cat.coverImage, cat.slug);
                       return (
                         <motion.button
                           key={cat.id}

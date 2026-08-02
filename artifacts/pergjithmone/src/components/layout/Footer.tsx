@@ -89,7 +89,6 @@ export function Footer() {
                 { href: '/si-funksionon', sq: 'Si funksionon', en: 'How it works' },
                 { href: '/shembuj',       sq: 'Shembuj',       en: 'Examples'     },
                 { href: '/cmime',         sq: 'Çmimet',        en: 'Pricing'      },
-                { href: '/album-ai',      sq: 'Album me AI',   en: 'AI photobook maker' },
               ].map(l => (
                 <li key={l.href}>
                   <Link
