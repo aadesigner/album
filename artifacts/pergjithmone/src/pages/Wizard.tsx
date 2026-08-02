@@ -221,16 +221,21 @@ export default function Wizard() {
     sessionStorage.removeItem('wizard_design');
     sessionStorage.removeItem('wizard_category');
     if (savedDesign) sessionStorage.setItem('wizard_initial_design', savedDesign);
-    createProject.mutateAsync({
-      data: { bookSizeId: sizeId, title: lang === 'sq' ? 'Albumi Im' : 'My Album' }
-    }).then(proj => setLocation(`/editor/${proj.id}`)).catch((e: any) => {
-      console.error(e);
-      toast({
-        title: lang === 'sq' ? 'Nuk mund të krijohet albumi' : 'Could not create photobook',
-        description: e?.data?.error || (lang === 'sq' ? 'Ndodhi një gabim' : 'Something went wrong'),
-        variant: 'destructive',
+    const payload = { bookSizeId: sizeId, title: lang === 'sq' ? 'Albumi Im' : 'My Album' };
+    const tryCreate = () => createProject.mutateAsync({ data: payload });
+    tryCreate()
+      .catch(() => new Promise((r) => setTimeout(r, 500)).then(tryCreate))
+      .then(proj => setLocation(`/editor/${proj.id}`))
+      .catch((e: any) => {
+        console.error(e);
+        const msg = e?.data?.error || e?.message;
+        if (!msg) return; // silent on empty/transient failures after retry
+        toast({
+          title: lang === 'sq' ? 'Nuk mund të krijohet albumi' : 'Could not create photobook',
+          description: msg,
+          variant: 'destructive',
+        });
       });
-    });
   }, [isAuthenticated]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleCreate = async () => {
@@ -242,17 +247,24 @@ export default function Wizard() {
       setLocation('/regjistrohu?next=/krijo');
       return;
     }
+    const payload = { bookSizeId: selectedSize, title: lang === 'sq' ? 'Albumi Im' : 'My Album' };
     try {
       if (selectedDesignId) sessionStorage.setItem('wizard_initial_design', selectedDesignId);
-      const proj = await createProject.mutateAsync({
-        data: { bookSizeId: selectedSize, title: lang === 'sq' ? 'Albumi Im' : 'My Album' }
-      });
+      let proj;
+      try {
+        proj = await createProject.mutateAsync({ data: payload });
+      } catch {
+        await new Promise((r) => setTimeout(r, 500));
+        proj = await createProject.mutateAsync({ data: payload });
+      }
       setLocation(`/editor/${proj.id}`);
     } catch (e: any) {
       console.error('Failed to create project', e);
+      const msg = e?.data?.error || e?.message;
+      if (!msg) return;
       toast({
         title: lang === 'sq' ? 'Nuk mund të krijohet albumi' : 'Could not create photobook',
-        description: e?.data?.error || (lang === 'sq' ? 'Ndodhi një gabim' : 'Something went wrong'),
+        description: msg,
         variant: 'destructive',
       });
     }

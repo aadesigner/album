@@ -26,13 +26,16 @@ export function ensureSchema(): void {
 
   logger.info({ dbDir }, "Pushing database schema with drizzle-kit");
 
+  // On Windows, pnpm is a .cmd shim — execFileSync("pnpm") fails with ENOENT.
+  const pnpmBin = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
   execFileSync(
-    "pnpm",
+    pnpmBin,
     ["exec", "drizzle-kit", "push", "--config", "./drizzle.config.ts", "--force"],
     {
       cwd: dbDir,
       stdio: "inherit",
       env: process.env,
+      shell: process.platform === "win32",
     },
   );
 

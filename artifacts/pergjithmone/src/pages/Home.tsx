@@ -7,6 +7,8 @@ import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import { DESIGNS } from '@/lib/designs';
 import { useListCategories } from '@workspace/api-client-react-tsconfig';
 import {
+  CAT_IMG,
+  CAT_IMG_BY_SLUG,
   DEFAULT_CATEGORIES,
   getCategoryImage,
   getCategorySpine,
@@ -162,70 +164,41 @@ function HeroSlideshow({ lang }: { lang: 'sq' | 'en' }) {
             </AnimatePresence>
           </div>
 
-          <div className="grid md:grid-cols-[1fr_260px] gap-10 items-end">
+          <div className="max-w-2xl">
 
-            {/* Headline + CTA */}
-            <div className="max-w-2xl">
+            {/* Per-slide headline + sub — crossfade on slide change */}
+            <AnimatePresence mode="wait" initial={true}>
+              <motion.div
+                key={idx}
+                initial={{ opacity: 0, y: 22 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -14 }}
+                transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <h1 className="text-[38px] md:text-[66px] font-serif font-medium text-white leading-[1.03] tracking-[-0.01em] mb-5">
+                  {slide.headline[lang]}
+                </h1>
+                <p className="text-[14px] text-white/55 mb-7 max-w-[400px] leading-[1.7]">
+                  {slide.sub[lang]}
+                </p>
+              </motion.div>
+            </AnimatePresence>
 
-              {/* Per-slide headline + sub — crossfade on slide change */}
-              <AnimatePresence mode="wait" initial={true}>
-                <motion.div
-                  key={idx}
-                  initial={{ opacity: 0, y: 22 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -14 }}
-                  transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
+            {/* CTA — static, never re-animates */}
+            <div className="flex flex-wrap items-center gap-3">
+              <Link href="/krijo">
+                <button
+                  className="px-8 py-3.5 bg-white text-[#1a1a1a] rounded-full text-[12.5px] font-semibold hover:bg-neutral-100 active:scale-[0.97] transition-all shadow-xl shadow-black/20"
                 >
-                  <h1 className="text-[38px] md:text-[66px] font-serif font-medium text-white leading-[1.03] tracking-[-0.01em] mb-5">
-                    {slide.headline[lang]}
-                  </h1>
-                  <p className="text-[14px] text-white/55 mb-7 max-w-[400px] leading-[1.7]">
-                    {slide.sub[lang]}
-                  </p>
-                </motion.div>
-              </AnimatePresence>
-
-              {/* CTA — static, never re-animates */}
-              <div className="flex flex-wrap items-center gap-3">
-                <Link href="/krijo">
-                  <button
-                    className="px-8 py-3.5 bg-white text-[#1a1a1a] rounded-full text-[12.5px] font-semibold hover:bg-neutral-100 active:scale-[0.97] transition-all shadow-xl shadow-black/20"
-                  >
-                    {lang === 'sq' ? 'krijo albumin tënd' : 'create your photobook'}
-                  </button>
-                </Link>
-                <Link href="/shembuj">
-                  <button className="px-6 py-3.5 border border-white/22 text-white/75 rounded-full text-[12.5px] hover:border-white/45 hover:text-white transition-all backdrop-blur-sm">
-                    {lang === 'sq' ? 'shiko shembuj' : 'browse examples'}
-                  </button>
-                </Link>
-              </div>
+                  {lang === 'sq' ? 'krijo albumin tënd' : 'create your photobook'}
+                </button>
+              </Link>
+              <Link href="/shembuj">
+                <button className="px-6 py-3.5 border border-white/22 text-white/75 rounded-full text-[12.5px] hover:border-white/45 hover:text-white transition-all backdrop-blur-sm">
+                  {lang === 'sq' ? 'shiko shembuj' : 'browse examples'}
+                </button>
+              </Link>
             </div>
-
-            {/* Right — stats (desktop only) */}
-            <motion.div
-              className="hidden md:flex flex-col gap-5 items-end"
-              initial={{ opacity: 0, x: 18 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 1.0, delay: 0.35 }}
-            >
-              {[
-                { num: '1,000+', label: lang === 'sq' ? 'albume të shitura' : 'books printed' },
-                { num: '200g',   label: lang === 'sq' ? 'letër premium mat' : 'premium matte paper' },
-                { num: '30',     label: lang === 'sq' ? 'ditë garanci' : 'day guarantee' },
-              ].map((s, i) => (
-                <motion.div
-                  key={i}
-                  className="text-right"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.4 + i * 0.1 }}
-                >
-                  <p className="text-white text-[26px] font-serif font-medium leading-none">{s.num}</p>
-                  <p className="text-white/32 text-[9.5px] uppercase tracking-[0.16em] mt-1">{s.label}</p>
-                </motion.div>
-              ))}
-            </motion.div>
           </div>
         </div>
       </div>
@@ -318,13 +291,15 @@ const SHOWCASE_BOOKS = [
     sub: { sq: 'dashuria e tyre, gjithmonë', en: 'love forever' },
     designId: 'blush-garden',
     spine: '#8B6F47',
+    img: CAT_IMG_BY_SLUG.dasme,
   },
   {
     key: 'travel',
-    label: { sq: 'Udhëtim', en: 'Travel' },
+    label: { sq: 'Udhëtime', en: 'Travel' },
     sub: { sq: 'aventurat tuaja', en: 'your adventures' },
     designId: 'explorer',
     spine: '#2A4A20',
+    img: CAT_IMG_BY_SLUG.udhetime,
   },
   {
     key: 'family',
@@ -332,20 +307,23 @@ const SHOWCASE_BOOKS = [
     sub: { sq: 'momentet e vogla', en: 'little moments' },
     designId: 'cloud-nine',
     spine: '#5C7A5A',
+    img: CAT_IMG_BY_SLUG.familje,
   },
   {
     key: 'couples',
-    label: { sq: 'Çift', en: 'Couples' },
+    label: { sq: 'Çifte', en: 'Couples' },
     sub: { sq: 'historia juaj e dashurisë', en: 'your love story' },
     designId: 'midnight-vows',
     spine: '#1A2040',
+    img: CAT_IMG.Çifte,
   },
   {
     key: 'celebration',
-    label: { sq: 'Festë', en: 'Celebration' },
+    label: { sq: 'Festash', en: 'Celebrations' },
     sub: { sq: 'dhurata perfekte', en: 'the perfect gift' },
     designId: 'champagne',
     spine: '#2C1E10',
+    img: CAT_IMG_BY_SLUG.festash,
   },
 ];
 
@@ -375,7 +353,6 @@ function ShowcaseBook({
   const scale  = isHov ? 1.09 : anyHov ? cfg.scale * 0.91 : cfg.scale;
   const ty     = isHov ? -20 : 0;
   const op     = anyHov && !isHov ? 0.55 : 1;
-  const design = DESIGNS.find(d => d.id === book.designId);
 
   return (
     <Link href="/krijo">
@@ -430,16 +407,16 @@ function ShowcaseBook({
             : '4px 10px 32px rgba(0,0,0,0.18), 1px 3px 8px rgba(0,0,0,0.10)',
           transition: 'box-shadow 0.52s',
         }}>
-          {/* Design wallpaper — same visual used in the editor's Designs panel */}
-          <div style={{
-            position: 'absolute', inset: 0, overflow: 'hidden',
-            background: design?.thumb?.background ?? '#2a1f15',
-          }}>
-            {design?.thumbAccents?.map((a, i) => (
-              <div key={i} style={a as React.CSSProperties} />
-            ))}
+          {/* Photo cover — same Unsplash set as choose-category / collections */}
+          <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', background: '#2a1f15' }}>
+            <img
+              src={book.img}
+              alt={book.label[lang]}
+              draggable={false}
+              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+            />
           </div>
-          {/* gradient — lighter on dark designs, stronger on light ones so label stays legible */}
+          {/* gradient — keep title readable over photos */}
           <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top,rgba(0,0,0,0.78) 0%,rgba(0,0,0,0.10) 52%,rgba(0,0,0,0.00) 100%)' }}/>
           {/* gloss */}
           <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(130deg,rgba(255,255,255,0.09) 0%,transparent 50%)', pointerEvents: 'none' }}/>

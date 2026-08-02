@@ -1,4 +1,4 @@
-import React, { useEffect, lazy, Suspense } from 'react';
+import React, { useEffect, lazy, Suspense, type ComponentType } from 'react';
 import { HelmetProvider } from 'react-helmet-async';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
@@ -13,6 +13,25 @@ import { useAuth } from '@/contexts/AuthContext';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useLanguage } from '@/contexts/LanguageContext';
 
+/** Retry failed dynamic imports — flaky networks otherwise surface as a full-page error. */
+function lazyRetry<T extends ComponentType<any>>(
+  factory: () => Promise<{ default: T }>,
+  retries = 3,
+) {
+  return lazy(async () => {
+    let last: unknown;
+    for (let i = 0; i < retries; i++) {
+      try {
+        return await factory();
+      } catch (err) {
+        last = err;
+        await new Promise((r) => setTimeout(r, 280 * (i + 1)));
+      }
+    }
+    throw last;
+  });
+}
+
 // ── Eagerly loaded (critical path / tiny) ─────────────────────────────────
 import Home from '@/pages/Home';
 import Login from '@/pages/Login';
@@ -22,31 +41,31 @@ import Maintenance from '@/pages/Maintenance';
 import Wizard from '@/pages/Wizard';
 
 // ── Lazy loaded (heavy pages not needed on first paint) ────────────────────
-const Pricing       = lazy(() => import('@/pages/Pricing'));
-const ForgotPassword= lazy(() => import('@/pages/ForgotPassword'));
-const HowItWorks    = lazy(() => import('@/pages/HowItWorks'));
-const FAQ           = lazy(() => import('@/pages/FAQ'));
-const Projects      = lazy(() => import('@/pages/Projects'));
-const Orders        = lazy(() => import('@/pages/Orders'));
-const Profile       = lazy(() => import('@/pages/Profile'));
-const Editor        = lazy(() => import('@/pages/Editor'));
-const AlbumAI        = lazy(() => import('@/pages/AlbumAI'));
-const Examples      = lazy(() => import('@/pages/Examples'));
-const About         = lazy(() => import('@/pages/About'));
-const Contact       = lazy(() => import('@/pages/Contact'));
-const Terms         = lazy(() => import('@/pages/Terms'));
-const Privacy       = lazy(() => import('@/pages/Privacy'));
+const Pricing       = lazyRetry(() => import('@/pages/Pricing'));
+const ForgotPassword= lazyRetry(() => import('@/pages/ForgotPassword'));
+const HowItWorks    = lazyRetry(() => import('@/pages/HowItWorks'));
+const FAQ           = lazyRetry(() => import('@/pages/FAQ'));
+const Projects      = lazyRetry(() => import('@/pages/Projects'));
+const Orders        = lazyRetry(() => import('@/pages/Orders'));
+const Profile       = lazyRetry(() => import('@/pages/Profile'));
+const Editor        = lazyRetry(() => import('@/pages/Editor'));
+const AlbumAI        = lazyRetry(() => import('@/pages/AlbumAI'));
+const Examples      = lazyRetry(() => import('@/pages/Examples'));
+const About         = lazyRetry(() => import('@/pages/About'));
+const Contact       = lazyRetry(() => import('@/pages/Contact'));
+const Terms         = lazyRetry(() => import('@/pages/Terms'));
+const Privacy       = lazyRetry(() => import('@/pages/Privacy'));
 
 // Admin pages — all lazy (rarely visited, heavy)
-const AdminDashboard  = lazy(() => import('@/pages/admin/Dashboard'));
-const AdminOrders     = lazy(() => import('@/pages/admin/Orders'));
-const AdminUsers      = lazy(() => import('@/pages/admin/Users'));
-const AdminCategories = lazy(() => import('@/pages/admin/Categories'));
-const AdminTemplates  = lazy(() => import('@/pages/admin/Templates'));
-const AdminLayouts    = lazy(() => import('@/pages/admin/Layouts'));
-const AdminBookSizes  = lazy(() => import('@/pages/admin/BookSizes'));
-const AdminSettings   = lazy(() => import('@/pages/admin/Settings'));
-const AdminSecurity   = lazy(() => import('@/pages/admin/Security'));
+const AdminDashboard  = lazyRetry(() => import('@/pages/admin/Dashboard'));
+const AdminOrders     = lazyRetry(() => import('@/pages/admin/Orders'));
+const AdminUsers      = lazyRetry(() => import('@/pages/admin/Users'));
+const AdminCategories = lazyRetry(() => import('@/pages/admin/Categories'));
+const AdminTemplates  = lazyRetry(() => import('@/pages/admin/Templates'));
+const AdminLayouts    = lazyRetry(() => import('@/pages/admin/Layouts'));
+const AdminBookSizes  = lazyRetry(() => import('@/pages/admin/BookSizes'));
+const AdminSettings   = lazyRetry(() => import('@/pages/admin/Settings'));
+const AdminSecurity   = lazyRetry(() => import('@/pages/admin/Security'));
 
 // ── Page loader ───────────────────────────────────────────────────────────
 // Shown by Suspense while a heavy page chunk (editor, AI album, admin, etc.)
