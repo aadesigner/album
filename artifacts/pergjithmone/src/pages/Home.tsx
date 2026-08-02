@@ -108,7 +108,7 @@ function HeroSlideshow({ lang }: { lang: 'sq' | 'en' }) {
   const slide = HERO_SLIDES[idx];
 
   return (
-    <section className="relative w-full min-h-[44dvh] md:min-h-[68dvh] flex items-end overflow-hidden bg-[#0c0b09]">
+    <section className="relative w-full min-h-[38dvh] md:min-h-[68dvh] flex items-end overflow-hidden bg-[#0c0b09]">
 
       {/* ── Slides (crossfade + Ken Burns) ── */}
       <AnimatePresence initial={false}>
@@ -143,7 +143,7 @@ function HeroSlideshow({ lang }: { lang: 'sq' | 'en' }) {
       </AnimatePresence>
 
       {/* ── Content ── */}
-      <div className="relative z-10 w-full pb-12 md:pb-10 px-5 md:px-12">
+      <div className="relative z-10 w-full pb-8 md:pb-10 px-5 md:px-12">
         <div className="max-w-7xl mx-auto">
 
           {/* Eyebrow — category name animates per slide */}
@@ -175,10 +175,10 @@ function HeroSlideshow({ lang }: { lang: 'sq' | 'en' }) {
                 exit={{ opacity: 0, y: -14 }}
                 transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
               >
-                <h1 className="text-[38px] md:text-[66px] font-serif font-medium text-white leading-[1.03] tracking-[-0.01em] mb-5">
+                <h1 className="text-[30px] md:text-[66px] font-serif font-medium text-white leading-[1.05] tracking-[-0.01em] mb-3.5 md:mb-5">
                   {slide.headline[lang]}
                 </h1>
-                <p className="text-[14px] text-white/55 mb-7 max-w-[400px] leading-[1.7]">
+                <p className="text-[13px] md:text-[14px] text-white/55 mb-5 md:mb-7 max-w-[400px] leading-[1.65]">
                   {slide.sub[lang]}
                 </p>
               </motion.div>
@@ -336,9 +336,10 @@ const BOOK_CFG = [
 ];
 
 const BW = 156, BH = 218, BD = 17;
+const BW_MOBILE = 148, BH_MOBILE = 206, BD_MOBILE = 14;
 
 function ShowcaseBook({
-  book, lang, cfg, hoveredKey, onHover, onLeave,
+  book, lang, cfg, hoveredKey, onHover, onLeave, mobile = false,
 }: {
   book: typeof SHOWCASE_BOOKS[0];
   lang: 'sq' | 'en';
@@ -346,38 +347,54 @@ function ShowcaseBook({
   hoveredKey: string | null;
   onHover: () => void;
   onLeave: () => void;
+  mobile?: boolean;
 }) {
   const isHov = hoveredKey === book.key;
   const anyHov = hoveredKey !== null;
-  const rotY   = isHov ? -4 : cfg.rotY;
-  const scale  = isHov ? 1.09 : anyHov ? cfg.scale * 0.91 : cfg.scale;
-  const ty     = isHov ? -20 : 0;
-  const op     = anyHov && !isHov ? 0.55 : 1;
+  const w = mobile ? BW_MOBILE : BW;
+  const h = mobile ? BH_MOBILE : BH;
+  const d = mobile ? BD_MOBILE : BD;
+  // Flat books on mobile so the carousel can scroll; 3D fan only on desktop.
+  const rotY   = mobile ? 0 : (isHov ? -4 : cfg.rotY);
+  const scale  = mobile ? 1 : (isHov ? 1.09 : anyHov ? cfg.scale * 0.91 : cfg.scale);
+  const ty     = mobile ? 0 : (isHov ? -20 : 0);
+  const op     = mobile ? 1 : (anyHov && !isHov ? 0.55 : 1);
+  const dragRef = React.useRef({ x: 0, y: 0, moved: false });
 
-  return (
-    <Link href="/krijo">
+  const cover = (
       <div
         onMouseEnter={onHover}
         onMouseLeave={onLeave}
         title={book.label[lang]}
+        onTouchStart={(e) => {
+          dragRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, moved: false };
+        }}
+        onTouchMove={(e) => {
+          const dx = Math.abs(e.touches[0].clientX - dragRef.current.x);
+          const dy = Math.abs(e.touches[0].clientY - dragRef.current.y);
+          if (dx > 8 || dy > 8) dragRef.current.moved = true;
+        }}
         style={{
           position: 'relative',
-          width: BW,
-          height: BH,
-          transformStyle: 'preserve-3d',
-          transform: `rotateY(${rotY}deg) scale(${scale}) translateY(${ty}px)`,
-          transition: 'transform 0.52s cubic-bezier(0.22,1,0.36,1), opacity 0.38s ease',
+          width: w,
+          height: h,
+          transformStyle: mobile ? 'flat' : 'preserve-3d',
+          transform: mobile ? 'none' : `rotateY(${rotY}deg) scale(${scale}) translateY(${ty}px)`,
+          transition: mobile ? undefined : 'transform 0.52s cubic-bezier(0.22,1,0.36,1), opacity 0.38s ease',
           opacity: op,
           cursor: 'pointer',
-          margin: `0 ${BD + 4}px`,
+          margin: mobile ? '0 10px' : `0 ${d + 4}px`,
           flexShrink: 0,
+          scrollSnapAlign: mobile ? 'center' : undefined,
+          touchAction: mobile ? 'pan-x' : undefined,
         }}
       >
-        {/* ── Spine (left face) ── */}
+        {/* ── Spine (left face) — desktop 3D only ── */}
+        {!mobile && (
         <div style={{
           position: 'absolute',
-          left: -BD, top: 0,
-          width: BD, height: BH,
+          left: -d, top: 0,
+          width: d, height: h,
           transformOrigin: 'right center',
           transform: 'rotateY(-90deg)',
           background: `linear-gradient(to right, ${book.spine}55, ${book.spine}cc)`,
@@ -396,16 +413,18 @@ function ShowcaseBook({
             }}>përgjithmonë</span>
           </div>
         </div>
+        )}
 
         {/* ── Cover (front face) ── */}
         <div style={{
           position: 'absolute', inset: 0,
           overflow: 'hidden',
-          borderRadius: '0 3px 3px 0',
+          borderRadius: mobile ? 10 : '0 3px 3px 0',
           boxShadow: isHov
             ? '8px 22px 48px rgba(0,0,0,0.28), 3px 6px 18px rgba(0,0,0,0.16)'
             : '4px 10px 32px rgba(0,0,0,0.18), 1px 3px 8px rgba(0,0,0,0.10)',
           transition: 'box-shadow 0.52s',
+          pointerEvents: 'none', // let parent carousel own the touch scroll
         }}>
           {/* Photo cover — same Unsplash set as choose-category / collections */}
           <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', background: '#2a1f15' }}>
@@ -444,11 +463,12 @@ function ShowcaseBook({
           </div>
         </div>
 
-        {/* ── Pages edge (right face) ── */}
+        {/* ── Pages edge (right face) — desktop 3D only ── */}
+        {!mobile && (
         <div style={{
           position: 'absolute',
-          right: -BD, top: '2%',
-          width: BD, height: '96%',
+          right: -d, top: '2%',
+          width: d, height: '96%',
           transformOrigin: 'left center',
           transform: 'rotateY(90deg)',
           background: 'linear-gradient(to left,#c8c4bc,#eae5de)',
@@ -463,18 +483,46 @@ function ShowcaseBook({
           ))}
           <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right,rgba(0,0,0,0.22),transparent 45%)' }}/>
         </div>
+        )}
       </div>
-    </Link>
   );
+
+  // On mobile, skip navigation if the finger was scrolling the carousel.
+  if (mobile) {
+    return (
+      <a
+        href="/krijo"
+        onClick={(e) => {
+          if (dragRef.current.moved) e.preventDefault();
+        }}
+        style={{ textDecoration: 'none', color: 'inherit', flexShrink: 0, scrollSnapAlign: 'center' }}
+      >
+        {cover}
+      </a>
+    );
+  }
+
+  return <Link href="/krijo">{cover}</Link>;
 }
 
 function Book3DShowcase({ lang }: { lang: 'sq' | 'en' }) {
   const [hovKey, setHovKey] = React.useState<string | null>(null);
+  const mobileScrollRef = React.useRef<HTMLDivElement>(null);
+
+  // Center the middle book on first mobile paint.
+  useEffect(() => {
+    const el = mobileScrollRef.current;
+    if (!el || window.innerWidth >= 768) return;
+    const mid = Math.floor(SHOWCASE_BOOKS.length / 2);
+    const child = el.children[mid] as HTMLElement | undefined;
+    if (!child) return;
+    el.scrollLeft = child.offsetLeft - (el.clientWidth - child.clientWidth) / 2;
+  }, []);
 
   return (
-    <section style={{ background: '#f7f4f0', paddingTop: 64, paddingBottom: 80, overflow: 'hidden' }}>
+    <section className="bg-[#f7f4f0] pt-12 pb-14 md:pt-16 md:pb-20 overflow-hidden">
       {/* Section label */}
-      <div style={{ textAlign: 'center', marginBottom: 52 }}>
+      <div className="text-center mb-9 md:mb-[52px]">
         <p style={{ color: 'rgba(0,0,0,0.32)', fontSize: 9, letterSpacing: '0.35em', textTransform: 'uppercase', margin: '0 0 14px' }}>
           {lang === 'sq' ? '— koleksioni ynë' : '— our collection'}
         </p>
@@ -488,9 +536,34 @@ function Book3DShowcase({ lang }: { lang: 'sq' | 'en' }) {
         </h2>
       </div>
 
-      {/* Books stage */}
-      <div style={{
-        display: 'flex', justifyContent: 'center', alignItems: 'flex-end',
+      {/* Mobile: horizontal snap swipe — no 3D perspective (breaks touch scroll on iOS) */}
+      <div
+        ref={mobileScrollRef}
+        className="flex md:hidden items-end overflow-x-auto snap-x snap-mandatory pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        style={{
+          WebkitOverflowScrolling: 'touch',
+          touchAction: 'pan-x',
+          paddingLeft: 'calc(50% - 84px)',
+          paddingRight: 'calc(50% - 84px)',
+        }}
+      >
+        {SHOWCASE_BOOKS.map((book, i) => (
+          <ShowcaseBook
+            key={book.key}
+            book={book}
+            lang={lang}
+            cfg={BOOK_CFG[i]}
+            hoveredKey={hovKey}
+            onHover={() => setHovKey(book.key)}
+            onLeave={() => setHovKey(null)}
+            mobile
+          />
+        ))}
+      </div>
+
+      {/* Desktop: fan layout */}
+      <div className="hidden md:flex" style={{
+        justifyContent: 'center', alignItems: 'flex-end',
         perspective: '1100px', perspectiveOrigin: '50% 55%',
         padding: '0 16px',
       }}>
@@ -1022,8 +1095,24 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Same categories + photos as choose-category flow */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-5">
+          {/* Mobile: swipeable category cards */}
+          <div
+            className="flex md:hidden gap-3 overflow-x-auto snap-x snap-mandatory pb-1 -mx-5 px-5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-x' }}
+          >
+            {categories.map((cat) => (
+              <div
+                key={cat.key}
+                className="snap-center shrink-0"
+                style={{ width: 'min(72vw, 260px)', touchAction: 'pan-x' }}
+              >
+                <CategoryCard cat={cat} lang={lang} />
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop grid */}
+          <div className="hidden md:grid grid-cols-3 gap-5">
             {categories.map((cat, i) => (
               <motion.div
                 key={cat.key}

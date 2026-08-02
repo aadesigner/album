@@ -2,11 +2,7 @@ You are a senior software architect, UI/UX designer, and full-stack engineer.
 
 Your task is to build a production-ready SaaS web application for creating and ordering premium printed photobooks.
 
-This project will initially be developed inside Replit, but EVERYTHING must remain completely independent from Replit.
-
-Never use Replit authentication, Replit database features, Replit storage, or any Replit-specific APIs.
-
-The application must be exportable to any VPS or cloud provider with zero code changes.
+The application must be deployable to any VPS or cloud provider with zero platform-specific lock-in.
 
 ====================================================
 PROJECT OVERVIEW

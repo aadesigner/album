@@ -31,4 +31,4 @@ edits, just like the inside front cover. Product wanted that pair to be symmetri
 - Existing DB rows lacking the new page type need a one-time backfill (insert
   `inside_back_cover` at the old `back_cover` pageNumber, bump `back_cover` by 1) — pure
   dev-DB data fix via `executeSql`, not a schema migration script (production schema
-  changes go through Replit's Publish diff flow, per the database skill).
+  changes go through the normal DB push / migration flow).

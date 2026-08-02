@@ -168,16 +168,16 @@ function KShapeEl({el,isSelected,onSelect,onChange,onGestureStart,onDragActive,s
     dragBoundFunc={(pos:any)=>dragBoundBox(pos,el.w,el.h,canvasH)}
     onDragStart={()=>{onGestureStart?.();onDragActive?.(true);}}
     onDragEnd={(e:any)=>{
-      onDragActive?.(false);
       const b=dragBoundBox({x:e.target.x(),y:e.target.y()},el.w,el.h,canvasH);
-      e.target.position(b); onChange(b);
+      e.target.position(b); onChange(b); onDragActive?.(false);
     }}
-    onTransformStart={()=>onGestureStart?.()}
+    onTransformStart={()=>{onGestureStart?.();onDragActive?.(true);}}
     onTransformEnd={(e:any)=>{
       const n=e.target,sx=n.scaleX(),sy=n.scaleY(); n.scaleX(1); n.scaleY(1);
       const nw=n.width()*sx,nh=n.height()*sy;
       const b=dragBoundBox({x:n.x(),y:n.y()},nw,nh,canvasH);
       n.position(b); onChange({...b,w:nw,h:nh,rotation:n.rotation()});
+      onDragActive?.(false);
     }}/>;
 }
 
@@ -223,16 +223,16 @@ function KImgEl({el,isSelected,onSelect,onChange,onGestureStart,onDragActive,sha
     dragBoundFunc={(pos:any)=>dragBoundBox(pos,el.w,el.h,canvasH)}
     onDragStart={()=>{onGestureStart?.();onDragActive?.(true);}}
     onDragEnd={(e:any)=>{
-      onDragActive?.(false);
       const b=dragBoundBox({x:e.target.x(),y:e.target.y()},el.w,el.h,canvasH);
-      e.target.position(b); onChange(b);
+      e.target.position(b); onChange(b); onDragActive?.(false);
     }}
-    onTransformStart={()=>onGestureStart?.()}
+    onTransformStart={()=>{onGestureStart?.();onDragActive?.(true);}}
     onTransformEnd={(e:any)=>{
       const n=e.target,sx=n.scaleX(),sy=n.scaleY(); n.scaleX(1); n.scaleY(1);
       const nw=Math.max(20,n.width()*sx),nh=Math.max(20,n.height()*sy);
       const b=dragBoundBox({x:n.x(),y:n.y()},nw,nh,canvasH);
       n.position(b); onChange({...b,w:nw,h:nh,rotation:n.rotation()});
+      onDragActive?.(false);
     }}/>
     {selectionStroke}
   </>;
@@ -251,21 +251,25 @@ function KTxtEl({el,onSelect,onChange,onStartEdit,onGestureStart,onDragActive,is
     lineHeight={el.lineHeight??1.2} letterSpacing={el.letterSpacing??0} padding={6}
     opacity={isEditing?0:(el.opacity??1)}
     wrap="word" perfectDrawEnabled={false} shadowForStrokeEnabled={false}
+    transformsEnabled="all"
+    dragDistance={2}
     onClick={onSelect} onTap={onSelect} onDblClick={onStartEdit} onDblTap={onStartEdit}
     draggable={isSelected && !isEditing}
     dragBoundFunc={(pos:any)=>dragBoundBox(pos,el.w,el.h,canvasH)}
     onDragStart={()=>{onGestureStart?.();onDragActive?.(true);}}
     onDragEnd={(e:any)=>{
-      onDragActive?.(false);
       const b=dragBoundBox({x:e.target.x(),y:e.target.y()},el.w,el.h,canvasH);
-      e.target.position(b); onChange(b);
+      e.target.position(b);
+      onChange(b);
+      onDragActive?.(false);
     }}
-    onTransformStart={()=>onGestureStart?.()}
+    onTransformStart={()=>{onGestureStart?.();onDragActive?.(true);}}
     onTransformEnd={(e:any)=>{
       const n=e.target,sx=n.scaleX(); n.scaleX(1); n.scaleY(1);
       const nw=Math.max(50,n.width()*sx);
       const b=dragBoundBox({x:n.x(),y:n.y()},nw,el.h,canvasH);
       n.position(b); onChange({...b,w:nw,rotation:n.rotation()});
+      onDragActive?.(false);
     }}/>;
 }
 
@@ -302,11 +306,27 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
 
   const [editId,setEditId]=useState<string|null>(null);
   const [editText,setEditText]=useState('');
-  const [dragging,setDragging]=useState(false);
   const textareaRef=useRef<HTMLTextAreaElement>(null);
+  const deleteBtnRef=useRef<HTMLDivElement>(null);
+  const draggingRef=useRef(false);
   // The box never shrinks below whatever height it started editing at
   // (the template's design height), but grows to fit longer text.
   const editMinHRef=useRef(0);
+
+  // Hide transformer + delete chip without setState (avoids Stage re-render mid-drag).
+  const setDragActive=useCallback((active:boolean)=>{
+    draggingRef.current=active;
+    if (deleteBtnRef.current) deleteBtnRef.current.style.visibility=active?'hidden':'visible';
+    if (!trRef.current) return;
+    if (active) {
+      trRef.current.nodes([]);
+      trRef.current.getLayer()?.batchDraw();
+    } else if (selectedId && selectedId!==editId) {
+      const node=shapeRefs.current[selectedId];
+      trRef.current.nodes(node?[node]:[]);
+      trRef.current.getLayer()?.batchDraw();
+    }
+  },[selectedId,editId,shapeRefs]);
 
   const startEdit=useCallback((el:EditorElement)=>{
     setEditId(el.id); setEditText(el.text||''); editMinHRef.current=el.h; onSelectId(el.id);
@@ -371,18 +391,18 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
           {bgs.map(el => <KBgEl key={el.id} el={el} canvasH={canvasH}/>)}
           {shapes.map(el => <KShapeEl key={el.id} el={el} isSelected={selectedId===el.id}
             onSelect={()=>{if(editId)commitEdit();onSelectId(el.id);}}
-            onChange={c=>onChangeEl(el.id,c)} onGestureStart={onGestureStart} onDragActive={setDragging}
+            onChange={c=>onChangeEl(el.id,c)} onGestureStart={onGestureStart} onDragActive={setDragActive}
             shapeRefs={shapeRefs} canvasH={canvasH}/>)}
           {phs.map(el => <KPlaceholderEl key={el.id} el={el} isSelected={selectedId===el.id}
             onSelect={()=>{if(editId)commitEdit();onSelectId(el.id);}} onOpenPhotos={onOpenPhotos} shapeRefs={shapeRefs}/>)}
           {imgs.map(el => <KImgEl key={el.id} el={el} isSelected={selectedId===el.id}
             onSelect={()=>{if(editId)commitEdit();onSelectId(el.id);}}
-            onChange={c=>onChangeEl(el.id,c)} onGestureStart={onGestureStart} onDragActive={setDragging}
+            onChange={c=>onChangeEl(el.id,c)} onGestureStart={onGestureStart} onDragActive={setDragActive}
             shapeRefs={shapeRefs} canvasH={canvasH}/>)}
           {txts.map(el => <KTxtEl key={el.id} el={el} isEditing={editId===el.id}
             isSelected={selectedId===el.id}
             onSelect={()=>{if(editId&&editId!==el.id)commitEdit();onSelectId(el.id);}}
-            onChange={c=>onChangeEl(el.id,c)} onGestureStart={onGestureStart} onDragActive={setDragging}
+            onChange={c=>onChangeEl(el.id,c)} onGestureStart={onGestureStart} onDragActive={setDragActive}
             onStartEdit={()=>startEdit(el)} shapeRefs={shapeRefs} canvasH={canvasH}/>)}
           {page.pageNumber!==undefined && (
             <KonvaText x={0} y={canvasH-26} width={DESIGN_W} text={String(page.pageNumber)}
@@ -572,15 +592,15 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
         </div>
       )}
 
-      {/* ── Delete button — hidden while dragging so it doesn't stick at the old spot ── */}
-      {isActive && selectedId && !editId && !dragging && (()=>{
+      {/* ── Delete button — visibility toggled via ref during drag (no re-render) ── */}
+      {isActive && selectedId && !editId && (()=>{
         const sel=elements.find(e=>e.id===selectedId&&(e.type==='image'||e.type==='text'||e.type==='placeholder'));
         if (!sel) return null;
         // Position at top-right corner of the element (screen coords)
         const bx=Math.min(Math.max((sel.x+sel.w)*scX, 28), pageW-4);
         const by=Math.max(sel.y*scY-14, 4);
         return (
-          <div style={{position:'absolute',left:bx-14,top:by-14,zIndex:45,pointerEvents:'all',display:'flex',gap:5}}>
+          <div ref={deleteBtnRef} style={{position:'absolute',left:bx-14,top:by-14,zIndex:45,pointerEvents:'all',display:'flex',gap:5}}>
             {/* Delete */}
             <button
               onMouseDown={e=>{e.stopPropagation();e.preventDefault();onDelete?.();}}
@@ -1564,7 +1584,7 @@ export default function Editor() {
     try { localStorage.removeItem(redoKey); } catch {}
   },[redoKey]);
 
-  const pushHistory=useCallback(()=>{
+  const pushHistory=useCallback((opts?:{silent?:boolean})=>{
     // Clone page arrays (element objects are replaced immutably on edit, never mutated).
     const cur=liveContent.current;
     const snap:Record<number,EditorElement[]>={};
@@ -1573,17 +1593,25 @@ export default function Editor() {
       snap[pid]=cur[pid].slice();
     }
     const stack=[...historyRef.current,snap].slice(-MAX_HISTORY);
-    historyRef.current=stack; setHistoryLen(stack.length); persistHistory(stack);
-    // Any new edit forks a new timeline — the old "forward" states no longer apply.
-    clearRedo();
-  },[persistHistory,clearRedo]);
+    historyRef.current=stack;
+    persistHistory(stack);
+    // Clear redo stack in refs; UI update can wait until after the gesture.
+    if (redoRef.current.length) {
+      redoRef.current=[];
+      try { localStorage.removeItem(redoKey); } catch {}
+      if (!opts?.silent) setRedoLen(0);
+    }
+    // Silent mode (drag start): skip setState so Konva isn't interrupted mid-gesture.
+    // UI counters are synced when the gesture commits in changeEl.
+    if (!opts?.silent) setHistoryLen(stack.length);
+  },[persistHistory,redoKey]);
 
-  // Drag/transform: push undo once at gesture start, not again on every release.
+  // Drag/transform: snapshot undo once at gesture start without a React re-render.
   const gestureHistoryRef=useRef(false);
   const beginHistoryGesture=useCallback(()=>{
     if (gestureHistoryRef.current) return;
     gestureHistoryRef.current=true;
-    pushHistory();
+    pushHistory({silent:true});
   },[pushHistory]);
 
 
@@ -1710,8 +1738,8 @@ export default function Editor() {
 
     const onStart=(e:TouchEvent)=>{
       if(e.touches.length!==1){ start=null; armed=false; return; }
-      // Don't steal gestures while an element is selected (drag / transform).
-      if(pageSwipeRef.current.selectedId){ start=null; return; }
+      // Never compete with element drag/transform — that made text feel sluggish.
+      if(pageSwipeRef.current.selectedId){ start=null; armed=false; return; }
       start={x:e.touches[0].clientX,y:e.touches[0].clientY,t:Date.now()};
       armed=false;
     };
@@ -1719,7 +1747,7 @@ export default function Editor() {
       if(!start||e.touches.length!==1) return;
       const dx=e.touches[0].clientX-start.x;
       const dy=e.touches[0].clientY-start.y;
-      if(!armed && Math.abs(dx)>14 && Math.abs(dx)>Math.abs(dy)*1.15) armed=true;
+      if(!armed && Math.abs(dx)>14 && Math.abs(dx)>Math.abs(dy)*1.2) armed=true;
       if(armed) e.preventDefault();
     };
     const finish=(e:TouchEvent)=>{
@@ -1729,12 +1757,13 @@ export default function Editor() {
       const dt=Math.max(1,Date.now()-start.t);
       const wasArmed=armed;
       start=null; armed=false;
-      if(Math.abs(dx)<=Math.abs(dy)*1.1) return;
+      if(Math.abs(dx)<=Math.abs(dy)*1.15) return;
       const vel=Math.abs(dx)/dt;
-      if(!wasArmed && Math.abs(dx)<40 && vel<0.3) return;
-      if(Math.abs(dx)<36 && vel<0.28) return;
+      if(!wasArmed && Math.abs(dx)<40 && vel<0.35) return;
+      if(Math.abs(dx)<36 && vel<0.32) return;
 
       const s=pageSwipeRef.current;
+      // Clear selection when changing pages so the next swipe is easier.
       const next=()=>{ if(s.spreadIdx<s.spreadsLen-1){ setSpreadIdx(s.spreadIdx+1); setSelectedId(null); setActiveSide('left'); } };
       const prev=()=>{ if(s.spreadIdx>0){ setSpreadIdx(s.spreadIdx-1); setSelectedId(null); setActiveSide(s.isMobile?'right':'left'); } };
 
@@ -1751,14 +1780,15 @@ export default function Editor() {
       }
     };
 
-    el.addEventListener('touchstart',onStart,{passive:true});
-    el.addEventListener('touchmove',onMove,{passive:false});
-    el.addEventListener('touchend',finish,{passive:true});
-    el.addEventListener('touchcancel',()=>{start=null;armed=false;},{passive:true});
+    // Capture phase so Konva stage listeners don't swallow the gesture first.
+    el.addEventListener('touchstart',onStart,{passive:true,capture:true});
+    el.addEventListener('touchmove',onMove,{passive:false,capture:true});
+    el.addEventListener('touchend',finish,{passive:true,capture:true});
+    el.addEventListener('touchcancel',()=>{start=null;armed=false;},{passive:true,capture:true});
     return ()=>{
-      el.removeEventListener('touchstart',onStart);
-      el.removeEventListener('touchmove',onMove);
-      el.removeEventListener('touchend',finish);
+      el.removeEventListener('touchstart',onStart,true);
+      el.removeEventListener('touchmove',onMove,true);
+      el.removeEventListener('touchend',finish,true);
     };
   },[]);
 
@@ -1860,15 +1890,24 @@ export default function Editor() {
   },[triggerSave,pushHistory]);
 
   const changeEl=useCallback((pid:number,eid:string,changes:Partial<EditorElement>)=>{
-    if (gestureHistoryRef.current) gestureHistoryRef.current=false;
+    const wasGesture=gestureHistoryRef.current;
+    if (wasGesture) gestureHistoryRef.current=false;
     else pushHistory();
     const prev=liveContent.current;
     const els=prev[pid]??[];
     const next={...prev,[pid]:els.map(e=>e.id===eid?{...e,...changes}:e)};
     liveContent.current=next;
     dirtyPages.current.add(pid);
-    // Defer React paint so Konva can finish the gesture without hitching.
-    startTransition(()=>setPagesContent(next));
+    // Position/size commits after drag: sync update (node already at final place).
+    // Toolbar text tweaks can be deferred.
+    const isGeom='x' in changes||'y' in changes||'w' in changes||'h' in changes||'rotation' in changes;
+    if (isGeom||wasGesture) setPagesContent(next);
+    else startTransition(()=>setPagesContent(next));
+    // Sync undo/redo button counts deferred from silent drag-start snapshot.
+    if (wasGesture) {
+      setHistoryLen(historyRef.current.length);
+      setRedoLen(redoRef.current.length);
+    }
     triggerSave();
   },[triggerSave,pushHistory]);
 
@@ -2211,7 +2250,7 @@ export default function Editor() {
             onClick={handleDownloadPDF}
             disabled={!!pdfProgress}
             title={lang==='sq'?'Shkarko PDF':'Download PDF'}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-medium border transition-all bg-white text-neutral-600 border-neutral-200 hover:border-neutral-400 disabled:opacity-40 disabled:cursor-not-allowed">
+            className="hidden md:flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-medium border transition-all bg-white text-neutral-600 border-neutral-200 hover:border-neutral-400 disabled:opacity-40 disabled:cursor-not-allowed">
             {pdfProgress ? <Loader2 size={13} className="animate-spin"/> : <FileDown size={13}/>}
             <span>PDF</span>
           </button>

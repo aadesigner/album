@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 
-// Defaults so Railway/production builds work without Replit-style env injection.
+// Defaults for production builds when env vars are not injected.
 // Set BASE_PATH=/ for a root domain; use e.g. /app/ if hosting under a subpath.
 const basePath = process.env.BASE_PATH || '/';
 const rawPort = process.env.PORT || '4173';

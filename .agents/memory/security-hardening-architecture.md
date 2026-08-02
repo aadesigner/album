@@ -5,31 +5,23 @@ description: Durable decisions from adding JWT fail-fast, CORS allowlist, login 
 
 # Security & Abuse Hardening Architecture
 
-## `trust proxy` must be `true`, not a fixed hop count, behind Replit's proxy
-The app is only ever reached through Replit's own proxy layer, and the number of
-internal hops in `X-Forwarded-For` varies by access path (public dev domain vs.
-internal preview/screenshot tooling saw 3 hops; a fixed hop count like `1` picked
-up an internal hop's IP instead of the real client). Using `app.set("trust proxy", true)`
-and taking the left-most XFF entry is correct here since the app can't be reached
-directly (no untrusted client can inject a fake left-most entry).
+## `trust proxy` must be `true`, not a fixed hop count
+Behind reverse proxies (Railway, Cloudflare, etc.) the number of internal hops
+in `X-Forwarded-For` varies by access path. A fixed hop count like `1` can pick
+up an internal hop's IP instead of the real client. Use `app.set("trust proxy", true)`
+and take the left-most XFF entry when the app is only reachable through a trusted proxy.
 **Why:** IP-based defenses (rate limiting, IP blocklist) are worthless if every
-request resolves to the same internal IP. Verified by hitting a temporary
-`req.ip`-echoing route from both the public domain and Replit's internal preview.
-**How to apply:** Never hardcode a proxy hop count for `trust proxy` in this
-environment — always `true`, gated by the fact the app isn't publicly reachable
-except through Replit's proxy.
+request resolves to the same internal IP.
+**How to apply:** Prefer `trust proxy = true` when the app isn't publicly reachable
+except through your edge proxy.
 
-## CORS allowlist must include the internal preview origin, not just the public domain
-Restricting CORS to `https://${REPLIT_DOMAINS}` breaks Replit's internal
-preview/screenshot tooling, which loads the app via `http://localhost:80` /
-`http://127.0.0.1:80` (not the public `*.replit.dev` origin) in non-production.
-**Why:** Discovered as real CORS 500s on `/api/analytics/track` and
-`/api/auth/refresh` when screenshotting the app for QA, even though the
-same requests succeeded from a real browser via the public domain.
-**How to apply:** In any CORS allowlist for a path-routed Replit web app, add
-`http://localhost` and `http://127.0.0.1` (with and without `:80`/`:5173`) to the
-allowed origins when `NODE_ENV !== "production"`. Production should stay strict
-(public domain(s) only).
+## CORS allowlist in non-production should include local origins
+In development, tooling may load the app via `http://localhost` /
+`http://127.0.0.1` (with or without `:80`/`:5173`/`:4173`), not only the public domain.
+**Why:** Strict CORS limited to production domains breaks local/preview API calls
+(`/api/analytics/track`, `/api/auth/refresh`, etc.).
+**How to apply:** Add local origins when `NODE_ENV !== "production"`. Production
+should stay strict (`CORS_ORIGINS` / public domain(s) only).
 
 ## Reuse `siteAnalyticsTable` for security events instead of a new table
 Rate-limit (429) and blocked-IP hits are logged as new `event` values

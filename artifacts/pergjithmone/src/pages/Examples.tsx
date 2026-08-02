@@ -372,6 +372,9 @@ function SpreadBrowserDemo({ lang }: { lang: 'sq' | 'en' }) {
   const [idx, setIdx] = useState(0);
   const [dir, setDir] = useState(1);
   const entry = BROWSE_ENTRIES[idx];
+  const swipeRef = useRef<{ x: number; y: number; t: number } | null>(null);
+  const idxRef = useRef(idx);
+  idxRef.current = idx;
 
   // Responsive page size
   const containerRef = useRef<HTMLDivElement>(null);
@@ -389,11 +392,11 @@ function SpreadBrowserDemo({ lang }: { lang: 'sq' | 'en' }) {
   }, []);
   const pgH = Math.round(pgW * (DH / DW));
 
-  const go = (d: number) => {
-    const next = idx + d;
+  const go = useCallback((d: number) => {
+    const next = idxRef.current + d;
     if (next < 0 || next >= BROWSE_ENTRIES.length) return;
     setDir(d); setIdx(next);
-  };
+  }, []);
 
   const renderEntry = (e: BrowseEntry) => {
     if (e.kind === 'cover') {
@@ -460,19 +463,45 @@ function SpreadBrowserDemo({ lang }: { lang: 'sq' | 'en' }) {
         {entry.label[lang]}
       </p>
 
-      {/* Pages + arrows */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+      {/* Pages + arrows — swipe left/right on the page area (mobile) */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', justifyContent: 'center' }}>
         <button style={btnStyle(idx === 0)} onClick={() => go(-1)} disabled={idx === 0}>
           <ChevronLeft size={16} />
         </button>
 
-        <div style={{ position: 'relative', overflow: 'hidden' }}>
+        <div
+          style={{ position: 'relative', overflow: 'hidden', touchAction: 'pan-y', maxWidth: '100%' }}
+          onTouchStart={(e) => {
+            swipeRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
+          }}
+          onTouchEnd={(e) => {
+            if (!swipeRef.current) return;
+            const dx = e.changedTouches[0].clientX - swipeRef.current.x;
+            const dy = e.changedTouches[0].clientY - swipeRef.current.y;
+            const dt = Math.max(1, Date.now() - swipeRef.current.t);
+            swipeRef.current = null;
+            if (Math.abs(dx) <= Math.abs(dy) * 1.1) return;
+            const vel = Math.abs(dx) / dt;
+            if (Math.abs(dx) < 36 && vel < 0.3) return;
+            if (dx < 0) go(1);
+            else go(-1);
+          }}
+        >
           <AnimatePresence mode="popLayout" initial={false}>
             <motion.div key={idx}
               initial={{ opacity: 0, x: dir * 32 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -dir * 32 }}
-              transition={{ duration: 0.18, ease: 'easeOut' }}>
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+              drag="x"
+              dragConstraints={{ left: 0, right: 0 }}
+              dragElastic={0.18}
+              onDragEnd={(_, info) => {
+                if (info.offset.x < -48 || info.velocity.x < -280) go(1);
+                else if (info.offset.x > 48 || info.velocity.x > 280) go(-1);
+              }}
+              style={{ cursor: 'grab', touchAction: 'pan-y' }}
+            >
               {renderEntry(entry)}
             </motion.div>
           </AnimatePresence>

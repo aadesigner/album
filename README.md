@@ -4,8 +4,8 @@ Albanian-language photobook SaaS — customers pick a category/style/size, desig
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 8080, previewPath `/api`)
-- `pnpm --filter @workspace/pergjithmone run dev` — run the web frontend (previewPath `/`)
+- `pnpm --filter @workspace/api-server run dev` — run the API server (port 8080, `/api`)
+- `pnpm --filter @workspace/pergjithmone run dev` — run the web frontend (port 4173)
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec-tsconfig run codegen` — regenerate API hooks and Zod schemas from `lib/api-spec/openapi.yaml` (never hand-edit generated files in `lib/api-client-react` / `lib/api-zod`)

@@ -35,4 +35,4 @@ Admin route: GET /api/orders/:orderId/whatsapp
 
 ## Vite proxy
 vite.config.ts proxies /api → localhost:8080 (API server dev port)
-**Why:** Without proxy, browser /api calls hit the Replit shared proxy → frontend, not API server.
+**Why:** Without proxy, browser /api calls hit the frontend host, not the API server.

@@ -57,14 +57,15 @@ export function Navbar() {
         }}
       >
         <div
-          className="max-w-7xl mx-auto px-4 md:px-10 h-[50px] md:h-[74px] flex items-center justify-between"
+          className="max-w-7xl mx-auto px-4 md:px-10 h-[46px] md:h-[74px] flex items-center justify-between"
         >
           {/* Logo */}
           <Link href="/" className="flex items-center shrink-0 z-50">
             <img
               src="/logo-full.png"
               alt="Përgjithmonë"
-              style={{ width: 148, height: 28, objectFit: 'cover', objectPosition: 'center' }}
+              className="w-[128px] h-[24px] md:w-[148px] md:h-[28px]"
+              style={{ objectFit: 'cover', objectPosition: 'center' }}
             />
           </Link>
 
@@ -167,7 +168,7 @@ export function Navbar() {
           {/* Mobile: animated hamburger */}
           <button
             onClick={() => setIsOpen(v => !v)}
-            className="flex md:hidden flex-col justify-center items-end gap-[5px] w-10 h-10"
+            className="flex md:hidden flex-col justify-center items-end gap-[5px] w-10 h-10 -translate-x-1.5"
             aria-label="Toggle menu"
           >
             <span
@@ -274,18 +275,18 @@ export function Navbar() {
                     </button>
                   </>
                 ) : (
-                  <div className="space-y-2 px-2">
-                    <Link href="/hyr" onClick={() => setIsOpen(false)}>
-                      <div className="flex items-center justify-between px-4 py-3 rounded-xl border border-neutral-200 text-neutral-600 hover:bg-neutral-50">
+                  <div className="flex gap-2 px-2">
+                    <Link href="/hyr" onClick={() => setIsOpen(false)} className="flex-1 min-w-0">
+                      <div className="flex items-center justify-center px-3 py-3.5 rounded-xl border border-neutral-200 text-neutral-700 hover:bg-neutral-50 h-full">
                         <span className="text-[13px] font-medium">{t('nav.login')}</span>
                       </div>
                     </Link>
-                    <Link href="/krijo" onClick={() => setIsOpen(false)}>
-                      <div className="flex items-center justify-between px-4 py-4 rounded-xl bg-neutral-900 text-white">
-                        <span className="text-[14px] font-semibold">
-                          {lang === 'sq' ? 'Krijo albumin tënd' : 'Create your photobook'}
+                    <Link href="/krijo" onClick={() => setIsOpen(false)} className="flex-1 min-w-0">
+                      <div className="flex items-center justify-center gap-1.5 px-3 py-3.5 rounded-xl bg-neutral-900 text-white h-full">
+                        <span className="text-[13px] font-semibold truncate">
+                          {lang === 'sq' ? 'Krijo Album' : 'Create Album'}
                         </span>
-                        <span className="opacity-60">↗</span>
+                        <span className="opacity-60 shrink-0">↗</span>
                       </div>
                     </Link>
                   </div>

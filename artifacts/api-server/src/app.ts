@@ -46,28 +46,16 @@ app.use(
 // Only the app's own known origins are allowed — no wildcard reflection.
 // Set CORS_ORIGINS to a comma-separated list of https:// origins in
 // production (e.g. "https://app.example.com,https://www.example.com").
-// REPLIT_DOMAINS / REPLIT_DEV_DOMAIN are read automatically when running
-// on Replit. Requests with no Origin header (curl, server-to-server,
-// same-origin) are always allowed since browsers only send Origin for
-// cross-origin requests.
+// Requests with no Origin header (curl, server-to-server, same-origin)
+// are always allowed since browsers only send Origin for cross-origin requests.
 function buildAllowedOrigins(): Set<string> {
   const origins = new Set<string>();
 
-  // Generic: explicit list supplied by the host environment.
   (process.env.CORS_ORIGINS ?? "")
     .split(",")
     .map((o) => o.trim())
     .filter(Boolean)
     .forEach((o) => origins.add(o));
-
-  // Replit: automatically-injected domain env vars.
-  [
-    ...(process.env.REPLIT_DOMAINS?.split(",") ?? []),
-    process.env.REPLIT_DEV_DOMAIN,
-  ]
-    .map((d) => d?.trim())
-    .filter((d): d is string => Boolean(d))
-    .forEach((d) => origins.add(`https://${d}`));
 
   if (process.env.NODE_ENV !== "production") {
     for (const host of ["localhost", "127.0.0.1"]) {
