@@ -66,10 +66,9 @@ export function generateAlbum(
   const coverBg = coverElements.find(e => e.type === 'background');
 
   const frontCover = withIds(coverElements, 'cover-front');
-  const backCover = withIds(
-    coverElements.filter(e => e.type !== 'placeholder'),
-    'cover-back',
-  );
+  // Outside back cover inherits the same full design as the front.
+  const backCover = withIds(coverElements, 'cover-back');
+
   const insideCover = coverBg ? withIds([coverBg], 'inside-cover') : [];
 
   const shuffledPhotos = shuffle(photoUrls);

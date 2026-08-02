@@ -671,31 +671,32 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
   if (spread.isSolo) {
     const isBackCover = spread.id === 'back-cover';
     const soloPage = isBackCover ? spread.left! : spread.right!;
-    const soloSide = isBackCover ? 'left' : 'right';
     const soloSpineW = isMobile ? 6 : 13;
     const spineGrad = isBackCover
       ? `linear-gradient(to left, #0C0C0C 0%, rgba(22,16,10,0.82) 42%, rgba(22,16,10,0.30) 100%)`
       : `linear-gradient(to right, #0C0C0C 0%, rgba(22,16,10,0.82) 42%, rgba(22,16,10,0.30) 100%)`;
 
+    const soloCanvas = (
+      <div style={{cursor:'default'}} onClick={()=>onActiveSide(isBackCover ? 'left' : 'right')}>
+        <PageCanvas page={soloPage} elements={spreadContent[soloPage.dbId]??[]}
+          selectedId={selectedId} onSelectId={onSelectId}
+          onChangeEl={(eid,c)=>onChangeEl(soloPage.dbId,eid,c)} onOpenPhotos={onOpenPhotos} onDelete={onDelete}
+          onGestureStart={onGestureStart} editRequestId={editRequestId} onEditRequestHandled={onEditRequestHandled}
+          isActive={true} pageW={pageW} pageH={pageH} canvasH={canvasH} shapeRefs={shapeRefs} side="solo" isMobile={isMobile}/>
+      </div>
+    );
+
     return (
       <div className="flex items-center justify-center">
         <div style={{boxShadow:'0 30px 80px rgba(0,0,0,0.38), 0 10px 24px rgba(0,0,0,0.22), 0 3px 8px rgba(0,0,0,0.14)'}}>
           <div style={{display:'flex',alignItems:'stretch',outline:`1.5px solid rgba(0,0,0,${isMobile?0.55:0.82})`,outlineOffset:0}}>
-            {isBackCover && (
+            {/* Outside back cover: editable canvas + spine on the right (book edge). */}
+            {isBackCover ? (
               <>
-                <LockedPageView pageW={pageW} pageH={pageH} role="back_cover" side="left"/>
+                {soloCanvas}
                 <div style={{width:soloSpineW,height:pageH,flexShrink:0,background:spineGrad}}/>
               </>
-            )}
-            {!isBackCover && (
-              <div style={{cursor:'default'}} onClick={()=>onActiveSide('right')}>
-                <PageCanvas page={soloPage} elements={spreadContent[soloPage.dbId]??[]}
-                  selectedId={selectedId} onSelectId={onSelectId}
-                  onChangeEl={(eid,c)=>onChangeEl(soloPage.dbId,eid,c)} onOpenPhotos={onOpenPhotos} onDelete={onDelete}
-                  onGestureStart={onGestureStart} editRequestId={editRequestId} onEditRequestHandled={onEditRequestHandled}
-                  isActive={true} pageW={pageW} pageH={pageH} canvasH={canvasH} shapeRefs={shapeRefs} side="solo" isMobile={isMobile}/>
-              </div>
-            )}
+            ) : soloCanvas}
           </div>
         </div>
       </div>
@@ -963,7 +964,7 @@ const SpreadNav = React.memo(function SpreadNav({spreads,current,onChange,onAddS
         // Helper: render a single page's scaled thumbnail
         const renderPageThumb=(page:PageDef|null,w:number,h:number)=>{
           if(!page) return <div style={{width:w,height:h,background:'#EAE5DC',flexShrink:0}}/>;
-          const locked=page.role==='locked_left'||page.role==='locked_right'||page.role==='back_cover';
+          const locked=page.role==='locked_left'||page.role==='locked_right';
           if(locked) return <div style={{width:w,height:h,flexShrink:0,background:'#F0EBE2',backgroundImage:'repeating-linear-gradient(45deg,transparent,transparent 2px,rgba(90,74,58,0.10) 2px,rgba(90,74,58,0.10) 3px)'}}/>;
           return <PageThumb elements={pagesContent[page.dbId]??[]} width={w} height={h} canvasH={canvasH}/>;
         };
@@ -2047,16 +2048,15 @@ export default function Editor() {
     const bgEl=projected.find(e=>e.type==='background');
 
     for (const page of allPages) {
-      if (page.role==='front_cover') {
-        // Full design — all elements including photo placeholders
+      if (page.role==='front_cover' || page.role==='back_cover') {
+        // Outside covers inherit the full chosen design (photos + text + shapes).
         updates[page.dbId]=projected.map((el,i)=>({...el,id:`${design.id}-${page.dbId}-${i}-${ts}`}));
-      } else if (page.role==='back_cover') {
-        // Background + decorative shapes/text — no photo placeholders
-        updates[page.dbId]=projected
-          .filter(el=>el.type!=='placeholder')
-          .map((el,i)=>({...el,id:`${design.id}-${page.dbId}-${i}-${ts}`}));
+      } else if (page.role==='locked_left' || page.role==='locked_right') {
+        // Inside lining pages stay non-editable; only sync background tint.
+        if (!bgEl) continue;
+        updates[page.dbId]=[{...bgEl,id:`${design.id}-${page.dbId}-bg-${ts}`}];
       } else {
-        // Inner pages and inside cover: replace existing background, keep photos/text
+        // Inner pages: replace existing background, keep photos/text
         if (!bgEl) continue;
         const current=liveContent.current[page.dbId]??[];
         const withoutBg=current.filter(e=>e.type!=='background');
