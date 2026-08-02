@@ -91,6 +91,7 @@ function HeroSlideshow({ lang }: { lang: 'sq' | 'en' }) {
   const [idx, setIdx] = useState(0);
   const [dir, setDir] = useState(1);
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const swipeRef = useRef<{ x: number; y: number; t: number } | null>(null);
 
   const advance = useCallback((d = 1) => {
     setDir(d);
@@ -108,7 +109,29 @@ function HeroSlideshow({ lang }: { lang: 'sq' | 'en' }) {
   const slide = HERO_SLIDES[idx];
 
   return (
-    <section className="relative w-full min-h-[38dvh] md:min-h-[68dvh] flex items-end overflow-hidden bg-[#0c0b09]">
+    <section
+      className="relative w-full min-h-[38dvh] md:min-h-[68dvh] flex items-end overflow-hidden bg-[#0c0b09]"
+      style={{ touchAction: 'pan-y' }}
+      onTouchStart={(e) => {
+        swipeRef.current = {
+          x: e.touches[0].clientX,
+          y: e.touches[0].clientY,
+          t: Date.now(),
+        };
+      }}
+      onTouchEnd={(e) => {
+        if (!swipeRef.current) return;
+        const dx = e.changedTouches[0].clientX - swipeRef.current.x;
+        const dy = e.changedTouches[0].clientY - swipeRef.current.y;
+        const dt = Math.max(1, Date.now() - swipeRef.current.t);
+        swipeRef.current = null;
+        if (Math.abs(dx) <= Math.abs(dy)) return;
+        const vel = Math.abs(dx) / dt;
+        if (Math.abs(dx) < 28 && vel < 0.22) return;
+        // Swipe left → next, swipe right → previous
+        advance(dx < 0 ? 1 : -1);
+      }}
+    >
 
       {/* ── Slides (crossfade + Ken Burns) ── */}
       <AnimatePresence initial={false}>

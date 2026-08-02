@@ -1535,6 +1535,7 @@ export default function Editor() {
 
   const shapeRefs=useRef<Record<string,any>>({});
   const canvasRef=useRef<HTMLDivElement>(null);
+  const swipeCleanupRef=useRef<(()=>void)|null>(null);
   const headerSwipeRef=useRef<{y:number}|null>(null);
   const [headerCollapsed,setHeaderCollapsed]=useState(false);
   const saveTimer=useRef<ReturnType<typeof setTimeout>|undefined>(undefined);
@@ -1647,7 +1648,8 @@ export default function Editor() {
     const ro=new ResizeObserver(()=>{ cancelAnimationFrame(rafId); rafId=requestAnimationFrame(measure); });
     if (canvasRef.current) ro.observe(canvasRef.current);
     return ()=>{ ro.disconnect(); cancelAnimationFrame(rafId); };
-  },[canvasH]);
+    // Re-run after project load so we observe the real canvas (not the skeleton).
+  },[canvasH, isLoading, project?.id]);
 
   useEffect(()=>{
     if (!project?.pages) return;
@@ -1726,9 +1728,8 @@ export default function Editor() {
     setSpreadIdx(i); setSelectedId(null); setActiveSide('right');
   },[]);
 
-  // Native canvas swipe — React onTouch* on the wrapper often never fires because
-  // Konva owns the canvas. Block only while an element is mid-drag/transform so
-  // soft left/right flicks still change page/spread even with a selection.
+  // Page swipe: attach via callback ref so listeners bind AFTER the loading
+  // skeleton unmounts (a mount-only useEffect saw canvasRef=null and never ran).
   const elementDragActiveRef=useRef(false);
   const onElementDragActive=useCallback((active:boolean)=>{
     elementDragActiveRef.current=active;
@@ -1741,53 +1742,25 @@ export default function Editor() {
     spreadIdx, spreadsLen:spreads.length, isSolo:!!currentSpread?.isSolo,
     activeSide, isMobile,
   };
+  const bindCanvasRef=useCallback((node:HTMLDivElement|null)=>{
+    canvasRef.current=node;
+    swipeCleanupRef.current?.();
+    swipeCleanupRef.current=null;
+    if(!node) return;
 
-  useEffect(()=>{
-    const el=canvasRef.current;
-    if(!el) return;
     let start:{x:number;y:number;t:number}|null=null;
     let armed=false;
-    const onCancel=()=>{ start=null; armed=false; };
+    const cancel=()=>{ start=null; armed=false; };
 
     const isFormTarget=(t:EventTarget|null)=>{
       const n=t as HTMLElement|null;
-      if(!n||typeof n.closest!=='function') return false;
-      return Boolean(n.closest('textarea,input,select,[contenteditable="true"]'));
+      return Boolean(n && typeof n.closest==='function' && n.closest('textarea,input,select,[contenteditable="true"]'));
     };
 
-    const onStart=(e:TouchEvent)=>{
-      if(e.touches.length!==1||elementDragActiveRef.current||isFormTarget(e.target)){
-        onCancel(); return;
-      }
-      start={x:e.touches[0].clientX,y:e.touches[0].clientY,t:Date.now()};
-      armed=false;
-    };
-    const onMove=(e:TouchEvent)=>{
-      if(!start||e.touches.length!==1) return;
-      // If Konva already started an element drag before we armed, yield to it.
-      if(elementDragActiveRef.current){ onCancel(); return; }
-      const dx=e.touches[0].clientX-start.x;
-      const dy=e.touches[0].clientY-start.y;
-      // Arm early; stopPropagation in capture so Konva never starts a drag on this flick.
-      if(!armed && Math.abs(dx)>6 && Math.abs(dx)>=Math.abs(dy)) armed=true;
-      if(armed){ e.preventDefault(); e.stopPropagation(); }
-    };
-    const finish=(e:TouchEvent)=>{
-      if(!start) return;
-      if(elementDragActiveRef.current){ onCancel(); return; }
-      const dx=e.changedTouches[0].clientX-start.x;
-      const dy=e.changedTouches[0].clientY-start.y;
-      const dt=Math.max(1,Date.now()-start.t);
-      start=null; armed=false;
-      // Mostly horizontal; accept soft flicks (~24px or quick velocity).
-      if(Math.abs(dx)<=Math.abs(dy)) return;
-      const vel=Math.abs(dx)/dt;
-      if(Math.abs(dx)<24 && vel<0.20) return;
-
+    const go=(dx:number)=>{
       const s=pageSwipeRef.current;
       const next=()=>{ if(s.spreadIdx<s.spreadsLen-1){ setSpreadIdx(s.spreadIdx+1); setSelectedId(null); setActiveSide('left'); } };
       const prev=()=>{ if(s.spreadIdx>0){ setSpreadIdx(s.spreadIdx-1); setSelectedId(null); setActiveSide(s.isMobile?'right':'left'); } };
-
       if(s.isMobile && !s.isSolo){
         if(dx<0){
           if(s.activeSide==='left'){ setActiveSide('right'); setSelectedId(null); }
@@ -1801,16 +1774,41 @@ export default function Editor() {
       }
     };
 
-    // Capture phase so Konva stage listeners don't swallow the gesture first.
-    el.addEventListener('touchstart',onStart,{passive:true,capture:true});
-    el.addEventListener('touchmove',onMove,{passive:false,capture:true});
-    el.addEventListener('touchend',finish,{passive:true,capture:true});
-    el.addEventListener('touchcancel',onCancel,{passive:true,capture:true});
-    return ()=>{
-      el.removeEventListener('touchstart',onStart,true);
-      el.removeEventListener('touchmove',onMove,true);
-      el.removeEventListener('touchend',finish,true);
-      el.removeEventListener('touchcancel',onCancel,true);
+    const onStart=(e:TouchEvent)=>{
+      if(e.touches.length!==1||elementDragActiveRef.current||isFormTarget(e.target)){ cancel(); return; }
+      start={x:e.touches[0].clientX,y:e.touches[0].clientY,t:Date.now()};
+      armed=false;
+    };
+    const onMove=(e:TouchEvent)=>{
+      if(!start||e.touches.length!==1) return;
+      if(elementDragActiveRef.current){ cancel(); return; }
+      const dx=e.touches[0].clientX-start.x;
+      const dy=e.touches[0].clientY-start.y;
+      if(!armed && Math.abs(dx)>6 && Math.abs(dx)>=Math.abs(dy)) armed=true;
+      if(armed){ e.preventDefault(); e.stopPropagation(); }
+    };
+    const onEnd=(e:TouchEvent)=>{
+      if(!start) return;
+      if(elementDragActiveRef.current){ cancel(); return; }
+      const dx=e.changedTouches[0].clientX-start.x;
+      const dy=e.changedTouches[0].clientY-start.y;
+      const dt=Math.max(1,Date.now()-start.t);
+      cancel();
+      if(Math.abs(dx)<=Math.abs(dy)) return;
+      const vel=Math.abs(dx)/dt;
+      if(Math.abs(dx)<20 && vel<0.18) return;
+      go(dx);
+    };
+
+    node.addEventListener('touchstart',onStart,{passive:true,capture:true});
+    node.addEventListener('touchmove',onMove,{passive:false,capture:true});
+    node.addEventListener('touchend',onEnd,{passive:true,capture:true});
+    node.addEventListener('touchcancel',cancel,{passive:true,capture:true});
+    swipeCleanupRef.current=()=>{
+      node.removeEventListener('touchstart',onStart,true);
+      node.removeEventListener('touchmove',onMove,true);
+      node.removeEventListener('touchend',onEnd,true);
+      node.removeEventListener('touchcancel',cancel,true);
     };
   },[]);
 
@@ -2343,7 +2341,7 @@ export default function Editor() {
                     ? 'text-neutral-300 active:bg-neutral-100'
                     : 'bg-neutral-900 text-white'
                 }`}>
-                <ChevronLeft size={14}/>{lang==='sq'?'E majtë':'Left'}
+                <ChevronLeft size={14}/>{lang==='sq'?'Faqja majtas':'Left Page'}
               </button>
 
               <span style={{fontSize:11,color:'#B0A898',letterSpacing:'0.06em',fontWeight:500}}>
@@ -2359,13 +2357,13 @@ export default function Editor() {
                     ? 'text-neutral-300 active:bg-neutral-100'
                     : 'bg-neutral-900 text-white'
                 }`}>
-                {lang==='sq'?'E djathtë':'Right'}<ChevronRight size={14}/>
+                {lang==='sq'?'Faqja djathtas':'Right Page'}<ChevronRight size={14}/>
               </button>
             </div>
           )}
 
-          {/* Canvas area — page swipe via native listeners (see useEffect on canvasRef) */}
-          <div ref={canvasRef}
+          {/* Canvas area — page swipe via bindCanvasRef (native touch listeners) */}
+          <div ref={bindCanvasRef}
             className="flex-1 min-h-0 flex items-center justify-center"
             style={isMobile
               ? {overflow:'hidden',padding:'12px',touchAction:'none'}
