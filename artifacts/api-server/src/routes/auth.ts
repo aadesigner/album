@@ -73,6 +73,7 @@ router.post("/auth/register", async (req, res): Promise<void> => {
         passwordHash,
         name: name || null,
         emailVerified: true, // no email verification needed for phone accounts
+        lastLoginAt: new Date(),
       })
       .returning();
   } catch (err: any) {
@@ -113,6 +114,7 @@ router.post("/auth/register", async (req, res): Promise<void> => {
       role: user.role,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
+      lastLoginAt: user.lastLoginAt ?? new Date(),
     },
   });
 });
@@ -254,10 +256,18 @@ router.post("/auth/refresh", async (req, res): Promise<void> => {
     const newPayload = { userId: user.id, email: user.email, role: user.role };
     const accessToken = generateAccessToken(newPayload);
     const newRefreshToken = generateRefreshToken(newPayload);
+    const now = new Date();
+    // Treat a resumed session as activity for admin "Last login". Throttle
+    // writes so rapid refreshes (multiple tabs) don't hammer the DB.
+    const lastMs = user.lastLoginAt ? new Date(user.lastLoginAt).getTime() : 0;
+    const touchLastLogin = !lastMs || now.getTime() - lastMs > 60 * 60 * 1000;
 
     await db
       .update(usersTable)
-      .set({ refreshToken: newRefreshToken })
+      .set({
+        refreshToken: newRefreshToken,
+        ...(touchLastLogin ? { lastLoginAt: now } : {}),
+      })
       .where(eq(usersTable.id, user.id));
 
     setRefreshTokenCookie(res, newRefreshToken);
@@ -271,6 +281,7 @@ router.post("/auth/refresh", async (req, res): Promise<void> => {
         role: user.role,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
+        lastLoginAt: touchLastLogin ? now : user.lastLoginAt,
       },
     });
   } finally {
@@ -288,6 +299,7 @@ router.get("/auth/me", requireAuth, async (req, res): Promise<void> => {
     role: user.role,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
+    lastLoginAt: user.lastLoginAt ?? null,
   });
 });
 
