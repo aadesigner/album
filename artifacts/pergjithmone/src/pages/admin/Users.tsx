@@ -11,6 +11,7 @@ import { PhoneInput } from '@/components/ui/PhoneInput';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/contexts/AuthContext';
 
 const BASE = (import.meta as any).env?.BASE_URL?.replace(/\/$/, '') || '';
 
@@ -18,6 +19,7 @@ const BASE = (import.meta as any).env?.BASE_URL?.replace(/\/$/, '') || '';
 function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   // Regular members are identified by phone (matching public sign-up); admins created
   // here don't need a public phone number, so they're identified by email instead.
+  const { getToken } = useAuth();
   const [form, setForm] = useState({ phone: '', email: '', name: '', password: '', role: 'user' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -29,7 +31,7 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
     setLoading(true);
     setError('');
     try {
-      const token = localStorage.getItem('pergjithmone_access_token') || sessionStorage.getItem('pergjithmone_access_token');
+      const token = getToken();
       const r = await fetch(`${BASE}/api/admin/users`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },

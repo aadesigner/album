@@ -5,6 +5,7 @@ import { format } from 'date-fns';
 import { RefreshCw, Eye, FileX, ExternalLink, X, Download, StickyNote } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/contexts/AuthContext';
 
 const BASE = (import.meta as any).env?.BASE_URL?.replace(/\/$/, '') || '';
 
@@ -130,6 +131,7 @@ function DeletePdfConfirm({ orderId, onConfirm, onCancel, loading }: {
 }
 
 export default function AdminOrders() {
+  const { getToken } = useAuth();
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [pdfModal, setPdfModal] = useState<{ url: string; orderId: number } | null>(null);
   const [deletePdf, setDeletePdf] = useState<{ orderId: number } | null>(null);
@@ -156,7 +158,7 @@ export default function AdminOrders() {
     if (!deletePdf) return;
     setDeletingPdfId(deletePdf.orderId);
     try {
-      const token = localStorage.getItem('pergjithmone_access_token') || sessionStorage.getItem('pergjithmone_access_token');
+      const token = getToken();
       await fetch(`${BASE}/api/admin/orders/${deletePdf.orderId}/pdf`, {
         method: 'DELETE',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
