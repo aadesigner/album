@@ -1727,11 +1727,17 @@ export default function Editor() {
     bookSize?.heightCm!==undefined?Number(bookSize.heightCm):undefined,
   ),[bookSize]);
 
-  // The dashboard's project list (5min staleTime) caches each project's front-cover
-  // thumbnail. Invalidate it when leaving the editor so the dashboard always shows
-  // the front cover as it currently is, not whatever was cached before this edit.
+  // Flush pending cover/page edits before the list refetches — otherwise
+  // leaving right after applying a design can show a blank/stale cover on
+  // "Projektet e mia" while the editor still looks correct.
+  const flushSaveRef=useRef<()=>Promise<void>>(async()=>{});
   useEffect(()=>{
-    return ()=>{ queryClient.invalidateQueries({queryKey:getListProjectsQueryKey()}); };
+    return ()=>{
+      void (async()=>{
+        try { await flushSaveRef.current(); } catch { /* leave-path best effort */ }
+        queryClient.invalidateQueries({queryKey:getListProjectsQueryKey()});
+      })();
+    };
   },[queryClient]);
   const spreads=useMemo(()=>buildSpreads(project?.pages||[],lang),[project?.pages,lang]);
 
@@ -2028,6 +2034,7 @@ export default function Editor() {
     if (!dirtyPages.current.size) return;
     await performSave();
   },[performSave]);
+  flushSaveRef.current=flushSave;
 
   const undo=useCallback(()=>{
     if (!historyRef.current.length) return;
@@ -2567,87 +2574,140 @@ export default function Editor() {
         )}
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
 
-          {/* Mobile mini spread — tap left/right page to switch which side you're editing */}
+          {/* Mobile mini spread — open-book preview; tap a side to edit it */}
           {isMobile && currentSpread && !currentSpread.isSolo && (
             <div
-              className="flex items-center justify-center flex-shrink-0 bg-white border-b border-neutral-100"
-              style={{ height: 72, padding: '8px 12px', gap: 0 }}
+              className="flex-shrink-0 flex items-center justify-center border-b border-neutral-100"
+              style={{
+                padding: '6px 12px 8px',
+                background: 'linear-gradient(180deg, #FFFFFF 0%, #F7F4EF 100%)',
+              }}
             >
-              {(['left', 'right'] as const).map((side, i) => {
-                const page = side === 'left' ? currentSpread.left : currentSpread.right;
-                const active = activeSide === side;
-                const thumbH = 52;
+              {(() => {
+                const thumbH = 44;
                 const thumbW = Math.round(thumbH * (DESIGN_W / canvasH));
-                const locked = page?.role === 'locked_left' || page?.role === 'locked_right';
+                const sides = (['left', 'right'] as const).map((side) => {
+                  const page = side === 'left' ? currentSpread.left : currentSpread.right;
+                  const locked = page?.role === 'locked_left' || page?.role === 'locked_right';
+                  // Numbers only under the art — no "Left/Right" overlay on the thumb
+                  const label = locked
+                    ? ''
+                    : page?.pageNumber != null
+                      ? String(page.pageNumber)
+                      : '·';
+                  return { side, page, locked, label, active: activeSide === side };
+                });
                 return (
-                  <React.Fragment key={side}>
-                    {i === 1 && (
-                      <div
-                        aria-hidden
-                        style={{
-                          width: 3,
-                          height: thumbH,
-                          flexShrink: 0,
-                          background: 'linear-gradient(to right, rgba(0,0,0,0.22), rgba(0,0,0,0.08), rgba(0,0,0,0.22))',
-                          margin: '0 1px',
+                  <div
+                    role="tablist"
+                    aria-label={lang === 'sq' ? 'Faqet e hapura' : 'Open spread'}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'stretch',
+                      borderRadius: 6,
+                      boxShadow: '0 1px 2px rgba(40,32,20,0.06), 0 6px 16px rgba(40,32,20,0.08)',
+                      background: '#EDE8E0',
+                      padding: 3,
+                    }}
+                  >
+                    {sides.map(({ side, page, locked, label, active }, i) => (
+                      <button
+                        key={side}
+                        type="button"
+                        role="tab"
+                        disabled={!page}
+                        aria-selected={active}
+                        aria-label={
+                          locked
+                            ? (side === 'left'
+                              ? (lang === 'sq' ? 'Kopertina e brendshme' : 'Inside cover')
+                              : (lang === 'sq' ? 'Pas e brendshme' : 'Inside back'))
+                            : page?.pageNumber != null
+                              ? (lang === 'sq' ? `Faqja ${page.pageNumber}` : `Page ${page.pageNumber}`)
+                              : side === 'left'
+                                ? (lang === 'sq' ? 'Faqja majtas' : 'Left page')
+                                : (lang === 'sq' ? 'Faqja djathtas' : 'Right page')
+                        }
+                        onClick={() => {
+                          if (!page) return;
+                          setActiveSide(side);
+                          setSelectedId(null);
                         }}
-                      />
-                    )}
-                    <button
-                      type="button"
-                      disabled={!page}
-                      onClick={() => {
-                        if (!page) return;
-                        setActiveSide(side);
-                        setSelectedId(null);
-                      }}
-                      aria-label={side === 'left'
-                        ? (lang === 'sq' ? 'Faqja majtas' : 'Left page')
-                        : (lang === 'sq' ? 'Faqja djathtas' : 'Right page')}
-                      aria-pressed={active}
-                      className="relative flex-shrink-0 overflow-hidden transition-all active:scale-[0.97] disabled:opacity-40"
-                      style={{
-                        width: thumbW,
-                        height: thumbH,
-                        borderRadius: side === 'left' ? '3px 0 0 3px' : '0 3px 3px 0',
-                        boxShadow: active
-                          ? '0 0 0 2px #171717, 0 4px 12px rgba(0,0,0,0.18)'
-                          : '0 0 0 1px rgba(0,0,0,0.12)',
-                        opacity: active ? 1 : 0.5,
-                        zIndex: active ? 2 : 1,
-                      }}
-                    >
-                      {!page ? (
-                        <div style={{ width: '100%', height: '100%', background: '#EAE5DC' }} />
-                      ) : locked ? (
-                        <div style={{
-                          width: '100%', height: '100%', background: '#FFFFFF',
-                          backgroundImage: 'repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(0,0,0,0.06) 3px,rgba(0,0,0,0.06) 4px)',
-                        }} />
-                      ) : (
-                        <PageThumb
-                          elements={spreadContent[page.dbId] ?? []}
-                          width={thumbW}
-                          height={thumbH}
-                          canvasH={canvasH}
-                        />
-                      )}
-                      <span
-                        className="absolute bottom-0.5 left-1/2 -translate-x-1/2 px-1.5 py-[1px] rounded-full text-[8px] font-semibold uppercase tracking-wide"
+                        className="flex flex-col items-center disabled:opacity-40 active:opacity-90"
                         style={{
-                          background: active ? 'rgba(23,23,23,0.88)' : 'rgba(0,0,0,0.35)',
-                          color: '#fff',
-                          lineHeight: 1.4,
+                          width: thumbW + 6,
+                          padding: '2px 3px 4px',
+                          border: 'none',
+                          background: active ? '#FFFFFF' : 'transparent',
+                          borderRadius: i === 0 ? '4px 1px 1px 4px' : '1px 4px 4px 1px',
+                          boxShadow: active ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                          transition: 'background 0.18s ease, box-shadow 0.18s ease',
+                          WebkitTapHighlightColor: 'transparent',
+                          cursor: page ? 'pointer' : 'default',
                         }}
                       >
-                        {side === 'left'
-                          ? (lang === 'sq' ? 'Majtas' : 'Left')
-                          : (lang === 'sq' ? 'Djathtas' : 'Right')}
-                      </span>
-                    </button>
-                  </React.Fragment>
+                        <div
+                          style={{
+                            width: thumbW,
+                            height: thumbH,
+                            borderRadius: side === 'left' ? '2px 0 0 2px' : '0 2px 2px 0',
+                            overflow: 'hidden',
+                            position: 'relative',
+                            opacity: active ? 1 : 0.55,
+                            outline: active ? '1.5px solid #C09A55' : '1px solid rgba(0,0,0,0.08)',
+                            outlineOffset: -1,
+                            transition: 'opacity 0.18s ease',
+                            background: '#F3EEE6',
+                          }}
+                        >
+                          {!page ? null : locked ? (
+                            <div style={{
+                              width: '100%', height: '100%',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              background: '#FAFAF8',
+                              backgroundImage: 'repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(0,0,0,0.05) 3px,rgba(0,0,0,0.05) 4px)',
+                            }}>
+                              <Lock size={11} strokeWidth={1.75} color="#A89F92" />
+                            </div>
+                          ) : (
+                            <PageThumb
+                              elements={spreadContent[page.dbId] ?? []}
+                              width={thumbW}
+                              height={thumbH}
+                              canvasH={canvasH}
+                            />
+                          )}
+                        </div>
+                        <span
+                          style={{
+                            marginTop: 4,
+                            minHeight: 9,
+                            fontSize: 9,
+                            lineHeight: 1,
+                            fontWeight: active ? 700 : 500,
+                            letterSpacing: '0.02em',
+                            color: active ? '#9A7A3E' : '#A39A8E',
+                            fontVariantNumeric: 'tabular-nums',
+                          }}
+                        >
+                          {label || '\u00A0'}
+                        </span>
+                        <span
+                          aria-hidden
+                          style={{
+                            marginTop: 3,
+                            width: active ? 12 : 0,
+                            height: 2,
+                            borderRadius: 1,
+                            background: 'linear-gradient(90deg,#C09A55,#E0BB7A)',
+                            transition: 'width 0.22s cubic-bezier(0.34,1.56,0.64,1)',
+                          }}
+                        />
+                      </button>
+                    ))}
+                  </div>
                 );
-              })}
+              })()}
             </div>
           )}
 

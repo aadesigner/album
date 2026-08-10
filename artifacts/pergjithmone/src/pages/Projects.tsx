@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import {
   useListProjects, useDeleteProject, useUpdateProject,
@@ -11,32 +11,27 @@ import { Button } from '@/components/ui/button';
 import { BookHeart, Plus, Trash2, Pencil, Check, Loader2 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useQueryClient } from '@tanstack/react-query';
+import { ResponsivePageThumb } from '@/components/PageThumb';
+import type { EditorElement } from '@/lib/designs';
 
 // ─── Cover thumbnail ──────────────────────────────────────────────────────────
-// Renders the project's actual front-cover design (background, shapes, text)
-// so the dashboard reflects the style the user picked in the wizard, instead
-// of a generic placeholder book.
-
-const COVER_W = 600;
-const COVER_H = 800;
-
-type CoverEl = {
-  type: 'image' | 'text' | 'placeholder' | 'background' | 'shape';
-  x: number; y: number; w: number; h: number;
-  bgColor?: string; bgGradientFrom?: string; bgGradientTo?: string; bgGradientDir?: string;
-  fill?: string; shapeKind?: string; cornerRadius?: number; opacity?: number;
-  text?: string; fontSize?: number; align?: string;
-};
+// Same renderer as the editor / wizard (PageThumb) so dashboard cards match
+// the real front cover — including photos, landmark art, and wallpaper.
 
 function CoverThumb({ frontCoverJson }: { frontCoverJson?: string | null }) {
-  let elements: CoverEl[] = [];
-  if (frontCoverJson) {
-    try { elements = JSON.parse(frontCoverJson); } catch { elements = []; }
-  }
+  const elements = useMemo(() => {
+    if (!frontCoverJson) return [] as EditorElement[];
+    try {
+      const parsed = JSON.parse(frontCoverJson);
+      return Array.isArray(parsed) ? (parsed as EditorElement[]) : [];
+    } catch {
+      return [];
+    }
+  }, [frontCoverJson]);
 
   if (elements.length === 0) {
     return (
-      <div className="w-2/3 h-[80%] bg-white shadow-md border border-gray-100 rounded-r-md flex items-center justify-center group-hover:scale-105 transition-transform duration-500">
+      <div className="w-2/3 max-w-[168px] aspect-[3/4] bg-white shadow-md border border-gray-100 rounded-r-md flex items-center justify-center relative group-hover:scale-105 transition-transform duration-500">
         <div className="w-4 h-full bg-gray-100 absolute left-0 border-r border-gray-200" />
         <span className="font-serif text-xs text-muted-foreground rotate-90 opacity-30">PËRGJITHMONË</span>
       </div>
@@ -44,39 +39,8 @@ function CoverThumb({ frontCoverJson }: { frontCoverJson?: string | null }) {
   }
 
   return (
-    <div className="w-2/3 h-[80%] shadow-md border border-gray-100 rounded-r-md overflow-hidden relative group-hover:scale-105 transition-transform duration-500">
-      <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
-        {elements.map((el, i) => {
-          const style: React.CSSProperties = {
-            position: 'absolute',
-            left: `${(el.x / COVER_W) * 100}%`,
-            top: `${(el.y / COVER_H) * 100}%`,
-            width: `${(el.w / COVER_W) * 100}%`,
-            height: `${(el.h / COVER_H) * 100}%`,
-          };
-          if (el.type === 'background') {
-            style.background = el.bgGradientFrom
-              ? `linear-gradient(${el.bgGradientDir === 'lr' ? 'to right' : el.bgGradientDir === 'diag' ? '135deg' : 'to bottom'}, ${el.bgGradientFrom}, ${el.bgGradientTo || '#fff'})`
-              : (el.bgColor || '#fff');
-            style.inset = 0; style.left = 0; style.top = 0; style.width = '100%'; style.height = '100%';
-          } else if (el.type === 'placeholder') {
-            style.background = '#E8E2D8';
-          } else if (el.type === 'shape') {
-            style.background = el.fill || '#ccc';
-            style.borderRadius = el.shapeKind === 'circle' ? '50%' : (el.cornerRadius ?? 0);
-            style.opacity = el.opacity ?? 1;
-          } else if (el.type === 'text') {
-            return (
-              <div key={i} style={{ ...style, fontSize: `${Math.max((el.fontSize || 12) / COVER_H * 100, 1.4)}%`, color: el.fill || '#333', textAlign: (el.align as any) || 'left', lineHeight: 1.1, overflow: 'hidden' }}>
-                {el.text}
-              </div>
-            );
-          } else {
-            return null;
-          }
-          return <div key={i} style={style} />;
-        })}
-      </div>
+    <div className="w-2/3 max-w-[168px] shadow-md border border-gray-100 rounded-r-md overflow-hidden relative group-hover:scale-105 transition-transform duration-500 bg-white">
+      <ResponsivePageThumb elements={elements} />
     </div>
   );
 }
@@ -225,7 +189,7 @@ export default function Projects() {
                   onClick={() => navigate(`/editor/${project.id}`)}
                 >
                   <div className="aspect-square bg-secondary flex items-center justify-center p-8 relative">
-                    <CoverThumb frontCoverJson={(project as any).frontCoverJson} />
+                    <CoverThumb frontCoverJson={project.frontCoverJson} />
                     <div className="absolute top-3 right-3">
                       <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded-full ${
                         project.status === 'ordered' ? 'bg-green-100 text-green-800' :
