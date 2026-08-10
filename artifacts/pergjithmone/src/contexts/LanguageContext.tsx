@@ -59,10 +59,9 @@ const translations: Translations = {
 
   // Wizard – Step 1
   'wizard.s1.title': { sq: 'Për çfarë rasti është ky album?', en: 'What is this album for?' },
-  'wizard.s1.subtitle': { sq: 'Zgjidhni kategorinë dhe ne do t\'ju tregojmë stilet përkatëse.', en: 'Choose a category and we\'ll show you matching styles.' },
+  'wizard.s1.subtitle': { sq: 'Zgjidhni kategorinë dhe ne do t\'ju tregojmë stilet përkatëse — ose filloni me faqe të bardha.', en: 'Choose a category for matching styles — or start with blank pages.' },
   'wizard.s1.blank': { sq: 'Faqe e Bardhë', en: 'Blank Canvas' },
-  'wizard.s1.blankDesc': { sq: 'Dizajnoni gjithçka vetë', en: 'Design everything yourself' },
-
+  'wizard.s1.blankDesc': { sq: 'Pa stil të gatshëm — filloni nga e para', en: 'No premade style — start from scratch' },
   // Wizard – Step 2
   'wizard.s2.title': { sq: 'Zgjidhni një Stil', en: 'Choose a Style' },
   'wizard.s2.subtitle': { sq: 'Çdo stil vjen me ngjyra, shkronja dhe paraqitje të gatshme. Gjithçka mund të ndryshohet.', en: 'Each style comes with colours, fonts and layouts ready to go. Everything can be changed.' },

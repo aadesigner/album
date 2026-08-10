@@ -5,12 +5,13 @@ import {
   projectPagesTable,
   bookSizesTable,
   appSettingsTable,
+  ordersTable,
 } from "@workspace/db-tsconfig";
-import { eq, and, ne, inArray, count } from "drizzle-orm";
+import { eq, and, inArray, count } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { v4 as uuidv4 } from "uuid";
 import { logger } from "../lib/logger";
-import { queueProjectPdfGeneration, pdfsDir } from "../lib/generateProjectPdf";
+import { queueProjectPdfGeneration, pdfsDir, isPdfGenerationInFlight } from "../lib/generateProjectPdf";
 import { getSecuritySettings } from "../lib/securitySettings";
 import path from "path";
 import fs from "fs";
@@ -110,16 +111,22 @@ router.post("/projects", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const settingsForCap = await getSecuritySettings();
-  const [{ count: existingAlbums }] = await db
-    .select({ count: count() })
-    .from(projectsTable)
-    .where(eq(projectsTable.userId, req.user!.id));
-  if (existingAlbums >= settingsForCap.maxAlbumsPerUser) {
-    res.status(403).json({
-      error: `You've reached the maximum of ${settingsForCap.maxAlbumsPerUser} albums per account.`,
-    });
-    return;
+  const isAdmin = req.user!.role === "admin";
+
+  // Abuse caps apply to customers only — admins creating test albums / catalog
+  // previews must not trip max-albums or pending-book limits.
+  if (!isAdmin) {
+    const settingsForCap = await getSecuritySettings();
+    const [{ count: existingAlbums }] = await db
+      .select({ count: count() })
+      .from(projectsTable)
+      .where(eq(projectsTable.userId, req.user!.id));
+    if (existingAlbums >= settingsForCap.maxAlbumsPerUser) {
+      res.status(403).json({
+        error: `You've reached the maximum of ${settingsForCap.maxAlbumsPerUser} albums per account.`,
+      });
+      return;
+    }
   }
 
   const [bookSize] = await db
@@ -134,17 +141,27 @@ router.post("/projects", requireAuth, async (req, res): Promise<void> => {
 
   const settings = await getSettings();
 
-  if (settings.pendingBooksLimitEnabled) {
-    const pending = await db
-      .select({ id: projectsTable.id })
+  if (!isAdmin && settings.pendingBooksLimitEnabled) {
+    // "Pending" = not checked out. Prefer status=ordered, but also exclude any
+    // project that already has an order row — heals rows whose status was
+    // clobbered by an older PDF job (pdf_ready/draft after checkout).
+    const userProjects = await db
+      .select({ id: projectsTable.id, status: projectsTable.status })
       .from(projectsTable)
-      .where(
-        and(
-          eq(projectsTable.userId, req.user!.id),
-          ne(projectsTable.status, "ordered"),
-        ),
-      );
-    if (pending.length >= settings.pendingBooksLimit) {
+      .where(eq(projectsTable.userId, req.user!.id));
+    const projectIds = userProjects.map((p) => p.id);
+    const orderedByOrderRow = new Set<number>();
+    if (projectIds.length > 0) {
+      const orderRows = await db
+        .select({ projectId: ordersTable.projectId })
+        .from(ordersTable)
+        .where(inArray(ordersTable.projectId, projectIds));
+      for (const row of orderRows) orderedByOrderRow.add(row.projectId);
+    }
+    const pendingCount = userProjects.filter(
+      (p) => p.status !== "ordered" && !orderedByOrderRow.has(p.id),
+    ).length;
+    if (pendingCount >= settings.pendingBooksLimit) {
       res.status(403).json({
         error: `You've reached the limit of ${settings.pendingBooksLimit} pending photobooks. Finish or order an existing one before starting a new one.`,
         code: "PENDING_BOOKS_LIMIT_REACHED",
@@ -322,6 +339,18 @@ router.delete(
       return;
     }
 
+    // Defense for rows whose status was overwritten by an older PDF job after
+    // checkout — if an order references this project, it must not be deletable.
+    const [linkedOrder] = await db
+      .select({ id: ordersTable.id })
+      .from(ordersTable)
+      .where(eq(ordersTable.projectId, projectId))
+      .limit(1);
+    if (linkedOrder) {
+      res.status(403).json({ error: "Cannot delete a project that has already been ordered" });
+      return;
+    }
+
     await db
       .delete(projectsTable)
       .where(eq(projectsTable.id, projectId));
@@ -408,11 +437,34 @@ router.patch(
       return;
     }
 
+    // Ownership check — same gate as POST pages / auto-save. Without this,
+    // any authenticated user who can guess projectId+pageId can edit others'
+    // pages (IDOR).
+    const [owned] = await db
+      .select({ id: projectsTable.id })
+      .from(projectsTable)
+      .where(
+        and(
+          eq(projectsTable.id, projectId),
+          eq(projectsTable.userId, req.user!.id),
+        ),
+      )
+      .limit(1);
+    if (!owned) {
+      res.status(404).json({ error: "Project not found" });
+      return;
+    }
+
     const { layoutId, contentJson, pageNumber } = req.body;
     const updates: Partial<typeof projectPagesTable.$inferInsert> = {};
     if (layoutId !== undefined) updates.layoutId = layoutId;
     if (contentJson !== undefined) updates.contentJson = contentJson;
     if (pageNumber !== undefined) updates.pageNumber = pageNumber;
+
+    if (Object.keys(updates).length === 0) {
+      res.status(400).json({ error: "No fields to update" });
+      return;
+    }
 
     const [page] = await db
       .update(projectPagesTable)
@@ -449,6 +501,21 @@ router.delete(
     const pageId = parseInt(rawPage, 10);
     if (isNaN(projectId) || isNaN(pageId)) {
       res.status(400).json({ error: "Invalid ID" });
+      return;
+    }
+
+    const [owned] = await db
+      .select({ id: projectsTable.id })
+      .from(projectsTable)
+      .where(
+        and(
+          eq(projectsTable.id, projectId),
+          eq(projectsTable.userId, req.user!.id),
+        ),
+      )
+      .limit(1);
+    if (!owned) {
+      res.status(404).json({ error: "Project not found" });
       return;
     }
 
@@ -521,25 +588,27 @@ router.post(
     // "/uploads/files/", so counting that substring across every page's
     // contentJson (existing pages + this patch's incoming ones) is a cheap,
     // good-enough proxy for "how many distinct photos are placed" without
-    // needing a dedicated photos table.
-    const capSettings = await getSecuritySettings();
-    if (capSettings.maxPhotosPerAlbum > 0) {
-      const existingPages = await db
-        .select({ id: projectPagesTable.id, contentJson: projectPagesTable.contentJson })
-        .from(projectPagesTable)
-        .where(eq(projectPagesTable.projectId, projectId));
-      const updatedById = new Map(pages.map((p) => [p.id, p.contentJson]));
-      const photoRefPattern = /\/uploads\/files\//g;
-      let photoCount = 0;
-      for (const page of existingPages) {
-        const content = updatedById.get(page.id) ?? page.contentJson;
-        photoCount += (content.match(photoRefPattern) || []).length;
-      }
-      if (photoCount > capSettings.maxPhotosPerAlbum) {
-        res.status(403).json({
-          error: `This album has reached the maximum of ${capSettings.maxPhotosPerAlbum} photos.`,
-        });
-        return;
+    // needing a dedicated photos table. Admins are exempt.
+    if (req.user!.role !== "admin") {
+      const capSettings = await getSecuritySettings();
+      if (capSettings.maxPhotosPerAlbum > 0) {
+        const existingPages = await db
+          .select({ id: projectPagesTable.id, contentJson: projectPagesTable.contentJson })
+          .from(projectPagesTable)
+          .where(eq(projectPagesTable.projectId, projectId));
+        const updatedById = new Map(pages.map((p) => [p.id, p.contentJson]));
+        const photoRefPattern = /\/uploads\/files\//g;
+        let photoCount = 0;
+        for (const page of existingPages) {
+          const content = updatedById.get(page.id) ?? page.contentJson;
+          photoCount += (content.match(photoRefPattern) || []).length;
+        }
+        if (photoCount > capSettings.maxPhotosPerAlbum) {
+          res.status(403).json({
+            error: `This album has reached the maximum of ${capSettings.maxPhotosPerAlbum} photos.`,
+          });
+          return;
+        }
       }
     }
 
@@ -623,6 +692,14 @@ router.post(
 // GET /projects/:projectId/pdf-download
 router.get(
   "/projects/:projectId/pdf-download",
+  // <iframe>/<a href> can't set Authorization. Allow ?token=<accessToken>
+  // so the admin PDF viewer can open the file in a new tab/iframe.
+  (req, _res, next) => {
+    if (!req.headers.authorization && typeof req.query.token === "string" && req.query.token) {
+      req.headers.authorization = `Bearer ${req.query.token}`;
+    }
+    next();
+  },
   requireAuth,
   async (req, res): Promise<void> => {
     const raw = Array.isArray(req.params.projectId)
@@ -690,15 +767,21 @@ router.get(
       return;
     }
 
-    const statusMap: Record<string, string> = {
-      draft: "pending",
-      pdf_generating: "generating",
-      pdf_ready: "ready",
-      ordered: "ready",
-    };
+    // PDF readiness is orthogonal to checkout. Ordered projects keep
+    // status="ordered" while a render runs; report generating via the
+    // in-flight set instead of overwriting status.
+    let pollStatus: string;
+    if (isPdfGenerationInFlight(projectId) || project.status === "pdf_generating") {
+      pollStatus = "generating";
+    } else if (project.pdfUrl || project.status === "pdf_ready") {
+      pollStatus = "ready";
+    } else {
+      // draft, or ordered with a missing/failed PDF
+      pollStatus = "pending";
+    }
 
     res.json({
-      status: statusMap[project.status] || "pending",
+      status: pollStatus,
       pdfUrl: project.pdfUrl,
       shareToken: project.shareToken,
       error: null,

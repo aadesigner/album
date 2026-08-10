@@ -149,4 +149,32 @@ export async function seedCatalog(): Promise<void> {
       await db.insert(appSettingsTable).values(setting);
     }
   }
+
+  // One-time lift of overly aggressive rate-limit defaults that shipped in
+  // early hardening. Only rewrite when the stored value still equals the old
+  // default so intentional admin tweaks are preserved.
+  const rateLimitBumps: Array<{ key: string; from: string; to: string }> = [
+    { key: "rate_limit_general_max", from: "300", to: "2000" },
+    { key: "rate_limit_auth_max", from: "20", to: "60" },
+    { key: "rate_limit_uploads_max", from: "30", to: "60" },
+  ];
+  for (const bump of rateLimitBumps) {
+    const [row] = await db
+      .select()
+      .from(appSettingsTable)
+      .where(eq(appSettingsTable.key, bump.key))
+      .limit(1);
+    if (row && row.value === bump.from) {
+      await db
+        .update(appSettingsTable)
+        .set({ value: bump.to })
+        .where(eq(appSettingsTable.key, bump.key));
+      logger.info(
+        { key: bump.key, from: bump.from, to: bump.to },
+        "Raised rate-limit setting from legacy default",
+      );
+    } else if (!row) {
+      await db.insert(appSettingsTable).values({ key: bump.key, value: bump.to });
+    }
+  }
 }

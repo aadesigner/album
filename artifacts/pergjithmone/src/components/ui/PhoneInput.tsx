@@ -48,6 +48,24 @@ function flagUrl(iso: string) {
   return `https://flagcdn.com/20x15/${iso}.png`;
 }
 
+/** Split an E.164-ish value (e.g. +355691112233) into dial code + national digits. */
+export function parsePhoneValue(full: string | null | undefined): { countryCode: string; number: string } {
+  const raw = (full || '').trim();
+  if (!raw) return { countryCode: '+355', number: '' };
+  const digits = raw.replace(/[^\d+]/g, '');
+  const withPlus = digits.startsWith('+') ? digits : `+${digits.replace(/\D/g, '')}`;
+  // Longest matching dial code first (+383 before +38, +355 before +35, etc.)
+  const codes = COUNTRY_CODES
+    .filter(c => c.code)
+    .map(c => c.code)
+    .sort((a, b) => b.length - a.length);
+  const match = codes.find(cc => withPlus.startsWith(cc));
+  if (match) {
+    return { countryCode: match, number: withPlus.slice(match.length).replace(/\D/g, '') };
+  }
+  return { countryCode: '+355', number: withPlus.replace(/\D/g, '') };
+}
+
 interface PhoneInputProps {
   value: string;
   onChange: (fullPhone: string) => void;
@@ -55,11 +73,19 @@ interface PhoneInputProps {
   placeholder?: string;
 }
 
-export function PhoneInput({ value: _value, onChange, disabled, placeholder = '6X XXX XXXX' }: PhoneInputProps) {
-  const [countryCode, setCountryCode] = useState('+355');
-  const [number, setNumber] = useState('');
+export function PhoneInput({ value, onChange, disabled, placeholder = '6X XXX XXXX' }: PhoneInputProps) {
+  const parsed = parsePhoneValue(value);
+  const [countryCode, setCountryCode] = useState(parsed.countryCode);
+  const [number, setNumber] = useState(parsed.number);
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
+
+  // Keep local fields in sync when the parent value changes (e.g. edit modal opens).
+  useEffect(() => {
+    const next = parsePhoneValue(value);
+    setCountryCode(next.countryCode);
+    setNumber(next.number);
+  }, [value]);
 
   // Close on outside click
   useEffect(() => {

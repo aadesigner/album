@@ -118,9 +118,11 @@ async function renderPage(elements: PdfElement[], canvasH: number): Promise<stri
   ctx.fillStyle = PAPER_COLOR;
   ctx.fillRect(0, 0, DESIGN_W, canvasH);
 
-  // Pre-load all images on this page in parallel
+  // Pre-load all images on this page in parallel (photos + wallpaper backgrounds)
   await Promise.allSettled(
-    elements.filter(e => e.type === 'image' && e.src).map(e => loadImg(e.src!))
+    elements
+      .filter(e => (e.type === 'image' || e.type === 'background') && e.src)
+      .map(e => loadImg(e.src!))
   );
 
   for (const el of elements) {
@@ -136,7 +138,18 @@ async function renderPage(elements: PdfElement[], canvasH: number): Promise<stri
 
     // ── Background ─────────────────────────────────────────────────────────
     if (el.type === 'background') {
-      if (el.bgGradientFrom) {
+      const wallpaper = el.src ? imgCache.get(el.src) : undefined;
+      if (wallpaper) {
+        // object-fit: cover the full page
+        const sx = DESIGN_W / wallpaper.naturalWidth;
+        const sy = canvasH / wallpaper.naturalHeight;
+        const s = Math.max(sx, sy);
+        const cw = DESIGN_W / s;
+        const ch = canvasH / s;
+        const cx = (wallpaper.naturalWidth - cw) / 2;
+        const cy = (wallpaper.naturalHeight - ch) / 2;
+        ctx.drawImage(wallpaper, cx, cy, cw, ch, 0, 0, DESIGN_W, canvasH);
+      } else if (el.bgGradientFrom) {
         const ex = el.bgGradientDir === 'lr'   ? DESIGN_W :
                    el.bgGradientDir === 'diag'  ? DESIGN_W : 0;
         const ey = el.bgGradientDir === 'lr'   ? 0 :
@@ -145,10 +158,11 @@ async function renderPage(elements: PdfElement[], canvasH: number): Promise<stri
         grad.addColorStop(0, el.bgGradientFrom);
         grad.addColorStop(1, el.bgGradientTo || '#fff');
         ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, DESIGN_W, canvasH);
       } else {
         ctx.fillStyle = el.bgColor || PAPER_COLOR;
+        ctx.fillRect(0, 0, DESIGN_W, canvasH);
       }
-      ctx.fillRect(0, 0, DESIGN_W, canvasH);
     }
 
     // ── Shape ──────────────────────────────────────────────────────────────

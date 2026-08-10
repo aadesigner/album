@@ -6,6 +6,12 @@ interface RecaptchaConfig {
   registerEnabled: boolean;
 }
 
+const DISABLED: RecaptchaConfig = {
+  siteKey: '',
+  loginEnabled: false,
+  registerEnabled: false,
+};
+
 // Singleton so multiple hook instances share one fetch + one script tag
 let configPromise: Promise<RecaptchaConfig> | null = null;
 let scriptLoaded = false;
@@ -13,9 +19,26 @@ let scriptLoaded = false;
 function fetchConfig(): Promise<RecaptchaConfig> {
   if (!configPromise) {
     configPromise = fetch('/api/config')
-      .then((r) => r.json())
-      .then((d) => d.recaptcha as RecaptchaConfig)
-      .catch(() => ({ siteKey: '', loginEnabled: false, registerEnabled: false }));
+      .then(async (r) => {
+        if (!r.ok) {
+          // Don't cache a hard failure forever — allow a later page load /
+          // remount to retry once rate limits (or transient errors) clear.
+          configPromise = null;
+          return DISABLED;
+        }
+        const d = await r.json();
+        const cfg = d?.recaptcha;
+        if (!cfg || typeof cfg !== 'object') return DISABLED;
+        return {
+          siteKey: typeof cfg.siteKey === 'string' ? cfg.siteKey : '',
+          loginEnabled: Boolean(cfg.loginEnabled),
+          registerEnabled: Boolean(cfg.registerEnabled),
+        } satisfies RecaptchaConfig;
+      })
+      .catch(() => {
+        configPromise = null;
+        return DISABLED;
+      });
   }
   return configPromise;
 }
@@ -47,10 +70,10 @@ export function useRecaptcha(page: 'login' | 'register') {
     let cancelled = false;
     fetchConfig().then(async (cfg) => {
       if (cancelled) return;
-      configRef.current = cfg;
-      const enabled = page === 'login' ? cfg.loginEnabled : cfg.registerEnabled;
-      if (enabled && cfg.siteKey) {
-        await loadScript(cfg.siteKey).catch(() => {/* ignore */});
+      configRef.current = cfg ?? DISABLED;
+      const enabled = page === 'login' ? configRef.current.loginEnabled : configRef.current.registerEnabled;
+      if (enabled && configRef.current.siteKey) {
+        await loadScript(configRef.current.siteKey).catch(() => {/* ignore */});
       }
       if (!cancelled) setReady(true);
     });

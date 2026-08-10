@@ -8,7 +8,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Link } from 'wouter';
 import { DESIGN_METAS, DESIGN_CATEGORY_LABELS, DB_CAT_TO_DESIGN_CAT, type DesignMeta } from '@/lib/designMeta';
-import { DESIGNS } from '@/lib/designs';
+import { DESIGNS, BLANK_STARTER_ID } from '@/lib/designs';
 import { ResponsivePageThumb } from '@/components/PageThumb';
 import { SEOMeta } from '@/components/SEOMeta';
 import { useToast } from '@/hooks/use-toast';
@@ -200,10 +200,13 @@ export default function Wizard() {
     ? (DESIGN_CATEGORY_LABELS[designCategoryKey]?.[lang] || designCategoryKey)
     : (lang === 'sq' ? 'Të gjitha stilet' : 'All styles');
 
+  const isBlankPath = selectedCategory === 'blank';
+
   const handleCategorySelect = (catId: number | 'blank') => {
     setSelectedCategory(catId);
     setSelectedDesignId(null);
-    setStep(2);
+    // Blank canvas skips the style step entirely.
+    setStep(catId === 'blank' ? 3 : 2);
   };
 
   const handleDesignSelect = (designId: string | null) => {
@@ -216,11 +219,12 @@ export default function Wizard() {
     const savedSize = sessionStorage.getItem('wizard_size');
     if (!savedSize) return;
     const sizeId = Number(savedSize);
-    const savedDesign = sessionStorage.getItem('wizard_design') || null;
+    const savedDesign = sessionStorage.getItem('wizard_design');
     sessionStorage.removeItem('wizard_size');
     sessionStorage.removeItem('wizard_design');
     sessionStorage.removeItem('wizard_category');
-    if (savedDesign) sessionStorage.setItem('wizard_initial_design', savedDesign);
+    // Empty / missing design → blank starter covers in the editor.
+    sessionStorage.setItem('wizard_initial_design', savedDesign || BLANK_STARTER_ID);
     const payload = { bookSizeId: sizeId, title: lang === 'sq' ? 'Albumi Im' : 'My Album' };
     const tryCreate = () => createProject.mutateAsync({ data: payload });
     tryCreate()
@@ -240,16 +244,17 @@ export default function Wizard() {
 
   const handleCreate = async () => {
     if (!selectedSize) return;
+    const designKey = selectedDesignId || BLANK_STARTER_ID;
     if (!isAuthenticated) {
       sessionStorage.setItem('wizard_size', String(selectedSize));
-      sessionStorage.setItem('wizard_design', selectedDesignId || '');
+      sessionStorage.setItem('wizard_design', designKey);
       sessionStorage.setItem('wizard_category', String(selectedCategory));
       setLocation('/regjistrohu?next=/krijo');
       return;
     }
     const payload = { bookSizeId: selectedSize, title: lang === 'sq' ? 'Albumi Im' : 'My Album' };
     try {
-      if (selectedDesignId) sessionStorage.setItem('wizard_initial_design', selectedDesignId);
+      sessionStorage.setItem('wizard_initial_design', designKey);
       let proj;
       try {
         proj = await createProject.mutateAsync({ data: payload });
@@ -270,9 +275,23 @@ export default function Wizard() {
     }
   };
 
-  const handleBack = () => { if (step > 1) setStep(s => s - 1); };
+  const handleBack = () => {
+    if (step === 3 && isBlankPath) setStep(1);
+    else if (step > 1) setStep(s => s - 1);
+  };
 
-  const stepLabels = [t('wizard.step.category'), t('wizard.step.style'), t('wizard.step.size')];
+  const progressSteps = isBlankPath
+    ? [
+        { num: 1, label: t('wizard.step.category'), activeWhen: 1, doneWhen: (s: number) => s > 1 },
+        { num: 3, label: t('wizard.step.size'), activeWhen: 3, doneWhen: () => false },
+      ]
+    : [
+        { num: 1, label: t('wizard.step.category'), activeWhen: 1, doneWhen: (s: number) => s > 1 },
+        { num: 2, label: t('wizard.step.style'), activeWhen: 2, doneWhen: (s: number) => s > 2 },
+        { num: 3, label: t('wizard.step.size'), activeWhen: 3, doneWhen: () => false },
+      ];
+  const totalProgressSteps = progressSteps.length;
+  const currentProgressIndex = Math.max(0, progressSteps.findIndex(p => p.activeWhen === step)) + 1;
 
   return (
     <AppLayout>
@@ -289,12 +308,11 @@ export default function Wizard() {
         {/* ── Progress header ── */}
         <div className="sticky top-[62px] md:top-[74px] z-10 bg-white/90 backdrop-blur-md border-b border-neutral-100">
           <div className="max-w-5xl mx-auto px-4 md:px-8 py-3 flex items-center gap-0">
-            {stepLabels.map((label, i) => {
-              const s = i + 1;
-              const isActive = step === s;
-              const isDone = step > s;
+            {progressSteps.map((p, i) => {
+              const isActive = step === p.activeWhen;
+              const isDone = p.doneWhen(step);
               return (
-                <React.Fragment key={s}>
+                <React.Fragment key={p.num}>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-all duration-300 ${
                       isDone
@@ -303,13 +321,13 @@ export default function Wizard() {
                         ? 'bg-neutral-900 text-white'
                         : 'bg-neutral-100 text-neutral-400'
                     }`}>
-                      {isDone ? <Check size={10} /> : <span>{s}</span>}
+                      {isDone ? <Check size={10} /> : <span>{i + 1}</span>}
                     </div>
                     <span className={`hidden sm:block text-[11px] uppercase tracking-[0.10em] font-semibold transition-colors duration-200 ${
                       isActive ? 'text-neutral-900' : isDone ? 'text-neutral-500' : 'text-neutral-300'
-                    }`}>{label}</span>
+                    }`}>{p.label}</span>
                   </div>
-                  {s < 3 && (
+                  {i < progressSteps.length - 1 && (
                     <div className="flex-1 mx-3 md:mx-4 h-px overflow-hidden bg-neutral-100">
                       <motion.div
                         className="h-full bg-neutral-800 origin-left"
@@ -382,7 +400,9 @@ export default function Wizard() {
                 transition={{ duration: 0.28, ease: 'easeOut' }}
               >
                 <div className="mb-7 md:mb-10">
-                  <p className="text-[10px] uppercase tracking-[0.28em] text-neutral-400 mb-2">01 / 03</p>
+                  <p className="text-[10px] uppercase tracking-[0.28em] text-neutral-400 mb-2">
+                    {String(currentProgressIndex).padStart(2, '0')} / {String(totalProgressSteps).padStart(2, '0')}
+                  </p>
                   <h1 className="text-2xl md:text-[38px] font-serif font-medium text-neutral-900 leading-tight mb-2">
                     {t('wizard.s1.title')}
                   </h1>
@@ -458,6 +478,9 @@ export default function Wizard() {
                         <p className="font-serif text-xs md:text-sm font-medium text-neutral-500 group-hover:text-neutral-800 transition-colors leading-snug text-center">
                           {t('wizard.s1.blank')}
                         </p>
+                        <p className="text-[10px] text-neutral-400 group-hover:text-neutral-500 transition-colors leading-snug text-center px-1">
+                          {t('wizard.s1.blankDesc')}
+                        </p>
                       </div>
                     </motion.button>
                   </div>
@@ -475,7 +498,9 @@ export default function Wizard() {
                 transition={{ duration: 0.28, ease: 'easeOut' }}
               >
                 <div className="mb-7 md:mb-10">
-                  <p className="text-[10px] uppercase tracking-[0.28em] text-neutral-400 mb-2">02 / 03</p>
+                  <p className="text-[10px] uppercase tracking-[0.28em] text-neutral-400 mb-2">
+                    {String(currentProgressIndex).padStart(2, '0')} / {String(totalProgressSteps).padStart(2, '0')}
+                  </p>
                   <h1 className="text-2xl md:text-[38px] font-serif font-medium text-neutral-900 leading-tight mb-2">
                     {lang === 'sq' ? 'Zgjidhni stilin tuaj' : 'Choose your design style'}
                   </h1>
@@ -527,11 +552,19 @@ export default function Wizard() {
                 transition={{ duration: 0.28, ease: 'easeOut' }}
               >
                 <div className="mb-7 md:mb-10">
-                  <p className="text-[10px] uppercase tracking-[0.28em] text-neutral-400 mb-2">03 / 03</p>
+                  <p className="text-[10px] uppercase tracking-[0.28em] text-neutral-400 mb-2">
+                    {String(currentProgressIndex).padStart(2, '0')} / {String(totalProgressSteps).padStart(2, '0')}
+                  </p>
                   <h1 className="text-2xl md:text-[38px] font-serif font-medium text-neutral-900 leading-tight mb-2">
                     {t('wizard.s3.title')}
                   </h1>
-                  <p className="text-neutral-500 text-sm max-w-lg leading-relaxed">{t('wizard.s3.subtitle')}</p>
+                  <p className="text-neutral-500 text-sm max-w-lg leading-relaxed">
+                    {isBlankPath
+                      ? (lang === 'sq'
+                        ? 'Faqe të bardha — filloni nga e para. Zgjidhni madhësinë e albumit.'
+                        : 'Blank pages — start from scratch. Choose your album size.')
+                      : t('wizard.s3.subtitle')}
+                  </p>
                 </div>
 
                 {loadingSizes ? (

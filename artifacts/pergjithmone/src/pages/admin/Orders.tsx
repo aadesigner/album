@@ -56,6 +56,14 @@ function PdfViewerModal({ url, orderId, onClose }: { url: string; orderId: numbe
   );
 }
 
+/** pdfUrl is an auth-gated API path — append access token so iframe/<a> work. */
+function authedPdfUrl(pdfUrl: string, token: string | null): string {
+  if (!pdfUrl) return pdfUrl;
+  if (!token) return pdfUrl;
+  const join = pdfUrl.includes('?') ? '&' : '?';
+  return `${pdfUrl}${join}token=${encodeURIComponent(token)}`;
+}
+
 // ── Admin note modal ──────────────────────────────────────────────────────────
 function AdminNoteModal({ orderId, initialNote, onClose, onSaved }: {
   orderId: number; initialNote: string; onClose: () => void; onSaved: (note: string) => void;
@@ -117,7 +125,7 @@ function DeletePdfConfirm({ orderId, onConfirm, onCancel, loading }: {
         <div className="text-4xl mb-3">🗑️</div>
         <h3 className="font-serif text-lg font-semibold mb-2">Delete PDF?</h3>
         <p className="text-sm text-neutral-500 mb-5">
-          This removes the generated PDF from Order #{orderId} and resets the project to draft. The user would need to regenerate.
+          This removes the generated PDF from Order #{orderId}. The order stays registered; you can regenerate the PDF afterward.
         </p>
         <div className="flex gap-3">
           <Button variant="outline" onClick={onCancel} className="flex-1">Cancel</Button>
@@ -142,9 +150,18 @@ export default function AdminOrders() {
     page: 1,
     limit: 100,
     status: statusFilter === 'all' ? undefined : statusFilter,
+  }, {
+    query: {
+      // New WhatsApp orders must show up immediately when opening this page —
+      // the global 5min staleTime was hiding fresh checkouts.
+      staleTime: 0,
+      refetchOnMount: 'always',
+      refetchOnWindowFocus: true,
+    },
   });
   const updateOrder = useUpdateAdminOrder();
   const queryClient = useQueryClient();
+  const [regenId, setRegenId] = useState<number | null>(null);
 
   const orders = (ordersData as any)?.data || [];
   const total = (ordersData as any)?.total || 0;
@@ -167,6 +184,26 @@ export default function AdminOrders() {
       setDeletePdf(null);
       refetch();
     } finally { setDeletingPdfId(null); }
+  };
+
+  const handleRegenPdf = async (orderId: number) => {
+    setRegenId(orderId);
+    try {
+      const token = getToken();
+      const res = await fetch(`${BASE}/api/admin/orders/${orderId}/regenerate-pdf`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        alert((body as any)?.error || 'Failed to queue PDF');
+        return;
+      }
+      // Poll briefly — generation is async.
+      setTimeout(() => refetch(), 2500);
+      setTimeout(() => refetch(), 8000);
+    } finally { setRegenId(null); }
   };
 
   return (
@@ -276,7 +313,7 @@ export default function AdminOrders() {
                         {o.pdfUrl ? (
                           <div className="flex items-center gap-1.5">
                             <button
-                              onClick={() => setPdfModal({ url: o.pdfUrl, orderId: o.id })}
+                              onClick={() => setPdfModal({ url: authedPdfUrl(o.pdfUrl, getToken()), orderId: o.id })}
                               className="flex items-center gap-1 px-2.5 py-1.5 bg-violet-50 text-violet-600 rounded-lg text-[10px] font-semibold hover:bg-violet-100 transition-colors"
                               title="View PDF"
                             >
@@ -291,7 +328,14 @@ export default function AdminOrders() {
                             </button>
                           </div>
                         ) : (
-                          <span className="text-[10px] text-neutral-300 italic">No PDF</span>
+                          <button
+                            onClick={() => handleRegenPdf(o.id)}
+                            disabled={regenId === o.id}
+                            className="px-2.5 py-1.5 rounded-lg text-[10px] font-semibold bg-amber-50 text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+                            title="Queue print PDF generation"
+                          >
+                            {regenId === o.id ? 'Queuing…' : 'Generate PDF'}
+                          </button>
                         )}
                       </td>
 

@@ -64,6 +64,8 @@ export default function AlbumAI() {
   const [generating, setGenerating] = useState(false);
   const [genStageIndex, setGenStageIndex] = useState(0);
   const [genDone, setGenDone] = useState(false);
+  const [genReveal, setGenReveal] = useState(false);
+  const [revealPhotos, setRevealPhotos] = useState<string[]>([]);
   const [genError, setGenError] = useState<string | null>(null);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const resumedRef = useRef(false);
@@ -198,11 +200,21 @@ export default function AlbumAI() {
   const runGeneration = useCallback(async (catId: number, photoUrls: string[], sizeId: number) => {
     setGenerating(true);
     setGenDone(false);
+    setGenReveal(false);
+    setRevealPhotos(photoUrls.slice(0, 12));
     setGenStageIndex(0);
     setGenError(null);
     try {
-      const catName = (categories as any[])?.find((c: any) => c.id === catId)?.nameAl || '';
-      const designCategoryKey = DB_CAT_TO_DESIGN_CAT[catName] || '';
+      const cat = (categories as any[])?.find((c: any) => c.id === catId);
+      const catName = cat?.nameAl || cat?.nameEn || '';
+      const designCategoryKey =
+        DB_CAT_TO_DESIGN_CAT[catName] ||
+        DB_CAT_TO_DESIGN_CAT[cat?.nameEn || ''] ||
+        '';
+
+      if (!photoUrls.length) {
+        throw new Error('NO_PHOTOS');
+      }
 
       setGenStageIndex(0); // project
       const desiredInner = Math.max(4, Math.round(photoUrls.length / 2));
@@ -217,7 +229,7 @@ export default function AlbumAI() {
       setGenStageIndex(1); // pages
       let fresh = await getProject(project.id);
       let innerPages = (fresh.pages as any[]).filter(p => p.pageType === 'inner');
-      let maxPageNumber = Math.max(...(fresh.pages as any[]).map(p => p.pageNumber ?? 0));
+      let maxPageNumber = Math.max(0, ...(fresh.pages as any[]).map(p => p.pageNumber ?? 0));
       const missing = finalInner - innerPages.length;
       if (missing > 0) {
         for (let i = 0; i < missing; i++) {
@@ -233,44 +245,81 @@ export default function AlbumAI() {
       innerPages = innerPages.slice().sort((a, b) => (a.pageNumber ?? 0) - (b.pageNumber ?? 0));
 
       setGenStageIndex(2); // design
+      // Tiny delay so the "designing" stage is visible even on fast machines,
+      // and so rapid retries never collide on the same Math.random stream feel.
+      await new Promise(r => setTimeout(r, 280 + Math.floor(Math.random() * 220)));
       const album = generateAlbum(designCategoryKey, photoUrls, innerPages.length, lang as 'sq' | 'en', {
         widthCm: Number(chosenSize.widthCm), heightCm: Number(chosenSize.heightCm),
       });
 
       const frontCoverPage = (fresh.pages as any[]).find(p => p.pageType === 'front_cover');
-      const insideCoverPage = (fresh.pages as any[]).find(p => p.pageType === 'inside_cover');
+      const insideCoverPage = (fresh.pages as any[]).find(
+        p => p.pageType === 'inside_cover' || p.pageType === 'inside_front_cover',
+      );
+      const insideBackPage = (fresh.pages as any[]).find(
+        p => p.pageType === 'inside_back_cover',
+      );
       const backCoverPage = (fresh.pages as any[]).find(p => p.pageType === 'back_cover');
 
       setGenStageIndex(3); // save
-      const patches: Promise<any>[] = [];
       const token = getToken();
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
-      const patchPage = (pageId: number, elements: any[]) =>
-        fetch(`/api/projects/${project.id}/pages/${pageId}`, {
-          method: 'PATCH', headers, body: JSON.stringify({ contentJson: JSON.stringify(elements) }),
-        });
 
+      const patchPage = async (pageId: number, elements: any[], attempts = 3) => {
+        let lastErr: Error | null = null;
+        for (let attempt = 0; attempt < attempts; attempt++) {
+          try {
+            const r = await fetch(`/api/projects/${project.id}/pages/${pageId}`, {
+              method: 'PATCH',
+              headers,
+              body: JSON.stringify({ contentJson: JSON.stringify(elements) }),
+            });
+            if (!r.ok) {
+              const body = await r.text().catch(() => '');
+              throw new Error(`PATCH ${pageId} failed (${r.status}): ${body.slice(0, 160)}`);
+            }
+            return;
+          } catch (err: any) {
+            lastErr = err instanceof Error ? err : new Error(String(err));
+            await new Promise(r => setTimeout(r, 350 * (attempt + 1)));
+          }
+        }
+        throw lastErr ?? new Error('Failed to save a page');
+      };
+
+      const patches: Promise<void>[] = [];
       if (frontCoverPage) patches.push(patchPage(frontCoverPage.id, album.frontCover));
       if (insideCoverPage) patches.push(patchPage(insideCoverPage.id, album.insideCover));
+      if (insideBackPage) patches.push(patchPage(insideBackPage.id, album.insideCover));
       if (backCoverPage) patches.push(patchPage(backCoverPage.id, album.backCover));
       innerPages.forEach((page, i) => {
         if (album.innerPages[i]) patches.push(patchPage(page.id, album.innerPages[i]));
       });
-      await Promise.all(patches);
+
+      // Save in small batches so a single slow page doesn't time everything out.
+      const BATCH = 6;
+      for (let i = 0; i < patches.length; i += BATCH) {
+        await Promise.all(patches.slice(i, i + BATCH));
+      }
 
       sessionStorage.removeItem(SS_KEY);
       setGenDone(true);
-      // Briefly show a "ready" state so the moment of completion registers
-      // before handing off to the editor.
-      await new Promise(r => setTimeout(r, 900));
+      setGenReveal(true);
+      // Reveal collage plays, then hand off to the editor.
+      await new Promise(r => setTimeout(r, 2400));
       setLocation(`/editor/${project.id}`);
     } catch (e: any) {
       console.error('Album generation failed', e);
       const isAuthError = e?.message?.includes('401') || /token|unauthor/i.test(String(e?.message ?? ''));
       const isLimitError = e?.data?.code === 'PENDING_BOOKS_LIMIT_REACHED';
+      const isNoPhotos = e?.message === 'NO_PHOTOS';
       setGenError(isLimitError
         ? e.data.error
+        : isNoPhotos
+        ? (lang === 'sq'
+          ? 'Ngarko të paktën disa foto përpara se të krijosh albumin.'
+          : 'Upload some photos before generating your album.')
         : isAuthError
         ? (lang === 'sq'
           ? 'Sesioni ka skaduar. Hyr përsëri dhe provo sërish.'
@@ -279,6 +328,8 @@ export default function AlbumAI() {
           ? 'Krijimi i albumit dështoi. Provoni përsëri.'
           : 'Album generation failed. Please try again.'));
       setGenerating(false);
+      setGenDone(false);
+      setGenReveal(false);
     }
   }, [categories, bookSizes, createProject, addProjectPage, getToken, lang, setLocation]);
 
@@ -465,88 +516,200 @@ export default function AlbumAI() {
               <motion.div
                 key="generating"
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="relative flex flex-col items-center justify-center py-20 text-center overflow-hidden"
+                className="relative flex flex-col items-center justify-center py-16 md:py-20 text-center overflow-hidden min-h-[420px]"
               >
-                {/* Ambient rotating sparkle field behind the icon */}
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                {/* Soft vignette + drifting orbs */}
+                <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                  <motion.div
+                    className="absolute -top-24 left-1/2 -translate-x-1/2 w-[520px] h-[520px] rounded-full"
+                    style={{ background: 'radial-gradient(circle, rgba(23,23,23,0.06) 0%, transparent 68%)' }}
+                    animate={{ scale: [1, 1.08, 1], opacity: [0.55, 0.9, 0.55] }}
+                    transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut' }}
+                  />
                   {[0, 1, 2].map(i => (
                     <motion.div
                       key={i}
-                      className="absolute rounded-full"
+                      className="absolute left-1/2 top-1/2 rounded-full"
                       style={{
-                        width: 180 + i * 90, height: 180 + i * 90,
-                        border: '1px solid rgba(23,23,23,0.06)',
+                        width: 200 + i * 100, height: 200 + i * 100,
+                        marginLeft: -(100 + i * 50), marginTop: -(100 + i * 50),
+                        border: '1px solid rgba(23,23,23,0.07)',
                       }}
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 14 + i * 6, repeat: Infinity, ease: 'linear' }}
+                      animate={{ rotate: i % 2 === 0 ? 360 : -360 }}
+                      transition={{ duration: 18 + i * 7, repeat: Infinity, ease: 'linear' }}
                     />
                   ))}
                 </div>
 
                 <AnimatePresence mode="wait">
-                  {genDone ? (
+                  {genReveal ? (
+                    <motion.div
+                      key="reveal"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="relative z-10 w-full max-w-lg mx-auto"
+                    >
+                      {/* Photo bloom — user's photos fan in before the editor opens */}
+                      <div className="relative h-56 md:h-64 mb-8">
+                        {(revealPhotos.length ? revealPhotos : photos.filter(p => p.previewUrl).slice(0, 9).map(p => p.previewUrl))
+                          .slice(0, 9)
+                          .map((src, i) => {
+                            const angle = (i - 4) * 7;
+                            const x = (i - 4) * 28;
+                            const y = Math.abs(i - 4) * 4;
+                            return (
+                              <motion.div
+                                key={`${src}-${i}`}
+                                className="absolute left-1/2 top-1/2 w-20 h-28 md:w-24 md:h-32 rounded-lg overflow-hidden shadow-lg border border-white/80"
+                                style={{ zIndex: i }}
+                                initial={{ opacity: 0, scale: 0.5, x: '-50%', y: '-40%', rotate: 0 }}
+                                animate={{
+                                  opacity: 1,
+                                  scale: 1,
+                                  x: `calc(-50% + ${x}px)`,
+                                  y: `calc(-50% + ${y}px)`,
+                                  rotate: angle,
+                                }}
+                                transition={{
+                                  type: 'spring',
+                                  stiffness: 220,
+                                  damping: 18,
+                                  delay: 0.05 + i * 0.06,
+                                }}
+                              >
+                                <img src={src} alt="" className="w-full h-full object-cover" draggable={false} />
+                              </motion.div>
+                            );
+                          })}
+                      </div>
+
+                      <motion.div
+                        initial={{ scale: 0.7, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        transition={{ type: 'spring', stiffness: 260, damping: 16, delay: 0.35 }}
+                        className="mx-auto w-14 h-14 rounded-full bg-emerald-500 flex items-center justify-center mb-4 shadow-md"
+                      >
+                        <PartyPopper size={22} className="text-white" />
+                      </motion.div>
+                      <motion.h2
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.45 }}
+                        className="font-serif text-xl md:text-2xl font-medium text-neutral-900 mb-2"
+                      >
+                        {lang === 'sq' ? 'Albumi yt është gati' : 'Your album is ready'}
+                      </motion.h2>
+                      <motion.p
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.55 }}
+                        className="text-sm text-neutral-500"
+                      >
+                        {lang === 'sq' ? 'Duke hapur editorin…' : 'Opening the editor…'}
+                      </motion.p>
+                    </motion.div>
+                  ) : genDone ? (
                     <motion.div
                       key="done"
                       initial={{ scale: 0.6, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
                       transition={{ type: 'spring', stiffness: 260, damping: 16 }}
-                      className="relative z-10 w-16 h-16 rounded-full bg-emerald-500 flex items-center justify-center mb-6"
+                      className="relative z-10 flex flex-col items-center"
                     >
-                      <PartyPopper size={26} className="text-white" />
+                      <div className="w-16 h-16 rounded-full bg-emerald-500 flex items-center justify-center mb-6">
+                        <PartyPopper size={26} className="text-white" />
+                      </div>
+                      <h2 className="font-serif text-xl font-medium text-neutral-900 mb-6">
+                        {lang === 'sq' ? 'Albumi u krijua!' : 'Your album is ready!'}
+                      </h2>
                     </motion.div>
                   ) : (
                     <motion.div
                       key="working"
                       initial={{ scale: 0.9, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1, rotate: [0, -6, 6, 0] }}
-                      transition={{ rotate: { duration: 2.4, repeat: Infinity, ease: 'easeInOut' } }}
-                      className="relative z-10 w-16 h-16 rounded-full bg-neutral-900 flex items-center justify-center mb-6"
+                      animate={{ scale: 1, opacity: 1 }}
+                      className="relative z-10 flex flex-col items-center w-full"
                     >
-                      <Wand2 size={26} className="text-white" />
+                      {/* Mini photo orbit while designing */}
+                      <div className="relative w-28 h-28 mb-6">
+                        <motion.div
+                          className="absolute inset-0 rounded-full bg-neutral-900 flex items-center justify-center shadow-xl"
+                          animate={{ rotate: [0, -5, 5, 0] }}
+                          transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
+                        >
+                          <Wand2 size={26} className="text-white" />
+                        </motion.div>
+                        {photos.filter(p => p.status === 'done' && (p.url || p.previewUrl)).slice(0, 6).map((p, i) => {
+                          const a = (i / 6) * Math.PI * 2;
+                          const r = 58;
+                          return (
+                            <motion.img
+                              key={p.id}
+                              src={p.previewUrl}
+                              alt=""
+                              className="absolute w-9 h-9 rounded-md object-cover border-2 border-white shadow-md"
+                              style={{ left: '50%', top: '50%', marginLeft: -18, marginTop: -18 }}
+                              initial={{ opacity: 0, scale: 0.4 }}
+                              animate={{
+                                opacity: 1,
+                                scale: 1,
+                                x: Math.cos(a) * r,
+                                y: Math.sin(a) * r,
+                              }}
+                              transition={{ delay: i * 0.08, type: 'spring', stiffness: 200, damping: 16 }}
+                              draggable={false}
+                            />
+                          );
+                        })}
+                      </div>
+
+                      <h2 className="font-serif text-xl font-medium text-neutral-900 mb-2">
+                        {lang === 'sq' ? 'Duke krijuar albumin tënd...' : 'Building your album...'}
+                      </h2>
+                      <p className="text-sm text-neutral-500 mb-8 max-w-xs">
+                        {lang === 'sq'
+                          ? 'Po zgjedhim kopertinat, layout-et dhe vendosim fotot — çdo herë ndryshe.'
+                          : 'Picking covers, layouts and placing your photos — different every time.'}
+                      </p>
+
+                      {/* Stage stepper */}
+                      <div className="flex items-center gap-1.5">
+                        {GEN_STAGES.map((stg, i) => {
+                          const StageIcon = stg.icon;
+                          const state = genDone || i < genStageIndex ? 'done' : i === genStageIndex ? 'active' : 'pending';
+                          return (
+                            <React.Fragment key={stg.key}>
+                              <div className="flex flex-col items-center gap-1.5 w-[76px]">
+                                <div
+                                  className={`w-8 h-8 rounded-full flex items-center justify-center border transition-colors duration-300 ${
+                                    state === 'done' ? 'bg-neutral-900 border-neutral-900 text-white'
+                                      : state === 'active' ? 'bg-white border-neutral-900 text-neutral-900'
+                                      : 'bg-white border-neutral-200 text-neutral-300'
+                                  }`}
+                                >
+                                  {state === 'done' ? <Check size={13} /> : state === 'active'
+                                    ? <Loader2 size={13} className="animate-spin" />
+                                    : <StageIcon size={13} />}
+                                </div>
+                                <span className={`text-[9.5px] uppercase tracking-[0.06em] leading-tight text-center ${
+                                  state === 'pending' ? 'text-neutral-300' : 'text-neutral-500'
+                                }`}>
+                                  {lang === 'sq' ? stg.sq : stg.en}
+                                </span>
+                              </div>
+                              {i < GEN_STAGES.length - 1 && (
+                                <div className={`h-px w-4 -mt-4 transition-colors duration-300 ${
+                                  i < genStageIndex || genDone ? 'bg-neutral-900' : 'bg-neutral-200'
+                                }`} />
+                              )}
+                            </React.Fragment>
+                          );
+                        })}
+                      </div>
                     </motion.div>
                   )}
                 </AnimatePresence>
-
-                <h2 className="relative z-10 font-serif text-xl font-medium text-neutral-900 mb-6">
-                  {genDone
-                    ? (lang === 'sq' ? 'Albumi u krijua!' : 'Your album is ready!')
-                    : (lang === 'sq' ? 'Duke krijuar albumin tënd...' : 'Building your album...')}
-                </h2>
-
-                {/* Stage stepper */}
-                <div className="relative z-10 flex items-center gap-1.5">
-                  {GEN_STAGES.map((stg, i) => {
-                    const StageIcon = stg.icon;
-                    const state = genDone || i < genStageIndex ? 'done' : i === genStageIndex ? 'active' : 'pending';
-                    return (
-                      <React.Fragment key={stg.key}>
-                        <div className="flex flex-col items-center gap-1.5 w-[76px]">
-                          <div
-                            className={`w-8 h-8 rounded-full flex items-center justify-center border transition-colors duration-300 ${
-                              state === 'done' ? 'bg-neutral-900 border-neutral-900 text-white'
-                                : state === 'active' ? 'bg-white border-neutral-900 text-neutral-900'
-                                : 'bg-white border-neutral-200 text-neutral-300'
-                            }`}
-                          >
-                            {state === 'done' ? <Check size={13} /> : state === 'active'
-                              ? <Loader2 size={13} className="animate-spin" />
-                              : <StageIcon size={13} />}
-                          </div>
-                          <span className={`text-[9.5px] uppercase tracking-[0.06em] leading-tight text-center ${
-                            state === 'pending' ? 'text-neutral-300' : 'text-neutral-500'
-                          }`}>
-                            {lang === 'sq' ? stg.sq : stg.en}
-                          </span>
-                        </div>
-                        {i < GEN_STAGES.length - 1 && (
-                          <div className={`h-px w-4 -mt-4 transition-colors duration-300 ${
-                            i < genStageIndex || genDone ? 'bg-neutral-900' : 'bg-neutral-200'
-                          }`} />
-                        )}
-                      </React.Fragment>
-                    );
-                  })}
-                </div>
               </motion.div>
             ) : step === 1 ? (
               <motion.div
@@ -757,6 +920,12 @@ export default function AlbumAI() {
                     ? `Bazuar në ${doneCount} fotot e tua, kemi zgjedhur madhësinë më të përshtatshme. Mund ta ndryshosh nëse dëshiron.`
                     : `Based on your ${doneCount} photos, we picked the best-fitting size. Feel free to change it.`}
                 </p>
+
+                {genError && (
+                  <div className="mb-4 px-4 py-3 rounded-xl border border-red-200 bg-red-50 text-red-700 text-sm text-center max-w-md mx-auto">
+                    {genError}
+                  </div>
+                )}
 
                 {!bookSizes ? (
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 md:gap-4 max-w-xl mx-auto">

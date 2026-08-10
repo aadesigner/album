@@ -6,7 +6,7 @@ import {
   getListAdminUsersQueryKey,
 } from '@workspace/api-client-react-tsconfig';
 import { format } from 'date-fns';
-import { Search, UserPlus, Trash2, ShieldBan, ShieldCheck, RefreshCw, Images, Eye, ExternalLink, Download, X, Pencil } from 'lucide-react';
+import { Search, UserPlus, Trash2, ShieldBan, ShieldCheck, RefreshCw, Images, Eye, ExternalLink, Download, X, Pencil, KeyRound } from 'lucide-react';
 import { PhoneInput } from '@/components/ui/PhoneInput';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +14,22 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 
 const BASE = (import.meta as any).env?.BASE_URL?.replace(/\/$/, '') || '';
+
+/** Internal placeholder emails for phone-only accounts — never show as a real email. */
+function isSyntheticPhoneEmail(email: string | null | undefined): boolean {
+  return !!email && /@ph\.local$/i.test(email);
+}
+
+function displayEmail(email: string | null | undefined): string {
+  if (!email || isSyntheticPhoneEmail(email)) return '';
+  return email;
+}
+
+function displayContact(u: { phone?: string | null; email?: string | null }): string {
+  if (u.phone) return u.phone;
+  const email = displayEmail(u.email);
+  return email || '—';
+}
 
 // ── Create user modal ─────────────────────────────────────────────────────────
 function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
@@ -111,27 +127,52 @@ function EditUserModal({ targetUser, onClose, onSaved }: {
 }) {
   const [form, setForm] = useState({
     name: targetUser.name || '',
-    email: targetUser.email || '',
+    email: displayEmail(targetUser.email),
     phone: targetUser.phone || '',
     adminNote: targetUser.adminNote || '',
+    password: '',
+    confirmPassword: '',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const updateUser = useUpdateAdminUser();
+  const hadSyntheticEmail = isSyntheticPhoneEmail(targetUser.email);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     try {
+      const password = form.password.trim();
+      if (password || form.confirmPassword) {
+        if (password.length < 8) {
+          setError('Password must be at least 8 characters');
+          setLoading(false);
+          return;
+        }
+        if (password !== form.confirmPassword) {
+          setError('Passwords do not match');
+          setLoading(false);
+          return;
+        }
+      }
+      const email = form.email.trim();
+      const data: Record<string, unknown> = {
+        name: form.name,
+        phone: form.phone || null,
+        adminNote: form.adminNote,
+      };
+      // Don't push empty/synthetic email updates for phone-only accounts.
+      if (email) {
+        data.email = email;
+      } else if (!hadSyntheticEmail && targetUser.email) {
+        // Clearing a real email isn't supported without a phone — keep current.
+      }
+      if (password) data.password = password;
+
       await updateUser.mutateAsync({
         userId: targetUser.id,
-        data: {
-          name: form.name,
-          email: form.email,
-          phone: form.phone || null,
-          adminNote: form.adminNote,
-        } as any,
+        data: data as any,
       });
       onSaved();
       onClose();
@@ -144,7 +185,7 @@ function EditUserModal({ targetUser, onClose, onSaved }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center gap-2 mb-5">
           <div className="w-8 h-8 rounded-xl bg-rose-100 flex items-center justify-center">
             <Pencil size={16} className="text-rose-600" />
@@ -154,15 +195,18 @@ function EditUserModal({ targetUser, onClose, onSaved }: {
         <form onSubmit={submit} className="space-y-4">
           <div>
             <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Full Name</label>
-            <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Jane Doe" />
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Email</label>
-            <Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="jane@example.com" />
+            <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Jane Doe" autoComplete="off" />
           </div>
           <div>
             <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Numri i Telefonit</label>
             <PhoneInput value={form.phone} onChange={v => setForm(f => ({ ...f, phone: v }))} />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Email <span className="font-normal text-neutral-400 normal-case">(optional)</span></label>
+            <Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="Leave empty for phone-only accounts" autoComplete="off" />
+            {hadSyntheticEmail && !form.email && (
+              <p className="text-[11px] text-neutral-400 mt-1">This member signed up with phone — no email on file.</p>
+            )}
           </div>
           <div>
             <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide flex items-center gap-1.5 mb-1.5">
@@ -176,6 +220,39 @@ function EditUserModal({ targetUser, onClose, onSaved }: {
               className="w-full rounded-lg border border-input bg-amber-50/40 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300 resize-none"
             />
           </div>
+
+          <div className="rounded-xl border border-neutral-200 bg-neutral-50/80 p-3.5 space-y-3">
+            <div className="flex items-center gap-2">
+              <KeyRound size={14} className="text-neutral-500" />
+              <p className="text-xs font-semibold text-neutral-600 uppercase tracking-wide">Set new password</p>
+            </div>
+            <p className="text-[11px] text-neutral-500 leading-relaxed">
+              Optional. Leave blank to keep the current password. Setting a new one signs the user out everywhere.
+            </p>
+            <div>
+              <label className="text-xs font-medium text-neutral-500 block mb-1.5">New password</label>
+              <Input
+                type="password"
+                value={form.password}
+                onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+                placeholder="Min 8 characters"
+                minLength={8}
+                autoComplete="new-password"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-neutral-500 block mb-1.5">Confirm password</label>
+              <Input
+                type="password"
+                value={form.confirmPassword}
+                onChange={e => setForm(f => ({ ...f, confirmPassword: e.target.value }))}
+                placeholder="Repeat new password"
+                minLength={8}
+                autoComplete="new-password"
+              />
+            </div>
+          </div>
+
           {error && <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
           <div className="flex gap-3 pt-1">
             <Button type="button" variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
@@ -430,7 +507,7 @@ export default function AdminUsers() {
             <Input
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Search by name or email…"
+              placeholder="Search by name or phone…"
               className="pl-9 border-rose-100 focus:border-rose-300 focus:ring-rose-200 rounded-xl"
             />
           </div>
@@ -473,7 +550,8 @@ export default function AdminUsers() {
                   </tr>
                 ) : (
                   users.map((u: any) => {
-                    const initials = (u.name || u.email).split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2);
+                    const contact = displayContact(u);
+                    const initials = (u.name || contact || '?').split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2);
                     return (
                       <tr key={u.id} className={`hover:bg-rose-50/30 transition-colors ${u.isBanned ? 'opacity-60' : ''}`}>
                         {/* User */}
@@ -485,7 +563,7 @@ export default function AdminUsers() {
                             </div>
                             <div className="min-w-0">
                               <p className="font-semibold text-neutral-700 text-xs truncate">{u.name || '—'}</p>
-                              <p className="text-[10px] text-neutral-400 truncate max-w-[160px]">{(u as any).phone || u.email || '—'}</p>
+                              <p className="text-[10px] text-neutral-400 truncate max-w-[160px]">{contact}</p>
                             </div>
                           </div>
                         </td>
@@ -497,13 +575,13 @@ export default function AdminUsers() {
 
                         {/* Last Login */}
                         <td className="px-5 py-3.5 text-xs text-neutral-400 whitespace-nowrap">
-                          {(u as any).lastLoginAt ? (
+                          {u.lastLoginAt ? (
                             <>
-                              {format(new Date((u as any).lastLoginAt), 'MMM d, yyyy')}
-                              <p className="text-[9px] text-neutral-300">{format(new Date((u as any).lastLoginAt), 'HH:mm')}</p>
+                              {format(new Date(u.lastLoginAt), 'MMM d, yyyy')}
+                              <p className="text-[9px] text-neutral-300">{format(new Date(u.lastLoginAt), 'HH:mm')}</p>
                             </>
                           ) : (
-                            <span className="text-neutral-300 italic">Never</span>
+                            <span className="text-neutral-300 italic" title="No recorded login since tracking began">Never</span>
                           )}
                         </td>
 
@@ -553,24 +631,24 @@ export default function AdminUsers() {
                         <td className="px-5 py-3.5">
                           <div className="flex items-center gap-1">
                             <button
-                              onClick={() => setAlbumsTarget({ id: u.id, name: u.name || u.email })}
+                              onClick={() => setAlbumsTarget({ id: u.id, name: u.name || contact })}
                               className="p-2 rounded-xl text-neutral-300 hover:bg-violet-50 hover:text-violet-500 transition-colors"
                               title="View albums & orders"
                             >
                               <Images size={14} />
                             </button>
                             <button
-                              onClick={() => setEditTarget({ id: u.id, name: u.name, email: u.email, phone: (u as any).phone, adminNote: (u as any).adminNote })}
-                              className={`p-2 rounded-xl transition-colors relative ${(u as any).adminNote ? 'text-amber-500 hover:bg-amber-50' : 'text-neutral-300 hover:bg-blue-50 hover:text-blue-500'}`}
-                              title={(u as any).adminNote ? 'Edit user (has admin note)' : 'Edit user'}
+                              onClick={() => setEditTarget({ id: u.id, name: u.name, email: u.email, phone: u.phone ?? null, adminNote: u.adminNote })}
+                              className={`p-2 rounded-xl transition-colors relative ${u.adminNote ? 'text-amber-500 hover:bg-amber-50' : 'text-neutral-300 hover:bg-blue-50 hover:text-blue-500'}`}
+                              title={u.adminNote ? 'Edit user (has admin note)' : 'Edit user'}
                             >
                               <Pencil size={14} />
-                              {(u as any).adminNote && (
+                              {u.adminNote && (
                                 <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-amber-400" />
                               )}
                             </button>
                             <button
-                              onClick={() => setDeleteTarget({ id: u.id, name: u.name || u.email })}
+                              onClick={() => setDeleteTarget({ id: u.id, name: u.name || contact })}
                               className="p-2 rounded-xl text-neutral-300 hover:bg-red-50 hover:text-red-500 transition-colors"
                               title="Delete user"
                             >

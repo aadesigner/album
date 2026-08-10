@@ -195,277 +195,276 @@ export const PH = (x:number, y:number, w:number, h:number, rotation=0): DE => ({
 export const TX = (text:string, x:number, y:number, w:number, h:number, o:Partial<DE>={}): DE =>
   ({ type:'text', x, y, w, h, rotation:0, text,
      fontSize:18, fill:'#333333', align:'center', fontFamily:'Georgia, serif', fontStyle:'normal', ...o });
+/** Movable cover graphic (transparent PNG) — used by landmark travel templates. */
+export const IMG = (src: string, x: number, y: number, w: number, h: number, o: Partial<DE> = {}): DE =>
+  ({ type: 'image', src, x, y, w, h, rotation: 0, ...o });
+
+
+/** Bump Unsplash (etc.) picker thumbs (w=400) to a size usable on covers/PDF. */
+export function wallpaperSrc(thumbPhoto: string, width = 1600): string {
+  try {
+    const u = new URL(thumbPhoto);
+    if (u.searchParams.has('w')) u.searchParams.set('w', String(width));
+    else u.searchParams.set('w', String(width));
+    return u.toString();
+  } catch {
+    return /([?&])w=\d+/.test(thumbPhoto)
+      ? thumbPhoto.replace(/([?&])w=\d+/, `$1w=${width}`)
+      : `${thumbPhoto}${thumbPhoto.includes('?') ? '&' : '?'}w=${width}`;
+  }
+}
+
+/**
+ * Bake a design wallpaper into cover-ready elements so the builder matches the
+ * picker: full-bleed image background + photo slots filled with the same image
+ * (user can still replace those images later).
+ */
+export function elementsWithCoverWallpaper(elements: DE[], thumbPhoto?: string): DE[] {
+  if (!thumbPhoto) return elements;
+  const src = wallpaperSrc(thumbPhoto);
+  return elements.map((el) => {
+    if (el.type === 'background') {
+      return {
+        ...el,
+        src,
+        // Solid/gradient underneath as fallback while the image loads
+        bgGradientFrom: undefined,
+        bgGradientTo: undefined,
+      };
+    }
+    if (el.type === 'placeholder') {
+      return { ...el, type: 'image' as const, src };
+    }
+    return el;
+  });
+}
+
+/** Sentinel written by the wizard when the user skips premade styles / picks blank. */
+export const BLANK_STARTER_ID = '__blank__';
+
+/** Front-cover starter for blank albums — white paper + gentle guidance text. */
+export function blankFrontCoverElements(lang: 'sq' | 'en' = 'sq'): DE[] {
+  return [
+    BG('#FFFFFF'),
+    TX(
+      lang === 'sq' ? 'Kopertina e albumit' : 'Your album cover',
+      48, 300, DESIGN_W - 96, 70,
+      {
+        fontSize: 34,
+        fill: '#2A2A2A',
+        align: 'center',
+        fontFamily: "Georgia, 'Times New Roman', serif",
+        fontStyle: 'italic',
+      },
+    ),
+    TX(
+      lang === 'sq'
+        ? 'Shtoni titullin ose foton që e tregon historinë'
+        : 'Add the title or photo that tells the story',
+      60, 380, DESIGN_W - 120, 48,
+      {
+        fontSize: 14,
+        fill: '#8A8A8A',
+        align: 'center',
+        fontFamily: "Arial, 'Helvetica Neue', sans-serif",
+        letterSpacing: 0.5,
+      },
+    ),
+  ];
+}
+
+/** Back-cover starter for blank albums. */
+export function blankBackCoverElements(lang: 'sq' | 'en' = 'sq'): DE[] {
+  return [
+    BG('#FFFFFF'),
+    TX(
+      lang === 'sq' ? 'Kopertina e pasme' : 'Back cover',
+      48, 300, DESIGN_W - 96, 70,
+      {
+        fontSize: 34,
+        fill: '#2A2A2A',
+        align: 'center',
+        fontFamily: "Georgia, 'Times New Roman', serif",
+        fontStyle: 'italic',
+      },
+    ),
+    TX(
+      lang === 'sq'
+        ? 'Një falënderim, një datë, ose një fjalë e ngrohtë'
+        : 'A thank-you, a date, or a closing note',
+      60, 380, DESIGN_W - 120, 48,
+      {
+        fontSize: 14,
+        fill: '#8A8A8A',
+        align: 'center',
+        fontFamily: "Arial, 'Helvetica Neue', sans-serif",
+        letterSpacing: 0.5,
+      },
+    ),
+  ];
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 20 Premade Designs — carefully crafted
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const DESIGNS: DesignDef[] = [
+
   // ── WEDDING ──────────────────────────────────────────────────────────────
   {
-    id:'blush-garden', name:{sq:'Kopshti Rozë', en:'Blush Garden'}, category:'Wedding',
-    thumb:{ background:'#FBF5EE' },
-    thumbAccents:[
-      { position:'absolute', top:'-10px', right:'-10px', width:44, height:44, borderRadius:'50%', background:'#F4BEBA', opacity:0.55 },
-      { position:'absolute', bottom:'-8px', left:'-8px', width:38, height:38, borderRadius:'50%', background:'#EEB0AC', opacity:0.48 },
-      { position:'absolute', top:8, left:8, right:8, height:42, background:'rgba(0,0,0,0.05)', borderRadius:2 },
-      { position:'absolute', bottom:12, left:16, right:16, height:1, background:'#DBABAA', opacity:0.6 },
-      { position:'absolute', bottom:18, left:22, right:22, height:1, background:'rgba(219,171,170,0.4)' },
-    ],
-    elements:[
-      BG('#FBF5EE'),
-      SH('circle',460,-65,215,215,'#F4BEB8',{opacity:0.24}),
-      SH('circle',-70,595,230,230,'#F0B4AE',{opacity:0.20}),
-      SH('circle',490,630,155,155,'#ECA8A4',{opacity:0.15}),
-      SH('rect',22,22,DESIGN_W-44,DESIGN_H-44,'transparent',{strokeColor:'#DAA8A4',strokeWidth:1,opacity:0.65}),
-      PH(54,60,DESIGN_W-108,512),
-      TX('Our Story',54,622,DESIGN_W-108,64,{fontSize:30,fill:'#8B4255',fontStyle:'italic'}),
-      TX('Date  ·  Venue',54,703,DESIGN_W-108,40,{fontSize:11,fill:'#BA8898'}),
-    ],
-  },
-  {
-    id:'midnight-vows', name:{sq:'Betimi i Natës', en:'Midnight Vows'}, category:'Wedding',
-    thumb:{ background:'#1A2040' },
-    thumbAccents:[
-      { position:'absolute', top:5, left:5, right:5, bottom:5, border:'1px solid rgba(200,168,75,0.60)', borderRadius:2 },
-      { position:'absolute', top:13, left:13, right:13, bottom:13, border:'0.5px solid rgba(200,168,75,0.35)', borderRadius:1 },
-      { position:'absolute', top:20, left:20, right:20, height:30, background:'rgba(200,168,75,0.10)', borderRadius:1 },
-      { position:'absolute', bottom:14, left:'30%', right:'30%', height:1, background:'rgba(200,168,75,0.65)' },
-    ],
-    elements:[
-      BG('#1A2040'),
-      SH('rect',18,18,DESIGN_W-36,DESIGN_H-36,'transparent',{strokeColor:'#C8A84B',strokeWidth:1.2,opacity:0.68}),
-      SH('rect',34,34,DESIGN_W-68,DESIGN_H-68,'transparent',{strokeColor:'#C0A040',strokeWidth:0.5,opacity:0.42}),
-      SH('circle',DESIGN_W/2-85,-85,170,170,'#C8A84B',{opacity:0.06}),
-      PH(58,65,DESIGN_W-116,485),
-      SH('rect',58,564,DESIGN_W-116,0.8,'#C8A84B',{opacity:0.5}),
-      TX('Forever & Always',58,580,DESIGN_W-116,64,{fontSize:24,fill:'#C8A84B',fontStyle:'italic'}),
-      TX('✦  ✦  ✦',DESIGN_W/2-50,658,100,36,{fontSize:13,fill:'#C8A84B'}),
-      TX('Date  ·  Place',58,706,DESIGN_W-116,40,{fontSize:11,fill:'#7A95BE'}),
+    id: 'cream-names',
+    name: { sq: 'Emra në Krem', en: 'Cream Names' },
+    category: 'Wedding',
+    // No thumbPhoto here — solid cream + movable text (picker thumb lives in designMeta)
+    thumb: { background: '#ECE7E1' },
+    thumbAccents: [],
+    elements: [
+      BG('#ECE7E1'),
+      TX('Emiljano & Artemisa', 40, 330, DESIGN_W - 80, 90, {
+        fontSize: 42,
+        fill: '#1A1A1A',
+        fontStyle: 'italic',
+        align: 'center',
+        fontFamily: "'Great Vibes', 'Dancing Script', 'Segoe Script', Georgia, cursive",
+      }),
+      TX('13.09.2023', 150, 430, DESIGN_W - 300, 40, {
+        fontSize: 16,
+        fill: '#1A1A1A',
+        align: 'center',
+        fontFamily: "Arial, 'Helvetica Neue', sans-serif",
+        letterSpacing: 2,
+      }),
     ],
   },
   {
-    id:'pure-vows', name:{sq:'Betim i Pastër', en:'Pure Vows'}, category:'Wedding',
-    thumb:{ background:'#FFFFFF', border:'1px solid #E2DED8' },
-    thumbAccents:[
-      { position:'absolute', inset:'5px', border:'1px solid #D0CCC6', borderRadius:1 },
-      { position:'absolute', inset:'11px', border:'0.5px solid #E2DED8', borderRadius:1 },
-      { position:'absolute', top:18, left:18, right:18, height:32, background:'#F6F3EF', borderRadius:1 },
-      { position:'absolute', bottom:14, left:20, right:20, height:1, background:'#C8C4BE' },
+    id: 'the-wedding-of',
+    name: { sq: 'Dasma e', en: 'The Wedding Of' },
+    category: 'Wedding',
+    thumbPhoto: '/designs/wedding-spin-thumb.jpg',
+    thumb: { background: '#1A2A1A' },
+    thumbAccents: [],
+    elements: [
+      BG('#1A2A1A'),
+      // Full-bleed replaceable cover photo (movable/replaceable image layer)
+      IMG('/designs/wedding-spin-cover.jpg', 0, 0, DESIGN_W, DESIGN_H),
+      TX('THE', 48, 48, 80, 28, {
+        fontSize: 13,
+        fill: '#FFFFFF',
+        align: 'left',
+        fontFamily: "Arial, 'Helvetica Neue', sans-serif",
+        letterSpacing: 3,
+      }),
+      TX('WEDDING', 40, 70, DESIGN_W - 80, 88, {
+        fontSize: 64,
+        fill: '#FFFFFF',
+        fontStyle: 'bold',
+        align: 'center',
+        fontFamily: "Georgia, 'Times New Roman', serif",
+        letterSpacing: 4,
+      }),
+      TX('OF', 48, 150, 80, 28, {
+        fontSize: 13,
+        fill: '#FFFFFF',
+        align: 'left',
+        fontFamily: "Arial, 'Helvetica Neue', sans-serif",
+        letterSpacing: 3,
+      }),
+      TX('VIONTINA & MARIGLEN', 40, 200, DESIGN_W - 80, 48, {
+        fontSize: 22,
+        fill: '#FFFFFF',
+        fontStyle: 'bold',
+        align: 'center',
+        fontFamily: "Georgia, 'Times New Roman', serif",
+        letterSpacing: 3,
+      }),
+      TX('4 SEPTEMBER 2025', 100, 740, DESIGN_W - 200, 36, {
+        fontSize: 13,
+        fill: '#1A1A1A',
+        align: 'center',
+        fontFamily: "Arial, 'Helvetica Neue', sans-serif",
+        letterSpacing: 2,
+      }),
     ],
-    elements:[
-      BG('#FFFFFF'),
-      SH('rect',16,16,DESIGN_W-32,DESIGN_H-32,'transparent',{strokeColor:'#C6C2BC',strokeWidth:1,opacity:0.85}),
-      SH('rect',30,30,DESIGN_W-60,DESIGN_H-60,'transparent',{strokeColor:'#DEDBD6',strokeWidth:0.6,opacity:0.65}),
-      PH(55,68,DESIGN_W-110,482),
-      SH('rect',55,566,DESIGN_W-110,0.8,'#C6C2BC',{opacity:0.7}),
-      TX('Our Wedding Day',55,584,DESIGN_W-110,54,{fontSize:18,fill:'#665A50',fontStyle:'italic'}),
-      TX('Date  ·  Location',55,650,DESIGN_W-110,40,{fontSize:11,fill:'#9A948E'}),
+  },
+
+  // ── TRAVEL — landmark covers (movable art + text; inners stay white) ─────
+  {
+    id: 'paris-pink',
+    name: { sq: 'Paris Rozë', en: 'Paris Pink' },
+    category: 'Travel',
+    thumbPhoto: '/designs/paris-cover-thumb.jpg',
+    thumb: { background: '#FEC5D6' },
+    thumbAccents: [],
+    elements: [
+      BG('#FEC5D6'),
+      // Layer order: title behind tower tip, year beside tower, tower on top
+      TX('PARIS', 24, 36, DESIGN_W - 48, 110, {
+        fontSize: 78,
+        fill: '#FFFFFF',
+        fontStyle: 'bold',
+        align: 'center',
+        fontFamily: "Impact, 'Arial Black', 'Helvetica Neue', sans-serif",
+        letterSpacing: 4,
+      }),
+      TX('2022', 390, 150, 160, 48, {
+        fontSize: 28,
+        fill: '#E06A8A',
+        fontStyle: 'bold',
+        align: 'left',
+        fontFamily: "Arial, 'Helvetica Neue', sans-serif",
+      }),
+      IMG('/designs/eiffel-tower.png', 95, 120, 410, 640),
     ],
   },
   {
-    id:'boho-warmth', name:{sq:'Ngrohtësi Boho', en:'Boho Warmth'}, category:'Wedding',
-    thumb:{ background:'#F2E8DA' },
-    thumbAccents:[
-      { position:'absolute', top:'-10px', right:'-10px', width:42, height:42, borderRadius:'50%', border:'2px solid rgba(196,144,88,0.65)', background:'transparent' },
-      { position:'absolute', bottom:'-8px', left:'-8px', width:34, height:34, borderRadius:'50%', border:'1.5px solid rgba(196,144,88,0.55)', background:'transparent' },
-      { position:'absolute', top:8, left:8, right:8, height:40, background:'rgba(0,0,0,0.055)', borderRadius:2 },
-      { position:'absolute', inset:'6px', border:'1px dashed rgba(180,120,60,0.32)', borderRadius:1 },
-    ],
-    elements:[
-      BG('#F2E8DA'),
-      SH('circle',DESIGN_W-100,-100,255,255,'transparent',{strokeColor:'#C49060',strokeWidth:1.5,opacity:0.42}),
-      SH('circle',-100,DESIGN_H-80,245,245,'transparent',{strokeColor:'#C49060',strokeWidth:1,opacity:0.36}),
-      SH('circle',DESIGN_W-55,85,105,105,'#D4A878',{opacity:0.16}),
-      SH('rect',24,24,DESIGN_W-48,DESIGN_H-48,'transparent',{strokeColor:'#B07840',strokeWidth:1,strokeDash:[8,5],opacity:0.48}),
-      PH(54,56,DESIGN_W-108,522),
-      TX('Bohemian Love',54,620,DESIGN_W-108,60,{fontSize:26,fill:'#8B5830',fontStyle:'italic'}),
-      TX('forever & always',54,695,DESIGN_W-108,40,{fontSize:12,fill:'#C49060'}),
-    ],
-  },
-  {
-    id:'garden-vows', name:{sq:'Dasma në Kopsht', en:'Garden Vows'}, category:'Wedding',
-    thumb:{ background:'#E4EBE0' },
-    thumbAccents:[
-      { position:'absolute', left:0, top:0, width:14, bottom:0, background:'rgba(74,122,84,0.16)' },
-      { position:'absolute', top:8, left:20, right:8, height:36, background:'rgba(0,0,0,0.05)', borderRadius:2 },
-      { position:'absolute', bottom:10, left:20, right:8, height:1, background:'rgba(74,122,84,0.55)' },
-      { position:'absolute', bottom:16, left:20, right:8, height:1, background:'rgba(74,122,84,0.25)' },
-    ],
-    elements:[
-      BG('#E4EBE0'),
-      SH('rect',0,0,44,DESIGN_H,'#4A7A54',{opacity:0.12}),
-      SH('rect',44,34,DESIGN_W-44,1,'#4A7A54',{opacity:0.45}),
-      SH('rect',44,DESIGN_H-34,DESIGN_W-44,1,'#4A7A54',{opacity:0.45}),
-      PH(66,52,DESIGN_W-82,448),
-      SH('rect',66,514,DESIGN_W-130,1,'#4A7A54',{opacity:0.32}),
-      TX('Garden Ceremony',66,530,DESIGN_W-130,58,{fontSize:22,fill:'#2E5A3A',fontStyle:'italic'}),
-      TX('Celebrate love in bloom',66,602,DESIGN_W-130,40,{fontSize:12,fill:'#6A9070'}),
+    id: 'barcelona-red',
+    name: { sq: 'Barcelona', en: 'Barcelona' },
+    category: 'Travel',
+    thumbPhoto: '/designs/barcelona-cover-thumb.jpg',
+    thumb: { background: '#A83441' },
+    thumbAccents: [],
+    elements: [
+      BG('#A83441'),
+      TX('BARCELONA', 16, 48, DESIGN_W - 32, 90, {
+        fontSize: 52,
+        fill: '#E8B84A',
+        fontStyle: 'bold',
+        align: 'center',
+        fontFamily: "Impact, 'Arial Black', 'Helvetica Neue', sans-serif",
+        letterSpacing: 2,
+      }),
+      IMG('/designs/sagrada-familia.png', 70, 160, 460, 520),
+      TX('2026', 200, 720, 200, 48, {
+        fontSize: 26,
+        fill: '#E8B84A',
+        fontStyle: 'bold',
+        align: 'center',
+        fontFamily: "Arial, 'Helvetica Neue', sans-serif",
+      }),
     ],
   },
-  // ── TRAVEL ───────────────────────────────────────────────────────────────
-  {
-    id:'explorer', name:{sq:'Eksplorues', en:'Explorer'}, category:'Travel',
-    thumb:{ background:'#1B3020' },
-    thumbAccents:[
-      { position:'absolute', top:0, left:0, right:0, bottom:'32%', background:'rgba(0,0,0,0.22)' },
-      { position:'absolute', bottom:0, left:0, right:0, height:'32%', background:'#1B3020' },
-      { position:'absolute', bottom:18, left:10, width:26, height:4, background:'#7AAA5A', borderRadius:2 },
-      { position:'absolute', bottom:10, left:10, width:42, height:2, background:'rgba(255,255,255,0.25)', borderRadius:1 },
-    ],
-    elements:[
-      BG('#1B3020'),
-      SH('rect',0,200,DESIGN_W,0.5,'#4A7A40',{opacity:0.18}),
-      SH('rect',0,400,DESIGN_W,0.5,'#4A7A40',{opacity:0.18}),
-      SH('rect',200,0,0.5,DESIGN_H,'#4A7A40',{opacity:0.18}),
-      SH('rect',400,0,0.5,DESIGN_H,'#4A7A40',{opacity:0.18}),
-      PH(0,0,DESIGN_W,538),
-      SH('rect',0,504,DESIGN_W,296,'#1B3020',{opacity:0.90}),
-      SH('rect',38,552,72,4,'#7AAA5A',{opacity:1}),
-      TX('Adventure Awaits',38,565,DESIGN_W-76,74,{fontSize:34,fill:'#FFFFFF',fontStyle:'bold',align:'left'}),
-      TX('Location  ·  Year',38,658,280,42,{fontSize:12,fill:'#7AAA5A',align:'left'}),
-    ],
-  },
-  {
-    id:'golden-hour', name:{sq:'Ora e Artë', en:'Golden Hour'}, category:'Travel',
-    thumb:{ background:'linear-gradient(to bottom, #E8841C 0%, #A84408 100%)' },
-    thumbAccents:[
-      { position:'absolute', top:'-12px', left:'50%', transform:'translateX(-50%)', width:52, height:52, borderRadius:'50%', background:'rgba(255,210,70,0.22)' },
-      { position:'absolute', bottom:0, left:0, right:0, height:'30%', background:'rgba(168,68,8,0.88)' },
-      { position:'absolute', bottom:12, left:10, width:36, height:2, background:'rgba(255,255,255,0.6)', borderRadius:1 },
-    ],
-    elements:[
-      BG('#C8600A',{from:'#E8841C',to:'#A84808',dir:'tb'}),
-      SH('circle',DESIGN_W/2-130,-130,260,260,'#FFD54F',{opacity:0.11}),
-      PH(0,0,DESIGN_W,DESIGN_H),
-      SH('rect',0,DESIGN_H-228,DESIGN_W,228,'#9C3C04',{opacity:0.84}),
-      TX('Golden Hours',38,DESIGN_H-200,DESIGN_W-76,80,{fontSize:38,fill:'#FFFFFF',fontStyle:'italic',align:'left'}),
-      TX('Memories that glow',38,DESIGN_H-114,DESIGN_W-76,46,{fontSize:14,fill:'rgba(255,255,255,0.75)',align:'left'}),
-    ],
-  },
-  {
-    id:'film-diary', name:{sq:'Ditari i Filmit', en:'Film Diary'}, category:'Travel',
-    thumb:{ background:'#E6DFC8' },
-    thumbAccents:[
-      { position:'absolute', top:6, left:8, width:36, height:46, background:'white', boxShadow:'0 2px 8px rgba(0,0,0,0.20)', borderRadius:1 },
-      { position:'absolute', top:6, right:6, width:24, height:30, background:'white', boxShadow:'0 2px 8px rgba(0,0,0,0.18)', borderRadius:1 },
-      { position:'absolute', bottom:6, left:6, right:6, height:22, background:'white', boxShadow:'0 2px 8px rgba(0,0,0,0.18)', borderRadius:1 },
-    ],
-    elements:[
-      BG('#E6DFC8'),
-      SH('rect',22,14,370,476,'#FFFFFF',{opacity:1}),
-      PH(42,34,330,380),
-      TX('a moment captured',42,426,330,46,{fontSize:12,fill:'#666',align:'center',fontStyle:'italic'}),
-      SH('rect',418,14,164,220,'#FFFFFF',{opacity:1}),
-      PH(432,30,136,168),
-      SH('rect',22,518,560,252,'#FFFFFF',{opacity:1}),
-      PH(42,534,520,198),
-    ],
-  },
-  {
-    id:'city-noir', name:{sq:'Qyteti Noir', en:'City Noir'}, category:'Travel',
-    thumb:{ background:'#080808' },
-    thumbAccents:[
-      { position:'absolute', top:0, left:0, right:0, height:24, background:'#161616', borderBottom:'1px solid rgba(240,192,48,0.5)' },
-      { position:'absolute', top:7, left:7, width:32, height:4, background:'#F0C030', borderRadius:1 },
-      { position:'absolute', bottom:10, left:8, width:36, height:3, background:'rgba(255,255,255,0.22)', borderRadius:1 },
-      { position:'absolute', bottom:16, left:8, width:22, height:2, background:'rgba(240,192,48,0.7)', borderRadius:1 },
-    ],
-    elements:[
-      BG('#080808'),
-      SH('rect',0,0,DESIGN_W,88,'#161616',{opacity:1}),
-      SH('rect',38,80,78,4,'#F0C030',{opacity:1}),
-      TX('CITY NOIR',38,18,DESIGN_W-76,52,{fontSize:14,fill:'rgba(255,255,255,0.65)',fontStyle:'bold',align:'left',fontFamily:'sans-serif'}),
-      PH(0,88,DESIGN_W,540),
-      SH('rect',0,600,DESIGN_W,DESIGN_H-600,'#060606',{opacity:0.92}),
-      TX('After Dark',38,618,380,80,{fontSize:44,fill:'#FFFFFF',fontStyle:'bold',align:'left'}),
-      TX('Urban Stories',38,716,280,44,{fontSize:14,fill:'#F0C030',align:'left'}),
-    ],
-  },
+
   // ── BABY & FAMILY ─────────────────────────────────────────────────────────
   {
-    id:'cloud-nine', name:{sq:'Re e Nëntë', en:'Cloud Nine'}, category:'Baby & Family',
-    thumb:{ background:'linear-gradient(160deg, #C8E8F8 0%, #EDF8FF 100%)' },
-    thumbAccents:[
-      { position:'absolute', top:'-10px', left:'-10px', width:38, height:38, borderRadius:'50%', background:'rgba(255,255,255,0.65)' },
-      { position:'absolute', top:'-6px', left:'20%', width:28, height:28, borderRadius:'50%', background:'rgba(255,255,255,0.50)' },
-      { position:'absolute', top:8, left:8, right:8, height:36, background:'rgba(255,255,255,0.45)', borderRadius:6 },
-      { position:'absolute', bottom:'-6px', right:'-6px', width:32, height:32, borderRadius:'50%', background:'rgba(184,216,240,0.55)' },
-    ],
-    elements:[
-      BG('#C8E8F8',{from:'#C8E8F8',to:'#EDF8FF',dir:'tb'}),
-      SH('circle',-60,-60,200,200,'#FFFFFF',{opacity:0.55}),
-      SH('circle',DESIGN_W-80,-50,185,185,'#FFFFFF',{opacity:0.45}),
-      SH('circle',80,20,135,135,'#FFFFFF',{opacity:0.38}),
-      SH('circle',DESIGN_W-100,DESIGN_H-80,245,245,'#B8D8F0',{opacity:0.30}),
-      PH(52,90,DESIGN_W-104,470),
-      TX('Little One',52,604,DESIGN_W-104,66,{fontSize:30,fill:'#3A78A8',fontStyle:'italic'}),
-      TX('born with love',52,682,DESIGN_W-104,44,{fontSize:13,fill:'#6AAACE'}),
-      TX('✦  ✦  ✦',52,738,DESIGN_W-104,38,{fontSize:12,fill:'#8AC4E0'}),
+    id: 'baby-ador',
+    name: { sq: 'ADOR', en: 'ADOR' },
+    category: 'Baby & Family',
+    // No thumbPhoto — elephant+"1" are baked into background.src (not a movable image).
+    // Picker thumb lives in designMeta. Only ADOR text is movable.
+    thumb: { background: '#BCC9D1' },
+    thumbAccents: [],
+    elements: [
+      { ...BG('#BCC9D1'), src: '/designs/baby-ador-cover.jpg' },
+      TX('ADOR', 40, 210, DESIGN_W - 80, 72, {
+        fontSize: 48,
+        fill: '#4A7593',
+        align: 'center',
+        fontFamily: "Georgia, 'Times New Roman', serif",
+        letterSpacing: 10,
+      }),
     ],
   },
-  {
-    id:'cherry-blossom', name:{sq:'Lulëzimi i Qershisë', en:'Cherry Blossom'}, category:'Baby & Family',
-    thumb:{ background:'linear-gradient(135deg, #FBE8F0 0%, #FFF6F9 100%)' },
-    thumbAccents:[
-      { position:'absolute', top:'-10px', right:'-10px', width:40, height:40, borderRadius:'50%', background:'#F4BCCC', opacity:0.68 },
-      { position:'absolute', bottom:'-8px', left:'-8px', width:32, height:32, borderRadius:'50%', background:'#F0B0C4', opacity:0.60 },
-      { position:'absolute', top:8, left:8, right:8, height:36, background:'rgba(255,255,255,0.52)', borderRadius:6 },
-      { position:'absolute', top:12, left:'60%', width:18, height:18, borderRadius:'50%', background:'rgba(244,188,204,0.50)' },
-    ],
-    elements:[
-      BG('#FBE8F0',{from:'#FBE8F0',to:'#FFF6F9',dir:'tb'}),
-      SH('circle',DESIGN_W-80,-80,245,245,'#F4BCCC',{opacity:0.28}),
-      SH('circle',-60,DESIGN_H-90,225,225,'#F0B0C4',{opacity:0.22}),
-      SH('circle',40,50,115,115,'#F8D0DC',{opacity:0.28}),
-      SH('circle',DESIGN_W-120,165,75,75,'#F4BCCC',{opacity:0.22}),
-      PH(50,72,DESIGN_W-100,492),
-      TX('Little Blossom',50,608,DESIGN_W-100,64,{fontSize:28,fill:'#C05880',fontStyle:'italic'}),
-      TX('precious moments',50,685,DESIGN_W-100,44,{fontSize:13,fill:'#D494B0'}),
-    ],
-  },
-  {
-    id:'family-portrait', name:{sq:'Portret Familjar', en:'Family Portrait'}, category:'Baby & Family',
-    thumb:{ background:'#FBF4EC' },
-    thumbAccents:[
-      { position:'absolute', left:0, top:0, bottom:0, width:4, background:'rgba(212,168,112,0.60)' },
-      { position:'absolute', top:6, left:10, width:28, height:52, background:'rgba(0,0,0,0.07)', borderRadius:2 },
-      { position:'absolute', top:6, right:6, left:'54%', height:28, background:'rgba(0,0,0,0.07)', borderRadius:2 },
-      { position:'absolute', bottom:8, right:6, left:'54%', height:26, background:'rgba(212,168,112,0.22)', borderRadius:2 },
-    ],
-    elements:[
-      BG('#FBF4EC'),
-      SH('rect',0,0,8,DESIGN_H,'#D4A870',{opacity:0.50}),
-      PH(28,28,266,DESIGN_H-56),
-      SH('rect',314,44,0.8,DESIGN_H-88,'#D4C4B0',{opacity:0.40}),
-      PH(326,44,250,310),
-      TX('Family',326,374,250,70,{fontSize:32,fill:'#A86030',fontStyle:'italic'}),
-      TX('Together always',326,458,250,46,{fontSize:14,fill:'#C08050'}),
-      TX('2025',326,516,250,44,{fontSize:12,fill:'#C0A880'}),
-      TX('✦',326,668,250,38,{fontSize:18,fill:'#D4A870'}),
-    ],
-  },
-  {
-    id:'honey', name:{sq:'Mjaltë', en:'Honey'}, category:'Baby & Family',
-    thumb:{ background:'linear-gradient(160deg, #FFF8E0 0%, #FFFDF5 100%)' },
-    thumbAccents:[
-      { position:'absolute', top:'-10px', right:'-10px', width:40, height:40, borderRadius:'50%', background:'#F0C840', opacity:0.28 },
-      { position:'absolute', bottom:'-6px', left:'-6px', width:30, height:30, borderRadius:'50%', background:'#F0C840', opacity:0.22 },
-      { position:'absolute', top:5, left:5, right:5, bottom:5, border:'1px solid rgba(224,184,64,0.45)', borderRadius:2 },
-      { position:'absolute', top:12, left:12, right:12, height:34, background:'rgba(0,0,0,0.04)', borderRadius:2 },
-    ],
-    elements:[
-      BG('#FFF8E0',{from:'#FFF8E0',to:'#FFFDF5',dir:'tb'}),
-      SH('circle',DESIGN_W-70,-70,225,225,'#F0C840',{opacity:0.14}),
-      SH('circle',-60,DESIGN_H-70,205,205,'#F0C840',{opacity:0.11}),
-      SH('circle',40,585,95,95,'#F8D840',{opacity:0.15}),
-      SH('rect',20,20,DESIGN_W-40,DESIGN_H-40,'transparent',{strokeColor:'#E0B840',strokeWidth:1,opacity:0.55}),
-      PH(55,55,DESIGN_W-110,502),
-      TX('Sweet Memories',55,598,DESIGN_W-110,62,{fontSize:26,fill:'#906820',fontStyle:'italic'}),
-      TX('made with love',55,674,DESIGN_W-110,42,{fontSize:12,fill:'#C09030'}),
-    ],
-  },
-  // ── CELEBRATION ───────────────────────────────────────────────────────────
+
   {
     id:'champagne', name:{sq:'Shampanjë', en:'Champagne'}, category:'Celebration',
     thumb:{ background:'radial-gradient(ellipse at 40% 25%, #2C1E10 0%, #120C08 70%)' },
@@ -487,6 +486,7 @@ export const DESIGNS: DesignDef[] = [
       TX('★  ★  ★',DESIGN_W/2-55,702,110,40,{fontSize:16,fill:'#D4AF37'}),
     ],
   },
+
   {
     id:'confetti', name:{sq:'Konfeti', en:'Confetti'}, category:'Celebration',
     thumb:{ background:'#FFFCF5' },
@@ -510,6 +510,7 @@ export const DESIGNS: DesignDef[] = [
       TX('every joyful moment',84,DESIGN_H-76,DESIGN_W-168,44,{fontSize:12,fill:'#888',align:'center'}),
     ],
   },
+
   {
     id:'ceremony', name:{sq:'Ceremoni', en:'Ceremony'}, category:'Celebration',
     thumb:{ background:'#0C1E3C' },
@@ -536,6 +537,7 @@ export const DESIGNS: DesignDef[] = [
       TX('\u2605  \u2605  \u2605',DESIGN_W/2-60,738,120,40,{fontSize:13,fill:'#C8A83A',align:'center'}),
     ],
   },
+
   {
     id:'ruby', name:{sq:'Përvjetori Rubin', en:'Ruby Anniversary'}, category:'Celebration',
     thumb:{ background:'#2D0A18' },
@@ -558,7 +560,7 @@ export const DESIGNS: DesignDef[] = [
       TX('❤',DESIGN_W/2-20,688,40,48,{fontSize:22,fill:'#C82048'}),
     ],
   },
-  // ── MODERN ────────────────────────────────────────────────────────────────
+
   {
     id:'editorial', name:{sq:'Editorial', en:'Editorial'}, category:'Modern',
     thumb:{ background:'#F8F8F6' },
@@ -580,6 +582,7 @@ export const DESIGNS: DesignDef[] = [
       TX('— Issue One',38,688,DESIGN_W-76,44,{fontSize:13,fill:'#777777',align:'left'}),
     ],
   },
+
   {
     id:'nordic', name:{sq:'Minimaliste Nordike', en:'Nordic Minimal'}, category:'Modern',
     thumb:{ background:'#F2F0EC' },
@@ -604,6 +607,7 @@ export const DESIGNS: DesignDef[] = [
       PH(234,0,DESIGN_W-234,DESIGN_H),
     ],
   },
+
   {
     id:'blueprint', name:{sq:'Skicë', en:'Blueprint'}, category:'Modern',
     thumb:{ background:'#0A1929' },
@@ -629,396 +633,6 @@ export const DESIGNS: DesignDef[] = [
     ],
   },
 
-  // ── MORE WEDDING ─────────────────────────────────────────────────────────
-  {
-    id:'venetian-lace', name:{sq:'Dantelë Veneciane', en:'Venetian Lace'}, category:'Wedding',
-    thumb:{ background:'#FAF7F2', border:'1px solid #E0D8CE' },
-    thumbAccents:[
-      { position:'absolute', top:4, left:4, right:4, bottom:4, border:'1px solid #D6CCBE', borderRadius:1 },
-      { position:'absolute', top:10, left:10, right:10, bottom:10, border:'0.5px solid #EAE4DA', borderRadius:1 },
-      { position:'absolute', top:'-6px', left:'50%', transform:'translateX(-50%)', width:16, height:16, borderRadius:'50%', background:'#D6CCBE' },
-      { position:'absolute', bottom:10, left:16, right:16, height:1, background:'#C8BEB0' },
-    ],
-    elements:[
-      BG('#FAF7F2'),
-      SH('rect',12,12,DESIGN_W-24,DESIGN_H-24,'transparent',{strokeColor:'#C8BEB0',strokeWidth:1,opacity:0.80}),
-      SH('rect',24,24,DESIGN_W-48,DESIGN_H-48,'transparent',{strokeColor:'#DDD6CC',strokeWidth:0.5,opacity:0.65}),
-      SH('rect',36,36,DESIGN_W-72,DESIGN_H-72,'transparent',{strokeColor:'#EAE4DA',strokeWidth:0.5,opacity:0.50}),
-      SH('circle',DESIGN_W/2-10,-10,24,24,'#C8BEB0',{opacity:0.70}),
-      PH(52,60,DESIGN_W-104,490),
-      SH('rect',52,564,DESIGN_W-104,0.8,'#C0B8AA',{opacity:0.65}),
-      TX('With This Ring',52,582,DESIGN_W-104,56,{fontSize:22,fill:'#7A6E60',fontStyle:'italic',fontFamily:"'Cormorant Garamond', serif"}),
-      TX('I Thee Wed',52,648,DESIGN_W-104,44,{fontSize:14,fill:'#A89E90',fontStyle:'italic'}),
-      TX('✦',DESIGN_W/2-12,706,24,36,{fontSize:14,fill:'#C0B0A0'}),
-    ],
-  },
-  {
-    id:'dusty-rose', name:{sq:'Trëndafil i Thatë', en:'Dusty Rose'}, category:'Wedding',
-    thumb:{ background:'#F0E0DA' },
-    thumbAccents:[
-      { position:'absolute', top:0, left:0, bottom:0, width:10, background:'#C8908A' },
-      { position:'absolute', top:8, left:14, right:8, height:36, background:'rgba(255,255,255,0.40)', borderRadius:2 },
-      { position:'absolute', bottom:12, left:14, right:12, height:1, background:'rgba(180,100,90,0.45)' },
-      { position:'absolute', bottom:6, left:14, right:16, height:1, background:'rgba(180,100,90,0.22)' },
-    ],
-    elements:[
-      BG('#F0E0DA'),
-      SH('rect',0,0,18,DESIGN_H,'#C8908A',{opacity:0.60}),
-      SH('circle',-40,DESIGN_H-100,200,200,'#E0A8A0',{opacity:0.18}),
-      SH('circle',DESIGN_W-20,-40,160,160,'#EAB8B2',{opacity:0.16}),
-      PH(36,30,DESIGN_W-50,500),
-      SH('rect',36,544,DESIGN_W-72,1,'#C08880',{opacity:0.45}),
-      TX('Always & Forever',36,560,DESIGN_W-72,62,{fontSize:24,fill:'#7A3A34',fontStyle:'italic'}),
-      TX('from this day forward',36,636,DESIGN_W-72,44,{fontSize:13,fill:'#B07870'}),
-    ],
-  },
-  {
-    id:'sage-vows', name:{sq:'Betimi i Sherebelës', en:'Sage Vows'}, category:'Wedding',
-    thumb:{ background:'#EBF0E6' },
-    thumbAccents:[
-      { position:'absolute', top:'-16px', right:'-16px', width:52, height:52, borderRadius:'50%', background:'rgba(90,130,80,0.22)' },
-      { position:'absolute', top:'-10px', right:'14px', width:34, height:34, borderRadius:'50%', background:'rgba(122,168,112,0.18)' },
-      { position:'absolute', bottom:'-16px', left:'-16px', width:48, height:48, borderRadius:'50%', background:'rgba(74,114,64,0.20)' },
-      { position:'absolute', top:6, left:6, right:6, bottom:6, border:'1px solid rgba(90,130,80,0.42)', borderRadius:1 },
-      { position:'absolute', bottom:10, left:12, right:12, height:1, background:'rgba(90,130,80,0.35)' },
-    ],
-    elements:[
-      BG('#EBF0E6'),
-      SH('circle',DESIGN_W-140,-140,360,360,'#5A8250',{opacity:0.20}),
-      SH('circle',DESIGN_W-100,-100,280,280,'#8AB878',{opacity:0.16}),
-      SH('circle',-100,DESIGN_H-100,320,320,'#4A7240',{opacity:0.18}),
-      SH('circle',-60,DESIGN_H-60,220,220,'#7AA870',{opacity:0.14}),
-      SH('circle',DESIGN_W-30,240,90,90,'#5A8250',{opacity:0.14}),
-      SH('circle',14,240,68,68,'#6A9860',{opacity:0.12}),
-      SH('rect',32,32,DESIGN_W-64,DESIGN_H-64,'transparent',{strokeColor:'#6A9860',strokeWidth:1,opacity:0.55}),
-      SH('rect',46,46,DESIGN_W-92,DESIGN_H-92,'transparent',{strokeColor:'#A0C890',strokeWidth:0.5,opacity:0.35}),
-      PH(62,62,DESIGN_W-124,476),
-      SH('rect',62,552,DESIGN_W-124,1,'#6A9860',{opacity:0.45}),
-      TX('Garden Vows',62,568,DESIGN_W-124,62,{fontSize:26,fill:'#2E5A28',fontStyle:'italic',fontFamily:"'Cormorant Garamond', serif"}),
-      TX('rooted in love, growing forever',62,642,DESIGN_W-124,44,{fontSize:13,fill:'#5A8A50'}),
-      TX('\u2767  \u2767  \u2767',62,696,DESIGN_W-124,46,{fontSize:14,fill:'#7AA870',align:'center'}),
-    ],
-  },
-  {
-    id:'noir-romance', name:{sq:'Romancë Noir', en:'Noir Romance'}, category:'Wedding',
-    thumb:{ background:'#0E0E0E' },
-    thumbAccents:[
-      { position:'absolute', top:6, left:6, right:6, bottom:6, border:'1px solid rgba(255,255,255,0.14)', borderRadius:1 },
-      { position:'absolute', top:12, left:12, right:12, height:32, background:'rgba(255,255,255,0.05)', borderRadius:1 },
-      { position:'absolute', bottom:8, left:16, right:16, height:1, background:'rgba(255,255,255,0.22)' },
-      { position:'absolute', bottom:3, left:24, right:24, height:1, background:'rgba(255,255,255,0.10)' },
-    ],
-    elements:[
-      BG('#0E0E0E'),
-      SH('rect',0,0,DESIGN_W,DESIGN_H,'#FFFFFF',{opacity:0.02}),
-      SH('rect',20,20,DESIGN_W-40,DESIGN_H-40,'transparent',{strokeColor:'rgba(255,255,255,0.18)',strokeWidth:1,opacity:1}),
-      SH('rect',36,36,DESIGN_W-72,DESIGN_H-72,'transparent',{strokeColor:'rgba(255,255,255,0.08)',strokeWidth:0.5,opacity:1}),
-      PH(54,58,DESIGN_W-108,476),
-      SH('rect',54,548,DESIGN_W-108,0.8,'rgba(255,255,255,0.25)',{opacity:1}),
-      TX('À Jamais',54,566,DESIGN_W-108,62,{fontSize:28,fill:'#FFFFFF',fontStyle:'italic'}),
-      TX('forever in shadow and light',54,644,DESIGN_W-108,44,{fontSize:11,fill:'rgba(255,255,255,0.45)'}),
-    ],
-  },
-  {
-    id:'rustic-barn', name:{sq:'Fshatar Rustik', en:'Rustic Barn'}, category:'Wedding',
-    thumb:{ background:'#F5EBD8' },
-    thumbAccents:[
-      { position:'absolute', top:0, left:0, right:0, height:18, background:'#8B5A2B', opacity:0.85 },
-      { position:'absolute', bottom:0, left:0, right:0, height:18, background:'#8B5A2B', opacity:0.85 },
-      { position:'absolute', top:8, left:8, right:8, height:38, background:'rgba(0,0,0,0.07)', borderRadius:1 },
-      { position:'absolute', top:20, left:6, right:6, bottom:20, border:'1px dashed rgba(139,90,43,0.30)', borderRadius:1 },
-    ],
-    elements:[
-      BG('#F5EBD8'),
-      SH('rect',0,0,DESIGN_W,28,'#8B5A2B',{opacity:0.80}),
-      SH('rect',0,DESIGN_H-28,DESIGN_W,28,'#8B5A2B',{opacity:0.80}),
-      SH('rect',24,36,DESIGN_W-48,DESIGN_H-72,'transparent',{strokeColor:'#9B6833',strokeWidth:1,strokeDash:[10,6],opacity:0.42}),
-      SH('circle',DESIGN_W/2-15,-6,30,30,'#F5EBD8',{opacity:1}),
-      TX('♥',DESIGN_W/2-16,8,32,28,{fontSize:13,fill:'#8B5A2B'}),
-      PH(46,58,DESIGN_W-92,472),
-      TX('Love Story',46,552,DESIGN_W-92,62,{fontSize:28,fill:'#5C3618',fontStyle:'italic'}),
-      TX('written in wildflowers',46,628,DESIGN_W-92,44,{fontSize:13,fill:'#A07040'}),
-    ],
-  },
-  {
-    id:'art-deco-wedding', name:{sq:'Dasmë Art Deco', en:'Art Deco'}, category:'Wedding',
-    thumb:{ background:'#1A1408' },
-    thumbAccents:[
-      { position:'absolute', top:0, left:'35%', right:'35%', height:8, background:'rgba(212,175,55,0.80)' },
-      { position:'absolute', bottom:0, left:'35%', right:'35%', height:8, background:'rgba(212,175,55,0.80)' },
-      { position:'absolute', top:8, left:6, right:6, bottom:8, border:'0.8px solid rgba(212,175,55,0.45)', borderRadius:0 },
-      { position:'absolute', top:14, left:'30%', right:'30%', height:1, background:'rgba(212,175,55,0.55)' },
-      { position:'absolute', bottom:14, left:'30%', right:'30%', height:1, background:'rgba(212,175,55,0.55)' },
-    ],
-    elements:[
-      BG('#1A1408'),
-      SH('rect',0,0,DESIGN_W,16,'#D4AF37',{opacity:0.85}),
-      SH('rect',0,DESIGN_H-16,DESIGN_W,16,'#D4AF37',{opacity:0.85}),
-      SH('rect',20,24,DESIGN_W-40,DESIGN_H-48,'transparent',{strokeColor:'#D4AF37',strokeWidth:0.8,opacity:0.55}),
-      SH('rect',32,36,DESIGN_W-64,DESIGN_H-72,'transparent',{strokeColor:'#C4A028',strokeWidth:0.4,opacity:0.38}),
-      SH('rect',DESIGN_W/2-60,24,120,12,'#D4AF37',{opacity:0.22}),
-      SH('rect',DESIGN_W/2-60,DESIGN_H-36,120,12,'#D4AF37',{opacity:0.22}),
-      PH(52,60,DESIGN_W-104,460),
-      SH('rect',52,534,DESIGN_W-104,1,'#D4AF37',{opacity:0.55}),
-      TX('FOREVER',52,550,DESIGN_W-104,62,{fontSize:28,fill:'#D4AF37',align:'center',fontFamily:"'Cormorant Garamond', serif"}),
-      TX('✦  2025  ✦',52,626,DESIGN_W-104,44,{fontSize:14,fill:'#A88828',align:'center'}),
-    ],
-  },
-  {
-    id:'silver-bride', name:{sq:'Nusja e Argjendtë', en:'Silver Bride'}, category:'Wedding',
-    thumb:{ background:'#F0F0F4' },
-    thumbAccents:[
-      { position:'absolute', top:0, left:0, bottom:0, width:4, background:'#8090A8', opacity:0.90 },
-      { position:'absolute', top:0, right:0, bottom:0, width:4, background:'#8090A8', opacity:0.90 },
-      { position:'absolute', top:6, left:8, right:8, height:'52%', background:'rgba(0,0,0,0.05)', borderRadius:1 },
-      { position:'absolute', bottom:10, left:10, width:32, height:12, background:'rgba(80,96,160,0.25)', borderRadius:1 },
-      { position:'absolute', bottom:18, left:10, width:22, height:1, background:'rgba(130,144,170,0.50)' },
-    ],
-    elements:[
-      BG('#F0F0F4'),
-      SH('rect',0,0,8,DESIGN_H,'#8090A8',{opacity:0.92}),
-      SH('rect',DESIGN_W-8,0,8,DESIGN_H,'#8090A8',{opacity:0.92}),
-      PH(28,28,DESIGN_W-56,398),
-      SH('rect',28,434,DESIGN_W-56,2,'#7888A0',{opacity:0.62}),
-      TX('Our',28,448,DESIGN_W-56,84,{fontSize:50,fill:'#1A1A2A',fontStyle:'italic',align:'left',fontFamily:"'Cormorant Garamond', serif"}),
-      TX('Beginning',28,534,DESIGN_W-56,84,{fontSize:50,fill:'#4858A0',fontStyle:'italic',align:'left',fontFamily:"'Cormorant Garamond', serif"}),
-      SH('rect',28,626,100,2,'#7888A0',{opacity:0.50}),
-      TX('written in silver',28,640,DESIGN_W-56,48,{fontSize:14,fill:'#6878A0',align:'left',fontStyle:'italic'}),
-      TX('\u2014 forever',28,698,DESIGN_W-56,42,{fontSize:12,fill:'#9AA0B4',align:'left'}),
-    ],
-  },
-
-  // ── MORE TRAVEL ───────────────────────────────────────────────────────────
-  {
-    id:'passport-stamp', name:{sq:'Pullë Pasaporte', en:'Passport Stamp'}, category:'Travel',
-    thumb:{ background:'#EDE4D0' },
-    thumbAccents:[
-      { position:'absolute', top:4, left:4, right:4, bottom:4, border:'2px solid rgba(139,90,43,0.45)', borderRadius:2 },
-      { position:'absolute', top:6, left:6, right:6, bottom:6, border:'1px solid rgba(139,90,43,0.22)', borderRadius:2 },
-      { position:'absolute', top:14, left:14, right:14, height:28, background:'rgba(0,0,0,0.08)', borderRadius:2 },
-      { position:'absolute', bottom:8, left:8, right:8, height:14, background:'rgba(139,90,43,0.14)', borderRadius:1 },
-    ],
-    elements:[
-      BG('#EDE4D0'),
-      SH('rect',20,20,DESIGN_W-40,DESIGN_H-40,'transparent',{strokeColor:'#8B5A2B',strokeWidth:3,opacity:0.45}),
-      SH('rect',30,30,DESIGN_W-60,DESIGN_H-60,'transparent',{strokeColor:'#8B5A2B',strokeWidth:1,opacity:0.28}),
-      TX('PASSPORT',DESIGN_W/2-80,44,160,42,{fontSize:13,fill:'#5C3618',fontStyle:'bold',align:'center',fontFamily:'sans-serif'}),
-      SH('rect',DESIGN_W/2-55,82,110,1,'#8B5A2B',{opacity:0.42}),
-      PH(44,96,DESIGN_W-88,460),
-      TX('DESTINATION',44,576,240,36,{fontSize:10,fill:'#8B5A2B',align:'left',fontFamily:'sans-serif'}),
-      TX('City, Country',44,608,240,44,{fontSize:20,fill:'#3C2010',align:'left',fontStyle:'italic'}),
-      TX('DATE OF ENTRY',326,576,180,36,{fontSize:10,fill:'#8B5A2B',align:'right',fontFamily:'sans-serif'}),
-      TX('2025',326,608,180,44,{fontSize:20,fill:'#3C2010',align:'right'}),
-    ],
-  },
-  {
-    id:'desert-dunes', name:{sq:'Dunjet e Shkretëtirës', en:'Desert Dunes'}, category:'Travel',
-    thumb:{ background:'linear-gradient(to bottom, #E8B870 0%, #C47A30 100%)' },
-    thumbAccents:[
-      { position:'absolute', bottom:0, left:0, right:0, height:'38%', background:'rgba(164,80,20,0.80)' },
-      { position:'absolute', bottom:'38%', left:0, right:0, height:2, background:'rgba(255,200,100,0.45)' },
-      { position:'absolute', top:8, left:8, width:26, height:2, background:'rgba(255,255,255,0.50)', borderRadius:1 },
-    ],
-    elements:[
-      BG('#C47A30',{from:'#E8B870',to:'#C47A30',dir:'tb'}),
-      SH('circle',DESIGN_W/2-100,-80,200,200,'#FFD080',{opacity:0.14}),
-      PH(0,0,DESIGN_W,DESIGN_H),
-      SH('rect',0,DESIGN_H-240,DESIGN_W,240,'#7A3A08',{opacity:0.82}),
-      TX('Desert Light',40,DESIGN_H-214,DESIGN_W-80,72,{fontSize:40,fill:'#FFFFFF',fontStyle:'italic',align:'left'}),
-      TX('Where the sun meets the sand',40,DESIGN_H-136,DESIGN_W-80,52,{fontSize:14,fill:'rgba(255,220,140,0.80)',align:'left'}),
-    ],
-  },
-  {
-    id:'ocean-atlas', name:{sq:'Atlasi i Detit', en:'Ocean Atlas'}, category:'Travel',
-    thumb:{ background:'#0D3B5C' },
-    thumbAccents:[
-      { position:'absolute', top:0, left:0, right:0, height:20, background:'rgba(0,180,216,0.22)' },
-      { position:'absolute', top:6, left:6, right:6, height:8, background:'rgba(255,255,255,0.10)', borderRadius:1 },
-      { position:'absolute', bottom:10, left:8, width:32, height:2, background:'rgba(0,200,255,0.60)', borderRadius:1 },
-      { position:'absolute', bottom:16, left:8, width:48, height:1, background:'rgba(255,255,255,0.25)', borderRadius:1 },
-    ],
-    elements:[
-      BG('#0D3B5C'),
-      SH('rect',0,0,DESIGN_W,72,'#0A2C44',{opacity:1}),
-      SH('rect',0,72,DESIGN_W,3,'#00B4D8',{opacity:0.70}),
-      SH('circle',DESIGN_W-80,-60,200,200,'#00A8D0',{opacity:0.07}),
-      TX('OCEAN ATLAS',38,18,DESIGN_W-76,46,{fontSize:13,fill:'rgba(255,255,255,0.70)',fontStyle:'bold',align:'left',fontFamily:'sans-serif'}),
-      PH(0,75,DESIGN_W,500),
-      SH('rect',0,575,DESIGN_W,DESIGN_H-575,'#071A2C',{opacity:0.90}),
-      TX('Into the Blue',38,594,DESIGN_W-76,70,{fontSize:36,fill:'#FFFFFF',fontStyle:'italic',align:'left'}),
-      TX('Stories from the sea',38,682,DESIGN_W-76,44,{fontSize:14,fill:'#00B4D8',align:'left'}),
-    ],
-  },
-  {
-    id:'mountain-peak', name:{sq:'Maja e Malit', en:'Mountain Peak'}, category:'Travel',
-    thumb:{ background:'linear-gradient(to bottom, #1A2840 0%, #2E4860 100%)' },
-    thumbAccents:[
-      { position:'absolute', bottom:0, left:0, right:0, height:'40%', background:'rgba(10,18,30,0.82)' },
-      { position:'absolute', top:0, left:0, right:0, height:'40%', background:'rgba(100,140,200,0.12)' },
-      { position:'absolute', bottom:14, left:8, width:36, height:2, background:'rgba(255,255,255,0.55)', borderRadius:1 },
-    ],
-    elements:[
-      BG('#1A2840',{from:'#1A2840',to:'#2E4860',dir:'tb'}),
-      PH(0,0,DESIGN_W,DESIGN_H),
-      SH('rect',0,DESIGN_H-232,DESIGN_W,232,'#0A1220',{opacity:0.86}),
-      SH('rect',38,DESIGN_H-226,64,4,'#90B8E0',{opacity:0.90}),
-      TX('Summit',38,DESIGN_H-214,DESIGN_W-76,80,{fontSize:44,fill:'#FFFFFF',fontStyle:'bold',align:'left'}),
-      TX('Above the clouds',38,DESIGN_H-128,DESIGN_W-76,48,{fontSize:15,fill:'rgba(144,184,224,0.82)',align:'left'}),
-    ],
-  },
-  {
-    id:'vintage-postcard', name:{sq:'Kartë Postale Vintage', en:'Vintage Postcard'}, category:'Travel',
-    thumb:{ background:'#F0E8D0' },
-    thumbAccents:[
-      { position:'absolute', top:4, left:4, right:4, bottom:4, border:'1px solid #C0A868', borderRadius:1 },
-      { position:'absolute', top:0, right:0, width:20, height:26, background:'rgba(192,168,104,0.35)', borderRadius:'0 0 0 3px' },
-      { position:'absolute', bottom:6, left:10, right:10, height:1, background:'rgba(160,120,60,0.45)' },
-      { position:'absolute', top:8, left:8, width:28, height:22, background:'rgba(0,0,0,0.08)', borderRadius:1 },
-    ],
-    elements:[
-      BG('#F0E8D0'),
-      SH('rect',16,16,DESIGN_W-32,DESIGN_H-32,'transparent',{strokeColor:'#C0A868',strokeWidth:1,opacity:0.70}),
-      SH('rect',DESIGN_W-52,10,48,60,'#C8B070',{opacity:0.28}),
-      SH('rect',DESIGN_W-50,12,44,56,'transparent',{strokeColor:'#A08038',strokeWidth:0.8,opacity:0.50}),
-      TX('GREETINGS FROM',30,30,DESIGN_W-100,36,{fontSize:10,fill:'#7A5820',fontFamily:'sans-serif'}),
-      PH(30,62,DESIGN_W-80,400),
-      SH('rect',30,476,DESIGN_W-60,1,'#C0A868',{opacity:0.55}),
-      TX('A Place to Remember',30,492,DESIGN_W-60,62,{fontSize:22,fill:'#4A3010',fontStyle:'italic'}),
-      TX('With love from afar',30,566,DESIGN_W-60,44,{fontSize:13,fill:'#8A6830'}),
-    ],
-  },
-  {
-    id:'jungle-journal', name:{sq:'Ditar i Xhunglës', en:'Jungle Journal'}, category:'Travel',
-    thumb:{ background:'#1A2E18' },
-    thumbAccents:[
-      { position:'absolute', top:0, left:0, bottom:0, width:14, background:'rgba(80,140,60,0.32)' },
-      { position:'absolute', top:8, left:18, right:8, height:36, background:'rgba(0,0,0,0.25)', borderRadius:1 },
-      { position:'absolute', bottom:8, left:18, right:8, height:16, background:'rgba(80,160,60,0.22)', borderRadius:1 },
-    ],
-    elements:[
-      BG('#1A2E18'),
-      SH('rect',0,0,52,DESIGN_H,'#2A5020',{opacity:0.45}),
-      SH('rect',52,0,DESIGN_W-52,DESIGN_H,'#0A1808',{opacity:0.30}),
-      SH('rect',66,28,DESIGN_W-80,1,'#50A040',{opacity:0.30}),
-      SH('rect',66,DESIGN_H-28,DESIGN_W-80,1,'#50A040',{opacity:0.30}),
-      PH(68,44,DESIGN_W-82,500),
-      TX('Into the Wild',68,564,DESIGN_W-82,70,{fontSize:36,fill:'#FFFFFF',fontStyle:'italic',align:'left'}),
-      TX('Nature Journal · 2025',68,648,DESIGN_W-82,44,{fontSize:12,fill:'#70C050',align:'left'}),
-    ],
-  },
-
-  // ── MORE BABY & FAMILY ────────────────────────────────────────────────────
-  {
-    id:'mint-nursery', name:{sq:'Çerdhe Balsami', en:'Mint Nursery'}, category:'Baby & Family',
-    thumb:{ background:'linear-gradient(160deg, #D4EDE6 0%, #EEF8F4 100%)' },
-    thumbAccents:[
-      { position:'absolute', inset:'3px', border:'2px solid rgba(80,180,140,0.50)', borderRadius:2 },
-      { position:'absolute', inset:'9px', border:'1.5px solid rgba(120,200,170,0.35)', borderRadius:1 },
-      { position:'absolute', inset:'15px', border:'1px solid rgba(160,220,196,0.28)', borderRadius:1 },
-      { position:'absolute', top:20, left:20, right:20, height:22, background:'rgba(255,255,255,0.40)', borderRadius:1 },
-    ],
-    elements:[
-      BG('#D4EDE6',{from:'#D4EDE6',to:'#EEF8F4',dir:'tb'}),
-      SH('rect',10,10,DESIGN_W-20,DESIGN_H-20,'transparent',{strokeColor:'#60B898',strokeWidth:3,opacity:0.55}),
-      SH('rect',24,24,DESIGN_W-48,DESIGN_H-48,'transparent',{strokeColor:'#88C8B0',strokeWidth:2,opacity:0.38}),
-      SH('rect',38,38,DESIGN_W-76,DESIGN_H-76,'transparent',{strokeColor:'#A8D8C0',strokeWidth:1,opacity:0.28}),
-      SH('circle',DESIGN_W/2-110,-90,280,280,'#FFFFFF',{opacity:0.35}),
-      SH('circle',-60,DESIGN_H-90,220,220,'#A8DCC8',{opacity:0.18}),
-      PH(58,66,DESIGN_W-116,458),
-      SH('rect',58,538,DESIGN_W-116,2,'#70B898',{opacity:0.50}),
-      TX('Sweet Little One',58,552,DESIGN_W-116,62,{fontSize:26,fill:'#2A7060',fontStyle:'italic',fontFamily:"'Cormorant Garamond', serif"}),
-      TX('growing every day',58,626,DESIGN_W-116,44,{fontSize:13,fill:'#4A9A80'}),
-      TX('\u2767  \u2767  \u2767',58,680,DESIGN_W-116,44,{fontSize:14,fill:'#70C0A0',align:'center'}),
-    ],
-  },
-  {
-    id:'rainbow-kids', name:{sq:'Ylberi i Fëmijëve', en:'Rainbow Kids'}, category:'Baby & Family',
-    thumb:{ background:'#FFFDF8' },
-    thumbAccents:[
-      { position:'absolute', top:'-14px', left:'10%', width:22, height:22, borderRadius:'50%', background:'#FF6B6B' },
-      { position:'absolute', top:'-10px', left:'30%', width:18, height:18, borderRadius:'50%', background:'#FF9F43' },
-      { position:'absolute', top:'-16px', left:'55%', width:24, height:24, borderRadius:'50%', background:'#FECA57' },
-      { position:'absolute', top:'-10px', right:'12%', width:18, height:18, borderRadius:'50%', background:'#48DBFB' },
-      { position:'absolute', bottom:8, left:8, right:8, height:18, background:'rgba(0,0,0,0.04)', borderRadius:2 },
-    ],
-    elements:[
-      BG('#FFFDF8'),
-      SH('circle',15,20,62,62,'#FF6B6B',{opacity:0.90}),
-      SH('circle',100,6,50,50,'#FF9F43',{opacity:0.88}),
-      SH('circle',186,16,56,56,'#FECA57',{opacity:0.90}),
-      SH('circle',278,4,48,48,'#48DBFB',{opacity:0.88}),
-      SH('circle',366,14,54,54,'#FF9FF3',{opacity:0.90}),
-      SH('circle',456,6,58,58,'#FF6B6B',{opacity:0.85}),
-      SH('circle',524,20,52,52,'#FECA57',{opacity:0.82}),
-      SH('circle',30,DESIGN_H-62,52,52,'#FECA57',{opacity:0.88}),
-      SH('circle',128,DESIGN_H-52,44,44,'#2A9D8F',{opacity:0.88}),
-      SH('circle',224,DESIGN_H-58,50,50,'#FF9F43',{opacity:0.90}),
-      SH('circle',326,DESIGN_H-50,46,46,'#FF6B6B',{opacity:0.88}),
-      SH('circle',424,DESIGN_H-60,50,50,'#48DBFB',{opacity:0.88}),
-      SH('circle',512,DESIGN_H-54,52,52,'#FF9FF3',{opacity:0.85}),
-      PH(32,96,DESIGN_W-64,468),
-      TX('Growing Up',32,584,DESIGN_W-64,68,{fontSize:32,fill:'#2C2C2C',align:'center',fontFamily:"'Pacifico', cursive"}),
-      TX('every colour of childhood',32,662,DESIGN_W-64,44,{fontSize:13,fill:'#888',align:'center'}),
-    ],
-  },
-  {
-    id:'lavender-lullaby', name:{sq:'Ninull Lavande', en:'Lavender Lullaby'}, category:'Baby & Family',
-    thumb:{ background:'linear-gradient(160deg, #E8E0F5 0%, #F8F4FF 100%)' },
-    thumbAccents:[
-      { position:'absolute', top:'-20px', right:'-20px', width:58, height:58, borderRadius:'50%', background:'rgba(200,168,224,0.35)' },
-      { position:'absolute', top:'-14px', right:'14px', width:38, height:38, borderRadius:'50%', background:'#E8E0F5' },
-      { position:'absolute', top:8, left:8, width:12, height:12, borderRadius:'50%', background:'rgba(192,160,220,0.55)' },
-      { position:'absolute', top:18, right:12, width:8, height:8, borderRadius:'50%', background:'rgba(200,168,224,0.50)' },
-      { position:'absolute', bottom:10, left:8, right:8, height:18, background:'rgba(255,255,255,0.40)', borderRadius:2 },
-    ],
-    elements:[
-      BG('#E8E0F5',{from:'#E8E0F5',to:'#F8F4FF',dir:'tb'}),
-      SH('circle',DESIGN_W-240,-180,480,480,'#C8A8E0',{opacity:0.32}),
-      SH('circle',DESIGN_W-80,-80,380,380,'#E8E0F5',{opacity:0.85}),
-      SH('circle',60,26,22,22,'#C8A8E0',{opacity:0.55}),
-      SH('circle',28,88,14,14,'#D4B8EC',{opacity:0.48}),
-      SH('circle',DESIGN_W-46,110,18,18,'#C0A0D8',{opacity:0.50}),
-      SH('circle',DESIGN_W-28,220,12,12,'#D0B8E8',{opacity:0.45}),
-      SH('circle',40,360,10,10,'#C8A8E0',{opacity:0.42}),
-      SH('circle',22,480,14,14,'#D4B8EC',{opacity:0.38}),
-      SH('circle',DESIGN_W-38,350,16,16,'#C0A0D8',{opacity:0.40}),
-      SH('circle',80,DESIGN_H-80,18,18,'#D0B8E8',{opacity:0.42}),
-      SH('circle',DESIGN_W-70,DESIGN_H-90,14,14,'#C8A8E0',{opacity:0.38}),
-      PH(50,70,DESIGN_W-100,480),
-      SH('rect',50,564,DESIGN_W-100,1,'#C0A8DC',{opacity:0.45}),
-      TX('Dreamland',50,580,DESIGN_W-100,62,{fontSize:30,fill:'#6040A0',fontStyle:'italic',fontFamily:"'Dancing Script', cursive"}),
-      TX('lullabies & starlight',50,654,DESIGN_W-100,44,{fontSize:13,fill:'#9070C0'}),
-      TX('\u2736  \u2736  \u2736',50,706,DESIGN_W-100,44,{fontSize:13,fill:'#C0A8DC',align:'center'}),
-    ],
-  },
-  {
-    id:'storybook', name:{sq:'Libri i Tregimeve', en:'Storybook'}, category:'Baby & Family',
-    thumb:{ background:'#FBF5E8' },
-    thumbAccents:[
-      { position:'absolute', top:0, left:0, bottom:0, width:4, background:'#D4A840', opacity:0.70 },
-      { position:'absolute', top:0, left:'42%', bottom:0, width:3, background:'#C09030', opacity:0.55 },
-      { position:'absolute', top:0, left:'44%', right:0, bottom:0, background:'rgba(0,0,0,0.04)' },
-      { position:'absolute', top:6, left:8, width:'34%', height:24, background:'rgba(0,0,0,0.06)', borderRadius:1 },
-      { position:'absolute', bottom:8, left:8, width:'34%', height:1, background:'rgba(184,120,40,0.40)' },
-    ],
-    elements:[
-      BG('#FBF5E8'),
-      SH('rect',0,0,268,DESIGN_H,'#FFF8F0',{opacity:1}),
-      SH('rect',0,0,14,DESIGN_H,'#E8C070',{opacity:0.68}),
-      SH('rect',268,0,10,DESIGN_H,'#C49030',{opacity:0.50}),
-      SH('rect',268,0,1,DESIGN_H,'#A87020',{opacity:0.70}),
-      SH('circle',50,60,110,110,'#F0D890',{opacity:0.18}),
-      TX('\u201C',18,54,228,170,{fontSize:140,fill:'#D4A840',align:'left',opacity:0.14,fontFamily:"'Georgia', serif"}),
-      TX('Chapter',20,186,230,50,{fontSize:20,fill:'#7A4A10',fontStyle:'italic'}),
-      TX('One',20,234,230,72,{fontSize:46,fill:'#5C3818',fontStyle:'bold',fontFamily:"'Playfair Display', serif"}),
-      SH('rect',20,314,172,1.5,'#D4A840',{opacity:0.45}),
-      TX('Once upon\na time\u2026',20,330,230,96,{fontSize:14,fill:'#A07030',fontStyle:'italic',align:'left'}),
-      TX('2025',20,DESIGN_H-46,100,32,{fontSize:11,fill:'#C0A060',align:'left',fontFamily:'sans-serif'}),
-      PH(284,24,DESIGN_W-306,DESIGN_H-48),
-    ],
-  },
-
-  // ── MORE CELEBRATION ──────────────────────────────────────────────────────
   {
     id:'birthday-bash', name:{sq:'Festë Ditëlindje', en:'Birthday Bash'}, category:'Celebration',
     thumb:{ background:'#FFF8F0' },
@@ -1044,6 +658,7 @@ export const DESIGNS: DesignDef[] = [
       TX('with joy & love',36,756,DESIGN_W-72,36,{fontSize:12,fill:'#E63946',align:'center'}),
     ],
   },
+
   {
     id:'silver-25', name:{sq:'Argjend 25', en:'Silver 25th'}, category:'Celebration',
     thumb:{ background:'#E8EAF0' },
@@ -1069,6 +684,7 @@ export const DESIGNS: DesignDef[] = [
       TX('twenty-five years of love',54,762,DESIGN_W-108,38,{fontSize:12,fill:'#7888B0'}),
     ],
   },
+
   {
     id:'new-chapter', name:{sq:'Kapitull i Ri', en:'New Chapter'}, category:'Celebration',
     thumb:{ background:'#F8F6F0' },
@@ -1091,6 +707,7 @@ export const DESIGNS: DesignDef[] = [
       TX('— a new beginning',36,686,DESIGN_W-72,44,{fontSize:12,fill:'#7080A0'}),
     ],
   },
+
   {
     id:'milestone', name:{sq:'Pikë Kthese', en:'Milestone'}, category:'Celebration',
     thumb:{ background:'#FBF8F2' },
@@ -1115,7 +732,6 @@ export const DESIGNS: DesignDef[] = [
     ],
   },
 
-  // ── MORE MODERN ───────────────────────────────────────────────────────────
   {
     id:'darkroom', name:{sq:'Dhoma e Errët', en:'Darkroom'}, category:'Modern',
     thumb:{ background:'#080808' },
@@ -1134,6 +750,7 @@ export const DESIGNS: DesignDef[] = [
       TX('print No. 01',40,DESIGN_H-82,DESIGN_W-80,40,{fontSize:12,fill:'rgba(255,255,255,0.35)',align:'left',fontFamily:'monospace'}),
     ],
   },
+
   {
     id:'cinematic', name:{sq:'Kinematografik', en:'Cinematic'}, category:'Modern',
     thumb:{ background:'#111' },
@@ -1152,6 +769,7 @@ export const DESIGNS: DesignDef[] = [
       TX('CINÉMA',38,DESIGN_H-52,DESIGN_W-76,40,{fontSize:13,fill:'rgba(255,255,255,0.65)',fontStyle:'bold',align:'left',fontFamily:'sans-serif'}),
     ],
   },
+
   {
     id:'photo-essay', name:{sq:'Ese Foto', en:'Photo Essay'}, category:'Modern',
     thumb:{ background:'#F6F4F0' },
@@ -1172,6 +790,7 @@ export const DESIGNS: DesignDef[] = [
       TX('— 2025',36,594,DESIGN_W-72,44,{fontSize:12,fill:'#999999',align:'left'}),
     ],
   },
+
   {
     id:'swiss-type', name:{sq:'Tipografi Zvicerane', en:'Swiss Type'}, category:'Modern',
     thumb:{ background:'#FFFFFF', border:'1px solid #E0E0E0' },
@@ -1192,6 +811,7 @@ export const DESIGNS: DesignDef[] = [
       TX('2025',DESIGN_W-120,616,92,44,{fontSize:13,fill:'#111111',align:'right',fontFamily:'sans-serif'}),
     ],
   },
+
   {
     id:'polaroid-wall', name:{sq:'Muri Polaroid', en:'Polaroid Wall'}, category:'Modern',
     thumb:{ background:'#E0D8C8' },
@@ -1230,6 +850,7 @@ export const DESIGNS: DesignDef[] = [
       TX('together',334,668,168,30,{fontSize:11,fill:'#888',align:'center',fontStyle:'italic',rotation:-9}),
     ],
   },
+
   {
     id:'polaroid-scatter', name:{sq:'Polaroid të Shpërndara', en:'Polaroid Scatter'}, category:'Modern',
     thumb:{ background:'#EFE7D8' },
@@ -1267,6 +888,7 @@ export const DESIGNS: DesignDef[] = [
       TX('#5',184,712,140,24,{fontSize:10,fill:'#999',align:'center',fontStyle:'italic',rotation:-6}),
     ],
   },
+
   {
     id:'polaroid-clothesline', name:{sq:'Litar Polaroid', en:'Polaroid Clothesline'}, category:'Modern',
     thumb:{ background:'#F4EFE6' },
@@ -1299,6 +921,7 @@ export const DESIGNS: DesignDef[] = [
       TX('little moments, strung together',60,660,DESIGN_W-120,60,{fontSize:15,fill:'#5A4E3C',align:'center',fontStyle:'italic'}),
     ],
   },
+
   {
     id:'minimalist-b', name:{sq:'Minimale e Zezë', en:'Black Minimal'}, category:'Modern',
     thumb:{ background:'#111' },
@@ -1316,6 +939,7 @@ export const DESIGNS: DesignDef[] = [
       TX('speaks volumes',48,650,DESIGN_W-96,44,{fontSize:13,fill:'rgba(255,255,255,0.40)'}),
     ],
   },
+
   {
     id:'bauhaus', name:{sq:'Bauhaus', en:'Bauhaus'}, category:'Modern',
     thumb:{ background:'#F0EEE8' },
@@ -1337,7 +961,6 @@ export const DESIGNS: DesignDef[] = [
     ],
   },
 
-  // ── PORTRAIT ─────────────────────────────────────────────────────────────
   {
     id:'classic-portrait', name:{sq:'Portret Klasik', en:'Classic Portrait'}, category:'Portrait',
     thumb:{ background:'#F8F4EE', border:'1px solid #E0D8CE' },
@@ -1356,6 +979,7 @@ export const DESIGNS: DesignDef[] = [
       TX('Name  ·  Year',52,650,DESIGN_W-104,44,{fontSize:12,fill:'#9A908A'}),
     ],
   },
+
   {
     id:'studio-noir', name:{sq:'Studio Noir', en:'Studio Noir'}, category:'Portrait',
     thumb:{ background:'#0C0C0C' },
@@ -1375,6 +999,7 @@ export const DESIGNS: DesignDef[] = [
       TX('Session  ·  2025',36,DESIGN_H-66,DESIGN_W-72,44,{fontSize:12,fill:'rgba(255,255,255,0.35)',align:'left',fontFamily:'monospace'}),
     ],
   },
+
   {
     id:'ethereal', name:{sq:'Eterik', en:'Ethereal'}, category:'Portrait',
     thumb:{ background:'linear-gradient(160deg, #F5EEFE 0%, #FEF5F8 100%)' },
@@ -1394,6 +1019,7 @@ export const DESIGNS: DesignDef[] = [
       TX('light beyond the veil',50,682,DESIGN_W-100,44,{fontSize:13,fill:'#A080C8'}),
     ],
   },
+
   {
     id:'golden-portrait', name:{sq:'Portret i Artë', en:'Golden Portrait'}, category:'Portrait',
     thumb:{ background:'#2A1A08' },
@@ -1414,7 +1040,6 @@ export const DESIGNS: DesignDef[] = [
     ],
   },
 
-  // ── NATURE ───────────────────────────────────────────────────────────────
   {
     id:'forest-path', name:{sq:'Shtigjet e Pyllit', en:'Forest Path'}, category:'Nature',
     thumb:{ background:'#1C2E1A' },
@@ -1433,6 +1058,7 @@ export const DESIGNS: DesignDef[] = [
       TX('Where the light falls softly',40,DESIGN_H-104,DESIGN_W-80,44,{fontSize:14,fill:'#90C070',align:'left'}),
     ],
   },
+
   {
     id:'ocean-calm', name:{sq:'Qetësia e Oqeanit', en:'Ocean Calm'}, category:'Nature',
     thumb:{ background:'linear-gradient(to bottom, #0D4F6C 0%, #1A7A9E 100%)' },
@@ -1451,6 +1077,7 @@ export const DESIGNS: DesignDef[] = [
       TX('still waters, deep peace',40,DESIGN_H-102,DESIGN_W-80,46,{fontSize:14,fill:'#64B8D8',align:'left'}),
     ],
   },
+
   {
     id:'wildflower', name:{sq:'Lulet e Egra', en:'Wildflower'}, category:'Nature',
     thumb:{ background:'#FBF5E8' },
@@ -1486,78 +1113,6 @@ export const DESIGNS: DesignDef[] = [
     ],
   },
 
-  // ── TRAVEL — photo wallpapers ────────────────────────────────────────────
-  {
-    id:'mountain-escape', name:{sq:'Arratisja në Male', en:'Mountain Escape'}, category:'Travel',
-    thumbPhoto:'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=400&q=85&fit=crop',
-    thumb:{ background:'#1C2B3A' }, thumbAccents:[],
-    elements:[
-      BG('#1C2B3A'),
-      SH('rect',0,0,DESIGN_W,DESIGN_H,'#0A1828',{opacity:0.30}),
-      PH(0,0,DESIGN_W,560),
-      SH('rect',0,526,DESIGN_W,DESIGN_H-526,'#1C2B3A',{opacity:0.92}),
-      SH('rect',40,574,64,3,'#7BA7C2',{opacity:1}),
-      TX('Peak Memories',40,586,DESIGN_W-80,70,{fontSize:30,fill:'#FFFFFF',fontStyle:'bold',align:'left'}),
-      TX('Location  ·  Year',40,672,260,40,{fontSize:12,fill:'#7BA7C2',align:'left'}),
-    ],
-  },
-  {
-    id:'coastal-breeze', name:{sq:'Brizë Bregdetare', en:'Coastal Breeze'}, category:'Travel',
-    thumbPhoto:'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=400&q=85&fit=crop',
-    thumb:{ background:'#1A4A5C' }, thumbAccents:[],
-    elements:[
-      BG('#EFF7FA'),
-      SH('rect',0,0,DESIGN_W,DESIGN_H,'#B8D8E8',{opacity:0.18}),
-      PH(30,30,DESIGN_W-60,520),
-      SH('rect',30,562,DESIGN_W-60,1,'#5BA3C0',{opacity:0.45}),
-      TX('By the Sea',30,578,DESIGN_W-60,64,{fontSize:28,fill:'#1A4A5C',fontStyle:'italic'}),
-      TX('Sun  ·  Salt  ·  Memories',30,654,DESIGN_W-60,40,{fontSize:12,fill:'#5BA3C0'}),
-    ],
-  },
-  {
-    id:'desert-journey', name:{sq:'Udhëtim Shkretëtire', en:'Desert Journey'}, category:'Travel',
-    thumbPhoto:'https://images.unsplash.com/photo-1509316785289-025f5b846b35?w=400&q=85&fit=crop&crop=center',
-    thumb:{ background:'#3D2510' }, thumbAccents:[],
-    elements:[
-      BG('#F5E6C8',{from:'#F5E6C8',to:'#D4A870',dir:'tb'}),
-      SH('circle',DESIGN_W/2-130,-130,260,260,'#E8C080',{opacity:0.12}),
-      PH(0,0,DESIGN_W,545),
-      SH('rect',0,512,DESIGN_W,DESIGN_H-512,'#3D2510',{opacity:0.88}),
-      SH('rect',40,560,56,3,'#E8B860',{opacity:1}),
-      TX('Endless Horizons',40,572,DESIGN_W-80,72,{fontSize:28,fill:'#FFFFFF',fontStyle:'italic',align:'left'}),
-      TX('Sahara  ·  Year',40,658,240,40,{fontSize:12,fill:'#E8B860',align:'left'}),
-    ],
-  },
-  {
-    id:'northern-lights', name:{sq:'Drita Veriore', en:'Northern Lights'}, category:'Travel',
-    thumbPhoto:'https://images.unsplash.com/photo-1531366936337-7c912a4589a7?w=400&q=85&fit=crop',
-    thumb:{ background:'#0B1628' }, thumbAccents:[],
-    elements:[
-      BG('#0B1628'),
-      SH('rect',0,0,DESIGN_W,DESIGN_H/2,'#0D2A3A',{opacity:0.55}),
-      PH(0,0,DESIGN_W,560),
-      SH('rect',0,526,DESIGN_W,DESIGN_H-526,'#0B1628',{opacity:0.94}),
-      SH('rect',40,574,48,3,'#48C8A8',{opacity:1}),
-      TX('Aurora',40,585,DESIGN_W-80,76,{fontSize:40,fill:'#FFFFFF',fontStyle:'bold',align:'left'}),
-      TX('Arctic  ·  Year',40,675,240,40,{fontSize:12,fill:'#48C8A8',align:'left'}),
-    ],
-  },
-  {
-    id:'forest-path', name:{sq:'Shtegu i Pyllit', en:'Forest Path'}, category:'Travel',
-    thumbPhoto:'https://images.unsplash.com/photo-1448375240586-882707db888b?w=400&q=85&fit=crop',
-    thumb:{ background:'#1A3020' }, thumbAccents:[],
-    elements:[
-      BG('#1A3020'),
-      SH('rect',0,0,16,DESIGN_H,'#2A4A2A',{opacity:0.60}),
-      SH('rect',DESIGN_W-16,0,16,DESIGN_H,'#2A4A2A',{opacity:0.60}),
-      PH(24,24,DESIGN_W-48,530),
-      SH('rect',0,554,DESIGN_W,DESIGN_H-554,'#0E2016',{opacity:0.92}),
-      TX('Into the Wild',40,580,DESIGN_W-80,66,{fontSize:28,fill:'#A8D898',fontStyle:'italic',align:'left'}),
-      TX('Forest  ·  Year',40,660,220,40,{fontSize:12,fill:'rgba(168,216,152,0.7)',align:'left'}),
-    ],
-  },
-
-  // ── LOCATIONS ────────────────────────────────────────────────────────────
   {
     id:'tuscan-hills', name:{sq:'Kodrat Toskane', en:'Tuscan Hills'}, category:'Locations',
     thumbPhoto:'https://images.unsplash.com/photo-1523531294919-4bcd7c65e216?w=400&q=85&fit=crop',
@@ -1571,6 +1126,7 @@ export const DESIGNS: DesignDef[] = [
       TX('Italy  ·  Year',30,644,DESIGN_W-60,40,{fontSize:12,fill:'#A07838'}),
     ],
   },
+
   {
     id:'santorini-blue', name:{sq:'Blu Santorini', en:'Santorini Blue'}, category:'Locations',
     thumbPhoto:'https://images.unsplash.com/photo-1570077188670-e3a8d69ac5ff?w=400&q=85&fit=crop',
@@ -1584,6 +1140,7 @@ export const DESIGNS: DesignDef[] = [
       TX('Greece  ·  Year',24,638,DESIGN_W-48,40,{fontSize:12,fill:'#4080C0'}),
     ],
   },
+
   {
     id:'paris-moments', name:{sq:'Momente Pariziane', en:'Paris Moments'}, category:'Locations',
     thumbPhoto:'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=400&q=85&fit=crop',
@@ -1596,6 +1153,7 @@ export const DESIGNS: DesignDef[] = [
       TX('France  ·  Year',36,626,DESIGN_W-72,40,{fontSize:12,fill:'#8A7050'}),
     ],
   },
+
   {
     id:'japan-sakura', name:{sq:'Japoni & Lule', en:'Japan & Blossom'}, category:'Locations',
     thumbPhoto:'https://images.unsplash.com/photo-1528360983277-13d401cdc186?w=400&q=85&fit=crop',
@@ -1609,6 +1167,7 @@ export const DESIGNS: DesignDef[] = [
       TX('日本  ·  Year',24,638,DESIGN_W-48,40,{fontSize:14,fill:'#C07090'}),
     ],
   },
+
   {
     id:'new-york-city', name:{sq:'Qyteti i Madh', en:'New York City'}, category:'Locations',
     thumbPhoto:'https://images.unsplash.com/photo-1534430480872-3498386e7856?w=400&q=85&fit=crop',
@@ -1624,48 +1183,6 @@ export const DESIGNS: DesignDef[] = [
     ],
   },
 
-  // ── BABY & FAMILY — photo wallpapers ─────────────────────────────────────
-  {
-    id:'golden-family', name:{sq:'Familja Artë', en:'Golden Family'}, category:'Baby & Family',
-    thumbPhoto:'https://images.unsplash.com/photo-1511895426328-dc8714191011?w=400&q=85&fit=crop&crop=top',
-    thumb:{ background:'#3A2810' }, thumbAccents:[],
-    elements:[
-      BG('#FDF5E8'),
-      SH('circle',DESIGN_W-80,-80,240,240,'#F0C878',{opacity:0.10}),
-      PH(30,30,DESIGN_W-60,510),
-      SH('rect',30,552,DESIGN_W-60,1,'#C09050',{opacity:0.35}),
-      TX('Our Family',30,568,DESIGN_W-60,64,{fontSize:28,fill:'#3A2810',fontStyle:'italic'}),
-      TX('Together  ·  Always',30,644,DESIGN_W-60,40,{fontSize:12,fill:'#C09050'}),
-    ],
-  },
-  {
-    id:'autumn-family', name:{sq:'Familja në Vjeshtë', en:'Autumn Family'}, category:'Baby & Family',
-    thumbPhoto:'https://images.unsplash.com/photo-1476703993599-0035a21b17a9?w=400&q=85&fit=crop',
-    thumb:{ background:'#3A1C08' }, thumbAccents:[],
-    elements:[
-      BG('#FBF0E0'),
-      SH('circle',-60,DESIGN_H-80,280,280,'#D4782A',{opacity:0.08}),
-      PH(24,24,DESIGN_W-48,510),
-      SH('rect',24,546,DESIGN_W-48,1,'#C07030',{opacity:0.40}),
-      TX('Fall Together',24,562,DESIGN_W-48,64,{fontSize:26,fill:'#3A1C08',fontStyle:'italic'}),
-      TX('Autumn  ·  Year',24,638,DESIGN_W-48,40,{fontSize:12,fill:'#C07030'}),
-    ],
-  },
-  {
-    id:'little-joy', name:{sq:'Gëzime të Vogla', en:'Little Joy'}, category:'Baby & Family',
-    thumbPhoto:'https://images.unsplash.com/photo-1533483595632-c5f0e57a1936?w=400&q=85&fit=crop',
-    thumb:{ background:'#283A50' }, thumbAccents:[],
-    elements:[
-      BG('#F8FBFF'),
-      SH('circle',DESIGN_W/2-80,-80,200,200,'#A8C8F0',{opacity:0.15}),
-      PH(24,24,DESIGN_W-48,510),
-      SH('rect',24,546,DESIGN_W-48,1,'#6090C0',{opacity:0.30}),
-      TX('Childhood',24,562,DESIGN_W-48,64,{fontSize:28,fill:'#283A50',fontStyle:'italic'}),
-      TX('Growing up fast  ·  Year',24,638,DESIGN_W-48,40,{fontSize:12,fill:'#6090C0'}),
-    ],
-  },
-
-  // ── NATURE — photo wallpapers ─────────────────────────────────────────────
   {
     id:'lavender-fields', name:{sq:'Fusha Lavande', en:'Lavender Fields'}, category:'Nature',
     thumbPhoto:'https://images.unsplash.com/photo-1474552226712-ac0f0961a954?w=400&q=85&fit=crop',
@@ -1679,6 +1196,7 @@ export const DESIGNS: DesignDef[] = [
       TX('Provence  ·  Year',24,638,DESIGN_W-48,40,{fontSize:12,fill:'#9070B0'}),
     ],
   },
+
   {
     id:'cherry-blossom-walk', name:{sq:'Shëtitje Lulesh', en:'Cherry Blossom Walk'}, category:'Nature',
     thumbPhoto:'https://images.unsplash.com/photo-1522383225653-ed111181a951?w=400&q=85&fit=crop',
@@ -1692,6 +1210,7 @@ export const DESIGNS: DesignDef[] = [
       TX('Spring  ·  Year',24,638,DESIGN_W-48,40,{fontSize:12,fill:'#D09090'}),
     ],
   },
+
   {
     id:'misty-mountains', name:{sq:'Malet me Mjegull', en:'Misty Mountains'}, category:'Nature',
     thumbPhoto:'https://images.unsplash.com/photo-1501854140801-50d01698950b?w=400&q=85&fit=crop',
@@ -1705,6 +1224,7 @@ export const DESIGNS: DesignDef[] = [
       TX('Highlands  ·  Year',24,638,DESIGN_W-48,40,{fontSize:12,fill:'#708090'}),
     ],
   },
+
   {
     id:'golden-meadow-photo', name:{sq:'Livadhi i Artë', en:'Golden Meadow'}, category:'Nature',
     thumbPhoto:'https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?w=400&q=85&fit=crop',

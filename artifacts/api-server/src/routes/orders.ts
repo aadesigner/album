@@ -26,18 +26,21 @@ router.post("/orders", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const capSettings = await getSecuritySettings();
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const [{ count: ordersToday }] = await db
-    .select({ count: count() })
-    .from(ordersTable)
-    .where(and(eq(ordersTable.userId, req.user!.id), gte(ordersTable.createdAt, todayStart)));
-  if (ordersToday >= capSettings.maxOrdersPerDay) {
-    res.status(403).json({
-      error: `You've reached the maximum of ${capSettings.maxOrdersPerDay} orders per day. Please try again tomorrow.`,
-    });
-    return;
+  // Daily order cap is for customers only — admins testing checkout freely.
+  if (req.user!.role !== "admin") {
+    const capSettings = await getSecuritySettings();
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const [{ count: ordersToday }] = await db
+      .select({ count: count() })
+      .from(ordersTable)
+      .where(and(eq(ordersTable.userId, req.user!.id), gte(ordersTable.createdAt, todayStart)));
+    if (ordersToday >= capSettings.maxOrdersPerDay) {
+      res.status(403).json({
+        error: `You've reached the maximum of ${capSettings.maxOrdersPerDay} orders per day. Please try again tomorrow.`,
+      });
+      return;
+    }
   }
 
   const [project] = await db

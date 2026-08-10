@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   getCanvasHeight,
   scaleElementsToCanvas,
+  elementsWithCoverWallpaper,
+  wallpaperSrc,
   DESIGN_H,
   DESIGN_W,
 } from "./designs";
@@ -83,5 +85,28 @@ describe("scaleElementsToCanvas", () => {
     // Original object must be unchanged
     expect(original.y).toBe(200);
     expect(original.h).toBe(100);
+  });
+});
+
+describe("elementsWithCoverWallpaper", () => {
+  it("is a no-op without thumbPhoto", () => {
+    const els = [{ type: "background" as const, x: 0, y: 0, w: DESIGN_W, h: DESIGN_H, rotation: 0, bgColor: "#111" }];
+    expect(elementsWithCoverWallpaper(els)).toBe(els);
+  });
+
+  it("bakes wallpaper into background + placeholders", () => {
+    const thumb = "https://images.unsplash.com/photo-x?w=400&q=85&fit=crop";
+    const els = [
+      { type: "background" as const, x: 0, y: 0, w: DESIGN_W, h: DESIGN_H, rotation: 0, bgColor: "#111", bgGradientFrom: "#000", bgGradientTo: "#fff" },
+      { type: "placeholder" as const, x: 10, y: 10, w: 100, h: 100, rotation: 0 },
+      { type: "text" as const, x: 0, y: 0, w: 100, h: 40, rotation: 0, text: "Hi" },
+    ];
+    const out = elementsWithCoverWallpaper(els, thumb);
+    expect(out[0].type).toBe("background");
+    expect(out[0].src).toBe(wallpaperSrc(thumb));
+    expect(out[0].bgGradientFrom).toBeUndefined();
+    expect(out[1].type).toBe("image");
+    expect(out[1].src).toBe(wallpaperSrc(thumb));
+    expect(out[2].type).toBe("text");
   });
 });

@@ -14,9 +14,8 @@ import {
 } from "@workspace/db-tsconfig";
 import { ipBlocklistTable } from "@workspace/db-tsconfig";
 import { eq, count, sql, desc, ilike, and, or, ne, inArray } from "drizzle-orm";
-import { requireAdmin, invalidateCachedUser } from "../lib/auth";
+import { requireAdmin, invalidateCachedUser, hashPassword } from "../lib/auth";
 import { invalidatePendingBooksLimitCache } from "./projects";
-import bcrypt from "bcryptjs";
 import {
   SECURITY_SETTINGS_DEFAULTS,
   SECURITY_SETTINGS_KEY_MAP,
@@ -24,8 +23,37 @@ import {
   type SecuritySettings,
 } from "../lib/securitySettings";
 import { invalidateIpBlocklistCache } from "../lib/ipBlocklist";
+import { queueProjectPdfGeneration } from "../lib/generateProjectPdf";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
+
+/** Operator accounts (seeded super-admin) stay out of every member-facing admin surface. */
+const notHiddenUser = eq(usersTable.isHidden, false);
+
+/** Phone-only accounts store a NOT-NULL placeholder like `3556…@ph.local` — never treat as a real email. */
+function isSyntheticPhoneEmail(email: string | null | undefined): boolean {
+  return !!email && /@ph\.local$/i.test(email);
+}
+
+function phoneLocalEmail(phone: string): string {
+  return `${phone.replace(/\D/g, "")}@ph.local`;
+}
+
+/** Hide synthetic emails from admin UI responses; keep phone as the public identifier. */
+function publicAdminEmail(email: string | null | undefined): string | null {
+  if (!email || isSyntheticPhoneEmail(email)) return null;
+  return email;
+}
+
+async function findVisibleUser(userId: number) {
+  const [user] = await db
+    .select({ id: usersTable.id, isHidden: usersTable.isHidden })
+    .from(usersTable)
+    .where(and(eq(usersTable.id, userId), notHiddenUser))
+    .limit(1);
+  return user ?? null;
+}
 
 // Reads the security/limits fields out of the same key/value map the rest of
 // /admin/settings already uses, so GET and PATCH share one source of truth.
@@ -67,14 +95,24 @@ router.get("/admin/stats", requireAdmin, async (req, res): Promise<void> => {
     [visitorsMonth],
     [wpClicksTotal],
   ] = await Promise.all([
-    db.select({ count: count() }).from(usersTable),
-    db.select({ count: count() }).from(ordersTable),
-    db.select({ count: count() }).from(projectsTable),
-    db.select({ count: count() }).from(ordersTable).where(sql`${ordersTable.createdAt} >= ${monthStart}`),
-    db.select({ total: sql<number>`coalesce(sum(${ordersTable.priceLek}), 0)` }).from(ordersTable),
-    db.select({ total: sql<number>`coalesce(sum(${ordersTable.priceLek}), 0)` }).from(ordersTable).where(sql`${ordersTable.createdAt} >= ${monthStart}`),
-    db.select({ count: count() }).from(usersTable).where(sql`${usersTable.createdAt} >= ${todayStart}`),
-    db.select({ count: count() }).from(usersTable).where(sql`${usersTable.createdAt} >= ${weekAgo}`),
+    db.select({ count: count() }).from(usersTable).where(notHiddenUser),
+    db.select({ count: count() }).from(ordersTable)
+      .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
+      .where(notHiddenUser),
+    db.select({ count: count() }).from(projectsTable)
+      .innerJoin(usersTable, eq(projectsTable.userId, usersTable.id))
+      .where(notHiddenUser),
+    db.select({ count: count() }).from(ordersTable)
+      .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
+      .where(and(notHiddenUser, sql`${ordersTable.createdAt} >= ${monthStart}`)),
+    db.select({ total: sql<number>`coalesce(sum(${ordersTable.priceLek}), 0)` }).from(ordersTable)
+      .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
+      .where(notHiddenUser),
+    db.select({ total: sql<number>`coalesce(sum(${ordersTable.priceLek}), 0)` }).from(ordersTable)
+      .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
+      .where(and(notHiddenUser, sql`${ordersTable.createdAt} >= ${monthStart}`)),
+    db.select({ count: count() }).from(usersTable).where(and(notHiddenUser, sql`${usersTable.createdAt} >= ${todayStart}`)),
+    db.select({ count: count() }).from(usersTable).where(and(notHiddenUser, sql`${usersTable.createdAt} >= ${weekAgo}`)),
     db.select({ count: sql<number>`count(distinct ip)` }).from(siteAnalyticsTable).where(sql`${siteAnalyticsTable.event} = 'page_view' AND ${siteAnalyticsTable.createdAt} >= ${todayStart}`),
     db.select({ count: sql<number>`count(distinct ip)` }).from(siteAnalyticsTable).where(sql`${siteAnalyticsTable.event} = 'page_view' AND ${siteAnalyticsTable.createdAt} >= ${weekAgo}`),
     db.select({ count: sql<number>`count(distinct ip)` }).from(siteAnalyticsTable).where(sql`${siteAnalyticsTable.event} = 'page_view' AND ${siteAnalyticsTable.createdAt} >= ${monthStart}`),
@@ -94,18 +132,20 @@ router.get("/admin/stats", requireAdmin, async (req, res): Promise<void> => {
         notes: ordersTable.notes,
         createdAt: ordersTable.createdAt,
         userName: usersTable.name,
-        userPhone: sql<string>`${(usersTable as any).phone}`,
+        userPhone: sql<string>`${usersTable.phone}`,
         projectTitle: projectsTable.title,
       })
       .from(ordersTable)
-      .leftJoin(usersTable, eq(ordersTable.userId, usersTable.id))
+      .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
       .leftJoin(projectsTable, eq(ordersTable.projectId, projectsTable.id))
+      .where(notHiddenUser)
       .orderBy(desc(ordersTable.createdAt))
       .limit(10),
 
     db
-      .select({ id: usersTable.id, name: usersTable.name, phone: sql<string>`${(usersTable as any).phone}`, createdAt: usersTable.createdAt })
+      .select({ id: usersTable.id, name: usersTable.name, phone: usersTable.phone, email: usersTable.email, createdAt: usersTable.createdAt })
       .from(usersTable)
+      .where(notHiddenUser)
       .orderBy(desc(usersTable.createdAt))
       .limit(6),
 
@@ -126,6 +166,7 @@ router.get("/admin/stats", requireAdmin, async (req, res): Promise<void> => {
         count(*) AS registrations
       FROM users
       WHERE created_at >= now() - interval '29 days'
+        AND is_hidden = false
       GROUP BY date ORDER BY date ASC
     `),
   ]);
@@ -144,7 +185,13 @@ router.get("/admin/stats", requireAdmin, async (req, res): Promise<void> => {
     visitorsMonth: Number(visitorsMonth.count) || 0,
     wpClicksTotal: Number(wpClicksTotal.count) || 0,
     recentOrders,
-    recentUsers,
+    recentUsers: recentUsers.map((u) => ({
+      id: u.id,
+      name: u.name,
+      phone: u.phone ?? null,
+      email: publicAdminEmail(u.email),
+      createdAt: u.createdAt,
+    })),
     chartData: chartRows.rows,
     regChartData: regRows.rows,
   });
@@ -161,8 +208,7 @@ router.get("/admin/users", requireAdmin, async (req, res): Promise<void> => {
     ? or(ilike(usersTable.name, `%${search}%`), sql`${(usersTable as any).phone} ILIKE ${'%' + search + '%'}`)
     : undefined;
   // Hidden accounts (e.g. the auto-provisioned super-admin) never appear in this list.
-  const notHidden = eq((usersTable as any).isHidden, false);
-  const whereClause = searchClause ? and(searchClause, notHidden) : notHidden;
+  const whereClause = searchClause ? and(searchClause, notHiddenUser) : notHiddenUser;
 
   const [users, [total]] = await Promise.all([
     db
@@ -206,6 +252,7 @@ router.get("/admin/users", requireAdmin, async (req, res): Promise<void> => {
 
   const enriched = users.map((u) => ({
     ...u,
+    email: publicAdminEmail(u.email) ?? "",
     orderCount: orderCounts[u.id] || 0,
     projectCount: projectCounts[u.id] || 0,
   }));
@@ -250,7 +297,7 @@ router.post("/admin/users", requireAdmin, async (req, res): Promise<void> => {
     return;
   }
 
-  const passwordHash = await bcrypt.hash(password, 10);
+  const passwordHash = await hashPassword(password);
   // Email-only accounts (typically admins) use the email as-is; phone accounts still
   // need a synthetic email to satisfy the NOT NULL/unique constraint on that column.
   const finalEmail = email || `${phone.replace(/\D/g, "")}@ph.local`;
@@ -278,44 +325,104 @@ router.patch(
       return;
     }
 
-    const { name, email, phone, role, emailVerified, isBanned, adminNote } = req.body;
+    const { name, email, phone, role, emailVerified, isBanned, adminNote, password } = req.body;
+
+    if (!(await findVisibleUser(userId))) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    if (password !== undefined && password !== null && password !== "") {
+      if (typeof password !== "string" || password.length < 8) {
+        res.status(400).json({ error: "Password must be at least 8 characters" });
+        return;
+      }
+      if (password.length > 128) {
+        res.status(400).json({ error: "Password is too long" });
+        return;
+      }
+    }
 
     if (phone !== undefined && phone !== null && phone !== "" && !/^\+\d{6,15}$/.test(phone)) {
       res.status(400).json({ error: "Invalid phone number format (e.g. +35568123456)" });
       return;
     }
-    if (email !== undefined && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    // Empty / omitted email is fine (phone-only members). Only validate when a real value is sent.
+    const emailProvided = email !== undefined && email !== null && String(email).trim() !== "";
+    if (emailProvided && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim())) {
+      res.status(400).json({ error: "Invalid email format" });
+      return;
+    }
+    if (emailProvided && isSyntheticPhoneEmail(String(email).trim())) {
       res.status(400).json({ error: "Invalid email format" });
       return;
     }
 
+    const [current] = await db
+      .select({
+        email: usersTable.email,
+        phone: usersTable.phone,
+      })
+      .from(usersTable)
+      .where(eq(usersTable.id, userId))
+      .limit(1);
+    if (!current) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    const nextPhone =
+      phone !== undefined ? (phone || null) : (current.phone as string | null);
+    const nextEmail = emailProvided
+      ? String(email).trim().toLowerCase()
+      : isSyntheticPhoneEmail(current.email) && nextPhone
+        ? phoneLocalEmail(nextPhone)
+        : current.email;
+
     // Pre-check for conflicts with OTHER users (same convention as user creation) —
     // excludes the user being edited so re-saving their own unchanged value doesn't 409.
-    if (email !== undefined || phone !== undefined) {
-      const conflictConds = [];
-      if (email !== undefined) conflictConds.push(eq(usersTable.email, email));
-      if (phone !== undefined && phone) conflictConds.push(eq((usersTable as any).phone, phone));
-      if (conflictConds.length > 0) {
-        const existing = await db
-          .select({ id: usersTable.id })
-          .from(usersTable)
-          .where(and(ne(usersTable.id, userId), or(...conflictConds)))
-          .limit(1);
-        if (existing.length > 0) {
-          res.status(409).json({ error: email !== undefined ? "Email already registered" : "Phone number already registered" });
-          return;
-        }
+    const conflictConds = [];
+    if (nextEmail !== current.email) conflictConds.push(eq(usersTable.email, nextEmail));
+    if (nextPhone && nextPhone !== current.phone) {
+      conflictConds.push(eq(usersTable.phone, nextPhone));
+    }
+    if (conflictConds.length > 0) {
+      const existing = await db
+        .select({ id: usersTable.id })
+        .from(usersTable)
+        .where(and(ne(usersTable.id, userId), or(...conflictConds)))
+        .limit(1);
+      if (existing.length > 0) {
+        res.status(409).json({
+          error: nextEmail !== current.email ? "Email already registered" : "Phone number already registered",
+        });
+        return;
       }
     }
 
     const updates: Partial<typeof usersTable.$inferInsert> = {};
     if (name !== undefined) updates.name = name;
-    if (email !== undefined) updates.email = email;
-    if (phone !== undefined) (updates as any).phone = phone || null;
+    if (nextEmail !== current.email) updates.email = nextEmail;
+    if (phone !== undefined) updates.phone = nextPhone;
     if (role !== undefined) updates.role = role;
     if (emailVerified !== undefined) updates.emailVerified = emailVerified;
     if (isBanned !== undefined) updates.isBanned = Boolean(isBanned);
     if (adminNote !== undefined) (updates as any).adminNote = adminNote || null;
+
+    // Admin-set password: hash with bcrypt (12) and kill all existing sessions.
+    if (typeof password === "string" && password.length >= 8) {
+      updates.passwordHash = await hashPassword(password);
+      updates.refreshToken = null;
+      updates.resetPasswordToken = null;
+      updates.resetPasswordExpires = null;
+      updates.failedLoginAttempts = 0;
+      updates.lockedUntil = null;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      res.status(400).json({ error: "No updates provided" });
+      return;
+    }
 
     let user: any;
     try {
@@ -327,7 +434,7 @@ router.patch(
           id: usersTable.id,
           name: usersTable.name,
           email: usersTable.email,
-          phone: (usersTable as any).phone,
+          phone: usersTable.phone,
           role: usersTable.role,
           isBanned: usersTable.isBanned,
           adminNote: (usersTable as any).adminNote,
@@ -349,7 +456,10 @@ router.patch(
     }
 
     invalidateCachedUser(userId);
-    res.json(user);
+    if (typeof password === "string" && password.length >= 8) {
+      logger.info({ userId, adminId: req.user!.id }, "Admin reset user password");
+    }
+    res.json({ ...user, email: publicAdminEmail(user.email) ?? "" });
   },
 );
 
@@ -366,6 +476,10 @@ router.delete(
       res.status(400).json({ error: "Invalid user ID" });
       return;
     }
+    if (!(await findVisibleUser(userId))) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
     await db.delete(usersTable).where(eq(usersTable.id, userId));
     res.json({ success: true });
   },
@@ -379,10 +493,10 @@ router.get("/admin/orders", requireAdmin, async (req, res): Promise<void> => {
   const userId = req.query.userId ? parseInt(req.query.userId as string, 10) : undefined;
   const offset = (page - 1) * limit;
 
-  const clauses = [];
+  const clauses = [notHiddenUser];
   if (status) clauses.push(eq(ordersTable.status, status as typeof ordersTable.status._.data));
   if (userId && !isNaN(userId)) clauses.push(eq(ordersTable.userId, userId));
-  const whereClause = clauses.length ? and(...clauses) : undefined;
+  const whereClause = and(...clauses);
 
   const [orders, [total]] = await Promise.all([
     db
@@ -396,19 +510,22 @@ router.get("/admin/orders", requireAdmin, async (req, res): Promise<void> => {
         adminNote: (ordersTable as any).adminNote,
         createdAt: ordersTable.createdAt,
         userName: usersTable.name,
-        userPhone: sql<string>`${(usersTable as any).phone}`,
+        userPhone: sql<string>`${usersTable.phone}`,
         projectTitle: projectsTable.title,
         projectPageCount: projectsTable.pageCount,
         pdfUrl: projectsTable.pdfUrl,
       })
       .from(ordersTable)
-      .leftJoin(usersTable, eq(ordersTable.userId, usersTable.id))
+      .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
       .leftJoin(projectsTable, eq(ordersTable.projectId, projectsTable.id))
       .where(whereClause)
       .limit(limit)
       .offset(offset)
       .orderBy(desc(ordersTable.createdAt)),
-    db.select({ count: count() }).from(ordersTable).where(whereClause),
+    db.select({ count: count() })
+      .from(ordersTable)
+      .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
+      .where(whereClause),
   ]);
 
   res.json({ data: orders, total: total.count, page, limit });
@@ -423,8 +540,51 @@ router.delete(
     if (isNaN(orderId)) { res.status(400).json({ error: "Invalid order ID" }); return; }
     const [order] = await db.select({ projectId: ordersTable.projectId }).from(ordersTable).where(eq(ordersTable.id, orderId));
     if (!order) { res.status(404).json({ error: "Order not found" }); return; }
-    await db.update(projectsTable).set({ pdfUrl: null, status: "draft" }).where(eq(projectsTable.id, order.projectId));
+    // Only clear the file URL — never demote status to draft. These projects
+    // are tied to an order and must stay "ordered" for delete protection and
+    // pending-book accounting.
+    await db
+      .update(projectsTable)
+      .set({ pdfUrl: null })
+      .where(eq(projectsTable.id, order.projectId));
     res.json({ success: true });
+  },
+);
+
+// POST /admin/orders/:orderId/regenerate-pdf — re-queue print PDF (e.g. after
+// a failed generation left pdfUrl null while the order row exists).
+router.post(
+  "/admin/orders/:orderId/regenerate-pdf",
+  requireAdmin,
+  async (req, res): Promise<void> => {
+    const orderId = parseInt(req.params.orderId as string, 10);
+    if (isNaN(orderId)) { res.status(400).json({ error: "Invalid order ID" }); return; }
+    const [order] = await db
+      .select({ projectId: ordersTable.projectId })
+      .from(ordersTable)
+      .where(eq(ordersTable.id, orderId))
+      .limit(1);
+    if (!order) { res.status(404).json({ error: "Order not found" }); return; }
+
+    // Ensure checkout status sticks even if an older PDF job demoted it.
+    await db
+      .update(projectsTable)
+      .set({ status: "ordered" })
+      .where(eq(projectsTable.id, order.projectId));
+
+    try {
+      await queueProjectPdfGeneration(order.projectId);
+    } catch (err) {
+      const isCap = err instanceof Error && err.message.startsWith("TOO_MANY_CONCURRENT_PDFS");
+      if (!isCap) logger.error({ err, orderId, projectId: order.projectId }, "Admin PDF regenerate failed");
+      res.status(isCap ? 429 : 400).json({
+        error: isCap
+          ? "Too many PDFs generating right now. Try again in a moment."
+          : "Unable to queue PDF generation",
+      });
+      return;
+    }
+    res.json({ success: true, status: "generating" });
   },
 );
 
@@ -1039,12 +1199,16 @@ router.get(
           bookSizeLabel: bookSizesTable.label,
         })
         .from(projectsTable)
-        .leftJoin(usersTable, eq(projectsTable.userId, usersTable.id))
+        .innerJoin(usersTable, eq(projectsTable.userId, usersTable.id))
         .leftJoin(bookSizesTable, eq(projectsTable.bookSizeId, bookSizesTable.id))
+        .where(notHiddenUser)
         .limit(limit)
         .offset(offset)
         .orderBy(desc(projectsTable.createdAt)),
-      db.select({ count: count() }).from(projectsTable),
+      db.select({ count: count() })
+        .from(projectsTable)
+        .innerJoin(usersTable, eq(projectsTable.userId, usersTable.id))
+        .where(notHiddenUser),
     ]);
 
     res.json({ data: projects, total: total.count, page, limit });

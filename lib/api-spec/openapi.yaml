@@ -2168,6 +2168,11 @@ components:
           type: boolean
         adminNote:
           type: string
+        password:
+          type: string
+          minLength: 8
+          writeOnly: true
+          description: Optional new password set by an admin. Invalidates the user's sessions.
 
     ChangePasswordInput:
       type: object

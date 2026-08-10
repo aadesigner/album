@@ -138,10 +138,22 @@ function wrapLines(
 
 // Resolve an uploaded-photo URL (e.g. "/api/uploads/files/xyz.jpg") to the
 // local file on disk, avoiding a network round-trip through our own server.
+// Also resolves built-in cover art under /designs/*.
 function resolveLocalImagePath(src: string, uploadsDir: string): string | null {
-  const match = src.match(/\/api\/uploads\/files\/([\w.\-]+)$/);
-  if (!match) return null;
-  return path.join(uploadsDir, match[1]);
+  const uploadMatch = src.match(/\/api\/uploads\/files\/([\w.\-]+)$/);
+  if (uploadMatch) return path.join(uploadsDir, uploadMatch[1]);
+
+  const designMatch = src.match(/\/designs\/([\w.\-]+)$/);
+  if (designMatch) {
+    const file = designMatch[1];
+    const candidates = [
+      path.join(process.cwd(), "assets", "designs", file),
+      path.join(process.cwd(), "public", "designs", file),
+      path.join(process.cwd(), "../pergjithmone/public/designs", file),
+    ];
+    return candidates.find((p) => fs.existsSync(p)) ?? null;
+  }
+  return null;
 }
 
 async function loadPageImages(
@@ -151,7 +163,7 @@ async function loadPageImages(
   const cache = new Map<string, import("@napi-rs/canvas").Image>();
   await Promise.all(
     elements
-      .filter((e) => e.type === "image" && e.src)
+      .filter((e) => (e.type === "image" || e.type === "background") && e.src)
       .map(async (e) => {
         const src = e.src!;
         if (cache.has(src)) return;
@@ -160,7 +172,7 @@ async function loadPageImages(
           if (localPath && fs.existsSync(localPath)) {
             cache.set(src, await loadImage(localPath));
           } else {
-            // Fallback for any non-local src (shouldn't normally happen).
+            // Fallback for any non-local src (external wallpapers, etc.).
             cache.set(src, await loadImage(src));
           }
         } catch (err) {
@@ -205,17 +217,28 @@ async function renderPageToCanvas(
     }
 
     if (el.type === "background") {
-      if (el.bgGradientFrom) {
+      const wallpaper = el.src ? images.get(el.src) : undefined;
+      if (wallpaper) {
+        const sx = DESIGN_W / wallpaper.width;
+        const sy = canvasH / wallpaper.height;
+        const s = Math.max(sx, sy);
+        const cw = DESIGN_W / s;
+        const ch = canvasH / s;
+        const cx = (wallpaper.width - cw) / 2;
+        const cy = (wallpaper.height - ch) / 2;
+        ctx.drawImage(wallpaper, cx, cy, cw, ch, 0, 0, DESIGN_W, canvasH);
+      } else if (el.bgGradientFrom) {
         const ex = el.bgGradientDir === "lr" ? DESIGN_W : el.bgGradientDir === "diag" ? DESIGN_W : 0;
         const ey = el.bgGradientDir === "lr" ? 0 : el.bgGradientDir === "diag" ? canvasH : canvasH;
         const grad = ctx.createLinearGradient(0, 0, ex, ey);
         grad.addColorStop(0, el.bgGradientFrom);
         grad.addColorStop(1, el.bgGradientTo || "#fff");
         ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, DESIGN_W, canvasH);
       } else {
         ctx.fillStyle = el.bgColor || PAPER_COLOR;
+        ctx.fillRect(0, 0, DESIGN_W, canvasH);
       }
-      ctx.fillRect(0, 0, DESIGN_W, canvasH);
     } else if (el.type === "shape") {
       const cr = el.shapeKind === "circle" ? Math.min(el.w, el.h) / 2 : (el.cornerRadius ?? 0);
       if (cr > 0) {

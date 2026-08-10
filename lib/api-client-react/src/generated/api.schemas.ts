@@ -527,6 +527,12 @@ export interface AdminUserUpdate {
   emailVerified?: boolean;
   isBanned?: boolean;
   adminNote?: string;
+  /**
+   * Optional new password set by an admin. Invalidates the user's sessions.
+   * @minLength 8
+   * @writeOnly
+   */
+  password?: string;
 }
 
 export interface ChangePasswordInput {

@@ -70,13 +70,13 @@ export default function AdminSettings() {
       pendingBooksLimit:        s?.pendingBooksLimit        || 3,
       // Security & Limits
       rateLimitGeneralWindowMs:    s?.rateLimitGeneralWindowMs    || 900000,
-      rateLimitGeneralMax:         s?.rateLimitGeneralMax         || 300,
+      rateLimitGeneralMax:         s?.rateLimitGeneralMax         || 2000,
       rateLimitAuthWindowMs:       s?.rateLimitAuthWindowMs       || 900000,
-      rateLimitAuthMax:            s?.rateLimitAuthMax            || 20,
+      rateLimitAuthMax:            s?.rateLimitAuthMax            || 60,
       rateLimitAnalyticsWindowMs:  s?.rateLimitAnalyticsWindowMs  || 60000,
       rateLimitAnalyticsMax:       s?.rateLimitAnalyticsMax       || 120,
       rateLimitUploadsWindowMs:    s?.rateLimitUploadsWindowMs    || 60000,
-      rateLimitUploadsMax:         s?.rateLimitUploadsMax         || 30,
+      rateLimitUploadsMax:         s?.rateLimitUploadsMax         || 60,
       loginLockoutThreshold:       s?.loginLockoutThreshold       || 5,
       loginLockoutMinutes:         s?.loginLockoutMinutes         || 15,
       maxAlbumsPerUser:            s?.maxAlbumsPerUser            || 20,
@@ -410,9 +410,9 @@ export default function AdminSettings() {
 
               {/* ── SECURITY & LIMITS ─────────────────────────────────────── */}
               <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
-                <SectionHeader icon={ShieldAlert} title="Security & Limits" desc="Rate limits, login lockout, and abuse caps. Changes apply within ~15 seconds, no restart needed." />
+                <SectionHeader icon={ShieldAlert} title="Security & Limits" desc="Rate limits, login lockout, and abuse caps for customers. Logged-in admins are fully exempt from rate limits and album/order caps. Changes apply within ~15 seconds, no restart needed." />
 
-                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Rate limits (per IP)</p>
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Rate limits (per IP, non-admins)</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
                   <FormField control={form.control} name="rateLimitGeneralWindowMs" render={({ field }) => (
                     <FormItem><FormLabel>General window (ms)</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>

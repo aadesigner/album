@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import { X, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -53,7 +53,7 @@ function relLuminance(hex: string): number {
 }
 
 // ─── Mini page renderer ───────────────────────────────────────────────────────
-function PageMiniRender({ elements, w, h, paperColor = '#F2EDE5', canvasH = DESIGN_H }: {
+const PageMiniRender = memo(function PageMiniRender({ elements, w, h, paperColor = '#F2EDE5', canvasH = DESIGN_H }: {
   elements: EditorElement[]; w: number; h: number; paperColor?: string; canvasH?: number;
 }) {
   const scX = w / DESIGN_W;
@@ -77,7 +77,7 @@ function PageMiniRender({ elements, w, h, paperColor = '#F2EDE5', canvasH = DESI
   };
 
   return (
-    <div style={{ position: 'absolute', inset: 0, background: getBg(), overflow: 'hidden', userSelect: 'none' }}>
+    <div style={{ position: 'absolute', inset: 0, background: getBg(), overflow: 'hidden', userSelect: 'none', contain: 'strict' }}>
       {shapes.map((el, i) => (
         <div key={i} style={{
           position: 'absolute',
@@ -100,7 +100,7 @@ function PageMiniRender({ elements, w, h, paperColor = '#F2EDE5', canvasH = DESI
         }} />
       ))}
       {imgs.map((el, i) => (
-        <img key={i} src={el.src} draggable={false} alt="" style={{
+        <img key={i} src={el.src} draggable={false} alt="" decoding="async" style={{
           position: 'absolute',
           left: el.x * scX, top: el.y * scY,
           width: el.w * scX, height: el.h * scY,
@@ -133,10 +133,10 @@ function PageMiniRender({ elements, w, h, paperColor = '#F2EDE5', canvasH = DESI
       ))}
     </div>
   );
-}
+});
 
 // ─── Pages-edge face (plain white) ───────────────────────────────────────────
-function PagesEdgeFace({ W, H, D, pageCount }: { W: number; H: number; D: number; pageCount: number }) {
+const PagesEdgeFace = memo(function PagesEdgeFace({ W, H, D, pageCount }: { W: number; H: number; D: number; pageCount: number }) {
   return (
     <div style={{ position: 'absolute', inset: 0, background: '#FAFAF8', overflow: 'hidden' }}>
       <div style={{
@@ -146,10 +146,10 @@ function PagesEdgeFace({ W, H, D, pageCount }: { W: number; H: number; D: number
       <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.08) 0%, transparent 12%, transparent 88%, rgba(0,0,0,0.10) 100%)' }} />
     </div>
   );
-}
+});
 
 // ─── Spine face ───────────────────────────────────────────────────────────────
-function SpineFace({ title, D, H, bgColor }: { title: string; D: number; H: number; bgColor: string }) {
+const SpineFace = memo(function SpineFace({ title, D, H, bgColor }: { title: string; D: number; H: number; bgColor: string }) {
   return (
     <div style={{
       position: 'absolute', inset: 0,
@@ -177,11 +177,11 @@ function SpineFace({ title, D, H, bgColor }: { title: string; D: number; H: numb
           maxWidth: H * 0.75,
           overflow: 'hidden',
           textOverflow: 'ellipsis',
-        }}>{title || 'Përgjithmonë'}</div>
+        }}>{title}</div>
       </div>
     </div>
   );
-}
+});
 
 // ─── Browse item types ────────────────────────────────────────────────────────
 type BrowseItem =
@@ -210,21 +210,32 @@ function SpreadBrowser({
 
   const item = items[idx];
 
-  // Responsive page width
-  const [pgW, setPgW] = useState(200);
+  // Responsive page width — fill the viewport (width + height), not a tiny fixed cap.
+  const [pgW, setPgW] = useState(280);
   const containerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const measure = () => {
       if (!containerRef.current) return;
-      const avail = containerRef.current.clientWidth - 120;
-      const half = Math.min(Math.floor(avail / 2), 260);
-      setPgW(Math.max(100, half));
+      const cw = containerRef.current.clientWidth;
+      const ch = containerRef.current.clientHeight;
+      const narrow = cw < 640;
+      // Arrows sit beside the book on desktop; on mobile they overlay so pages can grow.
+      const sideReserve = narrow ? 16 : 140;
+      const verticalChrome = narrow ? 96 : 120; // label + dots + hint + gaps
+      const availW = Math.max(0, cw - sideReserve);
+      const availH = Math.max(0, ch - verticalChrome);
+      const aspect = canvasH / DESIGN_W;
+      // Size for an open spread (2 pages + thin spine)
+      const maxByWidth = Math.floor((availW - 8) / 2);
+      const maxByHeight = Math.floor(availH / aspect);
+      const cap = cw >= 1100 ? 520 : cw >= 768 ? 440 : 360;
+      setPgW(Math.max(140, Math.min(maxByWidth, maxByHeight, cap)));
     };
     measure();
     const ro = new ResizeObserver(measure);
-    if (containerRef.current) ro.observe(containerRef.current);
+    ro.observe(containerRef.current);
     return () => ro.disconnect();
-  }, []);
+  }, [canvasH]);
   const pgH = Math.round(pgW * (canvasH / DESIGN_W));
 
   // Keyboard navigation
@@ -277,7 +288,7 @@ function SpreadBrowser({
     return (
       <div style={{
         display: 'flex', alignItems: 'stretch',
-        filter: 'drop-shadow(0 20px 50px rgba(0,0,0,0.60))',
+        boxShadow: '0 20px 50px rgba(0,0,0,0.45)',
         perspective: 1400, transformStyle: 'preserve-3d',
       }}>
         <div style={{ transform: `rotateY(${showSpineLeft ? 10 : -10}deg)`, transformOrigin: showSpineLeft ? 'left center' : 'right center', display: 'flex' }}>
@@ -297,7 +308,7 @@ function SpreadBrowser({
     return (
       <div style={{
         display: 'flex', alignItems: 'stretch',
-        filter: 'drop-shadow(0 20px 50px rgba(0,0,0,0.60))',
+        boxShadow: '0 20px 50px rgba(0,0,0,0.45)',
         perspective: 1400, transformStyle: 'preserve-3d',
       }}>
         {/* Left page — tilted back slightly like an open book, hinged at the spine */}
@@ -310,8 +321,17 @@ function SpreadBrowser({
         }}>
           {spread.left ? (
             isInsideCover ? (
-              <div style={{ position: 'absolute', inset: 0, background: '#1a1410', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ color: 'rgba(255,255,255,0.12)', fontSize: 10, fontFamily: 'Georgia, serif', fontStyle: 'italic' }}>{lang === 'sq' ? 'brendia e kopertinës' : 'inside cover'}</span>
+              <div style={{
+                position: 'absolute', inset: 0, background: '#FFFFFF',
+                backgroundImage: 'repeating-linear-gradient(45deg,transparent,transparent 6px,rgba(0,0,0,0.05) 6px,rgba(0,0,0,0.05) 7px)',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
+              }}>
+                <span style={{ color: 'rgba(0,0,0,0.28)', fontSize: 10, fontFamily: 'Georgia, serif', fontStyle: 'italic' }}>
+                  {lang === 'sq' ? 'brendia e kopertinës' : 'inside cover'}
+                </span>
+                <span style={{ color: 'rgba(0,0,0,0.18)', fontSize: 8, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                  {lang === 'sq' ? 'e bllokuar' : 'not editable'}
+                </span>
               </div>
             ) : (
               <PageMiniRender elements={leftEls} w={pgW} h={pgH} canvasH={canvasH} />
@@ -339,8 +359,17 @@ function SpreadBrowser({
         }}>
           {spread.right ? (
             isInsideBackCover ? (
-              <div style={{ position: 'absolute', inset: 0, background: '#1a1410', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ color: 'rgba(255,255,255,0.12)', fontSize: 10, fontFamily: 'Georgia, serif', fontStyle: 'italic' }}>{lang === 'sq' ? 'brendia e kopertinës së pasme' : 'inside back cover'}</span>
+              <div style={{
+                position: 'absolute', inset: 0, background: '#FFFFFF',
+                backgroundImage: 'repeating-linear-gradient(45deg,transparent,transparent 6px,rgba(0,0,0,0.05) 6px,rgba(0,0,0,0.05) 7px)',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
+              }}>
+                <span style={{ color: 'rgba(0,0,0,0.28)', fontSize: 10, fontFamily: 'Georgia, serif', fontStyle: 'italic' }}>
+                  {lang === 'sq' ? 'brendia e kopertinës së pasme' : 'inside back cover'}
+                </span>
+                <span style={{ color: 'rgba(0,0,0,0.18)', fontSize: 8, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                  {lang === 'sq' ? 'e bllokuar' : 'not editable'}
+                </span>
               </div>
             ) : (
               <PageMiniRender elements={rightEls} w={pgW} h={pgH} canvasH={canvasH} />
@@ -355,30 +384,59 @@ function SpreadBrowser({
     );
   };
 
-  return (
-    <div ref={containerRef} className="flex-1 flex flex-col items-center justify-center gap-7 px-4 overflow-hidden select-none">
+  const navBtn = (side: 'left' | 'right') => {
+    const disabled = side === 'left' ? idx === 0 : idx >= items.length - 1;
+    const onClick = () => go(side === 'left' ? -1 : 1);
+    return (
+      <button
+        onClick={onClick}
+        disabled={disabled}
+        aria-label={side === 'left' ? 'Previous' : 'Next'}
+        style={{
+          width: 48, height: 48, borderRadius: '50%', flexShrink: 0, border: 'none',
+          background: disabled ? 'rgba(10,8,6,0.28)' : 'rgba(10,8,6,0.62)',
+          color: disabled ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.92)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: disabled ? 'default' : 'pointer', transition: 'all 0.15s',
+          outline: disabled ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(255,255,255,0.16)',
+          boxShadow: disabled ? 'none' : '0 4px 16px rgba(0,0,0,0.35)',
+          backdropFilter: 'blur(2px)',
+        }}
+      >
+        {side === 'left' ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
+      </button>
+    );
+  };
 
+  return (
+    <div
+      ref={containerRef}
+      className="flex-1 flex flex-col items-center justify-center gap-4 md:gap-6 px-2 sm:px-4 overflow-hidden select-none"
+      style={{ width: '100%', height: '100%', minHeight: 0 }}
+    >
       {/* Label */}
-      <p style={{ color: 'rgba(255,255,255,0.22)', fontSize: 10, letterSpacing: '0.22em', textTransform: 'uppercase', fontFamily: 'Georgia, serif' }}>
+      <p style={{ color: 'rgba(255,255,255,0.22)', fontSize: 10, letterSpacing: '0.22em', textTransform: 'uppercase', fontFamily: 'Georgia, serif', flexShrink: 0 }}>
         {item?.label}
       </p>
 
-      {/* Pages + arrows */}
-      <div className="flex items-center gap-5 md:gap-7">
-        <button onClick={() => go(-1)} disabled={idx === 0} style={{
-          width: 44, height: 44, borderRadius: '50%', flexShrink: 0, border: 'none',
-          background: idx === 0 ? 'rgba(10,8,6,0.28)' : 'rgba(10,8,6,0.62)',
-          color: idx === 0 ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.92)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          cursor: idx === 0 ? 'default' : 'pointer', transition: 'all 0.15s',
-          outline: idx === 0 ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(255,255,255,0.16)',
-          boxShadow: idx === 0 ? 'none' : '0 4px 16px rgba(0,0,0,0.35)',
-          backdropFilter: 'blur(2px)',
-        }}>
-          <ChevronLeft size={19} />
-        </button>
+      {/* Pages + arrows — arrows overlay on narrow screens so the book can fill width */}
+      <div className="relative flex items-center justify-center w-full max-w-full" style={{ flex: '1 1 auto', minHeight: 0 }}>
+        <div className="hidden md:flex absolute left-0 z-10 items-center" style={{ top: '50%', transform: 'translateY(-50%)' }}>
+          {navBtn('left')}
+        </div>
+        <div className="hidden md:flex absolute right-0 z-10 items-center" style={{ top: '50%', transform: 'translateY(-50%)' }}>
+          {navBtn('right')}
+        </div>
 
-        <div style={{ position: 'relative', overflow: 'hidden' }}>
+        {/* Mobile arrows — floating over page edges */}
+        <div className="flex md:hidden absolute left-1 z-10" style={{ top: '50%', transform: 'translateY(-50%)' }}>
+          {navBtn('left')}
+        </div>
+        <div className="flex md:hidden absolute right-1 z-10" style={{ top: '50%', transform: 'translateY(-50%)' }}>
+          {navBtn('right')}
+        </div>
+
+        <div style={{ position: 'relative', overflow: 'visible', maxWidth: '100%' }}>
           <AnimatePresence mode="popLayout" initial={false}>
             <motion.div
               key={idx}
@@ -393,23 +451,10 @@ function SpreadBrowser({
             </motion.div>
           </AnimatePresence>
         </div>
-
-        <button onClick={() => go(1)} disabled={idx >= items.length - 1} style={{
-          width: 44, height: 44, borderRadius: '50%', flexShrink: 0, border: 'none',
-          background: idx >= items.length - 1 ? 'rgba(10,8,6,0.28)' : 'rgba(10,8,6,0.62)',
-          color: idx >= items.length - 1 ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.92)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          cursor: idx >= items.length - 1 ? 'default' : 'pointer', transition: 'all 0.15s',
-          outline: idx >= items.length - 1 ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(255,255,255,0.16)',
-          boxShadow: idx >= items.length - 1 ? 'none' : '0 4px 16px rgba(0,0,0,0.35)',
-          backdropFilter: 'blur(2px)',
-        }}>
-          <ChevronRight size={19} />
-        </button>
       </div>
 
       {/* Dot pagination */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 320 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 360, flexShrink: 0 }}>
         {items.map((_, i) => (
           <button key={i} onClick={() => { setDir(i > idx ? 1 : -1); setIdx(i); }} style={{
             width: i === idx ? 18 : 5, height: 5, borderRadius: 3, border: 'none', padding: 0, cursor: 'pointer',
@@ -419,8 +464,8 @@ function SpreadBrowser({
         ))}
       </div>
 
-      {/* Keyboard hint */}
-      <p style={{ color: 'rgba(255,255,255,0.14)', fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+      {/* Keyboard hint — desktop only */}
+      <p className="hidden md:block" style={{ color: 'rgba(255,255,255,0.14)', fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', flexShrink: 0 }}>
         {lang === 'sq' ? '← → tastet e shigjetave' : '← → arrow keys'}
       </p>
     </div>
@@ -438,8 +483,6 @@ export function Book3DViewer({
   lang: 'sq' | 'en';
   canvasH?: number;
 }) {
-  const [rotY, setRotY] = useState(-28);
-  const [rotX, setRotX] = useState(14);
   const [autoRotate, setAutoRotate] = useState(true);
   const [hint, setHint] = useState(true);
   const [browseMode, setBrowseMode] = useState(false);
@@ -450,32 +493,53 @@ export function Book3DViewer({
   const lastPos = useRef({ x: 0, y: 0 });
   const animRef = useRef<number>(0);
   const resumeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // Direct DOM transform — avoids React re-renders (and cover image remounts)
+  // on every drag/auto-rotate frame, which was the main source of sluggishness.
+  const bookRef = useRef<HTMLDivElement>(null);
+
+  const applyBookTransform = useCallback(() => {
+    const el = bookRef.current;
+    if (!el) return;
+    el.style.transform = `rotateX(${rotXRef.current}deg) rotateY(${rotYRef.current}deg)`;
+  }, []);
 
   // Book dimensions — scale to screen
   const W = 270;
   const H = Math.round(W * (canvasH / DESIGN_W)); // ≈ 360 for 3:4 books
   const D = Math.max(8, Math.min(28, Math.round((project.pageCount || 20) * 0.45)));
 
-  // Auto-rotation
+  // Auto-rotation — only while spinning; stops the rAF loop when idle/browsing
   useEffect(() => {
+    if (browseMode || !autoRotate) {
+      cancelAnimationFrame(animRef.current);
+      return;
+    }
     const tick = () => {
-      if (!isDragging.current && autoRotate && !browseMode) {
+      if (!isDragging.current) {
         rotYRef.current += 0.28;
-        setRotY(rotYRef.current);
+        applyBookTransform();
       }
       animRef.current = requestAnimationFrame(tick);
     };
     animRef.current = requestAnimationFrame(tick);
     return () => {
       cancelAnimationFrame(animRef.current);
-      if (resumeTimer.current) clearTimeout(resumeTimer.current);
     };
-  }, [autoRotate, browseMode]);
+  }, [autoRotate, browseMode, applyBookTransform]);
+
+  useEffect(() => () => {
+    if (resumeTimer.current) clearTimeout(resumeTimer.current);
+  }, []);
 
   useEffect(() => {
     const t = setTimeout(() => setHint(false), 3200);
     return () => clearTimeout(t);
   }, []);
+
+  // Re-apply transform when returning from browse mode (book remounts)
+  useEffect(() => {
+    if (!browseMode) applyBookTransform();
+  }, [browseMode, applyBookTransform]);
 
   const pauseAuto = useCallback(() => {
     setAutoRotate(false);
@@ -483,11 +547,12 @@ export function Book3DViewer({
     resumeTimer.current = setTimeout(() => setAutoRotate(true), 3500);
   }, []);
 
-  // Mouse / touch
+  // Mouse / touch — mutate transform in place; no setState during drag
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     if (browseMode) return;
     isDragging.current = true;
     lastPos.current = { x: e.clientX, y: e.clientY };
+    if (bookRef.current) bookRef.current.style.cursor = 'grabbing';
     pauseAuto(); e.preventDefault();
   }, [pauseAuto, browseMode]);
 
@@ -497,12 +562,14 @@ export function Book3DViewer({
     const dy = e.clientY - lastPos.current.y;
     rotYRef.current += dx * 0.55;
     rotXRef.current = Math.min(28, Math.max(-18, rotXRef.current - dy * 0.28));
-    setRotY(rotYRef.current);
-    setRotX(rotXRef.current);
+    applyBookTransform();
     lastPos.current = { x: e.clientX, y: e.clientY };
-  }, [browseMode]);
+  }, [browseMode, applyBookTransform]);
 
-  const onMouseUp = useCallback(() => { isDragging.current = false; }, []);
+  const onMouseUp = useCallback(() => {
+    isDragging.current = false;
+    if (bookRef.current) bookRef.current.style.cursor = 'grab';
+  }, []);
 
   const onTouchStart = useCallback((e: React.TouchEvent) => {
     if (browseMode) return;
@@ -517,20 +584,32 @@ export function Book3DViewer({
     const dy = e.touches[0].clientY - lastPos.current.y;
     rotYRef.current += dx * 0.55;
     rotXRef.current = Math.min(28, Math.max(-18, rotXRef.current - dy * 0.28));
-    setRotY(rotYRef.current);
-    setRotX(rotXRef.current);
+    applyBookTransform();
     lastPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-  }, [browseMode]);
+  }, [browseMode, applyBookTransform]);
 
   const onTouchEnd = useCallback(() => { isDragging.current = false; }, []);
 
+  const resetView = useCallback(() => {
+    rotYRef.current = -28;
+    rotXRef.current = 14;
+    applyBookTransform();
+    setAutoRotate(true);
+  }, [applyBookTransform]);
+
   // ── Extract page content ────────────────────────────────────────────────────
-  const frontCoverSpread = spreads.find(s => s.id === 'cover');
-  const backCoverSpread  = spreads.find(s => s.id === 'back-cover');
+  const frontCoverSpread = useMemo(() => spreads.find(s => s.id === 'cover'), [spreads]);
+  const backCoverSpread  = useMemo(() => spreads.find(s => s.id === 'back-cover'), [spreads]);
   const coverPage  = frontCoverSpread?.right ?? null;
   const backPage   = backCoverSpread?.left   ?? null;
-  const coverEls   = coverPage ? (pagesContent[coverPage.dbId] ?? []) : [];
-  const backEls    = backPage  ? (pagesContent[backPage.dbId]  ?? []) : [];
+  const coverEls   = useMemo(
+    () => (coverPage ? (pagesContent[coverPage.dbId] ?? []) : []),
+    [coverPage, pagesContent],
+  );
+  const backEls = useMemo(
+    () => (backPage ? (pagesContent[backPage.dbId] ?? []) : []),
+    [backPage, pagesContent],
+  );
   const coverBg    = coverEls.find(e => e.type === 'background');
   const spineColor = (coverBg as any)?.bgColor || (coverBg as any)?.bgGradientFrom || '#1a1209';
 
@@ -538,33 +617,38 @@ export function Book3DViewer({
   // stage blend with whatever design the user picked, instead of a fixed
   // neutral backdrop that can clash with (or wash out) any given cover. ─────
   const themeColor = /^#[0-9a-f]{6}$/i.test(spineColor) ? spineColor : '#4a3f33';
-  const ambientBase = ['#f5f1ea', '#eee7db', '#f2ede4'];
-  const ambientBlend = ambientBase.map(c => mixHex(c, themeColor, 0.22));
-  const isDarkAmbient = relLuminance(ambientBlend[1]) < 0.55;
-  const ink = {
-    strong: isDarkAmbient ? 'rgba(255,255,255,0.86)' : 'rgba(0,0,0,0.72)',
-    mid: isDarkAmbient ? 'rgba(255,255,255,0.58)' : 'rgba(0,0,0,0.42)',
-    faint: isDarkAmbient ? 'rgba(255,255,255,0.36)' : 'rgba(0,0,0,0.30)',
-    faintest: isDarkAmbient ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.18)',
-    btnBg: isDarkAmbient ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.05)',
-    btnBgActive: isDarkAmbient ? 'rgba(255,255,255,0.20)' : 'rgba(0,0,0,0.10)',
-    outline: isDarkAmbient ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.10)',
-  };
-  const ambientGradient = `linear-gradient(170deg, ${ambientBlend[0]} 0%, ${ambientBlend[1]} 45%, ${ambientBlend[2]} 100%)`;
-  const vignette = isDarkAmbient
-    ? 'radial-gradient(ellipse 80% 60% at 50% 52%, rgba(255,255,255,0.08) 0%, transparent 70%)'
-    : 'radial-gradient(ellipse 80% 60% at 50% 52%, rgba(255,255,255,0.55) 0%, transparent 70%)';
+  const { ink, ambientGradient, vignette } = useMemo(() => {
+    const ambientBase = ['#f5f1ea', '#eee7db', '#f2ede4'];
+    const ambientBlend = ambientBase.map(c => mixHex(c, themeColor, 0.22));
+    const isDarkAmbient = relLuminance(ambientBlend[1]) < 0.55;
+    return {
+      ink: {
+        strong: isDarkAmbient ? 'rgba(255,255,255,0.86)' : 'rgba(0,0,0,0.72)',
+        mid: isDarkAmbient ? 'rgba(255,255,255,0.58)' : 'rgba(0,0,0,0.42)',
+        faint: isDarkAmbient ? 'rgba(255,255,255,0.36)' : 'rgba(0,0,0,0.30)',
+        faintest: isDarkAmbient ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.18)',
+        btnBg: isDarkAmbient ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.05)',
+        btnBgActive: isDarkAmbient ? 'rgba(255,255,255,0.20)' : 'rgba(0,0,0,0.10)',
+        outline: isDarkAmbient ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.10)',
+      },
+      ambientGradient: `linear-gradient(170deg, ${ambientBlend[0]} 0%, ${ambientBlend[1]} 45%, ${ambientBlend[2]} 100%)`,
+      vignette: isDarkAmbient
+        ? 'radial-gradient(ellipse 80% 60% at 50% 52%, rgba(255,255,255,0.08) 0%, transparent 70%)'
+        : 'radial-gradient(ellipse 80% 60% at 50% 52%, rgba(255,255,255,0.55) 0%, transparent 70%)',
+    };
+  }, [themeColor]);
   // ── Browse items: front cover → inner spreads → back cover ─────────────────
-  const browseItems: BrowseItem[] = [
+  const browseItems: BrowseItem[] = useMemo(() => [
     ...(coverPage ? [{ kind: 'cover' as const, page: coverPage, label: lang === 'sq' ? 'Kopertina' : 'Front Cover' }] : []),
     ...spreads
       .filter(s => !s.isSolo)
       .map((s, i) => ({ kind: 'spread' as const, spread: s, label: lang === 'sq' ? `Faqet ${i + 1}` : `Spread ${i + 1}` })),
     ...(backPage ? [{ kind: 'back' as const, page: backPage, label: lang === 'sq' ? 'Kopertina e Pasme' : 'Back Cover' }] : []),
-  ];
+  ], [coverPage, backPage, spreads, lang]);
 
   const title = project?.title || (lang === 'sq' ? 'Fotolibri' : 'Photobook');
   const pageCount = project?.pageCount ?? spreads.length * 2;
+  const innerSpreadCount = useMemo(() => spreads.filter(s => !s.isSolo).length, [spreads]);
 
   return (
     <div
@@ -615,7 +699,7 @@ export function Book3DViewer({
           {/* Reset */}
           {!browseMode && (
             <button
-              onClick={() => { rotYRef.current = -28; rotXRef.current = 14; setRotY(-28); setRotX(14); setAutoRotate(true); }}
+              onClick={resetView}
               title={lang === 'sq' ? 'Rivendos pamjen' : 'Reset view'}
               style={{
                 width: 34, height: 34, borderRadius: '50%', border: 'none', display: 'flex',
@@ -662,12 +746,15 @@ export function Book3DViewer({
       {/* Main */}
       <AnimatePresence mode="wait">
         {browseMode ? (
-          <motion.div key="browse" className="relative z-10 flex-1 flex flex-col overflow-hidden p-3 md:p-5"
+          <motion.div key="browse" className="relative z-10 flex-1 flex flex-col overflow-hidden p-2 sm:p-3 md:p-5 min-h-0"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             transition={{ duration: 0.18 }}>
             {/* Renders directly on the viewer's ambient background — no extra
                 dark "stage" layered on top of it. */}
-            <div style={{ flex: 1, borderRadius: 24, overflow: 'hidden', position: 'relative' }}>
+            <div style={{
+              flex: 1, borderRadius: 24, overflow: 'hidden', position: 'relative',
+              display: 'flex', flexDirection: 'column', minHeight: 0,
+            }}>
               <SpreadBrowser items={browseItems} pagesContent={pagesContent} lang={lang} canvasH={canvasH} />
             </div>
           </motion.div>
@@ -677,27 +764,28 @@ export function Book3DViewer({
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             transition={{ duration: 0.18 }}>
 
-            {/* Ground shadow — cast beneath the book */}
+            {/* Ground shadow — cast beneath the book (no CSS blur — cheaper) */}
             <div style={{
               position: 'absolute',
               left: '50%', top: '50%',
               transform: 'translateX(-50%)',
               marginTop: H * 0.52 + D * 0.4,
-              width: W * 1.15,
-              height: 56,
-              background: `radial-gradient(ellipse, ${hexToRgba(themeColor, 0.30)} 0%, transparent 70%)`,
-              filter: 'blur(18px)',
+              width: W * 1.35,
+              height: 72,
+              background: `radial-gradient(ellipse, ${hexToRgba(themeColor, 0.28)} 0%, ${hexToRgba(themeColor, 0.08)} 45%, transparent 72%)`,
               pointerEvents: 'none',
             }} />
 
             {/* Book wrapper */}
             <div
+              ref={bookRef}
               style={{
                 position: 'relative',
                 width: W, height: H,
                 transformStyle: 'preserve-3d',
-                transform: `rotateX(${rotX}deg) rotateY(${rotY}deg)`,
-                cursor: isDragging.current ? 'grabbing' : 'grab',
+                transform: 'rotateX(14deg) rotateY(-28deg)',
+                willChange: 'transform',
+                cursor: 'grab',
               }}
               onMouseDown={onMouseDown}
               onTouchStart={onTouchStart}
@@ -710,7 +798,9 @@ export function Book3DViewer({
                 borderRadius: '1px 4px 4px 1px',
                 overflow: 'hidden',
                 backfaceVisibility: 'hidden',
+                WebkitBackfaceVisibility: 'hidden',
                 boxShadow: '0 0 0 1px rgba(0,0,0,0.7)',
+                contain: 'strict',
               }}>
                 {coverEls.length > 0
                   ? <PageMiniRender elements={coverEls} w={W} h={H} canvasH={canvasH} />
@@ -726,11 +816,6 @@ export function Book3DViewer({
                   position: 'absolute', top: 0, left: 0, bottom: 0, width: 22, pointerEvents: 'none',
                   background: 'linear-gradient(to right, rgba(0,0,0,0.42), rgba(0,0,0,0.10) 60%, transparent)',
                 }} />
-                {/* Brand watermark */}
-                <div style={{ position: 'absolute', bottom: 14, left: 0, right: 0, display: 'flex', justifyContent: 'center', pointerEvents: 'none' }}>
-                  <span style={{ fontFamily: 'Georgia, serif', fontStyle: 'italic', fontSize: Math.max(8, W * 0.042),
-                    letterSpacing: '0.10em', color: 'rgba(255,255,255,0.18)' }}>përgjithmonë</span>
-                </div>
               </div>
 
               {/* ── BACK COVER ── rotateY(180deg) then translateZ(D) in local space = z=-D in world */}
@@ -740,7 +825,9 @@ export function Book3DViewer({
                 borderRadius: '4px 1px 1px 4px',
                 overflow: 'hidden',
                 backfaceVisibility: 'hidden',
+                WebkitBackfaceVisibility: 'hidden',
                 boxShadow: '0 0 0 1px rgba(0,0,0,0.5)',
+                contain: 'strict',
               }}>
                 {backEls.length > 0
                   ? <PageMiniRender elements={backEls} w={W} h={H} canvasH={canvasH} />
@@ -818,8 +905,8 @@ export function Book3DViewer({
         {!browseMode && (
           <p style={{ color: ink.faintest, fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase' }}>
             {lang === 'sq'
-              ? <>{pageCount} faqe &nbsp;·&nbsp; {spreads.filter(s => !s.isSolo).length} fletë</>
-              : <>{pageCount} pages &nbsp;·&nbsp; {spreads.filter(s => !s.isSolo).length} spreads</>}
+              ? <>{pageCount} faqe &nbsp;·&nbsp; {innerSpreadCount} fletë</>
+              : <>{pageCount} pages &nbsp;·&nbsp; {innerSpreadCount} spreads</>}
           </p>
         )}
       </div>

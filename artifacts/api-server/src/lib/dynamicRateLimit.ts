@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { getSecuritySettings, type SecuritySettings } from "./securitySettings";
 import { logSecurityEvent } from "./securityEvents";
+import { verifyAccessToken } from "./auth";
 
 type NumericKey = {
   [K in keyof SecuritySettings]: SecuritySettings[K] extends number ? K : never;
@@ -12,6 +13,25 @@ interface DynamicLimiterOptions {
   /** Settings key holding the max requests per window. */
   maxKey: NumericKey;
   message: string;
+}
+
+/**
+ * True when the request carries a valid admin access token. Used to skip
+ * rate limits for operators — limits are IP-based and an admin working the
+ * panel / editor would otherwise lock themselves (and anyone sharing their
+ * IP) out of the API.
+ *
+ * Intentionally a JWT peek only (no DB round-trip): role is embedded in the
+ * access token, and requireAdmin still re-checks the live DB user on admin
+ * routes. A revoked admin's token expires within 15m.
+ */
+export function isAdminBearerRequest(req: Request): boolean {
+  const header = req.headers.authorization;
+  if (!header?.startsWith("Bearer ")) return false;
+  const token = header.slice("Bearer ".length).trim();
+  if (!token) return false;
+  const payload = verifyAccessToken(token);
+  return payload?.role === "admin";
 }
 
 /**
@@ -40,6 +60,12 @@ export function createDynamicLimiter({ windowMsKey, maxKey, message }: DynamicLi
 
   return async function dynamicLimiter(req: Request, res: Response, next: NextFunction): Promise<void> {
     if (req.method === "OPTIONS") {
+      next();
+      return;
+    }
+    // Admins are never rate-limited — panel polling, uploads, and editor
+    // autosave would otherwise trip the general / uploads buckets quickly.
+    if (isAdminBearerRequest(req)) {
       next();
       return;
     }

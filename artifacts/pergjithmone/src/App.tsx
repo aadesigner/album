@@ -119,7 +119,11 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: (failureCount, error: any) => {
-        if (error?.status === 401 || error?.status === 403) return false;
+        // Never retry auth failures or rate limits — 429 retries dig a deeper
+        // hole against the per-IP budget and can lock the whole SPA out.
+        if (error?.status === 401 || error?.status === 403 || error?.status === 429) {
+          return false;
+        }
         return failureCount < 2;
       },
       // Keep data fresh for 5 min; retain in cache for 15 min so navigating

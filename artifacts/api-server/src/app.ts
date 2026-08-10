@@ -121,6 +121,7 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 // ── Rate limiting ──────────────────────────────────────────────────────────
 // Thresholds are admin-editable (Settings → Security & Limits) and read live
 // from a short-TTL cache — see lib/dynamicRateLimit.ts and securitySettings.ts.
+// Admins with a valid Bearer token skip every limiter.
 const generalLimiter = createDynamicLimiter({
   windowMsKey: "rateLimitGeneralWindowMs",
   maxKey: "rateLimitGeneralMax",
@@ -142,10 +143,30 @@ const uploadsLimiter = createDynamicLimiter({
   message: "Too many uploads, please slow down.",
 });
 
-app.use("/api", generalLimiter);
+// Paths that already have a dedicated limiter must not also burn the general
+// bucket — page analytics + editor uploads were previously double-counted and
+// could lock an IP out of login/API after normal SPA use.
+// /api/auth/refresh is intentionally unscoped: every page load hits it, and
+// putting it on the tight login/register bucket locked sessions out of the
+// SPA (and then frantic reloads burned login too).
+const GENERAL_EXEMPT_PREFIXES = [
+  "/api/analytics",
+  "/api/uploads",
+  "/api/auth/login",
+  "/api/auth/register",
+  "/api/auth/refresh",
+  "/api/healthz",
+];
+app.use("/api", (req, res, next) => {
+  const path = (req.originalUrl || req.url || "").split("?")[0];
+  if (GENERAL_EXEMPT_PREFIXES.some((p) => path === p || path.startsWith(p + "/"))) {
+    next();
+    return;
+  }
+  return generalLimiter(req, res, next);
+});
 app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/register", authLimiter);
-app.use("/api/auth/refresh", authLimiter);
 app.use("/api/analytics", analyticsLimiter);
 app.use("/api/uploads", uploadsLimiter);
 

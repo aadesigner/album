@@ -29,6 +29,12 @@ export const PageThumb = React.memo(function PageThumb({
         {sorted.map((el, i) => {
           const key = (el as EditorElement).id ?? i;
           if (el.type === 'background') {
+            if (el.src) {
+              return <img key={key} src={el.src} alt="" loading="lazy" style={{
+                position: 'absolute', inset: 0, width: '100%', height: '100%',
+                objectFit: 'cover', display: 'block', pointerEvents: 'none',
+              }}/>;
+            }
             let bg = el.bgColor || PAPER_COLOR;
             if (el.bgGradientFrom && el.bgGradientTo) {
               const dir = el.bgGradientDir === 'lr' ? 'to right' : el.bgGradientDir === 'diag' ? '135deg' : 'to bottom';

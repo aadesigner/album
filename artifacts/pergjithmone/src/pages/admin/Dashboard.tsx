@@ -8,6 +8,7 @@ import {
 import { format, parseISO, subDays } from 'date-fns';
 import { TrendingUp, Users, ShoppingBag, CreditCard, Eye, MessageCircle, UserPlus, FolderOpen, Printer, Truck } from 'lucide-react';
 import { Link } from 'wouter';
+import { useAuth } from '@/contexts/AuthContext';
 
 const STATUS_COLORS: Record<string, string> = {
   pending: 'bg-amber-100 text-amber-700',
@@ -62,7 +63,11 @@ function fillRegDates(rawData: any[], combined: any[]) {
 // New orders land here (default status "pending") as soon as a customer sends
 // their album via WhatsApp. Admin marks them "Shipped" once printed & sent.
 function PendingPrintingWidget() {
-  const { data, isLoading, refetch } = useListAdminOrders({ page: 1, limit: 50, status: 'pending' });
+  const { getToken } = useAuth();
+  const { data, isLoading, refetch } = useListAdminOrders(
+    { page: 1, limit: 50, status: 'pending' },
+    { query: { staleTime: 0, refetchOnMount: 'always', refetchInterval: 30_000 } },
+  );
   const updateOrder = useUpdateAdminOrder();
   const [shippingId, setShippingId] = React.useState<number | null>(null);
 
@@ -74,6 +79,13 @@ function PendingPrintingWidget() {
       await updateOrder.mutateAsync({ orderId, data: { status: 'shipped' as any } });
       refetch();
     } finally { setShippingId(null); }
+  };
+
+  const pdfHref = (pdfUrl: string) => {
+    const token = getToken();
+    if (!token || !pdfUrl) return pdfUrl;
+    const join = pdfUrl.includes('?') ? '&' : '?';
+    return `${pdfUrl}${join}token=${encodeURIComponent(token)}`;
   };
 
   return (
@@ -116,7 +128,7 @@ function PendingPrintingWidget() {
                   <td className="px-5 py-3 font-semibold text-neutral-700 text-xs whitespace-nowrap">{Number(o.priceLek).toLocaleString()} L</td>
                   <td className="px-5 py-3">
                     {o.pdfUrl ? (
-                      <a href={o.pdfUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-violet-600 font-semibold hover:underline">View PDF</a>
+                      <a href={pdfHref(o.pdfUrl)} target="_blank" rel="noopener noreferrer" className="text-[10px] text-violet-600 font-semibold hover:underline">View PDF</a>
                     ) : (
                       <span className="text-[10px] text-neutral-300 italic">No PDF</span>
                     )}
@@ -318,7 +330,8 @@ export default function AdminDashboard() {
                 <div className="px-5 py-10 text-center text-neutral-300 text-sm">No users yet 🌸</div>
               ) : (
                 s.recentUsers.map((u: any) => {
-                  const initials = (u.name || u.email).split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2);
+                  const contact = u.phone || u.email || '—';
+                  const initials = (u.name || contact || '?').split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2);
                   return (
                     <div key={u.id} className="flex items-center gap-3 px-5 py-3 hover:bg-rose-50/40 transition-colors">
                       <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
@@ -327,7 +340,7 @@ export default function AdminDashboard() {
                       </div>
                       <div className="min-w-0">
                         <p className="text-xs font-medium text-neutral-700 truncate">{u.name || 'No name'}</p>
-                        <p className="text-[10px] text-neutral-400 truncate">{u.email}</p>
+                        <p className="text-[10px] text-neutral-400 truncate">{contact}</p>
                       </div>
                     </div>
                   );

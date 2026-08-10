@@ -1,11 +1,10 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo, useDeferredValue, startTransition } from 'react';
 import { Stage, Layer, Rect, Text as KonvaText, Image as KonvaImage, Transformer } from 'react-konva';
-import { useGetProject, useCreateOrder, useGetOrderWhatsapp, useListBookSizes, getGetProjectQueryKey, getGetOrderWhatsappQueryKey, getListProjectsQueryKey } from '@workspace/api-client-react-tsconfig';
+import { useGetProject, useCreateOrder, useListBookSizes, getGetProjectQueryKey, getListProjectsQueryKey } from '@workspace/api-client-react-tsconfig';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, ShoppingBag, LayoutTemplate, Image as ImageIcon, Type,
   Trash2, Check, X, Plus, Camera, Lock, Loader2, Wand2, Box, Undo2, FileDown,
-  ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { generatePDF } from '@/lib/generatePDF';
 import { Link, useRoute } from 'wouter';
@@ -25,11 +24,14 @@ const Book3DViewer = React.lazy(() =>
 
 export {
   DESIGN_W, DESIGN_H, LAYOUTS, DESIGNS, CATEGORY_LABELS, LAYOUT_CATEGORY_LABELS,
+  getCanvasHeight, scaleElementsToCanvas, elementsWithCoverWallpaper,
+  BLANK_STARTER_ID, blankFrontCoverElements, blankBackCoverElements,
+  type EditorElement, type DE, type DesignDef, type LayoutZone, type LayoutDef,
 } from '@/lib/designs';
-export type { EditorElement, DE, DesignDef, LayoutZone, LayoutDef } from '@/lib/designs';
 import {
   DESIGN_W, DESIGN_H, LAYOUTS, DESIGNS, CATEGORY_LABELS, LAYOUT_CATEGORY_LABELS,
-  getCanvasHeight, scaleElementsToCanvas,
+  getCanvasHeight, scaleElementsToCanvas, elementsWithCoverWallpaper,
+  BLANK_STARTER_ID, blankFrontCoverElements, blankBackCoverElements,
   type EditorElement, type DE, type DesignDef, type LayoutZone,
 } from '@/lib/designs';
 import { PageThumb } from '@/components/PageThumb';
@@ -141,6 +143,23 @@ function buildSpreads(pages: any[], lang: 'sq'|'en' = 'sq'): SpreadDef[] {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function KBgEl({el,canvasH}: {el: EditorElement; canvasH:number}) {
+  const [img,setImg]=useState<HTMLImageElement>();
+  useEffect(()=>{
+    if (!el.src) { setImg(undefined); return; }
+    const i=new window.Image(); i.crossOrigin='anonymous';
+    i.onload=()=>setImg(i); i.onerror=()=>setImg(undefined); i.src=el.src;
+  },[el.src]);
+
+  // Wallpaper backgrounds (travel/location designs): object-fit cover the page.
+  if (el.src && img) {
+    const sx=DESIGN_W/img.naturalWidth, sy=canvasH/img.naturalHeight;
+    const s=Math.max(sx,sy);
+    const cw=DESIGN_W/s, ch=canvasH/s;
+    return <KonvaImage image={img} x={0} y={0} width={DESIGN_W} height={canvasH}
+      crop={{x:(img.naturalWidth-cw)/2,y:(img.naturalHeight-ch)/2,width:cw,height:ch}}
+      listening={false}/>;
+  }
+
   if (el.bgGradientFrom) {
     const ep = el.bgGradientDir==='lr' ? {x:DESIGN_W,y:0}
              : el.bgGradientDir==='diag' ? {x:DESIGN_W,y:canvasH}
@@ -690,24 +709,64 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
 
 function LockedPageView({pageW,pageH,role,side}: {pageW:number;pageH:number;role:string;side:'left'|'right'}) {
   const shadow=side==='left'
-    ?'linear-gradient(to left, rgba(0,0,0,0.28) 0%, rgba(0,0,0,0.09) 9%, transparent 25%)'
-    :'linear-gradient(to right, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0.08) 9%, transparent 25%)';
+    ?'linear-gradient(to left, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0.06) 10%, transparent 28%)'
+    :'linear-gradient(to right, rgba(0,0,0,0.16) 0%, rgba(0,0,0,0.05) 10%, transparent 28%)';
+  const label = role==='locked_left' ? 'Inside Cover'
+    : role==='locked_right' ? 'Inside Back Cover'
+    : role==='back_cover' ? 'Outside Cover' : 'Back Cover';
+  // Unique pattern id so left+right locked pages on the same spread don't collide.
+  const patternId = `locked-hatch-${side}-${role}`;
   return (
-    <div style={{position:'relative',width:pageW,height:pageH,flexShrink:0,background:'#F0EBE2'}}>
-      <svg style={{position:'absolute',inset:0,width:'100%',height:'100%',opacity:0.08}}>
-        <defs><pattern id="dg" width="20" height="20" patternUnits="userSpaceOnUse">
-          <path d="M-2,2 l4,-4 M0,20 l20,-20 M18,22 l4,-4" stroke="#5a4a3a" strokeWidth="0.6"/></pattern></defs>
-        <rect width="100%" height="100%" fill="url(#dg)"/>
+    <div style={{
+      position:'relative', width:pageW, height:pageH, flexShrink:0,
+      background:'#FFFFFF', overflow:'hidden',
+    }}>
+      {/* Soft paper grain */}
+      <div style={{
+        position:'absolute', inset:0, pointerEvents:'none',
+        backgroundImage:PAPER_TEXTURE, backgroundSize:'256px 256px',
+        opacity:0.04, mixBlendMode:'multiply' as any,
+      }}/>
+      {/* Full-area uneditable hatch */}
+      <svg style={{position:'absolute', inset:0, width:'100%', height:'100%', pointerEvents:'none'}} aria-hidden>
+        <defs>
+          <pattern id={patternId} width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <line x1="0" y1="0" x2="0" y2="14" stroke="rgba(120,120,120,0.14)" strokeWidth="1"/>
+          </pattern>
+        </defs>
+        <rect width="100%" height="100%" fill={`url(#${patternId})`}/>
       </svg>
-      <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:8}}>
-        <Lock size={18} color="#C0B4A8"/>
-        <p style={{fontSize:9,color:'#C0B4A8',textTransform:'uppercase',letterSpacing:'0.18em',fontWeight:500,margin:0}}>
-          {role==='locked_left'?'Inside Cover':role==='locked_right'?'Inside Back Cover':role==='back_cover'?'Outside Cover':'Back Cover'}
+      {/* Soft veil so the hatch reads as "locked", not dirty paper */}
+      <div style={{
+        position:'absolute', inset:0, pointerEvents:'none',
+        background:'linear-gradient(180deg, rgba(255,255,255,0.35) 0%, rgba(248,248,248,0.15) 50%, rgba(255,255,255,0.40) 100%)',
+      }}/>
+      <div style={{
+        position:'absolute', inset:0, display:'flex', flexDirection:'column',
+        alignItems:'center', justifyContent:'center', gap:10, pointerEvents:'none',
+      }}>
+        <div style={{
+          width:44, height:44, borderRadius:'50%',
+          background:'rgba(255,255,255,0.92)',
+          border:'1px solid rgba(0,0,0,0.08)',
+          boxShadow:'0 4px 14px rgba(0,0,0,0.06)',
+          display:'flex', alignItems:'center', justifyContent:'center',
+        }}>
+          <Lock size={16} color="#9A9A9A"/>
+        </div>
+        <p style={{
+          fontSize:10, color:'#8A8A8A', textTransform:'uppercase',
+          letterSpacing:'0.16em', fontWeight:500, margin:0,
+        }}>
+          {label}
+        </p>
+        <p style={{
+          fontSize:9, color:'#B0B0B0', letterSpacing:'0.04em', margin:0,
+        }}>
+          Not editable
         </p>
       </div>
-      <div style={{position:'absolute',inset:0,pointerEvents:'none',background:shadow}}/>
-      <div style={{position:'absolute',inset:0,pointerEvents:'none',
-        backgroundImage:PAPER_TEXTURE,backgroundSize:'256px 256px',opacity:0.055,mixBlendMode:'multiply' as any}}/>
+      <div style={{position:'absolute', inset:0, pointerEvents:'none', background:shadow}}/>
     </div>
   );
 }
@@ -970,18 +1029,44 @@ const SpreadNav = React.memo(function SpreadNav({spreads,current,onChange,onAddS
   const [dragIdx,setDragIdx]=useState<number|null>(null);
   const [overIdx,setOverIdx]=useState<number|null>(null);
   const [reordering,setReordering]=useState(false);
+  // HTML5 drag breaks overflow-x scroll on iOS — only enable for mouse pointers
+  const [allowMouseDrag,setAllowMouseDrag]=useState(false);
   // Refs for touch drag (need stable values in passive-false listener)
   const dragIdxRef=useRef<number|null>(null);
   const overIdxRef=useRef<number|null>(null);
-  // Refs for swipe-to-navigate gesture
-  const swipeRef=useRef<{x:number;y:number;t:number}|null>(null);
+  // Long-press to reorder — immediate drag was blocking horizontal scroll
+  const longPressTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
+  const pendingDragIdx=useRef<number|null>(null);
+  const touchOrigin=useRef<{x:number;y:number}|null>(null);
+  // Refs for swipe-to-navigate gesture (only when the strip itself didn't scroll)
+  const swipeRef=useRef<{x:number;y:number;t:number;scrollLeft:number}|null>(null);
 
   useEffect(()=>{
-    scrollRef.current?.querySelector('[data-cur="true"]')?.scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'});
+    const mq=window.matchMedia('(hover: hover) and (pointer: fine)');
+    const sync=()=>setAllowMouseDrag(mq.matches);
+    sync();
+    mq.addEventListener?.('change',sync);
+    return ()=>mq.removeEventListener?.('change',sync);
+  },[]);
+
+  useEffect(()=>{
+    const el=scrollRef.current?.querySelector('[data-cur="true"]') as HTMLElement|null;
+    if(!el||!scrollRef.current) return;
+    // Prefer manual scroll so we don't get clipped by justify/center quirks
+    const parent=scrollRef.current;
+    const target=el.offsetLeft - (parent.clientWidth - el.offsetWidth) / 2;
+    parent.scrollTo({ left: Math.max(0, target), behavior: 'smooth' });
   },[current]);
 
   // A spread is draggable if it's an inner spread (not solo, not sp1 which has the locked inside-cover)
   const canMove=(i:number)=>!spreads[i].isSolo && i>=2;
+
+  const clearLongPress=()=>{
+    if(longPressTimer.current) clearTimeout(longPressTimer.current);
+    longPressTimer.current=null;
+    pendingDragIdx.current=null;
+    touchOrigin.current=null;
+  };
 
   const doReorder=async(from:number,to:number)=>{
     if (from===to||!canMove(from)||!canMove(to)||reordering) return;
@@ -989,13 +1074,19 @@ const SpreadNav = React.memo(function SpreadNav({spreads,current,onChange,onAddS
     try { await onReorder(from,to); } finally { setReordering(false); }
   };
 
-  // Touch drag — attach non-passive touchmove so we can preventDefault (stop scroll during drag)
+  // Touch drag — only preventDefault once a long-press reorder is active
   useEffect(()=>{
     const el=scrollRef.current; if(!el) return;
     const onTouchMove=(e:TouchEvent)=>{
+      const touch=e.touches[0];
+      // Cancel pending long-press if the finger moved (user is scrolling)
+      if(pendingDragIdx.current!==null&&touchOrigin.current){
+        const dx=touch.clientX-touchOrigin.current.x;
+        const dy=touch.clientY-touchOrigin.current.y;
+        if(Math.abs(dx)>10||Math.abs(dy)>10) clearLongPress();
+      }
       if(dragIdxRef.current===null) return;
       e.preventDefault();
-      const touch=e.touches[0];
       const hit=document.elementFromPoint(touch.clientX,touch.clientY);
       const node=hit?.closest('[data-si]');
       if(node){
@@ -1011,62 +1102,99 @@ const SpreadNav = React.memo(function SpreadNav({spreads,current,onChange,onAddS
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[spreads]);
 
-  const handleTouchStart=(i:number)=>{
+  useEffect(()=>()=>clearLongPress(),[]);
+
+  const handleItemTouchStart=(i:number,e:React.TouchEvent)=>{
     if(!canMove(i)) return;
-    dragIdxRef.current=i; overIdxRef.current=null;
-    setDragIdx(i); setOverIdx(null);
+    const t=e.touches[0];
+    touchOrigin.current={x:t.clientX,y:t.clientY};
+    pendingDragIdx.current=i;
+    if(longPressTimer.current) clearTimeout(longPressTimer.current);
+    longPressTimer.current=setTimeout(()=>{
+      if(pendingDragIdx.current!==i) return;
+      dragIdxRef.current=i; overIdxRef.current=null;
+      setDragIdx(i); setOverIdx(null);
+      pendingDragIdx.current=null;
+      try { navigator.vibrate?.(10); } catch { /* ignore */ }
+    }, 450);
   };
-  const handleTouchEnd=()=>{
+  const handleItemTouchEnd=()=>{
+    const wasDragging=dragIdxRef.current!==null;
     const from=dragIdxRef.current; const to=overIdxRef.current;
-    if(from!==null&&to!==null&&from!==to) doReorder(from,to);
-    dragIdxRef.current=null; overIdxRef.current=null;
-    setDragIdx(null); setOverIdx(null);
+    clearLongPress();
+    if(wasDragging){
+      if(from!==null&&to!==null&&from!==to) doReorder(from,to);
+      dragIdxRef.current=null; overIdxRef.current=null;
+      setDragIdx(null); setOverIdx(null);
+    }
   };
 
   const onNavTouchStart=(e:React.TouchEvent)=>{
-    // Only record swipe start if not already doing a reorder drag
     if(dragIdxRef.current!==null) return;
-    swipeRef.current={x:e.touches[0].clientX,y:e.touches[0].clientY,t:Date.now()};
+    swipeRef.current={
+      x:e.touches[0].clientX,
+      y:e.touches[0].clientY,
+      t:Date.now(),
+      scrollLeft:scrollRef.current?.scrollLeft ?? 0,
+    };
   };
 
   const onNavTouchEnd=(e:React.TouchEvent)=>{
     if(!swipeRef.current||dragIdxRef.current!==null){swipeRef.current=null;return;}
-    const dx=e.changedTouches[0].clientX-swipeRef.current.x;
-    const dy=e.changedTouches[0].clientY-swipeRef.current.y;
-    const dt=Math.max(1,Date.now()-swipeRef.current.t);
+    const start=swipeRef.current;
     swipeRef.current=null;
-    // Must be more horizontal than vertical, and either quick or a short flick.
+    // If the strip scrolled, this was a scroll — don't also change page
+    const scrolled=Math.abs((scrollRef.current?.scrollLeft ?? 0) - start.scrollLeft);
+    if(scrolled>6) return;
+    const dx=e.changedTouches[0].clientX-start.x;
+    const dy=e.changedTouches[0].clientY-start.y;
+    const dt=Math.max(1,Date.now()-start.t);
     if(Math.abs(dx)<=Math.abs(dy)) return;
     const velocity=Math.abs(dx)/dt;
     if(Math.abs(dx)<36&&velocity<0.28) return;
-    if(dx<0&&current<spreads.length-1) onChange(current+1); // swipe left → next spread
-    else if(dx>0&&current>0)           onChange(current-1); // swipe right → prev spread
+    if(dx<0&&current<spreads.length-1) onChange(current+1);
+    else if(dx>0&&current>0)           onChange(current-1);
   };
 
   return (
     <div ref={scrollRef}
-      className="flex items-center justify-center gap-2 overflow-x-auto px-3 py-2.5 border-t border-neutral-200 flex-shrink-0"
-      style={{minHeight:68,background:'#F5F2EE',scrollbarWidth:'none'}}
+      className="spread-nav-scroll flex items-center gap-2 overflow-x-auto px-3 py-2.5 border-t border-neutral-200 flex-shrink-0"
+      style={{
+        minHeight:68,
+        background:'#F5F2EE',
+        scrollbarWidth:'none',
+        // Critical: allow native horizontal pan. justify-center was removed —
+        // ::before/::after below center content when it fits, without clipping scroll.
+        touchAction:'pan-x',
+        WebkitOverflowScrolling:'touch',
+        overscrollBehaviorX:'contain',
+      }}
       onTouchStart={onNavTouchStart}
-      onTouchEnd={onNavTouchEnd}>
+      onTouchEnd={onNavTouchEnd}
+      onTouchCancel={()=>{ clearLongPress(); swipeRef.current=null; }}
+    >
+      {/* Flex spacers: center when content is short; collapse when overflowing so ends are reachable */}
+      <style>{`
+        .spread-nav-scroll::-webkit-scrollbar { display: none; }
+        /* margin:auto spacers center when content fits; collapse to 0 when overflowing so first/last thumbs are fully reachable */
+        .spread-nav-scroll::before,
+        .spread-nav-scroll::after { content: ''; margin: auto; }
+      `}</style>
       {spreads.map((sp,i)=>{
         const movable=canMove(i);
         const isCurrent=i===current;
         const isDragging=dragIdx===i;
         const isOver=overIdx===i&&dragIdx!==null&&dragIdx!==i&&movable;
-        // Dropping here inserts the dragged page into the gap next to this
-        // thumbnail (shifting the pages in between), not on top of it —
-        // which side depends on drag direction (matches the splice-based
-        // reorder in reorderSpreads: forward drags land after the target,
-        // backward drags land before it).
         const insertAfter=isOver&&dragIdx!==null&&dragIdx<i;
         const insertBefore=isOver&&dragIdx!==null&&dragIdx>i;
 
-        // Helper: render a single page's scaled thumbnail
         const renderPageThumb=(page:PageDef|null,w:number,h:number)=>{
           if(!page) return <div style={{width:w,height:h,background:'#EAE5DC',flexShrink:0}}/>;
           const locked=page.role==='locked_left'||page.role==='locked_right';
-          if(locked) return <div style={{width:w,height:h,flexShrink:0,background:'#F0EBE2',backgroundImage:'repeating-linear-gradient(45deg,transparent,transparent 2px,rgba(90,74,58,0.10) 2px,rgba(90,74,58,0.10) 3px)'}}/>;
+          if(locked) return <div style={{
+            width:w, height:h, flexShrink:0, background:'#FFFFFF',
+            backgroundImage:'repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(0,0,0,0.06) 3px,rgba(0,0,0,0.06) 4px)',
+          }}/>;
           return <PageThumb elements={pagesContent[page.dbId]??[]} width={w} height={h} canvasH={canvasH}/>;
         };
 
@@ -1078,16 +1206,11 @@ const SpreadNav = React.memo(function SpreadNav({spreads,current,onChange,onAddS
           ? '0 0 0 2px #C09A55, 0 4px 14px rgba(192,154,85,0.32)'
           : '0 1px 3px rgba(0,0,0,0.12)';
 
-        // No scale-up on hover-to-drop — a size bump reads as "this tile is
-        // the target/replacement", whereas the inset line above reads as
-        // "the page will slide into the gap here".
         const scale=isCurrent?'scale(1.08)':'scale(1)';
 
-        // Thumb dimensions derived from the book's aspect ratio so square/landscape
-        // books never appear letterboxed or stretched in the navigator.
         const THUMB_SOLO_W=28, THUMB_PAIR_W=24;
         const thumbH=Math.round((sp.isSolo?THUMB_SOLO_W:THUMB_PAIR_W)*(canvasH/DESIGN_W));
-        const thumbContainerW=sp.isSolo?THUMB_SOLO_W:THUMB_SOLO_W+2+THUMB_PAIR_W; // 28 or 50
+        const thumbContainerW=sp.isSolo?THUMB_SOLO_W:THUMB_SOLO_W+2+THUMB_PAIR_W;
 
         return (
           <div
@@ -1095,18 +1218,16 @@ const SpreadNav = React.memo(function SpreadNav({spreads,current,onChange,onAddS
             data-si={i}
             className="flex-shrink-0 flex flex-col items-center gap-0.5 select-none"
             style={{opacity:isDragging?0.18:1,transition:'opacity 0.15s'}}
-            // Mouse drag
-            draggable={movable}
-            onDragStart={movable ? e=>{e.dataTransfer.effectAllowed='move';setDragIdx(i);dragIdxRef.current=i;} : undefined}
-            onDragOver={movable ? e=>{if(dragIdxRef.current!==null&&dragIdxRef.current!==i){e.preventDefault();e.dataTransfer.dropEffect='move';setOverIdx(i);}} : undefined}
-            onDragLeave={movable ? ()=>setOverIdx(o=>o===i?null:o) : undefined}
-            onDrop={movable ? e=>{e.preventDefault();if(dragIdxRef.current!==null&&dragIdxRef.current!==i)doReorder(dragIdxRef.current,i);setDragIdx(null);setOverIdx(null);dragIdxRef.current=null;} : undefined}
-            onDragEnd={()=>{setDragIdx(null);setOverIdx(null);dragIdxRef.current=null;}}
-            // Touch drag
-            onTouchStart={movable ? ()=>handleTouchStart(i) : undefined}
-            onTouchEnd={movable ? handleTouchEnd : undefined}
+            draggable={movable && allowMouseDrag}
+            onDragStart={movable && allowMouseDrag ? e=>{e.dataTransfer.effectAllowed='move';setDragIdx(i);dragIdxRef.current=i;} : undefined}
+            onDragOver={movable && allowMouseDrag ? e=>{if(dragIdxRef.current!==null&&dragIdxRef.current!==i){e.preventDefault();e.dataTransfer.dropEffect='move';setOverIdx(i);}} : undefined}
+            onDragLeave={movable && allowMouseDrag ? ()=>setOverIdx(o=>o===i?null:o) : undefined}
+            onDrop={movable && allowMouseDrag ? e=>{e.preventDefault();if(dragIdxRef.current!==null&&dragIdxRef.current!==i)doReorder(dragIdxRef.current,i);setDragIdx(null);setOverIdx(null);dragIdxRef.current=null;} : undefined}
+            onDragEnd={allowMouseDrag ? ()=>{setDragIdx(null);setOverIdx(null);dragIdxRef.current=null;} : undefined}
+            onTouchStart={movable ? (e)=>handleItemTouchStart(i,e) : undefined}
+            onTouchEnd={movable ? handleItemTouchEnd : undefined}
+            onTouchCancel={movable ? handleItemTouchEnd : undefined}
           >
-            {/* Thumbnail */}
             <button
               data-cur={String(isCurrent)}
               onClick={()=>onChange(i)}
@@ -1120,8 +1241,6 @@ const SpreadNav = React.memo(function SpreadNav({spreads,current,onChange,onAddS
               onMouseEnter={e=>{if(!isCurrent)(e.currentTarget as HTMLButtonElement).style.opacity='0.70';}}
               onMouseLeave={e=>{if(!isCurrent)(e.currentTarget as HTMLButtonElement).style.opacity='0.40';}}
             >
-              {/* Thumb height is derived from the book's aspect ratio (canvasH/DESIGN_W)
-                   so square and landscape books never appear letterboxed or stretched. */}
               <div style={{
                 width:thumbContainerW,height:thumbH,borderRadius:3,
                 overflow:'hidden',
@@ -1136,16 +1255,14 @@ const SpreadNav = React.memo(function SpreadNav({spreads,current,onChange,onAddS
                   ? renderPageThumb(sp.right??sp.left,THUMB_SOLO_W,thumbH)
                   : <>{renderPageThumb(sp.left,THUMB_PAIR_W,thumbH)}<div style={{width:2,flexShrink:0,background:'rgba(0,0,0,0.22)'}}/>{renderPageThumb(sp.right,THUMB_PAIR_W,thumbH)}</>
                 }
-                {/* Drag handle overlay for movable spreads */}
                 {movable && (
-                  <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.15)'}}>
+                  <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.15)',pointerEvents:'none'}}>
                     <span style={{fontSize:9,color:'rgba(255,255,255,0.9)',letterSpacing:'0.04em',lineHeight:1}}>⠿</span>
                   </div>
                 )}
               </div>
             </button>
 
-            {/* Label */}
             <span style={{
               fontSize:7,letterSpacing:'0.09em',textTransform:'uppercase',
               color:isCurrent?'#B8904A':'#B0A898',
@@ -1153,7 +1270,6 @@ const SpreadNav = React.memo(function SpreadNav({spreads,current,onChange,onAddS
               transition:'color 0.20s ease',
             }}>{sp.navLabel}</span>
 
-            {/* Active indicator pill */}
             <div style={{
               width:isCurrent?14:0,height:2,borderRadius:1,
               background:'linear-gradient(90deg,#C09A55,#E0BB7A)',
@@ -1164,7 +1280,6 @@ const SpreadNav = React.memo(function SpreadNav({spreads,current,onChange,onAddS
         );
       })}
 
-      {/* Add spread */}
       <button onClick={onAddSpread} disabled={addingSpread}
         title="Add 2 pages (1 spread)"
         className={`flex-shrink-0 flex flex-col items-center gap-0.5 transition-opacity ${addingSpread?'opacity-30':'opacity-50 hover:opacity-100'}`}>
@@ -1484,17 +1599,65 @@ function MobileSheet({tab,show,onClose,photos,onUpload,uploading,onAddPhoto,onLa
 
 function OrderModal({project,onClose,lang}: {project:any;onClose:()=>void;lang:'sq'|'en'}) {
   const createOrder=useCreateOrder();
-  const [orderId,setOrderId]=useState<number|null>(null);
+  const queryClient=useQueryClient();
+  const {getToken}=useAuth();
   const [st,setSt]=useState<'idle'|'loading'|'done'|'error'>('idle');
-  const whatsapp=useGetOrderWhatsapp(orderId??0,{query:{queryKey:getGetOrderWhatsappQueryKey(orderId??0),enabled:!!orderId}});
-  useEffect(()=>{
-    if (whatsapp.data?.url&&st==='loading'){window.open(whatsapp.data.url,'_blank');setSt('done');}
-  },[whatsapp.data,st]);
+  const [errMsg,setErrMsg]=useState<string>('');
+
   const go=async()=>{
+    if (st==='loading') return;
     setSt('loading');
-    try{const o=await createOrder.mutateAsync({data:{projectId:project.id}});setOrderId((o as any).id);}
-    catch{setSt('error');}
+    setErrMsg('');
+    // Open the tab synchronously inside the click gesture so popup blockers
+    // don't swallow WhatsApp after the async create-order round-trip.
+    const waTab=window.open('about:blank','_blank');
+    try{
+      const o=await createOrder.mutateAsync({data:{projectId:project.id}});
+      const id=(o as any)?.id;
+      if (!id) throw new Error('Order created but no id returned');
+
+      const token=getToken();
+      const headers:Record<string,string>={};
+      if (token) headers['Authorization']=`Bearer ${token}`;
+      const waRes=await fetch(`/api/orders/${id}/whatsapp?lang=${lang}`,{
+        headers,
+        credentials:'include',
+      });
+      if (!waRes.ok){
+        const body=await waRes.json().catch(()=>({}));
+        throw new Error((body as any)?.error || `WhatsApp link failed (${waRes.status})`);
+      }
+      const {url}=await waRes.json() as {url:string};
+      if (waTab && !waTab.closed) waTab.location.href=url;
+      else window.open(url,'_blank');
+
+      // Keep project lists / album status in sync for this client immediately.
+      void queryClient.invalidateQueries({queryKey:getGetProjectQueryKey(project.id)});
+      void queryClient.invalidateQueries({queryKey:getListProjectsQueryKey()});
+      void queryClient.invalidateQueries({queryKey:['/api/orders']});
+      void fetch('/api/analytics/track',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({event:'wp_click',path:`/orders/${id}`}),
+      }).catch(()=>{});
+
+      setSt('done');
+    }catch(e:any){
+      try{waTab?.close();}catch{/* ignore */}
+      const status=e?.status;
+      const apiErr=typeof e?.data?.error==='string'?e.data.error:null;
+      const msg=apiErr
+        || (typeof e?.message==='string'?e.message:null)
+        || (lang==='sq'?'Ndodhi një gabim.':'An error occurred.');
+      // Surface rate-limit / cap errors clearly — silent failures were why
+      // WhatsApp could open (or look like it did) without an admin order.
+      setErrMsg(status===429
+        ? (lang==='sq'?'Shumë kërkesa — provo përsëri pas pak.':'Too many requests — try again shortly.')
+        : msg);
+      setSt('error');
+    }
   };
+
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center" style={{background:'rgba(0,0,0,0.55)'}}>
       <motion.div initial={{y:60,opacity:0}} animate={{y:0,opacity:1}} exit={{y:60,opacity:0}}
@@ -1517,10 +1680,16 @@ function OrderModal({project,onClose,lang}: {project:any;onClose:()=>void;lang:'
           <div className="text-center py-3">
             <div className="w-11 h-11 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-2"><Check size={22} className="text-green-600"/></div>
             <p className="font-medium text-green-700 text-sm">{lang==='sq'?'Porosia u dërgua!':'Order sent via WhatsApp!'}</p>
-            <button onClick={onClose} className="mt-4 px-6 py-2 bg-neutral-900 text-white rounded-full text-sm">Close</button>
+            <p className="text-xs text-neutral-400 mt-1">{lang==='sq'?'Porosia u regjistrua në sistem.':'Your order is registered in the system.'}</p>
+            <button onClick={onClose} className="mt-4 px-6 py-2 bg-neutral-900 text-white rounded-full text-sm">{lang==='sq'?'Mbyll':'Close'}</button>
           </div>
         ):st==='error'?(
-          <p className="text-center text-red-500 text-sm py-2">{lang==='sq'?'Ndodhi një gabim.':'An error occurred.'}</p>
+          <div className="text-center py-2 space-y-3">
+            <p className="text-red-500 text-sm">{errMsg||(lang==='sq'?'Ndodhi një gabim.':'An error occurred.')}</p>
+            <button onClick={go} className="px-5 py-2 rounded-full text-sm bg-neutral-900 text-white">
+              {lang==='sq'?'Provo përsëri':'Try again'}
+            </button>
+          </div>
         ):(
           <>
             <button onClick={go} disabled={st==='loading'}
@@ -1743,25 +1912,6 @@ export default function Editor() {
       return next;
     });
   },[project?.pages]);
-
-  // Auto-apply a design chosen in the Wizard (first open of a fresh project).
-  // Runs once when pagesContent first populates — uses a ref guard so the
-  // effect never fires again, avoiding the pagesContent cascade.
-  const pagesLoadedOnce=useRef(false);
-  useEffect(()=>{
-    if (pagesLoadedOnce.current||autoAppliedRef.current) return;
-    if (Object.keys(pagesContent).length===0) return;
-    pagesLoadedOnce.current=true;
-    const designId=sessionStorage.getItem('wizard_initial_design');
-    sessionStorage.removeItem('wizard_initial_design');
-    autoAppliedRef.current=true;
-    if (!designId) return;
-    const allEmpty=Object.values(pagesContent).every(els=>!els?.length);
-    if (!allEmpty) return;
-    const design=DESIGNS.find(d=>d.id===designId);
-    if (design) applyDesign(design);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[Object.keys(pagesContent).length]);
 
   useEffect(()=>{
     const h=(e:KeyboardEvent)=>{
@@ -2122,27 +2272,44 @@ export default function Editor() {
     const ts=Date.now();
     const updates:Record<number,EditorElement[]>={};
 
-    // DESIGNS are authored against the 3:4 reference canvas — re-project onto
-    // this project's real canvas height before use (no-op for 3:4 books).
-    const projected=scaleElementsToCanvas(design.elements,canvasH);
+    // Wallpaper designs bake the picker photo onto covers — skip when the
+    // design already ships movable cover art (e.g. Paris tower / Barcelona).
+    const hasCoverArt = design.elements.some((e) => e.type === "image" && !!e.src);
+    const coverSource =
+      !hasCoverArt && design.thumbPhoto
+        ? elementsWithCoverWallpaper(design.elements, design.thumbPhoto)
+        : design.elements;
+    const coverProjected = scaleElementsToCanvas(coverSource, canvasH);
 
-    // Background element from the design (used on inner pages)
-    const bgEl=projected.find(e=>e.type==='background');
+    // Inner pages (and inside linings) are ALWAYS white — never inherit the
+    // cover color. Covers keep the design palette; everything else is paper.
+    const whiteBg: DE = {
+      type: "background",
+      x: 0,
+      y: 0,
+      w: DESIGN_W,
+      h: canvasH,
+      rotation: 0,
+      bgColor: "#FFFFFF",
+    };
 
     for (const page of allPages) {
-      if (page.role==='front_cover' || page.role==='back_cover') {
-        // Outside covers inherit the full chosen design (photos + text + shapes).
-        updates[page.dbId]=projected.map((el,i)=>({...el,id:`${design.id}-${page.dbId}-${i}-${ts}`}));
-      } else if (page.role==='locked_left' || page.role==='locked_right') {
-        // Inside lining pages stay non-editable; only sync background tint.
-        if (!bgEl) continue;
-        updates[page.dbId]=[{...bgEl,id:`${design.id}-${page.dbId}-bg-${ts}`}];
+      if (page.role === "front_cover" || page.role === "back_cover") {
+        updates[page.dbId] = coverProjected.map((el, i) => ({
+          ...el,
+          id: `${design.id}-${page.dbId}-${i}-${ts}`,
+        }));
+      } else if (page.role === "locked_left" || page.role === "locked_right") {
+        updates[page.dbId] = [
+          { ...whiteBg, id: `${design.id}-${page.dbId}-bg-${ts}` },
+        ];
       } else {
-        // Inner pages: replace existing background, keep photos/text
-        if (!bgEl) continue;
-        const current=liveContent.current[page.dbId]??[];
-        const withoutBg=current.filter(e=>e.type!=='background');
-        updates[page.dbId]=[{...bgEl,id:`${design.id}-${page.dbId}-bg-${ts}`},...withoutBg];
+        const current = liveContent.current[page.dbId] ?? [];
+        const withoutBg = current.filter((e) => e.type !== "background");
+        updates[page.dbId] = [
+          { ...whiteBg, id: `${design.id}-${page.dbId}-bg-${ts}` },
+          ...withoutBg,
+        ];
       }
     }
 
@@ -2154,6 +2321,53 @@ export default function Editor() {
     setDesignToast(name);
     setTimeout(()=>setDesignToast(null),2800);
   },[spreads,batchUpdatePages,lang,canvasH]);
+
+  /** Blank-canvas starter: white pages everywhere; gentle cover prompts only. */
+  const applyBlankStarter=useCallback(()=>{
+    const allPages=(spreads.flatMap(s=>[s.left,s.right]).filter(Boolean) as PageDef[]);
+    const ts=Date.now();
+    const updates:Record<number,EditorElement[]>={};
+    const whiteBg: DE = {
+      type: "background", x: 0, y: 0, w: DESIGN_W, h: canvasH, rotation: 0, bgColor: "#FFFFFF",
+    };
+    const front = scaleElementsToCanvas(blankFrontCoverElements(lang as 'sq'|'en'), canvasH);
+    const back = scaleElementsToCanvas(blankBackCoverElements(lang as 'sq'|'en'), canvasH);
+
+    for (const page of allPages) {
+      if (page.role === "front_cover") {
+        updates[page.dbId] = front.map((el, i) => ({ ...el, id: `blank-front-${page.dbId}-${i}-${ts}` }));
+      } else if (page.role === "back_cover") {
+        updates[page.dbId] = back.map((el, i) => ({ ...el, id: `blank-back-${page.dbId}-${i}-${ts}` }));
+      } else {
+        updates[page.dbId] = [
+          { ...whiteBg, id: `blank-${page.dbId}-bg-${ts}` },
+        ];
+      }
+    }
+
+    batchUpdatePages(updates);
+    setSelectedId(null);
+  },[spreads,batchUpdatePages,lang,canvasH]);
+
+  // Auto-apply a design chosen in the Wizard (first open of a fresh project).
+  const pagesLoadedOnce=useRef(false);
+  useEffect(()=>{
+    if (pagesLoadedOnce.current||autoAppliedRef.current) return;
+    if (Object.keys(pagesContent).length===0) return;
+    pagesLoadedOnce.current=true;
+    const designId=sessionStorage.getItem('wizard_initial_design');
+    sessionStorage.removeItem('wizard_initial_design');
+    autoAppliedRef.current=true;
+    const allEmpty=Object.values(pagesContent).every(els=>!els?.length);
+    if (!allEmpty) return;
+    if (!designId || designId === BLANK_STARTER_ID) {
+      applyBlankStarter();
+      return;
+    }
+    const design=DESIGNS.find(d=>d.id===designId);
+    if (design) applyDesign(design);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[Object.keys(pagesContent).length]);
 
   // Stable callback for MobileSheet — avoids an inline arrow in JSX that would
   // defeat React.memo on MobileSheet and recreate it on every render.
@@ -2353,35 +2567,87 @@ export default function Editor() {
         )}
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
 
-          {/* Mobile page arrows — only for 2-page spreads */}
+          {/* Mobile mini spread — tap left/right page to switch which side you're editing */}
           {isMobile && currentSpread && !currentSpread.isSolo && (
-            <div className="flex items-center justify-between flex-shrink-0 bg-white border-b border-neutral-100"
-              style={{height:38,paddingLeft:8,paddingRight:8}}>
-              <button
-                onClick={()=>{ setActiveSide('left'); setSelectedId(null); }}
-                className={`flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-                  activeSide==='left'
-                    ? 'text-neutral-300 active:bg-neutral-100'
-                    : 'bg-neutral-900 text-white'
-                }`}>
-                <ChevronLeft size={14}/>{lang==='sq'?'Faqja majtas':'Left Page'}
-              </button>
-
-              <span style={{fontSize:11,color:'#B0A898',letterSpacing:'0.06em',fontWeight:500}}>
-                {lang==='sq'
-                  ? `Faqja ${activeSide==='left'?'1':'2'} / 2`
-                  : `Page ${activeSide==='left'?'1':'2'} of 2`}
-              </span>
-
-              <button
-                onClick={()=>{ setActiveSide('right'); setSelectedId(null); }}
-                className={`flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-                  activeSide==='right'
-                    ? 'text-neutral-300 active:bg-neutral-100'
-                    : 'bg-neutral-900 text-white'
-                }`}>
-                {lang==='sq'?'Faqja djathtas':'Right Page'}<ChevronRight size={14}/>
-              </button>
+            <div
+              className="flex items-center justify-center flex-shrink-0 bg-white border-b border-neutral-100"
+              style={{ height: 72, padding: '8px 12px', gap: 0 }}
+            >
+              {(['left', 'right'] as const).map((side, i) => {
+                const page = side === 'left' ? currentSpread.left : currentSpread.right;
+                const active = activeSide === side;
+                const thumbH = 52;
+                const thumbW = Math.round(thumbH * (DESIGN_W / canvasH));
+                const locked = page?.role === 'locked_left' || page?.role === 'locked_right';
+                return (
+                  <React.Fragment key={side}>
+                    {i === 1 && (
+                      <div
+                        aria-hidden
+                        style={{
+                          width: 3,
+                          height: thumbH,
+                          flexShrink: 0,
+                          background: 'linear-gradient(to right, rgba(0,0,0,0.22), rgba(0,0,0,0.08), rgba(0,0,0,0.22))',
+                          margin: '0 1px',
+                        }}
+                      />
+                    )}
+                    <button
+                      type="button"
+                      disabled={!page}
+                      onClick={() => {
+                        if (!page) return;
+                        setActiveSide(side);
+                        setSelectedId(null);
+                      }}
+                      aria-label={side === 'left'
+                        ? (lang === 'sq' ? 'Faqja majtas' : 'Left page')
+                        : (lang === 'sq' ? 'Faqja djathtas' : 'Right page')}
+                      aria-pressed={active}
+                      className="relative flex-shrink-0 overflow-hidden transition-all active:scale-[0.97] disabled:opacity-40"
+                      style={{
+                        width: thumbW,
+                        height: thumbH,
+                        borderRadius: side === 'left' ? '3px 0 0 3px' : '0 3px 3px 0',
+                        boxShadow: active
+                          ? '0 0 0 2px #171717, 0 4px 12px rgba(0,0,0,0.18)'
+                          : '0 0 0 1px rgba(0,0,0,0.12)',
+                        opacity: active ? 1 : 0.5,
+                        zIndex: active ? 2 : 1,
+                      }}
+                    >
+                      {!page ? (
+                        <div style={{ width: '100%', height: '100%', background: '#EAE5DC' }} />
+                      ) : locked ? (
+                        <div style={{
+                          width: '100%', height: '100%', background: '#FFFFFF',
+                          backgroundImage: 'repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(0,0,0,0.06) 3px,rgba(0,0,0,0.06) 4px)',
+                        }} />
+                      ) : (
+                        <PageThumb
+                          elements={spreadContent[page.dbId] ?? []}
+                          width={thumbW}
+                          height={thumbH}
+                          canvasH={canvasH}
+                        />
+                      )}
+                      <span
+                        className="absolute bottom-0.5 left-1/2 -translate-x-1/2 px-1.5 py-[1px] rounded-full text-[8px] font-semibold uppercase tracking-wide"
+                        style={{
+                          background: active ? 'rgba(23,23,23,0.88)' : 'rgba(0,0,0,0.35)',
+                          color: '#fff',
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        {side === 'left'
+                          ? (lang === 'sq' ? 'Majtas' : 'Left')
+                          : (lang === 'sq' ? 'Djathtas' : 'Right')}
+                      </span>
+                    </button>
+                  </React.Fragment>
+                );
+              })}
             </div>
           )}
 

@@ -35,6 +35,7 @@ try {
 const { default: app } = await import("./app");
 const { seedSuperAdmin } = await import("./lib/seedSuperAdmin");
 const { seedCatalog } = await import("./lib/seedCatalog");
+const { backfillLastLoginAt } = await import("./lib/backfillLastLogin");
 
 app.listen(port, (err) => {
   if (err) {
@@ -44,7 +45,7 @@ app.listen(port, (err) => {
 
   logger.info({ port }, "Server listening");
 
-  Promise.all([seedCatalog(), seedSuperAdmin()]).catch((seedErr) => {
+  Promise.all([seedCatalog(), seedSuperAdmin(), backfillLastLoginAt()]).catch((seedErr) => {
     logger.error({ err: seedErr }, "Failed during startup seed");
   });
 });

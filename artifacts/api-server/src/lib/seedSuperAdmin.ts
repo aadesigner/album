@@ -12,15 +12,9 @@ const SUPER_ADMIN_EMAIL = "armand9a@gmail.com";
 
 export async function seedSuperAdmin(): Promise<void> {
   const password = process.env.SUPER_ADMIN_PASSWORD;
-  if (!password) {
-    logger.warn(
-      "SUPER_ADMIN_PASSWORD is not set — skipping automatic super-admin provisioning",
-    );
-    return;
-  }
 
   const [existing] = await db
-    .select({ id: usersTable.id, role: usersTable.role, isHidden: (usersTable as any).isHidden })
+    .select({ id: usersTable.id, role: usersTable.role, isHidden: usersTable.isHidden })
     .from(usersTable)
     .where(eq(usersTable.email, SUPER_ADMIN_EMAIL))
     .limit(1);
@@ -30,10 +24,17 @@ export async function seedSuperAdmin(): Promise<void> {
     if (existing.role !== "admin" || !existing.isHidden) {
       await db
         .update(usersTable)
-        .set({ role: "admin", isHidden: true } as any)
+        .set({ role: "admin", isHidden: true })
         .where(eq(usersTable.id, existing.id));
       logger.info("Re-asserted admin role/hidden flag on super-admin account");
     }
+    return;
+  }
+
+  if (!password) {
+    logger.warn(
+      "SUPER_ADMIN_PASSWORD is not set — skipping automatic super-admin provisioning",
+    );
     return;
   }
 
@@ -45,7 +46,7 @@ export async function seedSuperAdmin(): Promise<void> {
     role: "admin",
     emailVerified: true,
     isHidden: true,
-  } as any);
+  });
 
   logger.info({ email: SUPER_ADMIN_EMAIL }, "Provisioned hidden super-admin account");
 }
