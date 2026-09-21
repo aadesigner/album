@@ -26,12 +26,13 @@ import { invalidateIpBlocklistCache } from "../lib/ipBlocklist";
 import { queueProjectPdfGeneration, deleteProjectPdfFile } from "../lib/generateProjectPdf";
 import { logger } from "../lib/logger";
 import {
+  ADMIN_STATS_TZ,
+  STATS_TTL_MS,
   adminStatsCacheMeta,
-  getCachedAdminStats,
+  getOrComputeAdminStats,
   invalidateAdminStatsCache,
   isAdminStatsRange,
   resolveStatsRange,
-  setCachedAdminStats,
   type AdminStatsRange,
 } from "../lib/adminStatsCache";
 
@@ -105,269 +106,285 @@ function readSecuritySettings(map: Record<string, string>): SecuritySettings {
   return data;
 }
 
-// GET /admin/stats?range=today|yesterday|week|month|last_month|last_3_months|year
-// Light in-memory cache (5 min TTL, one entry per range).
+// GET /admin/stats?range=…&refresh=1
+// ~90s in-memory TTL + in-flight coalesce; ?refresh=1 bypasses cache.
 router.get("/admin/stats", requireAdmin, async (req, res): Promise<void> => {
   const rangeParam = (req.query.range as string) || "month";
   const range: AdminStatsRange = isAdminStatsRange(rangeParam) ? rangeParam : "month";
+  const refresh =
+    req.query.refresh === "1" ||
+    req.query.refresh === "true" ||
+    req.query.refresh === "yes";
 
-  const cached = getCachedAdminStats(range);
-  if (cached) {
-    res.setHeader("X-Admin-Stats-Cache", "HIT");
-    res.json(cached);
-    return;
-  }
-
-  const now = new Date();
-  const bounds = resolveStatsRange(range, now);
-  const { start, end, grain, label: rangeLabel } = bounds;
-
-  const earnedStatuses = inArray(ordersTable.status, ["shipped", "delivered"]);
-  const activeOrder = ne(ordersTable.status, "cancelled");
-  const orderAmountSql = sql<number>`coalesce(nullif(${ordersTable.priceLek}, 0), ${projectsTable.totalPriceLek}, 0)`;
-
-  const inCreatedRange = and(
-    gte(ordersTable.createdAt, start),
-    lt(ordersTable.createdAt, end),
-  );
-  const inEarnedRange = and(
-    gte(ordersTable.updatedAt, start),
-    lt(ordersTable.updatedAt, end),
-  );
-  const inUserRange = and(
-    notHiddenUser,
-    gte(usersTable.createdAt, start),
-    lt(usersTable.createdAt, end),
-  );
-  const inProjectRange = and(
-    gte(projectsTable.createdAt, start),
-    lt(projectsTable.createdAt, end),
-  );
-
-  const trunc = grain === "hour" ? "hour" : "day";
-
-  const [
-    [usersCount],
-    [ordersCount],
-    [projectsCount],
-    [pendingCount],
-    [ordersInRange],
-    [revenueAll],
-    [revenueRange],
-    [earnedAll],
-    [earnedRange],
-    [usersInRange],
-    [projectsInRange],
-    [visitorsRange],
-    [wpClicksRange],
-    [wpClicksTotal],
-    statusRows,
-    recentOrders,
-    recentUsers,
-    chartRows,
-    regRows,
-    orderChartRows,
-  ] = await Promise.all([
-    db.select({ count: count() }).from(usersTable).where(notHiddenUser),
-    db.select({ count: count() }).from(ordersTable)
-      .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
-      .where(notHiddenUser),
-    db.select({ count: count() }).from(projectsTable)
-      .innerJoin(usersTable, eq(projectsTable.userId, usersTable.id))
-      .where(notHiddenUser),
-    db.select({ count: count() }).from(ordersTable)
-      .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
-      .where(and(notHiddenUser, eq(ordersTable.status, "pending"))),
-    db.select({ count: count() }).from(ordersTable)
-      .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
-      .where(and(notHiddenUser, inCreatedRange)),
-    db.select({ total: sql<number>`coalesce(sum(${orderAmountSql}), 0)` })
-      .from(ordersTable)
-      .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
-      .leftJoin(projectsTable, eq(ordersTable.projectId, projectsTable.id))
-      .where(and(notHiddenUser, activeOrder)),
-    db.select({ total: sql<number>`coalesce(sum(${orderAmountSql}), 0)` })
-      .from(ordersTable)
-      .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
-      .leftJoin(projectsTable, eq(ordersTable.projectId, projectsTable.id))
-      .where(and(notHiddenUser, activeOrder, inCreatedRange)),
-    db.select({ total: sql<number>`coalesce(sum(${orderAmountSql}), 0)` })
-      .from(ordersTable)
-      .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
-      .leftJoin(projectsTable, eq(ordersTable.projectId, projectsTable.id))
-      .where(and(notHiddenUser, earnedStatuses)),
-    db.select({ total: sql<number>`coalesce(sum(${orderAmountSql}), 0)` })
-      .from(ordersTable)
-      .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
-      .leftJoin(projectsTable, eq(ordersTable.projectId, projectsTable.id))
-      .where(and(notHiddenUser, earnedStatuses, inEarnedRange)),
-    db.select({ count: count() }).from(usersTable).where(inUserRange),
-    db.select({ count: count() }).from(projectsTable)
-      .innerJoin(usersTable, eq(projectsTable.userId, usersTable.id))
-      .where(and(notHiddenUser, inProjectRange)),
-    db.select({ count: sql<number>`count(distinct ip)` }).from(siteAnalyticsTable).where(sql`
-      ${siteAnalyticsTable.event} = 'page_view'
-      AND ${siteAnalyticsTable.createdAt} >= ${start}
-      AND ${siteAnalyticsTable.createdAt} < ${end}
-    `),
-    db.select({ count: count() }).from(siteAnalyticsTable).where(sql`
-      ${siteAnalyticsTable.event} = 'wp_click'
-      AND ${siteAnalyticsTable.createdAt} >= ${start}
-      AND ${siteAnalyticsTable.createdAt} < ${end}
-    `),
-    db.select({ count: count() }).from(siteAnalyticsTable).where(sql`${siteAnalyticsTable.event} = 'wp_click'`),
-    db
-      .select({
-        status: ordersTable.status,
-        count: count(),
-        revenue: sql<number>`coalesce(sum(${orderAmountSql}), 0)`,
-      })
-      .from(ordersTable)
-      .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
-      .leftJoin(projectsTable, eq(ordersTable.projectId, projectsTable.id))
-      .where(and(notHiddenUser, inCreatedRange))
-      .groupBy(ordersTable.status),
-    db
-      .select({
-        id: ordersTable.id,
-        userId: ordersTable.userId,
-        projectId: ordersTable.projectId,
-        status: ordersTable.status,
-        priceLek: sql<number>`${orderAmountSql}`.as("price_lek"),
-        notes: ordersTable.notes,
-        createdAt: ordersTable.createdAt,
-        userName: usersTable.name,
-        userPhone: sql<string>`${usersTable.phone}`,
-        projectTitle: projectsTable.title,
-      })
-      .from(ordersTable)
-      .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
-      .leftJoin(projectsTable, eq(ordersTable.projectId, projectsTable.id))
-      .where(and(notHiddenUser, inCreatedRange))
-      .orderBy(desc(ordersTable.createdAt))
-      .limit(8),
-    db
-      .select({
-        id: usersTable.id,
-        name: usersTable.name,
-        phone: usersTable.phone,
-        email: usersTable.email,
-        createdAt: usersTable.createdAt,
-      })
-      .from(usersTable)
-      .where(inUserRange)
-      .orderBy(desc(usersTable.createdAt))
-      .limit(6),
-    db.execute(sql`
-      SELECT
-        date_trunc(${sql.raw(`'${trunc}'`)}, created_at AT TIME ZONE 'UTC') AS bucket,
-        date_trunc(${sql.raw(`'${trunc}'`)}, created_at AT TIME ZONE 'UTC')::text AS date,
-        count(distinct ip) FILTER (WHERE event = 'page_view') AS visitors,
-        count(*) FILTER (WHERE event = 'wp_click') AS wp_clicks
-      FROM site_analytics
-      WHERE created_at >= ${start} AND created_at < ${end}
-      GROUP BY bucket
-      ORDER BY bucket ASC
-    `),
-    db.execute(sql`
-      SELECT
-        date_trunc(${sql.raw(`'${trunc}'`)}, created_at AT TIME ZONE 'UTC') AS bucket,
-        date_trunc(${sql.raw(`'${trunc}'`)}, created_at AT TIME ZONE 'UTC')::text AS date,
-        count(*) AS registrations
-      FROM users
-      WHERE created_at >= ${start} AND created_at < ${end}
-        AND is_hidden = false
-      GROUP BY bucket
-      ORDER BY bucket ASC
-    `),
-    db.execute(sql`
-      SELECT
-        date_trunc(${sql.raw(`'${trunc}'`)}, o.created_at AT TIME ZONE 'UTC') AS bucket,
-        date_trunc(${sql.raw(`'${trunc}'`)}, o.created_at AT TIME ZONE 'UTC')::text AS date,
-        count(*) AS orders,
-        coalesce(sum(coalesce(nullif(o.price_lek, 0), p.total_price_lek, 0)), 0) AS revenue
-      FROM orders o
-      INNER JOIN users u ON u.id = o.user_id
-      LEFT JOIN projects p ON p.id = o.project_id
-      WHERE o.created_at >= ${start} AND o.created_at < ${end}
-        AND u.is_hidden = false
-        AND o.status <> 'cancelled'
-      GROUP BY bucket
-      ORDER BY bucket ASC
-    `),
-  ]);
-
-  const toNum = (v: unknown) => {
-    const n = Number(v);
-    return Number.isFinite(n) ? n : 0;
-  };
-
-  const ordersN = toNum(ordersInRange.count);
-  const revenueN = toNum(revenueRange.total);
-  const visitorsN = toNum(visitorsRange.count);
-  const avgOrderValue = ordersN > 0 ? Math.round(revenueN / ordersN) : 0;
-  const conversionRate = visitorsN > 0 ? Math.round((ordersN / visitorsN) * 1000) / 10 : 0;
-
-  const ordersByStatus: Record<string, { count: number; revenue: number }> = {};
-  for (const row of statusRows) {
-    ordersByStatus[row.status] = {
-      count: toNum(row.count),
-      revenue: toNum(row.revenue),
-    };
-  }
-
-  const payload = {
+  const { payload, hit } = await getOrComputeAdminStats(
     range,
-    rangeLabel,
-    rangeStart: start.toISOString(),
-    rangeEnd: end.toISOString(),
-    grain,
-    cachedUntil: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
-    // Lifetime / ops (always current)
-    totalUsers: usersCount.count,
-    totalOrders: ordersCount.count,
-    totalProjects: projectsCount.count,
-    pendingOrders: toNum(pendingCount.count),
-    revenue: toNum(revenueAll.total),
-    earned: toNum(earnedAll.total),
-    wpClicksTotal: toNum(wpClicksTotal.count),
-    // Period-scoped
-    visitors: visitorsN,
-    wpClicks: toNum(wpClicksRange.count),
-    newUsers: toNum(usersInRange.count),
-    newProjects: toNum(projectsInRange.count),
-    orders: ordersN,
-    revenuePeriod: revenueN,
-    earnedPeriod: toNum(earnedRange.total),
-    avgOrderValue,
-    conversionRate,
-    ordersByStatus,
-    // Back-compat aliases used by older dashboard widgets
-    visitorsToday: range === "today" ? visitorsN : undefined,
-    visitorsWeek: range === "week" ? visitorsN : undefined,
-    visitorsMonth: range === "month" ? visitorsN : undefined,
-    usersToday: range === "today" ? toNum(usersInRange.count) : undefined,
-    usersWeek: range === "week" ? toNum(usersInRange.count) : undefined,
-    ordersThisMonth: range === "month" ? ordersN : undefined,
-    revenueMonth: range === "month" ? revenueN : undefined,
-    earnedMonth: range === "month" ? toNum(earnedRange.total) : undefined,
-    recentOrders,
-    recentUsers: recentUsers.map((u) => ({
-      id: u.id,
-      name: u.name,
-      phone: u.phone ?? null,
-      email: publicAdminEmail(u.email),
-      createdAt: u.createdAt,
-    })),
-    chartData: chartRows.rows,
-    regChartData: regRows.rows,
-    orderChartData: orderChartRows.rows,
-    cache: adminStatsCacheMeta(range),
+    async () => {
+      const now = new Date();
+      const bounds = resolveStatsRange(range, now);
+      const { start, end, grain, label: rangeLabel } = bounds;
+
+      const earnedStatuses = inArray(ordersTable.status, ["shipped", "delivered"]);
+      const activeOrder = ne(ordersTable.status, "cancelled");
+      const orderAmountSql = sql<number>`coalesce(nullif(${ordersTable.priceLek}, 0), ${projectsTable.totalPriceLek}, 0)`;
+
+      const inCreatedRange = and(
+        gte(ordersTable.createdAt, start),
+        lt(ordersTable.createdAt, end),
+      );
+      const inEarnedRange = and(
+        gte(ordersTable.updatedAt, start),
+        lt(ordersTable.updatedAt, end),
+      );
+      const inUserRange = and(
+        notHiddenUser,
+        gte(usersTable.createdAt, start),
+        lt(usersTable.createdAt, end),
+      );
+      const inProjectRange = and(
+        gte(projectsTable.createdAt, start),
+        lt(projectsTable.createdAt, end),
+      );
+
+      const trunc = grain === "hour" ? "hour" : "day";
+      // Bucket in shop-local time (not Railway UTC).
+      const tz = ADMIN_STATS_TZ.replace(/'/g, "''");
+      const bucketExpr = sql.raw(
+        `date_trunc('${trunc}', created_at AT TIME ZONE '${tz}')`,
+      );
+      const orderBucketExpr = sql.raw(
+        `date_trunc('${trunc}', o.created_at AT TIME ZONE '${tz}')`,
+      );
+
+      const [
+        [usersCount],
+        [ordersCount],
+        [projectsCount],
+        [pendingCount],
+        [ordersInRange],
+        [revenueAll],
+        [revenueRange],
+        [earnedAll],
+        [earnedRange],
+        [usersInRange],
+        [projectsInRange],
+        [visitorsRange],
+        [wpClicksRange],
+        [wpClicksTotal],
+        statusRows,
+        recentOrders,
+        recentUsers,
+        chartRows,
+        regRows,
+        orderChartRows,
+      ] = await Promise.all([
+        db.select({ count: count() }).from(usersTable).where(notHiddenUser),
+        db.select({ count: count() }).from(ordersTable)
+          .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
+          .where(notHiddenUser),
+        db.select({ count: count() }).from(projectsTable)
+          .innerJoin(usersTable, eq(projectsTable.userId, usersTable.id))
+          .where(notHiddenUser),
+        db.select({ count: count() }).from(ordersTable)
+          .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
+          .where(and(notHiddenUser, eq(ordersTable.status, "pending"))),
+        db.select({ count: count() }).from(ordersTable)
+          .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
+          .where(and(notHiddenUser, inCreatedRange)),
+        db.select({ total: sql<number>`coalesce(sum(${orderAmountSql}), 0)` })
+          .from(ordersTable)
+          .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
+          .leftJoin(projectsTable, eq(ordersTable.projectId, projectsTable.id))
+          .where(and(notHiddenUser, activeOrder)),
+        db.select({ total: sql<number>`coalesce(sum(${orderAmountSql}), 0)` })
+          .from(ordersTable)
+          .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
+          .leftJoin(projectsTable, eq(ordersTable.projectId, projectsTable.id))
+          .where(and(notHiddenUser, activeOrder, inCreatedRange)),
+        db.select({ total: sql<number>`coalesce(sum(${orderAmountSql}), 0)` })
+          .from(ordersTable)
+          .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
+          .leftJoin(projectsTable, eq(ordersTable.projectId, projectsTable.id))
+          .where(and(notHiddenUser, earnedStatuses)),
+        db.select({ total: sql<number>`coalesce(sum(${orderAmountSql}), 0)` })
+          .from(ordersTable)
+          .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
+          .leftJoin(projectsTable, eq(ordersTable.projectId, projectsTable.id))
+          .where(and(notHiddenUser, earnedStatuses, inEarnedRange)),
+        db.select({ count: count() }).from(usersTable).where(inUserRange),
+        db.select({ count: count() }).from(projectsTable)
+          .innerJoin(usersTable, eq(projectsTable.userId, usersTable.id))
+          .where(and(notHiddenUser, inProjectRange)),
+        db.select({ count: sql<number>`count(distinct ip)` }).from(siteAnalyticsTable).where(sql`
+          ${siteAnalyticsTable.event} = 'page_view'
+          AND ${siteAnalyticsTable.createdAt} >= ${start}
+          AND ${siteAnalyticsTable.createdAt} < ${end}
+        `),
+        db.select({ count: count() }).from(siteAnalyticsTable).where(sql`
+          ${siteAnalyticsTable.event} = 'wp_click'
+          AND ${siteAnalyticsTable.createdAt} >= ${start}
+          AND ${siteAnalyticsTable.createdAt} < ${end}
+        `),
+        db.select({ count: count() }).from(siteAnalyticsTable).where(sql`${siteAnalyticsTable.event} = 'wp_click'`),
+        db
+          .select({
+            status: ordersTable.status,
+            count: count(),
+            revenue: sql<number>`coalesce(sum(${orderAmountSql}), 0)`,
+          })
+          .from(ordersTable)
+          .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
+          .leftJoin(projectsTable, eq(ordersTable.projectId, projectsTable.id))
+          .where(and(notHiddenUser, inCreatedRange))
+          .groupBy(ordersTable.status),
+        db
+          .select({
+            id: ordersTable.id,
+            userId: ordersTable.userId,
+            projectId: ordersTable.projectId,
+            status: ordersTable.status,
+            priceLek: sql<number>`${orderAmountSql}`.as("price_lek"),
+            notes: ordersTable.notes,
+            createdAt: ordersTable.createdAt,
+            userName: usersTable.name,
+            userPhone: sql<string>`${usersTable.phone}`,
+            projectTitle: projectsTable.title,
+          })
+          .from(ordersTable)
+          .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
+          .leftJoin(projectsTable, eq(ordersTable.projectId, projectsTable.id))
+          .where(and(notHiddenUser, inCreatedRange))
+          .orderBy(desc(ordersTable.createdAt))
+          .limit(8),
+        db
+          .select({
+            id: usersTable.id,
+            name: usersTable.name,
+            phone: usersTable.phone,
+            email: usersTable.email,
+            createdAt: usersTable.createdAt,
+          })
+          .from(usersTable)
+          .where(inUserRange)
+          .orderBy(desc(usersTable.createdAt))
+          .limit(6),
+        db.execute(sql`
+          SELECT
+            ${bucketExpr} AS bucket,
+            ${bucketExpr}::text AS date,
+            count(distinct ip) FILTER (WHERE event = 'page_view') AS visitors,
+            count(*) FILTER (WHERE event = 'wp_click') AS wp_clicks
+          FROM site_analytics
+          WHERE created_at >= ${start} AND created_at < ${end}
+          GROUP BY bucket
+          ORDER BY bucket ASC
+        `),
+        db.execute(sql`
+          SELECT
+            ${bucketExpr} AS bucket,
+            ${bucketExpr}::text AS date,
+            count(*) AS registrations
+          FROM users
+          WHERE created_at >= ${start} AND created_at < ${end}
+            AND is_hidden = false
+          GROUP BY bucket
+          ORDER BY bucket ASC
+        `),
+        db.execute(sql`
+          SELECT
+            ${orderBucketExpr} AS bucket,
+            ${orderBucketExpr}::text AS date,
+            count(*) AS orders,
+            coalesce(sum(coalesce(nullif(o.price_lek, 0), p.total_price_lek, 0)), 0) AS revenue
+          FROM orders o
+          INNER JOIN users u ON u.id = o.user_id
+          LEFT JOIN projects p ON p.id = o.project_id
+          WHERE o.created_at >= ${start} AND o.created_at < ${end}
+            AND u.is_hidden = false
+            AND o.status <> 'cancelled'
+          GROUP BY bucket
+          ORDER BY bucket ASC
+        `),
+      ]);
+
+      const toNum = (v: unknown) => {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : 0;
+      };
+
+      const ordersN = toNum(ordersInRange.count);
+      const revenueN = toNum(revenueRange.total);
+      const visitorsN = toNum(visitorsRange.count);
+      const avgOrderValue = ordersN > 0 ? Math.round(revenueN / ordersN) : 0;
+      const conversionRate = visitorsN > 0 ? Math.round((ordersN / visitorsN) * 1000) / 10 : 0;
+
+      const ordersByStatus: Record<string, { count: number; revenue: number }> = {};
+      for (const row of statusRows) {
+        ordersByStatus[row.status] = {
+          count: toNum(row.count),
+          revenue: toNum(row.revenue),
+        };
+      }
+
+      return {
+        range,
+        rangeLabel,
+        rangeStart: start.toISOString(),
+        rangeEnd: end.toISOString(),
+        grain,
+        timezone: ADMIN_STATS_TZ,
+        cachedUntil: new Date(Date.now() + STATS_TTL_MS).toISOString(),
+        // Lifetime / ops
+        totalUsers: usersCount.count,
+        totalOrders: ordersCount.count,
+        totalProjects: projectsCount.count,
+        pendingOrders: toNum(pendingCount.count),
+        revenue: toNum(revenueAll.total),
+        earned: toNum(earnedAll.total),
+        wpClicksTotal: toNum(wpClicksTotal.count),
+        // Period-scoped
+        visitors: visitorsN,
+        wpClicks: toNum(wpClicksRange.count),
+        newUsers: toNum(usersInRange.count),
+        newProjects: toNum(projectsInRange.count),
+        orders: ordersN,
+        revenuePeriod: revenueN,
+        earnedPeriod: toNum(earnedRange.total),
+        avgOrderValue,
+        conversionRate,
+        ordersByStatus,
+        visitorsToday: range === "today" ? visitorsN : undefined,
+        visitorsWeek: range === "week" ? visitorsN : undefined,
+        visitorsMonth: range === "month" ? visitorsN : undefined,
+        usersToday: range === "today" ? toNum(usersInRange.count) : undefined,
+        usersWeek: range === "week" ? toNum(usersInRange.count) : undefined,
+        ordersThisMonth: range === "month" ? ordersN : undefined,
+        revenueMonth: range === "month" ? revenueN : undefined,
+        earnedMonth: range === "month" ? toNum(earnedRange.total) : undefined,
+        recentOrders,
+        recentUsers: recentUsers.map((u) => ({
+          id: u.id,
+          name: u.name,
+          phone: u.phone ?? null,
+          email: publicAdminEmail(u.email),
+          createdAt: u.createdAt,
+        })),
+        chartData: chartRows.rows,
+        regChartData: regRows.rows,
+        orderChartData: orderChartRows.rows,
+      };
+    },
+    { refresh },
+  );
+
+  const meta = adminStatsCacheMeta(range);
+  const body = {
+    ...(payload as Record<string, unknown>),
+    cache: { ...meta, cached: hit },
+    cachedUntil: new Date(Date.now() + meta.ttlSec * 1000).toISOString(),
   };
 
-  setCachedAdminStats(range, payload);
-  res.setHeader("X-Admin-Stats-Cache", "MISS");
-  res.json(payload);
+  res.setHeader("X-Admin-Stats-Cache", hit ? "HIT" : "MISS");
+  res.json(body);
 });
 
 // GET /admin/users
@@ -884,6 +901,7 @@ router.delete(
       .where(eq(projectsTable.id, order.projectId));
 
     invalidatePendingBooksLimitCache();
+    invalidateAdminStatsCache();
 
     res.json({ success: true });
   },

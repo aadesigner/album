@@ -41,14 +41,48 @@ function notifyReady() {
   readyListeners.clear();
 }
 
-function injectStylesheet() {
-  if (typeof document === 'undefined') return;
-  if (document.getElementById(EDITOR_FONT_STYLESHEET_ID)) return;
-  const link = document.createElement('link');
-  link.id = EDITOR_FONT_STYLESHEET_ID;
-  link.rel = 'stylesheet';
-  link.href = EDITOR_FONTS_STYLESHEET;
-  document.head.appendChild(link);
+function injectStylesheet(): Promise<void> {
+  if (typeof document === 'undefined') return Promise.resolve();
+  const existing = document.getElementById(EDITOR_FONT_STYLESHEET_ID) as HTMLLinkElement | null;
+  if (existing) {
+    if (existing.dataset.loaded === '1') return Promise.resolve();
+    return new Promise(resolve => {
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        existing.dataset.loaded = '1';
+        resolve();
+      };
+      existing.addEventListener('load', finish, { once: true });
+      existing.addEventListener('error', finish, { once: true });
+      requestAnimationFrame(() => {
+        try {
+          if (existing.sheet) finish();
+        } catch { /* ignore */ }
+      });
+      // Safety: never block UI forever if events were missed.
+      setTimeout(finish, 2500);
+    });
+  }
+
+  return new Promise(resolve => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      link.dataset.loaded = '1';
+      resolve();
+    };
+    const link = document.createElement('link');
+    link.id = EDITOR_FONT_STYLESHEET_ID;
+    link.rel = 'stylesheet';
+    link.href = EDITOR_FONTS_STYLESHEET;
+    link.onload = finish;
+    link.onerror = finish;
+    document.head.appendChild(link);
+    setTimeout(finish, 2500);
+  });
 }
 
 /**
@@ -61,12 +95,7 @@ export function ensureEditorFonts(): Promise<void> {
   if (fontsPromise) return fontsPromise;
 
   fontsPromise = (async () => {
-    injectStylesheet();
-
-    // Give the <link> a moment to register @font-face rules before load().
-    await new Promise<void>(resolve => {
-      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-    });
+    await injectStylesheet();
 
     if (document.fonts?.load) {
       await Promise.all(

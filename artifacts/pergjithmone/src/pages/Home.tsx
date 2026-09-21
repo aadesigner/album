@@ -27,6 +27,9 @@ type AlbumStyle = {
   spine: string;
   img: string;
   ambient: string;
+  /** Soft paper wash for the starter section */
+  paper: string;
+  ink: string;
 };
 
 const ALBUM_STYLES: AlbumStyle[] = [
@@ -38,45 +41,69 @@ const ALBUM_STYLES: AlbumStyle[] = [
     spine: '#8B6F47',
     img: CAT_IMG_BY_SLUG.dasme,
     ambient: '#2a1810',
+    paper: '#F3EDE6',
+    ink: '#2A2218',
   },
   {
     key: 'udhetime',
     label: { sq: 'Udhëtime', en: 'Travel' },
     line: { sq: 'Aventurat tuaja, në faqe.', en: 'Your adventures, on the page.' },
     designId: 'paris-pink',
-    spine: '#2A4A20',
+    spine: '#C45A78',
     img: CAT_IMG_BY_SLUG.udhetime,
-    ambient: '#101810',
+    ambient: '#1a0e14',
+    paper: '#F8E8EE',
+    ink: '#3A1828',
   },
   {
     key: 'familje',
     label: { sq: 'Familje', en: 'Family' },
     line: { sq: 'Momentet e vogla, të mëdha.', en: 'Small moments, made lasting.' },
     designId: 'baby-ador',
-    spine: '#5C7A5A',
+    spine: '#6A8490',
     img: CAT_IMG_BY_SLUG.familje,
-    ambient: '#141816',
+    ambient: '#12181a',
+    paper: '#E8EEF0',
+    ink: '#1E2A30',
   },
   {
     key: 'miqesi',
     label: { sq: 'Miqësi', en: 'Friendship' },
     line: { sq: 'Historia juaj e dashurisë.', en: 'Your love story, bound.' },
     designId: 'the-wedding-of',
-    spine: '#1A2040',
+    spine: '#2A3A28',
     img: CAT_IMG.Çifte,
-    ambient: '#0e1220',
+    ambient: '#0c120e',
+    paper: '#E6EAE4',
+    ink: '#1A2218',
   },
   {
     key: 'festash',
     label: { sq: 'Festash', en: 'Celebrate' },
     line: { sq: 'Festat që nuk harrohen.', en: 'Celebrations you keep.' },
     designId: 'birthday-bloom',
-    spine: '#5C4030',
+    spine: '#C45A72',
     img: CAT_IMG_BY_SLUG.festash,
-    ambient: '#1a1210',
+    ambient: '#1a0e12',
+    paper: '#F6E6EA',
+    ink: '#2A1418',
   },
 ];
 
+/** Wider Unsplash crop for full-bleed hero BGs. */
+function heroBgUrl(src: string): string {
+  if (!src.includes('images.unsplash.com')) return src;
+  return src
+    .replace(/([?&])w=\d+/, '$1w=1600')
+    .replace(/([?&])q=\d+/, '$1q=82');
+}
+
+function starterWashUrl(src: string): string {
+  if (!src.includes('images.unsplash.com')) return src;
+  return src
+    .replace(/([?&])w=\d+/, '$1w=900')
+    .replace(/([?&])q=\d+/, '$1q=75');
+}
 const HERO_CYCLE_MS = 3400;
 
 function usePrefersReducedMotion() {
@@ -358,9 +385,11 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
     return () => clearTimeout(t);
   }, [idx, reduced, paused]);
 
-  // Prefetch next cover's layout assets
+  // Prefetch next cover layout + hero background
   useEffect(() => {
     const next = ALBUM_STYLES[(idx + 1) % ALBUM_STYLES.length];
+    const bg = new Image();
+    bg.src = heroBgUrl(next.img);
     const d = DESIGNS.find(x => x.id === next.designId);
     const els = d ? designFrontElements(d) : [];
     for (const el of els) {
@@ -370,6 +399,13 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
       }
     }
   }, [idx]);
+
+  useEffect(() => {
+    for (const s of ALBUM_STYLES) {
+      const img = new Image();
+      img.src = heroBgUrl(s.img);
+    }
+  }, []);
 
   const go = (d: number) => {
     setIdx(i => (i + d + ALBUM_STYLES.length) % ALBUM_STYLES.length);
@@ -396,50 +432,56 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
         go(dx < 0 ? 1 : -1);
       }}
     >
-      {/* Crossfading ambient field */}
+      {/* Full-bleed photo — matches selected album atmosphere */}
       <AnimatePresence mode="sync" initial={false}>
         <motion.div
-          key={`amb-${style.key}`}
+          key={`bg-${style.key}`}
           aria-hidden
           className="pointer-events-none absolute inset-0"
-          initial={reduced ? { opacity: 1 } : { opacity: 0 }}
-          animate={{ opacity: 1 }}
+          initial={reduced ? { opacity: 1 } : { opacity: 0, scale: 1.04 }}
+          animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: reduced ? 0 : 0.55, ease: 'easeOut' }}
+          transition={{ duration: reduced ? 0 : 0.7, ease: [0.22, 1, 0.36, 1] }}
           style={{
-            background: `radial-gradient(120% 85% at 72% 38%, ${style.ambient} 0%, #0a0908 52%, #050403 100%)`,
+            backgroundImage: `url(${heroBgUrl(style.img)})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
           }}
         />
       </AnimatePresence>
 
-      {/* Drifting color orbs */}
+      {/* Readable wash + ambient tint */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background: `
+            linear-gradient(105deg, rgba(6,5,4,0.88) 0%, rgba(6,5,4,0.55) 42%, rgba(6,5,4,0.28) 68%, rgba(6,5,4,0.5) 100%),
+            linear-gradient(to top, rgba(6,5,4,0.75) 0%, transparent 42%),
+            radial-gradient(90% 70% at 78% 40%, ${style.ambient}99 0%, transparent 62%)
+          `,
+          transition: 'background 0.55s ease',
+        }}
+      />
+
       {!reduced && (
         <>
           <div
             aria-hidden
-            className="hero-orb-a pointer-events-none absolute -top-[18%] right-[-8%] w-[70%] h-[70%] rounded-full opacity-50 blur-3xl"
-            style={{ background: `radial-gradient(circle, ${style.spine}66 0%, transparent 68%)` }}
+            className="hero-orb-a pointer-events-none absolute -top-[18%] right-[-8%] w-[55%] h-[55%] rounded-full opacity-35 blur-3xl"
+            style={{ background: `radial-gradient(circle, ${style.spine}55 0%, transparent 70%)` }}
           />
           <div
             aria-hidden
-            className="hero-orb-b pointer-events-none absolute bottom-[-22%] left-[-14%] w-[65%] h-[65%] rounded-full opacity-40 blur-3xl"
-            style={{ background: `radial-gradient(circle, ${style.ambient}aa 0%, transparent 70%)` }}
-          />
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0 opacity-[0.2]"
-            style={{
-              backgroundImage: `linear-gradient(115deg, transparent 40%, ${style.spine}22 50%, transparent 60%)`,
-              backgroundSize: '220% 220%',
-              animation: 'heroOrbDriftA 20s linear infinite',
-            }}
+            className="hero-orb-b pointer-events-none absolute bottom-[-20%] left-[-12%] w-[50%] h-[50%] rounded-full opacity-30 blur-3xl"
+            style={{ background: `radial-gradient(circle, ${style.paper}33 0%, transparent 70%)` }}
           />
         </>
       )}
 
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-[0.05]"
+        className="pointer-events-none absolute inset-0 opacity-[0.06]"
         style={{
           backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=\'0 0 200 200\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cfilter id=\'n\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'0.85\' numOctaves=\'3\' stitchTiles=\'stitch\'/%3E%3C/filter%3E%3Crect width=\'100%25\' height=\'100%25\' filter=\'url(%23n)\'/%3E%3C/svg%3E")',
           backgroundSize: '180px',
@@ -448,7 +490,6 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
 
       <div className="relative z-10 max-w-7xl mx-auto px-5 md:px-10 pt-8 pb-12 md:pt-16 md:pb-20 min-h-[inherit] flex flex-col justify-center">
         <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] gap-6 md:gap-8 md:items-center">
-          {/* Brand — always first */}
           <motion.p
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
@@ -458,7 +499,6 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
             Përgjithmonë
           </motion.p>
 
-          {/* Dominant 3D book — second on mobile so it sits in first viewport */}
           <div className="order-2 md:order-none md:col-start-2 md:row-start-1 md:row-span-2 flex flex-col items-center justify-center py-1 md:py-0">
             <LivingAlbumBook style={style} size="hero" />
             <div className="mt-5 flex items-center gap-4 md:hidden">
@@ -480,7 +520,6 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
             </div>
           </div>
 
-          {/* Headline + CTA */}
           <div className="order-3 md:col-start-1 text-center md:text-left">
             <div className="h-[3.2em] md:h-[3.6em] relative mb-3 md:mb-4 overflow-hidden">
               <AnimatePresence mode="wait" initial={false}>
@@ -490,17 +529,17 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
                   transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-                  className="absolute inset-x-0 md:inset-x-auto top-0 font-serif text-[clamp(1.35rem,3.4vw,2rem)] text-white/88 leading-[1.2] font-medium"
+                  className="absolute inset-x-0 md:inset-x-auto top-0 font-serif text-[clamp(1.35rem,3.4vw,2rem)] text-white/90 leading-[1.2] font-medium"
                 >
                   {style.line[lang]}
                 </motion.h1>
               </AnimatePresence>
             </div>
 
-            <p className="text-[13px] md:text-[14.5px] text-white/50 max-w-md mx-auto md:mx-0 leading-relaxed mb-6 md:mb-8">
+            <p className="text-[13px] md:text-[14.5px] text-white/48 max-w-sm mx-auto md:mx-0 leading-relaxed mb-6 md:mb-8">
               {lang === 'sq'
-                ? 'Albume fotografike premium — dizajnoni online, printohen me cilësi galerie, mbërrijnë në derën tuaj.'
-                : 'Premium photo books — design online, printed at gallery quality, delivered to your door.'}
+                ? 'Dizajnoni online. Printohen me cilësi galerie.'
+                : 'Design online. Printed at gallery quality.'}
             </p>
 
             <div className="flex flex-wrap items-center justify-center md:justify-start gap-3">
@@ -548,6 +587,7 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
 }
 
 function AlbumStarter({ lang }: { lang: 'sq' | 'en' }) {
+  const reduced = usePrefersReducedMotion();
   const [idx, setIdx] = useState(0);
   const style = ALBUM_STYLES[idx];
   const href = `/krijo?category=${encodeURIComponent(style.key)}&design=${encodeURIComponent(style.designId)}`;
@@ -561,134 +601,164 @@ function AlbumStarter({ lang }: { lang: 'sq' | 'en' }) {
     return map;
   }, []);
 
+  useEffect(() => {
+    for (const s of ALBUM_STYLES) {
+      const img = new Image();
+      img.src = starterWashUrl(s.img);
+    }
+  }, []);
+
   return (
-    <section className="relative bg-[#f3efe9] overflow-hidden">
+    <section
+      className="relative overflow-hidden"
+      style={{
+        background: style.paper,
+        transition: 'background 0.55s ease',
+      }}
+    >
+      {/* Soft photo atmosphere — selected album mood */}
+      <AnimatePresence mode="sync" initial={false}>
+        <motion.div
+          key={`wash-${style.key}`}
+          aria-hidden
+          className="pointer-events-none absolute inset-0"
+          initial={reduced ? { opacity: 0.22 } : { opacity: 0 }}
+          animate={{ opacity: 0.22 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: reduced ? 0 : 0.5 }}
+          style={{
+            backgroundImage: `url(${starterWashUrl(style.img)})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            filter: 'saturate(0.85)',
+          }}
+        />
+      </AnimatePresence>
       <div
         aria-hidden
-        className="pointer-events-none absolute -top-24 right-[-10%] w-[55%] h-[55%] rounded-full opacity-40 blur-3xl"
+        className="pointer-events-none absolute inset-0"
         style={{
-          background: `radial-gradient(circle, ${style.spine}33, transparent 70%)`,
-          transition: 'background 0.45s ease',
+          background: `linear-gradient(180deg, ${style.paper}f2 0%, ${style.paper}d9 45%, ${style.paper}f5 100%)`,
+          transition: 'background 0.55s ease',
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-32 right-[-8%] w-[48%] h-[70%] rounded-full blur-3xl opacity-50"
+        style={{
+          background: `radial-gradient(circle, ${style.spine}28, transparent 68%)`,
+          transition: 'background 0.55s ease',
         }}
       />
 
-      <div className="relative max-w-7xl mx-auto px-5 md:px-10 pt-14 pb-16 md:pt-20 md:pb-24">
-        <div className="grid grid-cols-1 lg:grid-cols-[0.85fr_1.15fr] gap-10 lg:gap-14 items-center">
-          {/* Live book preview */}
-          <div className="flex flex-col items-center lg:items-start">
-            <LivingAlbumBook style={style} size="starter" interactive={false} />
-            <p className="mt-5 text-[11px] tracking-[0.18em] uppercase text-neutral-400 text-center lg:text-left">
-              {lang === 'sq' ? 'pamja e kopertinës' : 'cover preview'}
-              <span className="mx-2 text-neutral-300">·</span>
-              <span className="text-neutral-600 normal-case tracking-normal font-medium">
-                {style.label[lang]}
-              </span>
-            </p>
-          </div>
-
-          <div>
-            <p className="text-[10px] uppercase tracking-[0.32em] text-neutral-400 mb-3">
-              {lang === 'sq' ? 'hapi 1 nga 2' : 'step 1 of 2'}
-            </p>
-            <h2 className="font-serif text-[clamp(1.75rem,3.5vw,2.75rem)] text-neutral-900 font-medium leading-[1.15] mb-3">
-              {lang === 'sq' ? 'Çfarë po krijoni sot?' : 'What are you creating today?'}
-            </h2>
-            <p className="text-[14px] text-neutral-500 max-w-md leading-relaxed mb-6">
-              {lang === 'sq'
-                ? 'Zgjidhni llojin e albumit. Hapeni me atë stil — pastaj shtoni fotot tuaja.'
-                : 'Choose your album type. It opens with that style — then you add your photos.'}
-            </p>
-
-            {/* Occasion cards with real cover thumbs */}
-            <div
-              role="listbox"
-              aria-label={lang === 'sq' ? 'Lloji i albumit' : 'Album type'}
-              className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 mb-7"
+      <div className="relative max-w-3xl mx-auto px-5 md:px-8 pt-16 pb-16 md:pt-20 md:pb-24">
+        <div className="text-center mb-10 md:mb-12">
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={style.key}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.28 }}
             >
-              {ALBUM_STYLES.map((s, i) => {
-                const active = i === idx;
-                const els = coverElsById[s.designId] || [];
-                return (
-                  <button
-                    key={s.key}
-                    type="button"
-                    role="option"
-                    aria-selected={active}
-                    onClick={() => setIdx(i)}
-                    className="group relative text-left rounded-2xl overflow-hidden transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/40"
-                    style={{
-                      border: active ? '2px solid #1a1a1a' : '1px solid rgba(26,26,26,0.1)',
-                      background: active ? '#fff' : 'rgba(255,255,255,0.55)',
-                      boxShadow: active ? '0 12px 28px rgba(0,0,0,0.1)' : 'none',
-                      transform: active ? 'translateY(-1px)' : undefined,
-                    }}
-                  >
-                    <div className="relative aspect-[3/4] bg-[#ebe6de] overflow-hidden">
-                      {els.length > 0 ? (
-                        <ResponsivePageThumb elements={els} className="absolute inset-0" />
-                      ) : (
-                        <div className="absolute inset-0" style={{ background: s.spine }} />
-                      )}
-                      {active && (
-                        <span className="absolute top-2 right-2 w-5 h-5 rounded-full bg-[#1a1a1a] text-white flex items-center justify-center text-[10px] font-bold shadow-sm">
-                          ✓
-                        </span>
-                      )}
-                    </div>
-                    <div className="px-2.5 py-2.5">
-                      <span className="block font-serif text-[14px] text-neutral-900 leading-tight">
-                        {s.label[lang]}
-                      </span>
-                      <span className="block text-[10px] text-neutral-400 mt-0.5 leading-snug line-clamp-2">
-                        {s.line[lang]}
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+              <p
+                className="text-[10px] uppercase tracking-[0.28em] mb-3"
+                style={{ color: `${style.ink}66` }}
+              >
+                {style.label[lang]}
+              </p>
+              <h2
+                className="font-serif text-[clamp(1.85rem,4vw,2.65rem)] font-medium leading-[1.15] mb-3"
+                style={{ color: style.ink }}
+              >
+                {lang === 'sq' ? 'Çfarë po krijoni sot?' : 'What are you creating today?'}
+              </h2>
+              <p
+                className="text-[14px] max-w-md mx-auto leading-relaxed"
+                style={{ color: `${style.ink}99` }}
+              >
+                {style.line[lang]}
+              </p>
+            </motion.div>
+          </AnimatePresence>
+        </div>
 
-            <div className="rounded-2xl border border-neutral-200/80 bg-white/70 p-4 sm:p-5">
-              <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-                <div className="flex-1 min-w-0">
-                  <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-400 mb-1">
-                    {lang === 'sq' ? 'hapi 2' : 'step 2'}
-                  </p>
-                  <p className="text-[14px] text-neutral-800 font-medium leading-snug">
-                    {lang === 'sq'
-                      ? `Fillo albumin “${style.label.sq}”`
-                      : `Start your “${style.label.en}” album`}
-                  </p>
-                  <p className="text-[12px] text-neutral-500 mt-1 leading-snug">
-                    {lang === 'sq'
-                      ? 'Editori hapet me këtë kopertinë. Fotot i shtoni menjëherë.'
-                      : 'The editor opens with this cover. Add your photos next.'}
-                  </p>
+        {/* Compact cover strip — no heavy cards */}
+        <div
+          role="listbox"
+          aria-label={lang === 'sq' ? 'Lloji i albumit' : 'Album type'}
+          className="flex justify-center gap-3 sm:gap-4 mb-10 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-thin"
+        >
+          {ALBUM_STYLES.map((s, i) => {
+            const active = i === idx;
+            const els = coverElsById[s.designId] || [];
+            return (
+              <button
+                key={s.key}
+                type="button"
+                role="option"
+                aria-selected={active}
+                onClick={() => setIdx(i)}
+                className="group shrink-0 flex flex-col items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-800/30 rounded-md"
+              >
+                <div
+                  className="relative overflow-hidden transition-all duration-250"
+                  style={{
+                    width: active ? 76 : 64,
+                    height: active ? 102 : 86,
+                    borderRadius: 4,
+                    boxShadow: active
+                      ? `0 14px 32px ${style.spine}33, 0 0 0 1.5px ${style.ink}`
+                      : '0 4px 14px rgba(0,0,0,0.08)',
+                    opacity: active ? 1 : 0.72,
+                    transform: active ? 'translateY(-2px)' : undefined,
+                  }}
+                >
+                  {els.length > 0 ? (
+                    <ResponsivePageThumb elements={els} className="absolute inset-0" />
+                  ) : (
+                    <div className="absolute inset-0" style={{ background: s.spine }} />
+                  )}
                 </div>
-                <Link href={href} className="shrink-0">
-                  <motion.button
-                    whileTap={{ scale: 0.97 }}
-                    className="w-full sm:w-auto px-7 py-3.5 bg-[#1a1a1a] text-white rounded-full text-[12.5px] font-semibold shadow-md shadow-black/10"
-                  >
-                    {lang === 'sq' ? 'Fillo tani →' : 'Start now →'}
-                  </motion.button>
-                </Link>
-              </div>
-            </div>
+                <span
+                  className="text-[11px] tracking-wide transition-colors"
+                  style={{
+                    color: active ? style.ink : `${style.ink}66`,
+                    fontWeight: active ? 600 : 400,
+                  }}
+                >
+                  {s.label[lang]}
+                </span>
+              </button>
+            );
+          })}
+        </div>
 
-            <p className="mt-4 text-[12px] text-neutral-400">
-              {lang === 'sq' ? 'Ose ' : 'Or '}
-              <Link href="/krijo" className="text-neutral-700 underline underline-offset-2 hover:text-neutral-900">
-                {lang === 'sq' ? 'shfletoni të gjitha stilet' : 'browse all styles'}
-              </Link>
-            </p>
-          </div>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+          <Link href={href}>
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              className="px-9 py-3.5 text-white text-[12.5px] font-semibold rounded-full shadow-lg"
+              style={{
+                background: style.ink,
+                boxShadow: `0 12px 28px ${style.spine}33`,
+              }}
+            >
+              {lang === 'sq' ? `Fillo — ${style.label.sq}` : `Start — ${style.label.en}`}
+            </motion.button>
+          </Link>
+          <Link
+            href="/krijo"
+            className="text-[12.5px] underline underline-offset-4 decoration-black/15 hover:decoration-black/40 transition-colors"
+            style={{ color: `${style.ink}88` }}
+          >
+            {lang === 'sq' ? 'të gjitha stilet' : 'all styles'}
+          </Link>
         </div>
       </div>
     </section>
   );
 }
-
 // ── Data ───────────────────────────────────────────────────────────────────────
 
 type HomeCategoryCard = {

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { AdminLayout, ADMIN, useAdminTheme } from '@/components/layout/AdminLayout';
 import { useListAdminOrders, useUpdateAdminOrder } from '@workspace/api-client-react-tsconfig';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -270,20 +270,26 @@ export default function AdminDashboard() {
   const { theme } = useAdminTheme();
   const { getToken } = useAuth();
   const [range, setRange] = useState<RangeId>('month');
+  const forceRefresh = useRef(false);
 
   const { data: stats, isLoading, isFetching, dataUpdatedAt, refetch } = useQuery({
     queryKey: ['admin-stats', range],
     queryFn: async () => {
       const token = getToken();
-      const res = await fetch(`${BASE}/api/admin/stats?range=${range}`, {
+      const refresh = forceRefresh.current;
+      forceRefresh.current = false;
+      const qs = new URLSearchParams({ range });
+      if (refresh) qs.set('refresh', '1');
+      const res = await fetch(`${BASE}/api/admin/stats?${qs}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         credentials: 'include',
       });
       if (!res.ok) throw new Error('Failed to load stats');
       return res.json();
     },
-    staleTime: 5 * 60 * 1000,
-    refetchInterval: 5 * 60 * 1000,
+    // Light client cache — server already TTL-caches ~90s; avoid double 5-min lag.
+    staleTime: 60_000,
+    refetchInterval: 2 * 60_000,
     refetchOnWindowFocus: false,
   });
 
@@ -309,11 +315,17 @@ export default function AdminDashboard() {
   }, [s?.ordersByStatus]);
 
   const xInterval = chartData.length > 40 ? Math.floor(chartData.length / 8) : chartData.length > 14 ? 2 : 0;
-  const cacheHint = s?.cachedUntil
-    ? `Cached · refreshes ${format(new Date(s.cachedUntil), 'HH:mm')}`
+  const fromCache = Boolean(s?.cache?.cached);
+  const cacheHint = fromCache && s?.cachedUntil
+    ? `Cached · fresh until ${format(new Date(s.cachedUntil), 'HH:mm:ss')}`
     : dataUpdatedAt
-      ? `Updated ${format(new Date(dataUpdatedAt), 'HH:mm')}`
+      ? `Updated ${format(new Date(dataUpdatedAt), 'HH:mm:ss')}`
       : 'Live';
+
+  const handleRefresh = () => {
+    forceRefresh.current = true;
+    void refetch();
+  };
 
   return (
     <AdminLayout>
@@ -338,7 +350,7 @@ export default function AdminDashboard() {
             </span>
             <button
               type="button"
-              onClick={() => refetch()}
+              onClick={handleRefresh}
               disabled={isFetching}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium disabled:opacity-50"
               style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: theme.radius, color: theme.ink }}

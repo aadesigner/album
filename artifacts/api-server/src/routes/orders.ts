@@ -7,6 +7,7 @@ import { queueProjectPdfGeneration } from "../lib/generateProjectPdf";
 import { logger } from "../lib/logger";
 import { getSecuritySettings } from "../lib/securitySettings";
 import { findEmptyInnerPageNumbers } from "../lib/projectEditGuard";
+import { invalidateAdminStatsCache } from "../lib/adminStatsCache";
 
 const router: IRouter = Router();
 
@@ -112,6 +113,7 @@ router.post("/orders", requireAuth, async (req, res): Promise<void> => {
     logger.error({ err, projectId, orderId: order.id }, "Failed to queue PDF generation for order"),
   );
 
+  invalidateAdminStatsCache();
   res.status(201).json(order);
 });
 

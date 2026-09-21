@@ -1,7 +1,10 @@
 /**
  * Admin dashboard stats — period ranges + a tiny in-process TTL cache.
- * Cap is one entry per range (~7), each payload is a few KB of aggregates.
- * Never grows with traffic; no Redis required.
+ *
+ * Goals:
+ * - Keep Albania-local day/week boundaries correct (Europe/Tirane)
+ * - Short TTL so numbers stay fresh without hammering Postgres
+ * - Cap at one entry per range; coalesce concurrent misses (no stampede)
  */
 
 export const ADMIN_STATS_RANGES = [
@@ -20,44 +23,89 @@ export function isAdminStatsRange(v: unknown): v is AdminStatsRange {
   return typeof v === "string" && (ADMIN_STATS_RANGES as readonly string[]).includes(v);
 }
 
+/** Shop timezone — ranges and chart buckets follow this, not Railway UTC. */
+export const ADMIN_STATS_TZ = "Europe/Tirane";
+
+/** ~90s is enough to blunt refresh spam; short enough to feel live. */
+export const STATS_TTL_MS = 90_000;
+
 export type RangeBounds = {
-  /** Inclusive start */
+  /** Inclusive start (UTC instant of local midnight) */
   start: Date;
   /** Exclusive end */
   end: Date;
-  /** Human label */
   label: string;
-  /** Chart grain */
   grain: "hour" | "day";
-  /** Approx points expected (for filling) */
   expectedPoints: number;
 };
 
-function startOfDay(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+type CalParts = { year: number; month: number; day: number };
+
+function calendarPartsInTz(date: Date, timeZone: string): CalParts & { hour: number } {
+  const f = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    hourCycle: "h23",
+  });
+  const map: Record<string, string> = {};
+  for (const p of f.formatToParts(date)) {
+    if (p.type !== "literal") map[p.type] = p.value;
+  }
+  return {
+    year: Number(map.year),
+    month: Number(map.month),
+    day: Number(map.day),
+    hour: Number(map.hour),
+  };
 }
 
-function addDays(d: Date, n: number): Date {
-  const x = new Date(d);
-  x.setDate(x.getDate() + n);
-  return x;
+/** UTC instant for local midnight of the calendar day containing `date` in `timeZone`. */
+export function startOfZonedDay(date: Date, timeZone: string = ADMIN_STATS_TZ): Date {
+  const { year, month, day } = calendarPartsInTz(date, timeZone);
+  let guess = Date.UTC(year, month - 1, day, 12, 0, 0);
+  for (let i = 0; i < 4; i++) {
+    const p = calendarPartsInTz(new Date(guess), timeZone);
+    const asLocal = Date.UTC(p.year, p.month - 1, p.day, p.hour, 0, 0);
+    const wantLocal = Date.UTC(year, month - 1, day, 0, 0, 0);
+    guess += wantLocal - asLocal;
+  }
+  return new Date(guess);
 }
 
-function addMonths(d: Date, n: number): Date {
-  return new Date(d.getFullYear(), d.getMonth() + n, 1);
+function addZonedDays(date: Date, n: number, timeZone: string = ADMIN_STATS_TZ): Date {
+  const { year, month, day } = calendarPartsInTz(date, timeZone);
+  const noonUtc = new Date(Date.UTC(year, month - 1, day + n, 12, 0, 0));
+  return startOfZonedDay(noonUtc, timeZone);
 }
 
-/** Monday-start calendar week containing `d`. */
-function startOfWeekMon(d: Date): Date {
-  const day = startOfDay(d);
-  const dow = day.getDay(); // 0 Sun … 6 Sat
+function startOfZonedMonth(date: Date, timeZone: string = ADMIN_STATS_TZ): Date {
+  const { year, month } = calendarPartsInTz(date, timeZone);
+  const noonUtc = new Date(Date.UTC(year, month - 1, 1, 12, 0, 0));
+  return startOfZonedDay(noonUtc, timeZone);
+}
+
+function addZonedMonths(date: Date, n: number, timeZone: string = ADMIN_STATS_TZ): Date {
+  const { year, month } = calendarPartsInTz(date, timeZone);
+  const noonUtc = new Date(Date.UTC(year, month - 1 + n, 1, 12, 0, 0));
+  return startOfZonedDay(noonUtc, timeZone);
+}
+
+/** Monday-start week in Tirane. */
+function startOfZonedWeekMon(date: Date, timeZone: string = ADMIN_STATS_TZ): Date {
+  const dayStart = startOfZonedDay(date, timeZone);
+  // weekday in that zone: 0 Sun … 6 Sat via UTC noon probe
+  const { year, month, day } = calendarPartsInTz(dayStart, timeZone);
+  const dow = new Date(Date.UTC(year, month - 1, day, 12, 0, 0)).getUTCDay();
   const offset = dow === 0 ? 6 : dow - 1;
-  return addDays(day, -offset);
+  return addZonedDays(dayStart, -offset, timeZone);
 }
 
 export function resolveStatsRange(range: AdminStatsRange, now = new Date()): RangeBounds {
-  const today = startOfDay(now);
-  const tomorrow = addDays(today, 1);
+  const today = startOfZonedDay(now);
+  const tomorrow = addZonedDays(today, 1);
 
   switch (range) {
     case "today":
@@ -70,7 +118,7 @@ export function resolveStatsRange(range: AdminStatsRange, now = new Date()): Ran
       };
     case "yesterday":
       return {
-        start: addDays(today, -1),
+        start: addZonedDays(today, -1),
         end: today,
         label: "Yesterday",
         grain: "hour",
@@ -78,7 +126,7 @@ export function resolveStatsRange(range: AdminStatsRange, now = new Date()): Ran
       };
     case "week":
       return {
-        start: startOfWeekMon(now),
+        start: startOfZonedWeekMon(now),
         end: tomorrow,
         label: "This week",
         grain: "day",
@@ -86,15 +134,15 @@ export function resolveStatsRange(range: AdminStatsRange, now = new Date()): Ran
       };
     case "month":
       return {
-        start: new Date(now.getFullYear(), now.getMonth(), 1),
+        start: startOfZonedMonth(now),
         end: tomorrow,
         label: "This month",
         grain: "day",
         expectedPoints: 31,
       };
     case "last_month": {
-      const start = addMonths(today, -1);
-      const end = new Date(now.getFullYear(), now.getMonth(), 1);
+      const start = addZonedMonths(today, -1);
+      const end = startOfZonedMonth(now);
       return {
         start,
         end,
@@ -105,25 +153,30 @@ export function resolveStatsRange(range: AdminStatsRange, now = new Date()): Ran
     }
     case "last_3_months":
       return {
-        start: addMonths(new Date(now.getFullYear(), now.getMonth(), 1), -2),
+        start: addZonedMonths(startOfZonedMonth(now), -2),
         end: tomorrow,
         label: "Last 3 months",
         grain: "day",
         expectedPoints: 92,
       };
-    case "year":
+    case "year": {
+      const { year } = calendarPartsInTz(now, ADMIN_STATS_TZ);
+      const start = startOfZonedDay(new Date(Date.UTC(year, 0, 1, 12, 0, 0)));
       return {
-        start: new Date(now.getFullYear(), 0, 1),
+        start,
         end: tomorrow,
         label: "This year",
         grain: "day",
         expectedPoints: 366,
       };
+    }
   }
 }
 
-const STATS_TTL_MS = 5 * 60 * 1000;
-const cache = new Map<string, { expires: number; payload: unknown }>();
+type CacheEntry = { expires: number; payload: unknown };
+
+const cache = new Map<AdminStatsRange, CacheEntry>();
+const inflight = new Map<AdminStatsRange, Promise<unknown>>();
 
 export function getCachedAdminStats(range: AdminStatsRange): unknown | null {
   const hit = cache.get(range);
@@ -136,17 +189,54 @@ export function getCachedAdminStats(range: AdminStatsRange): unknown | null {
 }
 
 export function setCachedAdminStats(range: AdminStatsRange, payload: unknown): void {
-  // Hard cap: never more than one entry per known range.
   cache.set(range, { expires: Date.now() + STATS_TTL_MS, payload });
 }
 
-/** Drop all period caches (e.g. after an order status change). */
+/** Drop all period caches after order/user mutations. */
 export function invalidateAdminStatsCache(): void {
   cache.clear();
 }
 
-export function adminStatsCacheMeta(range: AdminStatsRange): { cached: boolean; ttlSec: number } {
+export function adminStatsCacheMeta(range: AdminStatsRange): {
+  cached: boolean;
+  ttlSec: number;
+  ttlMs: number;
+} {
   const hit = cache.get(range);
-  if (!hit || Date.now() > hit.expires) return { cached: false, ttlSec: 0 };
-  return { cached: true, ttlSec: Math.max(0, Math.round((hit.expires - Date.now()) / 1000)) };
+  if (!hit || Date.now() > hit.expires) {
+    return { cached: false, ttlSec: 0, ttlMs: STATS_TTL_MS };
+  }
+  const ttlSec = Math.max(0, Math.round((hit.expires - Date.now()) / 1000));
+  return { cached: true, ttlSec, ttlMs: STATS_TTL_MS };
+}
+
+/**
+ * Serve from cache, or run `compute` once per range while others await
+ * (prevents N concurrent heavy stats queries when TTL expires).
+ */
+export async function getOrComputeAdminStats(
+  range: AdminStatsRange,
+  compute: () => Promise<unknown>,
+  opts?: { refresh?: boolean },
+): Promise<{ payload: unknown; hit: boolean }> {
+  if (opts?.refresh) {
+    cache.delete(range);
+  } else {
+    const cached = getCachedAdminStats(range);
+    if (cached) return { payload: cached, hit: true };
+  }
+
+  let pending = inflight.get(range);
+  if (!pending) {
+    pending = (async () => {
+      const payload = await compute();
+      setCachedAdminStats(range, payload);
+      return payload;
+    })().finally(() => {
+      inflight.delete(range);
+    });
+    inflight.set(range, pending);
+  }
+
+  return { payload: await pending, hit: false };
 }

@@ -170,20 +170,25 @@ describe("front/back design helpers", () => {
     expect(designBackElements(patched)[1].text).toBe("OV-B");
   });
 
-  it("ignores stale place-photo wallpaper overrides on typographic city covers", () => {
+  it("keeps city photo layouts on built-in travel covers", () => {
     const rome = DESIGNS.find((d) => d.id === "rome");
     expect(rome).toBeTruthy();
-    expect(rome!.thumbPhoto).toBeUndefined();
-    const stale = [
-      { type: "background" as const, x: 0, y: 0, w: DESIGN_W, h: DESIGN_H, rotation: 0, bgColor: "#000", src: "/designs/rome-cover-thumb.jpg" },
+    expect(rome!.thumbPhoto).toBe("/designs/rome-cover-thumb.jpg");
+    expect(designFrontElements(rome!).some((e) => e.type === "image" && e.src?.includes("rome-cover-thumb"))).toBe(true);
+  });
+
+  it("applies admin overrides that include city photos", () => {
+    const rome = DESIGNS.find((d) => d.id === "rome")!;
+    const withPhoto = [
+      { type: "background" as const, x: 0, y: 0, w: DESIGN_W, h: DESIGN_H, rotation: 0, bgColor: "#000" },
+      { type: "image" as const, x: 0, y: 0, w: DESIGN_W, h: DESIGN_H, rotation: 0, src: "/designs/rome-cover-thumb.jpg" },
       { type: "text" as const, x: 0, y: 0, w: 100, h: 40, rotation: 0, text: "ROME" },
     ];
     const [patched] = applyDesignOverrides(
-      [rome!],
-      { rome: { frontElements: stale, backElements: stale } },
+      [rome],
+      { rome: { frontElements: withPhoto, backElements: withPhoto } },
     );
-    expect(designFrontElements(patched)).toEqual(rome!.elements);
-    expect(designFrontElements(patched).some((e) => e.src?.includes("cover-thumb"))).toBe(false);
+    expect(designFrontElements(patched).some((e) => e.src?.includes("cover-thumb"))).toBe(true);
   });
 
   it("rejects malformed custom designs", () => {

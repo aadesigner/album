@@ -102,7 +102,9 @@ export const PageThumb = React.memo(function PageThumb({
                 whiteSpace: 'pre-wrap',
                 padding: 6,
                 boxSizing: 'border-box',
-                opacity: el.opacity ?? 1,
+                // Hold text until webfonts land — avoids Great Vibes FOUT on hero/wedding covers.
+                opacity: fontsReady ? (el.opacity ?? 1) : 0,
+                transition: fontsReady ? 'opacity 0.18s ease' : undefined,
                 transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
                 transformOrigin: 'top left',
               }}>
