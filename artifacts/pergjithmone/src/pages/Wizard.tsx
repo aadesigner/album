@@ -7,20 +7,37 @@ import { useLocation } from 'wouter';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Link } from 'wouter';
-import { DB_CAT_TO_DESIGN_CAT, DESIGN_CATEGORY_LABELS, mergeDesignMetas, resolveDesignCategory, type DesignMeta } from '@/lib/designMeta';
-import { BLANK_STARTER_ID, parseCustomDesigns } from '@/lib/designs';
+import { DB_CAT_TO_DESIGN_CAT, DESIGN_CATEGORY_LABELS, resolveDesignCategory } from '@/lib/designMeta';
+import {
+  BLANK_STARTER_ID, parseCustomDesigns, buildDesignCatalog,
+  designFrontElements, type DesignDef, type DesignOverrides,
+} from '@/lib/designs';
+import { ResponsivePageThumb } from '@/components/PageThumb';
 import { SEOMeta } from '@/components/SEOMeta';
 import { useToast } from '@/hooks/use-toast';
 import { getCategoryImage } from '@/lib/categoryImages';
 import { createProjectErrorMessage } from '@/lib/projectErrors';
+import { ensureEditorFonts } from '@/lib/editorFonts';
 
-/** Warm the browser cache for design picker thumbs (no full cover render). */
-function preloadDesignThumbs(designs: DesignMeta[]) {
+/** Prefetch cover image assets used by the visible design cards. */
+function preloadDesignAssets(designs: DesignDef[]) {
+  const seen = new Set<string>();
   for (const d of designs) {
-    if (!d.thumbPhoto) continue;
-    const img = new Image();
-    img.decoding = 'async';
-    img.src = d.thumbPhoto;
+    for (const el of designFrontElements(d)) {
+      const src = el.src || (el.type === 'background' ? el.src : undefined);
+      if (!src || seen.has(src)) continue;
+      if (src.startsWith('data:')) continue;
+      seen.add(src);
+      const img = new Image();
+      img.decoding = 'async';
+      img.src = src;
+    }
+    if (d.thumbPhoto && !seen.has(d.thumbPhoto)) {
+      seen.add(d.thumbPhoto);
+      const img = new Image();
+      img.decoding = 'async';
+      img.src = d.thumbPhoto;
+    }
   }
 }
 
@@ -118,13 +135,11 @@ export function SizeCard({ size, isSelected, onClick, lang, t }: any) {
   );
 }
 
-// ── Design card thumbnail ─────────────────────────────────────────────────────
-// Lightweight meta thumb (photo/color + label) — NOT full PageThumb.
-// Rendering every cover with ResizeObserver + webfonts + full images made the
-// picker feel slow after picking a category.
+// ── Design card — real cover layout (same elements as Design Studio / Editor)
 function DesignCard({ design, isSelected, lang, onClick }: {
-  design: DesignMeta; isSelected: boolean; lang: 'sq' | 'en'; onClick: () => void;
+  design: DesignDef; isSelected: boolean; lang: 'sq' | 'en'; onClick: () => void;
 }) {
+  const els = useMemo(() => designFrontElements(design) as any, [design]);
   return (
     <button
       type="button"
@@ -132,36 +147,17 @@ function DesignCard({ design, isSelected, lang, onClick }: {
       className="relative flex flex-col items-center gap-2 group focus:outline-none w-full transition-transform duration-150 hover:-translate-y-0.5 active:scale-[0.97]"
     >
       <div
-        className={`relative w-full overflow-hidden rounded-2xl transition-shadow duration-150 ${
+        className={`relative w-full overflow-hidden rounded-2xl bg-white transition-shadow duration-150 ${
           isSelected
             ? 'ring-2 ring-neutral-900 shadow-xl'
             : 'ring-1 ring-neutral-200 hover:ring-neutral-400 hover:shadow-md'
         }`}
-        style={{ aspectRatio: '3/4', ...design.thumb }}
+        style={{ aspectRatio: '3/4' }}
       >
-        {design.thumbPhoto ? (
-          <img
-            src={design.thumbPhoto}
-            alt=""
-            loading="lazy"
-            decoding="async"
-            className="absolute inset-0 w-full h-full object-cover"
-          />
-        ) : null}
-        {design.thumbAccents.map((style, i) => (
-          <div key={i} style={{ position: 'absolute', ...style }} />
-        ))}
-        {design.thumbLabel ? (
-          <span
-            className="absolute bottom-2 left-1 right-1 text-center text-[10px] font-bold tracking-[0.14em] text-white"
-            style={{ textShadow: '0 1px 4px rgba(0,0,0,0.55)' }}
-          >
-            {design.thumbLabel}
-          </span>
-        ) : null}
+        <ResponsivePageThumb elements={els} className="absolute inset-0" />
 
         {isSelected && (
-          <div className="absolute inset-0 bg-black/10 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/10 flex items-center justify-center pointer-events-none">
             <div className="w-8 h-8 rounded-full bg-neutral-900 flex items-center justify-center shadow-md">
               <Check size={13} className="text-white" />
             </div>
@@ -198,15 +194,22 @@ export default function Wizard() {
   const bookCreationEnabled = siteSettings?.bookCreationEnabled !== false;
   const hiddenDesignIds: string[] = siteSettings?.hiddenDesignIds || [];
 
-  const allDesignMetas = useMemo(
-    () => mergeDesignMetas(parseCustomDesigns(siteSettings?.customDesigns)),
-    [siteSettings?.customDesigns],
+  const designOverrides = useMemo(() => {
+    const raw = siteSettings?.designOverrides;
+    return (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw as DesignOverrides : {};
+  }, [siteSettings?.designOverrides]);
+
+  const designCatalog = useMemo(
+    () => buildDesignCatalog(designOverrides, parseCustomDesigns(siteSettings?.customDesigns)),
+    [designOverrides, siteSettings?.customDesigns],
   );
 
-  // Prefetch all picker thumbs once — category switch then feels instant.
+  useEffect(() => { void ensureEditorFonts(); }, []);
+
+  // Prefetch assets for the full catalog once (category switch then feels instant).
   useEffect(() => {
     let cancelled = false;
-    const run = () => { if (!cancelled) preloadDesignThumbs(allDesignMetas); };
+    const run = () => { if (!cancelled) preloadDesignAssets(designCatalog); };
     let idleId: number | undefined;
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
     if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
@@ -219,7 +222,7 @@ export default function Wizard() {
       if (idleId != null && 'cancelIdleCallback' in window) window.cancelIdleCallback(idleId);
       if (timeoutId != null) clearTimeout(timeoutId);
     };
-  }, [allDesignMetas]);
+  }, [designCatalog]);
 
   // Home category cards deep-link to cover/style selection via ?category=slug
   // Showcase albums also pass ?design=id so the cover is pre-highlighted.
@@ -229,9 +232,9 @@ export default function Wizard() {
     const slug = (params.get('category') || '').trim().toLowerCase();
     const designId = (params.get('design') || '').trim();
 
-    if (designId && allDesignMetas.some(d => d.id === designId)) {
+    if (designId && designCatalog.some(d => d.id === designId)) {
       setSelectedDesignId(designId);
-      const designCat = allDesignMetas.find(d => d.id === designId)?.category;
+      const designCat = designCatalog.find(d => d.id === designId)?.category;
       if (designCat) {
         const match = (categories as any[]).find((c: any) =>
           DB_CAT_TO_DESIGN_CAT[c.nameAl] === designCat
@@ -257,7 +260,7 @@ export default function Wizard() {
       setStep(2);
     }
     setPreselectDone(true);
-  }, [categories, loadingCat, preselectDone, allDesignMetas]);
+  }, [categories, loadingCat, preselectDone, designCatalog]);
 
   // Map selected DB category → design category → filter designs
   const selectedCat = useMemo(() => {
@@ -269,12 +272,12 @@ export default function Wizard() {
     // Never fall back to ALL designs — that dumped travel cities into parties
     // whenever the DB category name didn't exact-match the map.
     const base = designCategoryKey
-      ? allDesignMetas.filter(d => d.category === designCategoryKey)
+      ? designCatalog.filter(d => d.category === designCategoryKey)
       : [];
     return hiddenDesignIds.length > 0
       ? base.filter(d => !hiddenDesignIds.includes(d.id))
       : base;
-  }, [designCategoryKey, hiddenDesignIds, allDesignMetas]);
+  }, [designCategoryKey, hiddenDesignIds, designCatalog]);
   const designCategoryLabel = designCategoryKey
     ? (DESIGN_CATEGORY_LABELS[designCategoryKey]?.[lang] || designCategoryKey)
     : (lang === 'sq' ? 'Të gjitha stilet' : 'All styles');
@@ -287,7 +290,7 @@ export default function Wizard() {
     if (catId !== 'blank') {
       const cat = (categories as any[])?.find((c: any) => c.id === catId);
       const key = resolveDesignCategory(cat);
-      if (key) preloadDesignThumbs(allDesignMetas.filter(d => d.category === key));
+      if (key) preloadDesignAssets(designCatalog.filter(d => d.category === key));
     }
     // Blank canvas skips the style step entirely.
     setStep(catId === 'blank' ? 3 : 2);

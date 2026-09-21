@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo, useDeferredValue, startTransition } from 'react';
 import { Stage, Layer, Rect, Text as KonvaText, Image as KonvaImage, Transformer, Line, Group } from 'react-konva';
-import { useGetProject, useCreateOrder, useListBookSizes, useGetAppSettings, getGetProjectQueryKey, getListProjectsQueryKey } from '@workspace/api-client-react-tsconfig';
+import { useGetProject, useCreateOrder, useListBookSizes, useGetAppSettings, useListLayouts, getGetProjectQueryKey, getListProjectsQueryKey } from '@workspace/api-client-react-tsconfig';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, ShoppingBag, LayoutTemplate, Image as ImageIcon, Type,
@@ -46,7 +46,7 @@ import {
   BLANK_STARTER_ID, blankFrontCoverElements, blankBackCoverElements,
   coverCropRect, imageFrameCoverFit, imageFrameFocusFromOffset,
   designFrontElements, designBackElements, buildDesignCatalog, parseCustomDesigns,
-  type EditorElement, type DE, type DesignDef, type LayoutZone, type DesignOverrides,
+  type EditorElement, type DE, type DesignDef, type LayoutZone, type LayoutDef, type DesignOverrides,
 } from '@/lib/designs';
 import { DESIGN_METAS } from '@/lib/designMeta';
 import { PageThumb } from '@/components/PageThumb';
@@ -57,6 +57,60 @@ import { useEditorFontsReady, ensureEditorFonts } from '@/lib/editorFonts';
 const PAPER_COLOR = '#FEFDF9';
 const SPINE_W = 1;
 const PAPER_TEXTURE = `url("data:image/svg+xml,<svg viewBox='0 0 300 300' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/></filter><rect width='300' height='300' filter='url(%23n)'/></svg>")`;
+
+/** Survives React Strict Mode remount so wizard design isn't applied twice / lost. */
+const consumedWizardDesignKeys = new Set<string>();
+
+/** Parse admin layout grid JSON into editor LayoutDef zones. */
+function parseAdminLayoutZones(json: string): LayoutZone[] {
+  try {
+    const parsed = JSON.parse(json);
+    const raw = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray(parsed?.cells)
+        ? parsed.cells
+        : Array.isArray(parsed?.zones)
+          ? parsed.zones
+          : [];
+    return raw
+      .map((c: any) => ({
+        x: Number(c.x) || 0,
+        y: Number(c.y) || 0,
+        w: Math.max(0.05, Number(c.w) || 0.2),
+        h: Math.max(0.05, Number(c.h) || 0.2),
+        type: c.type === 'text' ? 'text' : 'photo',
+        ...(typeof c.rotation === 'number' ? { rotation: c.rotation } : {}),
+      }))
+      .filter((c: LayoutZone) => c.w > 0 && c.h > 0);
+  } catch {
+    return [];
+  }
+}
+
+function mergeEditorLayouts(dbLayouts: { slug: string; nameAl: string; nameEn: string; gridDefinitionJson: string; isActive: boolean }[] | undefined): LayoutDef[] {
+  const byId = new Map<string, LayoutDef>(LAYOUTS.map(l => [l.id, l]));
+  for (const row of dbLayouts || []) {
+    if (!row.isActive) continue;
+    const zones = parseAdminLayoutZones(row.gridDefinitionJson);
+    if (!zones.length) continue;
+    const photoCount = zones.filter(z => z.type === 'photo').length;
+    const hasText = zones.some(z => z.type === 'text');
+    let category = 'Custom';
+    if (photoCount <= 1 && !hasText) category = '1 Photo';
+    else if (photoCount <= 1 && hasText) category = 'Photo + Text';
+    else if (photoCount === 2) category = '2 Photos';
+    else if (photoCount === 3) category = '3 Photos';
+    else if (photoCount === 4) category = '4 Photos';
+    else if (photoCount >= 5) category = '5-6 Photos';
+    byId.set(row.slug, {
+      id: row.slug,
+      category,
+      label: { sq: row.nameAl, en: row.nameEn },
+      zones,
+    });
+  }
+  return [...byId.values()];
+}
 
 /** Live clamp while dragging so elements don't jump on release. */
 function dragBoundBox(pos: { x: number; y: number }, w: number, h: number, canvasH: number) {
@@ -2382,11 +2436,12 @@ function DesignsPanel({onApply, lang, designs}: {
 // Desktop Sidebar
 // ─────────────────────────────────────────────────────────────────────────────
 
-function Sidebar({tab,onTab,photos,onUpload,uploading,onAddPhoto,onAddText,onLayout,onApplyDesign,selectedId,onDelete,lang,designs}: {
+function Sidebar({tab,onTab,photos,onUpload,uploading,onAddPhoto,onAddText,onLayout,onApplyDesign,selectedId,onDelete,lang,designs,layouts}: {
   tab:SideTab; onTab:(t:SideTab)=>void; photos:string[]; onUpload:(f:File)=>void; uploading:boolean;
   onAddPhoto:(url:string)=>void; onAddText:(s?:{fontSize?:number;fontStyle?:string;align?:'left'|'center'|'right'})=>void; onLayout:(id:string)=>void;
   onApplyDesign:(d:DesignDef)=>void; selectedId:string|null; onDelete:()=>void; lang:'sq'|'en';
   designs: DesignDef[];
+  layouts: LayoutDef[];
 }) {
   const fileRef=useRef<HTMLInputElement>(null);
   return (
@@ -2411,13 +2466,13 @@ function Sidebar({tab,onTab,photos,onUpload,uploading,onAddPhoto,onAddText,onLay
             <p className="text-[9px] uppercase tracking-widest text-neutral-400 mb-3">
               {lang==='sq'?'Apliko në faqen aktive':'Apply to active page'}
             </p>
-            {[...new Set(LAYOUTS.map(l=>l.category))].map(cat=>(
+            {[...new Set(layouts.map(l=>l.category))].map(cat=>(
               <div key={cat} className="pb-4">
                 <p className="text-[9px] uppercase tracking-widest text-neutral-500 font-semibold mb-2.5">
                   {(LAYOUT_CATEGORY_LABELS[cat]?.[lang]) ?? cat}
                 </p>
                 <div className="grid grid-cols-3 gap-2">
-                  {LAYOUTS.filter(l=>l.category===cat).map(l=>(
+                  {layouts.filter(l=>l.category===cat).map(l=>(
                     <button key={l.id} onClick={()=>onLayout(l.id)}
                       className="flex flex-col items-center gap-1.5 p-2 rounded-xl border border-neutral-200 hover:border-neutral-700 hover:bg-neutral-50 transition-all group outline-none">
                       <LayoutThumb zones={l.zones}/>
@@ -2494,11 +2549,12 @@ function Sidebar({tab,onTab,photos,onUpload,uploading,onAddPhoto,onAddText,onLay
 // Mobile Bottom Sheet
 // ─────────────────────────────────────────────────────────────────────────────
 
-function MobileSheet({tab,show,onClose,photos,onUpload,uploading,onAddPhoto,onLayout,onAddText,onApplyDesign,lang,designs}: {
+function MobileSheet({tab,show,onClose,photos,onUpload,uploading,onAddPhoto,onLayout,onAddText,onApplyDesign,lang,designs,layouts}: {
   tab:SideTab; show:boolean; onClose:()=>void; photos:string[]; onUpload:(f:File)=>void; uploading:boolean;
   onAddPhoto:(url:string)=>void; onLayout:(id:string)=>void; onAddText:(s?:{fontSize?:number;fontStyle?:string;align?:'left'|'center'|'right'})=>void;
   onApplyDesign:(d:DesignDef)=>void; lang:'sq'|'en';
   designs: DesignDef[];
+  layouts: LayoutDef[];
 }) {
   const fileRef=useRef<HTMLInputElement>(null);
   return (
@@ -2541,13 +2597,13 @@ function MobileSheet({tab,show,onClose,photos,onUpload,uploading,onAddPhoto,onLa
             )}
             {tab==='layouts' && (
               <div className="space-y-4">
-                {[...new Set(LAYOUTS.map(l=>l.category))].map(cat=>(
+                {[...new Set(layouts.map(l=>l.category))].map(cat=>(
                   <div key={cat}>
                     <p className="text-[9px] uppercase tracking-widest text-neutral-400 font-semibold mb-2">
                       {(LAYOUT_CATEGORY_LABELS[cat]?.[lang]) ?? cat}
                     </p>
                     <div className="grid grid-cols-3 gap-2">
-                      {LAYOUTS.filter(l=>l.category===cat).map(l=>(
+                      {layouts.filter(l=>l.category===cat).map(l=>(
                         <button key={l.id} onClick={()=>{onLayout(l.id);onClose();}}
                           className="flex flex-col items-center gap-1.5 p-2 rounded-xl border border-neutral-200 hover:border-neutral-700 hover:bg-neutral-50 transition-all outline-none">
                           <LayoutThumb zones={l.zones}/>
@@ -2727,6 +2783,8 @@ export default function Editor() {
 
   const {data:project,isLoading,isError,refetch:refetchProject}=useGetProject(projectId,{query:{queryKey:getGetProjectQueryKey(projectId),enabled:!!projectId&&!isNaN(projectId)}});
   const {data:bookSizes}=useListBookSizes();
+  const {data:dbLayouts}=useListLayouts();
+  const editorLayouts=useMemo(()=>mergeEditorLayouts(dbLayouts as any),[dbLayouts]);
   // The project's real book size determines the logical canvas height
   // (DESIGN_W stays fixed across all book sizes — see getCanvasHeight).
   // Falls back to the 3:4 reference height until book sizes/project load.
@@ -3033,6 +3091,7 @@ export default function Editor() {
         method:'POST',
         headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},
         body:JSON.stringify({pagesJson:JSON.stringify(pagesPayload)}),
+        keepalive:true,
       });
       setSaveStatus('saved');
     } catch(e){
@@ -3443,7 +3502,7 @@ export default function Editor() {
 
   const applyLayout=useCallback((layoutId:string)=>{
     if (!activePageId) return;
-    const layout=LAYOUTS.find(l=>l.id===layoutId); if(!layout) return;
+    const layout=editorLayouts.find(l=>l.id===layoutId); if(!layout) return;
     const newEls:EditorElement[]=layout.zones.map((z,i)=>({
       id:`${layoutId}-${i}-${Date.now()}`,rotation:z.rotation??0,
       x:z.x*DESIGN_W,y:z.y*canvasH,w:z.w*DESIGN_W,h:z.h*canvasH,
@@ -3452,7 +3511,7 @@ export default function Editor() {
         :{type:'text' as const,text:lang==='sq'?'Shto tekstin tënd...':'Your text here...',fontSize:18,fill:'#333',align:'center' as const,fontFamily:'Georgia, serif'}),
     }));
     updatePage(activePageId,newEls); setSelectedId(null);
-  },[activePageId,lang,updatePage,canvasH]);
+  },[activePageId,lang,updatePage,canvasH,editorLayouts]);
 
   const applyDesign=useCallback((design:DesignDef)=>{
     // Collect all page defs from spreads
@@ -3511,12 +3570,15 @@ export default function Editor() {
 
     batchUpdatePages(updates);
     setSelectedId(null);
+    // Persist immediately — don't wait for the 1.5s debounce (user often
+    // leaves right after picking a cover like Santorini).
+    void flushSave();
 
     // Brief toast
     const name=design.name[lang]??design.id;
     setDesignToast(name);
     setTimeout(()=>setDesignToast(null),2800);
-  },[spreads,batchUpdatePages,lang,canvasH]);
+  },[spreads,batchUpdatePages,lang,canvasH,flushSave]);
 
   /** Blank-canvas starter: white pages everywhere; gentle cover prompts only. */
   const applyBlankStarter=useCallback(()=>{
@@ -3543,7 +3605,8 @@ export default function Editor() {
 
     batchUpdatePages(updates);
     setSelectedId(null);
-  },[spreads,batchUpdatePages,lang,canvasH]);
+    void flushSave();
+  },[spreads,batchUpdatePages,lang,canvasH,flushSave]);
 
   // Auto-apply a design chosen in the Wizard (first open of a fresh project).
   const pagesLoadedOnce=useRef(false);
@@ -3552,6 +3615,12 @@ export default function Editor() {
     if (Object.keys(pagesContent).length===0) return;
     pagesLoadedOnce.current=true;
     const designId=sessionStorage.getItem('wizard_initial_design');
+    const consumeKey=`${projectId}:${designId||'none'}`;
+    if (consumedWizardDesignKeys.has(consumeKey)) {
+      autoAppliedRef.current=true;
+      return;
+    }
+    consumedWizardDesignKeys.add(consumeKey);
     sessionStorage.removeItem('wizard_initial_design');
     autoAppliedRef.current=true;
     const allEmpty=Object.values(pagesContent).every(els=>!els?.length);
@@ -3563,7 +3632,7 @@ export default function Editor() {
     const design=designsCatalog.find(d=>d.id===designId);
     if (design) applyDesign(design);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[Object.keys(pagesContent).length]);
+  },[Object.keys(pagesContent).length,projectId]);
 
   // Stable callback for MobileSheet — avoids an inline arrow in JSX that would
   // defeat React.memo on MobileSheet and recreate it on every render.
@@ -3789,7 +3858,7 @@ export default function Editor() {
           <Sidebar tab={tab} onTab={setTab} photos={photos} onUpload={upload} uploading={uploading}
             onAddPhoto={addPhoto} onAddText={addText} onLayout={applyLayout} onApplyDesign={requestApplyDesign}
             selectedId={selectedIsBackground ? null : selectedId} onDelete={deleteSelected} lang={lang}
-            designs={designsCatalog}/>
+            designs={designsCatalog} layouts={editorLayouts}/>
         )}
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
 
@@ -4015,7 +4084,7 @@ export default function Editor() {
       {isMobile && <MobileSheet tab={tab} show={showSheet} onClose={()=>setShowSheet(false)}
         photos={photos} onUpload={upload} uploading={uploading}
         onAddPhoto={addPhoto} onLayout={applyLayout} onAddText={addText}
-        onApplyDesign={requestApplyDesign} lang={lang} designs={designsCatalog}/>}
+        onApplyDesign={requestApplyDesign} lang={lang} designs={designsCatalog} layouts={editorLayouts}/>}
 
       {isMobile && (
         <CoverBgMobileSheet

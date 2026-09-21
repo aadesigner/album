@@ -11,7 +11,7 @@ import { eq, and, inArray, count } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { v4 as uuidv4 } from "uuid";
 import { logger } from "../lib/logger";
-import { queueProjectPdfGeneration, pdfsDir, isPdfGenerationInFlight } from "../lib/generateProjectPdf";
+import { queueProjectPdfGeneration, pdfsDir, isPdfGenerationInFlight, ensureProjectPdfFile } from "../lib/generateProjectPdf";
 import { getSecuritySettings } from "../lib/securitySettings";
 import path from "path";
 import fs from "fs";
@@ -818,8 +818,12 @@ router.get(
       return;
     }
 
-    const filePath = path.join(pdfsDir, `project-${projectId}.pdf`);
-    if (!fs.existsSync(filePath)) {
+    let filePath: string;
+    try {
+      // Ephemeral disks / redeploys can wipe pdfsDir while pdfUrl remains set.
+      filePath = await ensureProjectPdfFile(projectId);
+    } catch (err) {
+      console.error("PDF ensure failed", projectId, err);
       res.status(404).json({ error: "PDF not found" });
       return;
     }

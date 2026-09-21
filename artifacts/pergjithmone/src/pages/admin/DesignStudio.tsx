@@ -445,7 +445,6 @@ export default function AdminDesignStudio() {
   const [bgUiMode, setBgUiMode] = useState<CoverBgMode>('color');
   const imageFileRef = useRef<HTMLInputElement>(null);
   const bgFileRef = useRef<HTMLInputElement>(null);
-  const replaceFileRef = useRef<HTMLInputElement>(null);
   const [createForm, setCreateForm] = useState({
     nameEn: '',
     nameSq: '',
@@ -506,16 +505,6 @@ export default function AdminDesignStudio() {
   useEffect(() => {
     setBgUiMode(coverBgMode(bgEl));
   }, [bgEl?.id, bgEl?.src, bgEl?.bgGradientFrom, bgEl?.bgColor, coverSide, designId]);
-
-  const applyBgPatch = useCallback((patch: Parameters<typeof applyCoverBackground>[2]) => {
-    setDraft(prev => applyCoverBackground(prev, DESIGN_H, patch));
-    const bg = (coverSide === 'front' ? draftFront : draftBack).find(e => e.type === 'background')
-      || draft.find(e => e.type === 'background');
-    // Select background after patch so inspector stays on bg controls
-    const next = applyCoverBackground(draft, DESIGN_H, patch);
-    const nextBg = next.find(e => e.type === 'background');
-    if (nextBg) setSelectedId(nextBg.id);
-  }, [setDraft, coverSide, draftFront, draftBack, draft]);
 
   // Simpler applyBg that doesn't double-read stale draft
   const setCoverBg = useCallback((patch: Parameters<typeof applyCoverBackground>[2]) => {
@@ -1191,6 +1180,48 @@ export default function AdminDesignStudio() {
                       onChangeEl={onChangeEl}
                     />
                   </div>
+                  <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5">
+                    <input ref={imageFileRef} type="file" accept="image/*" className="hidden"
+                      onChange={e => { const f = e.target.files?.[0]; if (f) void uploadAndReplaceImage(f); e.target.value = ''; }} />
+                    <input ref={bgFileRef} type="file" accept="image/*" className="hidden"
+                      onChange={e => { const f = e.target.files?.[0]; if (f) void uploadAndSetBgPhoto(f); e.target.value = ''; }} />
+                    <button type="button" onClick={addText} disabled={uploading}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold"
+                      style={{ background: ADMIN.blushSoft, color: ADMIN.blushDeep }}>
+                      <Type size={12} /> Text
+                    </button>
+                    <button type="button" onClick={addShape} disabled={uploading}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold"
+                      style={{ background: ADMIN.blushSoft, color: ADMIN.blushDeep }}>
+                      <Square size={12} /> Shape
+                    </button>
+                    <button type="button" onClick={() => imageFileRef.current?.click()} disabled={uploading}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold"
+                      style={{ background: ADMIN.blushSoft, color: ADMIN.blushDeep }}>
+                      {uploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />} Image
+                    </button>
+                    <button type="button" onClick={() => {
+                      const bg = draft.find(e => e.type === 'background');
+                      if (bg) setSelectedId(bg.id);
+                      else setCoverBg({ mode: 'color', bgColor: '#FFFFFF' });
+                    }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold"
+                      style={{ background: ADMIN.blushSoft, color: ADMIN.blushDeep }}>
+                      <Palette size={12} /> Background
+                    </button>
+                    <button type="button" onClick={deleteSelected} disabled={!selected || selected.type === 'background'}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold text-red-700 disabled:opacity-40"
+                      style={{ background: '#FDF2F2' }}>
+                      <Trash2 size={12} /> Delete
+                    </button>
+                    {coverSide === 'back' && (
+                      <button type="button" onClick={copyFrontToBack}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold"
+                        style={{ background: ADMIN.bg, color: ADMIN.ink, border: `1px solid ${ADMIN.line}` }}>
+                        Copy front → back
+                      </button>
+                    )}
+                  </div>
                   {dirty && (
                     <p className="mt-3 text-[11px] text-amber-700 font-medium">
                       Unsaved changes{dirtyFront && dirtyBack ? ' (front & back)' : dirtyFront ? ' (front)' : ' (back)'}
@@ -1267,7 +1298,15 @@ export default function AdminDesignStudio() {
               ) : selected.type === 'image' ? (
                 <div className="space-y-3">
                   <p className="text-sm" style={{ color: ADMIN.ink }}>Landmark / cover art</p>
-                  <p className="text-[11px] break-all" style={{ color: ADMIN.muted }}>{selected.src}</p>
+                  {selected.src ? (
+                    <img src={selected.src} alt="" className="w-full h-28 object-cover rounded-xl" style={{ border: `1px solid ${ADMIN.line}` }} />
+                  ) : null}
+                  <p className="text-[11px] break-all" style={{ color: ADMIN.muted }}>{selected.src || 'No image yet'}</p>
+                  <Button type="button" variant="outline" className="w-full rounded-xl" disabled={uploading}
+                    onClick={() => imageFileRef.current?.click()}>
+                    {uploading ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <Upload size={14} className="mr-1.5" />}
+                    {selected.src ? 'Replace image' : 'Upload image'}
+                  </Button>
                   <p className="text-[11px]" style={{ color: ADMIN.muted }}>
                     Drag to reposition, use corner handles to resize. Size: {Math.round(selected.w)}×{Math.round(selected.h)}
                   </p>
@@ -1304,20 +1343,123 @@ export default function AdminDesignStudio() {
                 </div>
               ) : selected.type === 'background' ? (
                 <div className="space-y-3">
-                  <label className="block text-[11px] font-medium" style={{ color: ADMIN.ink }}>Background color</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="color"
-                      value={selected.bgColor || '#ffffff'}
-                      onChange={e => onChangeEl(selected.id, { bgColor: e.target.value })}
-                      className="h-9 w-12 rounded border cursor-pointer"
-                      style={{ borderColor: ADMIN.line }}
-                    />
-                    <Input
-                      value={selected.bgColor || '#ffffff'}
-                      onChange={e => onChangeEl(selected.id, { bgColor: e.target.value })}
-                    />
+                  <label className="block text-[11px] font-medium" style={{ color: ADMIN.ink }}>Background</label>
+                  <div className="flex gap-1">
+                    {([
+                      { id: 'color' as const, label: 'Color', icon: Droplets },
+                      { id: 'gradient' as const, label: 'Gradient', icon: Palette },
+                      { id: 'photo' as const, label: 'Photo', icon: ImageIcon },
+                    ]).map(m => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => {
+                          setBgUiMode(m.id);
+                          if (m.id === 'color') setCoverBg({ mode: 'color', bgColor: selected.bgColor || '#FFFFFF' });
+                          else if (m.id === 'gradient') setCoverBg({
+                            mode: 'gradient',
+                            bgGradientFrom: selected.bgGradientFrom || selected.bgColor || '#1A1A1A',
+                            bgGradientTo: selected.bgGradientTo || '#666666',
+                            bgGradientDir: selected.bgGradientDir || 'tb',
+                          });
+                          else setCoverBg({ mode: 'photo', src: selected.src || undefined });
+                        }}
+                        className="flex-1 inline-flex items-center justify-center gap-1 py-1.5 rounded-xl text-[10px] font-semibold"
+                        style={
+                          bgUiMode === m.id
+                            ? { background: ADMIN.blush, color: '#fff' }
+                            : { background: ADMIN.blushSoft, color: ADMIN.blushDeep }
+                        }
+                      >
+                        <m.icon size={11} /> {m.label}
+                      </button>
+                    ))}
                   </div>
+
+                  {bgUiMode === 'color' && (
+                    <div className="flex gap-2">
+                      <input
+                        type="color"
+                        value={selected.bgColor || '#ffffff'}
+                        onChange={e => setCoverBg({ mode: 'color', bgColor: e.target.value })}
+                        className="h-9 w-12 rounded border cursor-pointer"
+                        style={{ borderColor: ADMIN.line }}
+                      />
+                      <Input
+                        value={selected.bgColor || '#ffffff'}
+                        onChange={e => setCoverBg({ mode: 'color', bgColor: e.target.value })}
+                      />
+                    </div>
+                  )}
+
+                  {bgUiMode === 'gradient' && (
+                    <div className="space-y-2">
+                      <div className="flex gap-2 items-center">
+                        <input type="color"
+                          value={selected.bgGradientFrom || selected.bgColor || '#1A1A1A'}
+                          onChange={e => setCoverBg({
+                            mode: 'gradient',
+                            bgGradientFrom: e.target.value,
+                            bgGradientTo: selected.bgGradientTo || '#666666',
+                            bgGradientDir: selected.bgGradientDir || 'tb',
+                          })}
+                          className="h-9 w-12 rounded border cursor-pointer" style={{ borderColor: ADMIN.line }} />
+                        <span className="text-[10px]" style={{ color: ADMIN.muted }}>→</span>
+                        <input type="color"
+                          value={selected.bgGradientTo || '#666666'}
+                          onChange={e => setCoverBg({
+                            mode: 'gradient',
+                            bgGradientFrom: selected.bgGradientFrom || selected.bgColor || '#1A1A1A',
+                            bgGradientTo: e.target.value,
+                            bgGradientDir: selected.bgGradientDir || 'tb',
+                          })}
+                          className="h-9 w-12 rounded border cursor-pointer" style={{ borderColor: ADMIN.line }} />
+                      </div>
+                      <div className="flex gap-1">
+                        {([
+                          { id: 'tb' as const, label: '↓' },
+                          { id: 'lr' as const, label: '→' },
+                          { id: 'diag' as const, label: '↘' },
+                        ]).map(d => (
+                          <button key={d.id} type="button"
+                            onClick={() => setCoverBg({
+                              mode: 'gradient',
+                              bgGradientFrom: selected.bgGradientFrom || selected.bgColor || '#1A1A1A',
+                              bgGradientTo: selected.bgGradientTo || '#666666',
+                              bgGradientDir: d.id,
+                            })}
+                            className="flex-1 py-1.5 rounded-xl text-sm font-semibold"
+                            style={
+                              (selected.bgGradientDir || 'tb') === d.id
+                                ? { background: ADMIN.ink, color: '#fff' }
+                                : { background: ADMIN.bg, color: ADMIN.muted }
+                            }
+                          >{d.label}</button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {bgUiMode === 'photo' && (
+                    <div className="space-y-2">
+                      {selected.src ? (
+                        <img src={selected.src} alt="" className="w-full h-28 object-cover rounded-xl" style={{ border: `1px solid ${ADMIN.line}` }} />
+                      ) : (
+                        <p className="text-[11px]" style={{ color: ADMIN.muted }}>No photo yet — upload one.</p>
+                      )}
+                      <Button type="button" variant="outline" className="w-full rounded-xl" disabled={uploading}
+                        onClick={() => bgFileRef.current?.click()}>
+                        {uploading ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <Upload size={14} className="mr-1.5" />}
+                        {selected.src ? 'Replace photo' : 'Upload photo'}
+                      </Button>
+                      {selected.src && (
+                        <Button type="button" variant="ghost" className="w-full rounded-xl text-red-700"
+                          onClick={() => setCoverBg({ mode: 'color', bgColor: selected.bgColor || '#FFFFFF' })}>
+                          Remove photo
+                        </Button>
+                      )}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <p className="text-sm" style={{ color: ADMIN.muted }}>Select text, a shape, or an image to edit.</p>
