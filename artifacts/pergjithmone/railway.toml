@@ -24,9 +24,8 @@ watchPatterns = [
 ]
 
 [deploy]
-# Works for both image layouts (slim: /app/server.mjs — full: artifacts path).
-# Dashboard Start Command is overridden by this file when Config-as-code is set.
-startCommand = "sh -c 'if [ -f /app/server.mjs ] && [ -d /app/dist/public ]; then exec node /app/server.mjs; else exec node /app/artifacts/pergjithmone/server.mjs; fi'"
+# Prefer full-image path; /app/server.mjs also exists after Dockerfile compat copy.
+startCommand = "node /app/artifacts/pergjithmone/server.mjs"
 healthcheckPath = "/healthz"
 healthcheckTimeout = 60
 restartPolicyType = "ON_FAILURE"
