@@ -11,14 +11,14 @@
 
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "Dockerfile"
+dockerfilePath = "Dockerfile.api"
 watchPatterns = [
   "/artifacts/api-server/**",
   "/lib/**",
   "/package.json",
   "/pnpm-lock.yaml",
   "/pnpm-workspace.yaml",
-  "/Dockerfile",
+  "/Dockerfile.api",
 ]
 
 [deploy]
