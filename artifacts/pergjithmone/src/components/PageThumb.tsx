@@ -33,20 +33,39 @@ function thumbFontStyle(ff?: string, fs?: string): { fontStyle: string; fontWeig
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const PageThumb = React.memo(function PageThumb({
-  elements, width, height, canvasH = DESIGN_H,
-}: { elements: EditorElement[] | Omit<EditorElement, 'id'>[]; width: number; height: number; canvasH?: number }) {
+  elements, width, height, canvasH = DESIGN_H, fit = 'width', background,
+}: {
+  elements: EditorElement[] | Omit<EditorElement, 'id'>[];
+  width: number;
+  height: number;
+  canvasH?: number;
+  /** `width` = scale by width only (may letterbox). `cover` = fill the box. */
+  fit?: 'width' | 'cover';
+  /** Overrides the default paper fill (use cover color for 3D books). */
+  background?: string;
+}) {
   const fontsReady = useEditorFontsReady();
   useEffect(() => { void ensureEditorFonts(); }, []);
 
-  const scale = width / DESIGN_W;
+  const scaleW = width / DESIGN_W;
+  const scaleH = height / Math.max(1, canvasH);
+  const scale = fit === 'cover' ? Math.max(scaleW, scaleH) : scaleW;
+  const scaledW = DESIGN_W * scale;
+  const scaledH = canvasH * scale;
+  const ox = fit === 'cover' ? (width - scaledW) / 2 : 0;
+  const oy = fit === 'cover' ? (height - scaledH) / 2 : 0;
+
   return (
     <div
       data-fonts-ready={fontsReady ? '1' : '0'}
-      style={{ width, height, overflow: 'hidden', position: 'relative', flexShrink: 0, background: PAPER_COLOR }}
+      style={{
+        width, height, overflow: 'hidden', position: 'relative', flexShrink: 0,
+        background: background ?? PAPER_COLOR,
+      }}
     >
       <div style={{
         width: DESIGN_W, height: canvasH,
-        transform: `scale(${scale})`,
+        transform: `translate(${ox}px, ${oy}px) scale(${scale})`,
         transformOrigin: 'top left',
         position: 'absolute', top: 0, left: 0,
       }}>
@@ -69,16 +88,36 @@ export const PageThumb = React.memo(function PageThumb({
             return <div key={key} style={{ position: 'absolute', inset: 0, background: bg }}/>;
           }
           if (el.type === 'image' && el.src) {
-            return <img key={key} src={el.src} alt="" loading="lazy" style={{
-              position: 'absolute', left: el.x, top: el.y, width: el.w, height: el.h,
-              objectFit: el.objectFit === 'contain' ? 'contain' : 'cover',
-              objectPosition: `${(el.cropFocusX ?? 0.5) * 100}% ${(el.cropFocusY ?? 0.5) * 100}%`,
-              display: 'block', pointerEvents: 'none',
-              opacity: el.opacity ?? 1,
-              mixBlendMode: (el.mixBlendMode as React.CSSProperties['mixBlendMode']) || undefined,
-              transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
-              transformOrigin: 'top left',
-            }}/>;
+            const zoom = Math.max(1, el.cropZoom ?? 1);
+            const fx = (el.cropFocusX ?? 0.5) * 100;
+            const fy = (el.cropFocusY ?? 0.5) * 100;
+            return (
+              <div
+                key={key}
+                style={{
+                  position: 'absolute', left: el.x, top: el.y, width: el.w, height: el.h,
+                  overflow: 'hidden',
+                  opacity: el.opacity ?? 1,
+                  mixBlendMode: (el.mixBlendMode as React.CSSProperties['mixBlendMode']) || undefined,
+                  transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
+                  transformOrigin: 'top left',
+                  pointerEvents: 'none',
+                }}
+              >
+                <img
+                  src={el.src}
+                  alt=""
+                  loading="lazy"
+                  style={{
+                    width: '100%', height: '100%', display: 'block',
+                    objectFit: el.objectFit === 'contain' ? 'contain' : 'cover',
+                    objectPosition: `${fx}% ${fy}%`,
+                    transform: zoom > 1 ? `scale(${zoom})` : undefined,
+                    transformOrigin: `${fx}% ${fy}%`,
+                  }}
+                />
+              </div>
+            );
           }
           if (el.type === 'placeholder') {
             return <div key={key} style={{

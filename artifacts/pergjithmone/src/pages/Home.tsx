@@ -6,14 +6,13 @@ import { motion, useMotionValue, useSpring, useTransform, AnimatePresence } from
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useListCategories } from '@workspace/api-client-react-tsconfig';
 import {
-  CAT_IMG,
   CAT_IMG_BY_SLUG,
   DEFAULT_CATEGORIES,
   getCategoryImage,
   getCategorySpine,
   getCategorySublabel,
 } from '@/lib/categoryImages';
-import { DESIGNS, designFrontElements } from '@/lib/designs';
+import { DESIGNS, DESIGN_W, DESIGN_H, designFrontElements } from '@/lib/designs';
 import { PageThumb } from '@/components/PageThumb';
 import { ensureEditorFonts } from '@/lib/editorFonts';
 
@@ -26,6 +25,8 @@ type AlbumStyle = {
   designId: string;
   spine: string;
   img: string;
+  /** Deep hero base — should echo the cover, not fight it */
+  wash: string;
   ambient: string;
   /** Soft paper wash for the starter section */
   paper: string;
@@ -43,7 +44,8 @@ const ALBUM_STYLES: AlbumStyle[] = [
     designId: 'cream-names',
     spine: '#8B6F47',
     img: CAT_IMG_BY_SLUG.dasme,
-    ambient: '#2a1810',
+    wash: '#1A1410',
+    ambient: '#3D2A1C',
     paper: '#F3EDE6',
     ink: '#2A2218',
   },
@@ -57,7 +59,8 @@ const ALBUM_STYLES: AlbumStyle[] = [
     designId: 'paris-pink',
     spine: '#C45A78',
     img: CAT_IMG_BY_SLUG.udhetime,
-    ambient: '#1a0e14',
+    wash: '#1A0E14',
+    ambient: '#4A2030',
     paper: '#F8E8EE',
     ink: '#3A1828',
   },
@@ -71,7 +74,8 @@ const ALBUM_STYLES: AlbumStyle[] = [
     designId: 'baby-ador',
     spine: '#6A8490',
     img: CAT_IMG_BY_SLUG.familje,
-    ambient: '#12181a',
+    wash: '#101618',
+    ambient: '#2A3A40',
     paper: '#E8EEF0',
     ink: '#1E2A30',
   },
@@ -82,12 +86,13 @@ const ALBUM_STYLES: AlbumStyle[] = [
       sq: 'Miqësia që nuk zbehet.',
       en: 'Friendship that doesn’t fade.',
     },
-    designId: 'the-wedding-of',
-    spine: '#2A3A28',
-    img: CAT_IMG.Çifte,
-    ambient: '#0c120e',
-    paper: '#E6EAE4',
-    ink: '#1A2218',
+    designId: 'friends-forever',
+    spine: '#1A3A42',
+    img: CAT_IMG_BY_SLUG.miqesi,
+    wash: '#0A1416',
+    ambient: '#1A3840',
+    paper: '#E4EEF0',
+    ink: '#142428',
   },
   {
     key: 'festash',
@@ -99,7 +104,8 @@ const ALBUM_STYLES: AlbumStyle[] = [
     designId: 'birthday-bloom',
     spine: '#C45A72',
     img: CAT_IMG_BY_SLUG.festash,
-    ambient: '#1a0e12',
+    wash: '#160A10',
+    ambient: '#4A2030',
     paper: '#F6E6EA',
     ink: '#2A1418',
   },
@@ -111,7 +117,7 @@ function heroBgUrl(src: string): string {
     const u = new URL(src);
     if (!u.hostname.includes('unsplash.com')) return src;
     u.searchParams.set('w', '1600');
-    u.searchParams.set('q', '80');
+    u.searchParams.set('q', '75');
     u.searchParams.set('auto', 'format');
     u.searchParams.set('fit', 'crop');
     return u.toString();
@@ -197,10 +203,9 @@ function LivingAlbumBook({
     }
   }, [coverEls]);
 
-  const spineD = size === 'hero' ? 16 : 10;
-  const pageBlock = size === 'hero' ? 9 : 6;
-  const maxW = size === 'hero' ? 280 : 200;
-  const maxH = size === 'hero' ? 380 : 270;
+  const spineD = size === 'hero' ? 15 : 12;
+  const pageBlock = size === 'hero' ? 8 : 7;
+  const maxW = size === 'hero' ? 268 : 220;
 
   const onMove = (e: React.MouseEvent) => {
     if (!interactive || reduced || !wrapRef.current) return;
@@ -226,14 +231,13 @@ function LivingAlbumBook({
       onMouseLeave={onLeave}
       className={`relative mx-auto ${!reduced ? 'book-float' : ''}`}
       style={{
-        width: `min(${size === 'hero' ? 42 : 48}vw, ${maxW}px)`,
-        height: `min(${size === 'hero' ? 56 : 64}vw, ${maxH}px)`,
+        // Exact catalog aspect — stops paper letterboxing under the cover art
+        width: `min(${size === 'hero' ? '58vw' : '48vw'}, ${maxW}px)`,
+        aspectRatio: `${DESIGN_W} / ${DESIGN_H}`,
         maxWidth: maxW,
-        maxHeight: maxH,
-        perspective: size === 'hero' ? 1600 : 1200,
+        perspective: size === 'hero' ? 1500 : 1100,
         perspectiveOrigin: '42% 45%',
         touchAction: 'manipulation',
-        // Slim spine / page edge — reads as a thin keepsake, not a brick
         paddingLeft: spineD * 0.55,
         paddingRight: pageBlock * 0.7,
       }}
@@ -350,7 +354,13 @@ function LivingAlbumBook({
                 style={{ position: 'absolute', inset: 0 }}
               >
                 {coverEls.length > 0 && coverSize.w > 0 ? (
-                  <PageThumb elements={coverEls} width={coverSize.w} height={coverSize.h} />
+                  <PageThumb
+                    elements={coverEls}
+                    width={coverSize.w}
+                    height={coverSize.h}
+                    fit="cover"
+                    background={coverBg}
+                  />
                 ) : coverEls.length === 0 ? (
                   <img
                     src={style.img}
@@ -450,8 +460,9 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
     <section
       className="relative w-full overflow-hidden"
       style={{
-        minHeight: 'min(100svh, 920px)',
-        background: '#060504',
+        minHeight: 'min(100svh, 880px)',
+        background: style.wash,
+        transition: 'background-color 0.7s ease',
       }}
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
@@ -467,7 +478,7 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
         go(dx < 0 ? 1 : -1);
       }}
     >
-      {/* Full-bleed photo — matches selected album atmosphere */}
+      {/* Atmosphere photo — soft texture behind the book, not a competing full-bleed */}
       <AnimatePresence mode="sync" initial={false}>
         <motion.div
           key={`bg-${style.key}`}
@@ -476,7 +487,7 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
           initial={reduced ? { opacity: 1 } : { opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: reduced ? 0 : 0.65, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: reduced ? 0 : 0.7, ease: [0.22, 1, 0.36, 1] }}
         >
           <img
             src={heroBgUrl(style.img)}
@@ -484,54 +495,72 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
             decoding="async"
             fetchPriority="high"
             className="absolute inset-0 h-full w-full object-cover"
-            style={{ transform: reduced ? undefined : 'scale(1.04)' }}
+            style={{
+              objectPosition: '68% center',
+              opacity: 0.42,
+              filter: 'saturate(0.55) brightness(0.72) contrast(1.05)',
+              transform: reduced ? undefined : 'scale(1.06)',
+            }}
           />
         </motion.div>
       </AnimatePresence>
 
-      {/* Soft photo — kept quiet so the book stays the hero */}
+      {/* Style-tinted veil — text side solid, book side breathes */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0"
         style={{
           background: `
-            linear-gradient(105deg, rgba(6,5,4,0.92) 0%, rgba(6,5,4,0.78) 36%, rgba(6,5,4,0.62) 58%, rgba(6,5,4,0.82) 100%),
-            linear-gradient(to top, rgba(6,5,4,0.88) 0%, transparent 45%),
-            radial-gradient(70% 55% at 76% 40%, ${style.ambient}88 0%, transparent 68%)
+            linear-gradient(105deg,
+              ${style.wash} 0%,
+              ${style.wash}ee 28%,
+              ${style.wash}99 52%,
+              ${style.wash}55 72%,
+              ${style.wash}aa 100%
+            ),
+            linear-gradient(to top, ${style.wash}f0 0%, transparent 42%),
+            radial-gradient(58% 50% at 78% 42%, ${style.ambient}66 0%, transparent 72%)
           `,
-          transition: 'background 0.55s ease',
+          transition: 'background 0.7s ease',
         }}
       />
 
+      {/* Soft paper glow near the book — ties cover color into the room */}
       {!reduced && (
         <>
           <div
             aria-hidden
-            className="hero-orb-a pointer-events-none absolute -top-[18%] right-[-8%] w-[55%] h-[55%] rounded-full opacity-35 blur-3xl"
-            style={{ background: `radial-gradient(circle, ${style.spine}55 0%, transparent 70%)` }}
+            className="pointer-events-none absolute top-[8%] right-[-4%] w-[52%] h-[70%] rounded-full opacity-50 blur-3xl"
+            style={{
+              background: `radial-gradient(circle, ${style.paper}28 0%, ${style.spine}18 40%, transparent 70%)`,
+              transition: 'background 0.7s ease',
+            }}
           />
           <div
             aria-hidden
-            className="hero-orb-b pointer-events-none absolute bottom-[-20%] left-[-12%] w-[50%] h-[50%] rounded-full opacity-30 blur-3xl"
-            style={{ background: `radial-gradient(circle, ${style.paper}33 0%, transparent 70%)` }}
+            className="pointer-events-none absolute bottom-[-18%] left-[-10%] w-[48%] h-[48%] rounded-full opacity-40 blur-3xl"
+            style={{
+              background: `radial-gradient(circle, ${style.spine}22 0%, transparent 68%)`,
+              transition: 'background 0.7s ease',
+            }}
           />
         </>
       )}
 
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-[0.06]"
+        className="pointer-events-none absolute inset-0 opacity-[0.04]"
         style={{
           backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=\'0 0 200 200\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cfilter id=\'n\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'0.85\' numOctaves=\'3\' stitchTiles=\'stitch\'/%3E%3C/filter%3E%3Crect width=\'100%25\' height=\'100%25\' filter=\'url(%23n)\'/%3E%3C/svg%3E")',
           backgroundSize: '180px',
         }}
       />
 
-      <div className="relative z-10 max-w-7xl mx-auto px-5 md:px-10 pt-8 pb-12 md:pt-16 md:pb-20 min-h-[inherit] flex flex-col justify-center">
-        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] gap-6 md:gap-10 md:items-center">
+      <div className="relative z-10 max-w-7xl mx-auto px-5 md:px-10 pt-6 pb-10 md:pt-14 md:pb-16 min-h-[inherit] flex flex-col justify-center">
+        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] gap-5 md:gap-10 md:items-center">
           {/* Copy — headline first, brand second */}
-          <div className="order-1 md:order-1 md:col-start-1 text-center md:text-left">
-            <div className="relative mb-3 md:mb-4 min-h-[2.6em] md:min-h-[2.8em]">
+          <div className="order-2 md:order-1 md:col-start-1 text-center md:text-left">
+            <div className="relative mb-2.5 md:mb-4 min-h-[2.4em] md:min-h-[2.8em]">
               <AnimatePresence mode="wait" initial={false}>
                 <motion.h1
                   key={style.key}
@@ -539,7 +568,7 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
                   transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-                  className="font-serif text-[clamp(2rem,5.8vw,3.55rem)] text-white leading-[1.08] tracking-[-0.02em] font-medium"
+                  className="font-serif text-[clamp(1.75rem,5.2vw,3.55rem)] text-[#F7F2EC] leading-[1.1] tracking-[-0.02em] font-medium"
                 >
                   {style.line[lang]}
                 </motion.h1>
@@ -550,34 +579,45 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.65, delay: 0.05, ease: [0.22, 1, 0.36, 1] }}
-              className="font-serif text-[clamp(1.2rem,2.6vw,1.65rem)] text-white/55 leading-none tracking-[-0.01em] mb-5 md:mb-6"
+              className="font-serif text-[clamp(1.05rem,2.4vw,1.65rem)] leading-none tracking-[-0.01em] mb-4 md:mb-6"
+              style={{ color: `${style.paper}99` }}
             >
               Përgjithmonë
             </motion.p>
 
-            <p className="text-[13px] md:text-[14px] text-white/42 max-w-sm mx-auto md:mx-0 leading-relaxed mb-6 md:mb-8">
+            <p
+              className="hidden md:block text-[14px] max-w-sm mx-auto md:mx-0 leading-relaxed mb-8"
+              style={{ color: `${style.paper}66` }}
+            >
               {lang === 'sq'
                 ? 'Dizajnoni online. Printohen me cilësi galerie.'
                 : 'Design online. Printed at gallery quality.'}
             </p>
 
-            <div className="flex flex-wrap items-center justify-center md:justify-start gap-3">
+            <div className="flex flex-wrap items-center justify-center md:justify-start gap-2.5 md:gap-3">
               <Link href={`/krijo?category=${encodeURIComponent(style.key)}&design=${encodeURIComponent(style.designId)}`}>
                 <motion.button
                   whileTap={{ scale: 0.97 }}
-                  className="px-8 py-3.5 bg-white text-[#12100e] rounded-full text-[12.5px] font-semibold shadow-xl shadow-black/25"
+                  className="px-7 md:px-8 py-3 md:py-3.5 rounded-full text-[12px] md:text-[12.5px] font-semibold shadow-xl shadow-black/30"
+                  style={{ background: style.paper, color: style.ink }}
                 >
                   {lang === 'sq' ? 'krijo albumin' : 'create your book'}
                 </motion.button>
               </Link>
               <Link href="/shembuj">
-                <button className="px-6 py-3.5 text-white/70 text-[12.5px] border border-white/20 rounded-full hover:border-white/40 hover:text-white transition-colors">
+                <button
+                  className="px-6 py-3.5 text-[12.5px] border rounded-full transition-colors"
+                  style={{
+                    color: `${style.paper}b8`,
+                    borderColor: `${style.paper}33`,
+                  }}
+                >
                   {lang === 'sq' ? 'shiko shembuj' : 'see examples'}
                 </button>
               </Link>
             </div>
 
-            <div className="mt-8 md:mt-10 flex flex-wrap items-center justify-center md:justify-start gap-x-1 gap-y-1">
+            <div className="mt-6 md:mt-10 flex flex-wrap items-center justify-center md:justify-start gap-x-0.5 gap-y-0.5 max-w-md mx-auto md:mx-0">
               {ALBUM_STYLES.map((s, i) => (
                 <button
                   key={s.key}
@@ -585,14 +625,17 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
                   onClick={() => setIdx(i)}
                   aria-label={s.label[lang]}
                   aria-current={i === idx}
-                  className="relative h-8 px-2.5 text-[10px] tracking-[0.14em] uppercase transition-colors"
-                  style={{ color: i === idx ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.28)' }}
+                  className="relative h-7 md:h-8 px-2 md:px-2.5 text-[9px] md:text-[10px] tracking-[0.12em] uppercase transition-colors"
+                  style={{
+                    color: i === idx ? style.paper : `${style.paper}55`,
+                  }}
                 >
                   {s.label[lang]}
                   {i === idx && (
                     <motion.span
                       layoutId="hero-style-underline"
-                      className="absolute left-2.5 right-2.5 bottom-1 h-px bg-white/70"
+                      className="absolute left-2 right-2 md:left-2.5 md:right-2.5 bottom-0.5 md:bottom-1 h-px"
+                      style={{ background: `${style.paper}b0` }}
                     />
                   )}
                 </button>
@@ -600,23 +643,28 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
             </div>
           </div>
 
-          {/* 3D book */}
-          <div className="order-2 md:col-start-2 md:row-start-1 flex flex-col items-center justify-center py-2 md:py-0 md:pl-4">
+          {/* 3D book — first on mobile so the hero reads as one composition */}
+          <div className="order-1 md:order-2 md:col-start-2 md:row-start-1 flex flex-col items-center justify-center pt-1 pb-1 md:py-0 md:pl-4">
             <LivingAlbumBook style={style} size="hero" />
-            <div className="mt-5 flex items-center gap-4 md:hidden">
+            <div className="mt-3 flex items-center gap-4 md:hidden">
               <button
                 type="button"
                 onClick={() => go(-1)}
-                className="w-9 h-9 rounded-full border border-white/20 text-white/70 text-lg leading-none"
+                className="w-8 h-8 rounded-full text-base leading-none"
+                style={{ border: `1px solid ${style.paper}28`, color: `${style.paper}99` }}
                 aria-label="Previous"
               >‹</button>
-              <span className="text-[10px] tracking-[0.2em] text-white/35 tabular-nums">
+              <span
+                className="text-[10px] tracking-[0.2em] tabular-nums"
+                style={{ color: `${style.paper}55` }}
+              >
                 {String(idx + 1).padStart(2, '0')} / {String(ALBUM_STYLES.length).padStart(2, '0')}
               </span>
               <button
                 type="button"
                 onClick={() => go(1)}
-                className="w-9 h-9 rounded-full border border-white/20 text-white/70 text-lg leading-none"
+                className="w-8 h-8 rounded-full text-base leading-none"
+                style={{ border: `1px solid ${style.paper}28`, color: `${style.paper}99` }}
                 aria-label="Next"
               >›</button>
             </div>
@@ -645,7 +693,7 @@ function AlbumStarter({ lang }: { lang: 'sq' | 'en' }) {
     <section
       className="relative overflow-hidden"
       style={{
-        background: `linear-gradient(180deg, ${style.paper} 0%, #F7F4EF 55%, #F3EFE9 100%)`,
+        background: `linear-gradient(180deg, ${style.paper} 0%, #F7F4EF 52%, #F3EFE9 100%)`,
         transition: 'background 0.5s ease',
       }}
     >
@@ -663,108 +711,163 @@ function AlbumStarter({ lang }: { lang: 'sq' | 'en' }) {
         }}
       />
 
-      <div className="relative max-w-2xl mx-auto px-5 md:px-8 pt-14 pb-16 md:pt-16 md:pb-20">
-        <div className="text-center mb-9">
+      <div className="relative max-w-5xl mx-auto px-5 md:px-10 pt-14 pb-16 md:pt-20 md:pb-24">
+        <div className="text-center mb-10 md:mb-12">
           <h2
-            className="font-serif text-[clamp(1.75rem,3.8vw,2.4rem)] font-medium leading-[1.15] mb-2.5"
+            className="font-serif text-[clamp(1.9rem,4.2vw,2.75rem)] font-medium leading-[1.12] tracking-[-0.02em] mb-3"
             style={{ color: style.ink }}
           >
             {lang === 'sq' ? 'Çfarë po krijoni sot?' : 'What are you creating today?'}
           </h2>
-          <p className="text-[13.5px] leading-relaxed max-w-sm mx-auto" style={{ color: `${style.ink}88` }}>
+          <p
+            className="text-[14px] md:text-[15px] leading-relaxed max-w-md mx-auto"
+            style={{ color: `${style.ink}90` }}
+          >
             {lang === 'sq'
               ? 'Zgjidhni stilin. Editori hapet me atë kopertinë.'
               : 'Pick a style. The editor opens with that cover.'}
           </p>
         </div>
 
-        <div
-          role="listbox"
-          aria-label={lang === 'sq' ? 'Lloji i albumit' : 'Album type'}
-          className="flex flex-wrap justify-center gap-x-5 gap-y-5 mb-10"
-        >
-          {ALBUM_STYLES.map((s, i) => {
-            const active = i === idx;
-            const els = coverElsById[s.designId] || [];
-            return (
-              <button
-                key={s.key}
-                type="button"
-                role="option"
-                aria-selected={active}
-                onClick={() => setIdx(i)}
-                className="flex flex-col items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 rounded-sm"
-                style={{ ['--tw-ring-color' as string]: style.ink }}
+        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] gap-10 md:gap-14 md:items-center">
+          {/* Live preview — larger on desktop */}
+          <div className="flex flex-col items-center order-2 md:order-1">
+            <LivingAlbumBook style={style} size="starter" interactive={false} />
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.p
+                key={style.key}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.22 }}
+                className="mt-5 text-[13px] md:text-[14px] text-center max-w-[16rem] leading-snug"
+                style={{ color: `${style.ink}88` }}
               >
-                <div
-                  className="relative overflow-hidden"
-                  style={{
-                    width: 68,
-                    height: 90,
-                    borderRadius: 3,
-                    boxShadow: active
-                      ? `0 10px 24px ${style.spine}40, 0 0 0 1.5px ${style.ink}`
-                      : '0 3px 12px rgba(0,0,0,0.08)',
-                    opacity: active ? 1 : 0.65,
-                    transition: 'box-shadow 0.2s ease, opacity 0.2s ease',
-                  }}
-                >
-                  {els.length > 0 ? (
-                    <PageThumb elements={els} width={68} height={90} />
-                  ) : (
-                    <div className="absolute inset-0" style={{ background: s.spine }} />
-                  )}
-                </div>
-                <span
-                  className="text-[11px] tracking-[0.04em]"
-                  style={{
-                    color: active ? style.ink : `${style.ink}70`,
-                    fontWeight: active ? 600 : 400,
-                  }}
-                >
-                  {s.label[lang]}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+                {style.line[lang]}
+              </motion.p>
+            </AnimatePresence>
+          </div>
 
-        <div className="flex flex-col items-center gap-3">
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.p
-              key={style.key}
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="text-[12px] text-center"
-              style={{ color: `${style.ink}77` }}
+          {/* Style selection — bigger cards */}
+          <div className="order-1 md:order-2">
+            <div
+              role="listbox"
+              aria-label={lang === 'sq' ? 'Lloji i albumit' : 'Album type'}
+              className="flex md:grid md:grid-cols-5 gap-3.5 md:gap-3 overflow-x-auto md:overflow-visible snap-x snap-mandatory pb-2 md:pb-0 -mx-1 px-1 scrollbar-thin"
+              style={{ WebkitOverflowScrolling: 'touch' }}
             >
-              {style.line[lang]}
-            </motion.p>
-          </AnimatePresence>
-          <Link href={href}>
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              className="px-8 py-3.5 text-white text-[12.5px] font-semibold rounded-full"
-              style={{
-                background: style.ink,
-                boxShadow: `0 10px 24px ${style.spine}30`,
-              }}
-            >
-              {lang === 'sq' ? `Fillo — ${style.label.sq}` : `Start — ${style.label.en}`}
-            </motion.button>
-          </Link>
-          <Link
-            href="/krijo"
-            className="text-[12px] underline underline-offset-4 decoration-black/20 hover:decoration-black/45"
-            style={{ color: `${style.ink}70` }}
-          >
-            {lang === 'sq' ? 'të gjitha stilet' : 'all styles'}
-          </Link>
+              {ALBUM_STYLES.map((s, i) => {
+                const active = i === idx;
+                const els = coverElsById[s.designId] || [];
+                return (
+                  <button
+                    key={s.key}
+                    type="button"
+                    role="option"
+                    aria-selected={active}
+                    onClick={() => setIdx(i)}
+                    className="group flex flex-col items-center gap-2.5 shrink-0 snap-center focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 rounded-md w-[108px] md:w-auto"
+                    style={{ ['--tw-ring-color' as string]: style.ink }}
+                  >
+                    <div
+                      className="relative overflow-hidden w-full"
+                      style={{
+                        aspectRatio: `${DESIGN_W} / ${DESIGN_H}`,
+                        borderRadius: 5,
+                        boxShadow: active
+                          ? `0 14px 32px ${s.spine}45, 0 0 0 2px ${style.ink}`
+                          : '0 4px 16px rgba(0,0,0,0.10)',
+                        opacity: active ? 1 : 0.72,
+                        transform: active ? 'translateY(-2px)' : 'none',
+                        transition: 'box-shadow 0.22s ease, opacity 0.22s ease, transform 0.22s ease',
+                      }}
+                    >
+                      {els.length > 0 ? (
+                        <AlbumStarterThumb elements={els} bg={String(s.spine)} />
+                      ) : (
+                        <div className="absolute inset-0" style={{ background: s.spine }} />
+                      )}
+                    </div>
+                    <span
+                      className="text-[12px] md:text-[12.5px] tracking-[0.03em] leading-tight text-center px-0.5"
+                      style={{
+                        color: active ? style.ink : `${style.ink}78`,
+                        fontWeight: active ? 600 : 500,
+                      }}
+                    >
+                      {s.label[lang]}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-8 md:mt-10 flex flex-col items-stretch md:items-start gap-3">
+              <Link href={href} className="w-full md:w-auto">
+                <motion.button
+                  whileTap={{ scale: 0.98 }}
+                  className="w-full md:w-auto px-9 py-4 text-white text-[13px] font-semibold rounded-full"
+                  style={{
+                    background: style.ink,
+                    boxShadow: `0 12px 28px ${style.spine}35`,
+                  }}
+                >
+                  {lang === 'sq' ? `Fillo — ${style.label.sq}` : `Start — ${style.label.en}`}
+                </motion.button>
+              </Link>
+              <Link
+                href="/krijo"
+                className="text-[13px] text-center md:text-left underline underline-offset-4 decoration-black/15 hover:decoration-black/40 self-center md:self-start"
+                style={{ color: `${style.ink}75` }}
+              >
+                {lang === 'sq' ? 'shiko të gjitha stilet' : 'browse all styles'}
+              </Link>
+            </div>
+          </div>
         </div>
       </div>
     </section>
+  );
+}
+
+/** Fills the parent box with a live cover thumb (measures itself). */
+function AlbumStarterThumb({
+  elements,
+  bg,
+}: {
+  elements: ReturnType<typeof designFrontElements>;
+  bg: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ w: 0, h: 0 });
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => {
+      const r = el.getBoundingClientRect();
+      const w = Math.round(r.width);
+      const h = Math.round(r.height);
+      if (w > 0 && h > 0) setSize({ w, h });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  return (
+    <div ref={ref} className="absolute inset-0">
+      {size.w > 0 && (
+        <PageThumb
+          elements={elements}
+          width={size.w}
+          height={size.h}
+          fit="cover"
+          background={bg}
+        />
+      )}
+    </div>
   );
 }
 // ── Data ───────────────────────────────────────────────────────────────────────

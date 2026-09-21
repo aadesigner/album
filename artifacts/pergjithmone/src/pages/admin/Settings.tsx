@@ -50,7 +50,7 @@ function SectionHeader({ icon: Icon, title, desc }: { icon: any; title: string; 
   );
 }
 
-const CATEGORY_ORDER = ['Wedding','Travel','Baby & Family','Celebration','Modern','Portrait','Nature'];
+const CATEGORY_ORDER = ['Wedding','Travel','Baby & Family','Friendship','Celebration','Modern','Portrait','Nature'];
 
 export default function AdminSettings() {
   const queryClient = useQueryClient();

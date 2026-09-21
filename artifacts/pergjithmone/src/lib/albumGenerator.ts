@@ -60,7 +60,8 @@ const AI_CATEGORY_EXPAND: Record<string, string[]> = {
   Wedding: ['Wedding'],
   Travel: ['Travel'],
   'Baby & Family': ['Baby & Family'],
-  Celebration: ['Celebration', 'Wedding'],
+  Celebration: ['Celebration'],
+  Friendship: ['Friendship'],
   Modern: ['Modern', 'Travel'],
   Portrait: ['Wedding'],
   Nature: ['Nature', 'Travel'],
@@ -96,6 +97,10 @@ const CATEGORY_LAYOUT_BIAS: Record<string, Record<string, number>> = {
     '1 Photo': 1.15, 'Photo + Text': 1.0, '2 Photos': 1.35, '3 Photos': 1.25,
     '4 Photos': 0.9, '5-6 Photos': 0.3, Magazine: 0.9,
   },
+  Friendship: {
+    '1 Photo': 1.4, 'Photo + Text': 1.2, '2 Photos': 1.45, '3 Photos': 1.1,
+    '4 Photos': 0.55, '5-6 Photos': 0.15, Magazine: 0.7,
+  },
   Modern: {
     '1 Photo': 1.35, 'Photo + Text': 0.85, '2 Photos': 1.3, '3 Photos': 1.2,
     '4 Photos': 0.85, '5-6 Photos': 0.25, Magazine: 1.4,
@@ -119,6 +124,7 @@ const CATEGORY_TONES: Record<string, { bg: string; fill: string; muted: string; 
   Travel: { bg: '#1C2B3A', fill: '#FFFFFF', muted: '#A8C4D8', accent: '#3A5A70' },
   'Baby & Family': { bg: '#E8EEF2', fill: '#3A5568', muted: '#6A8496', accent: '#BCC9D1' },
   Celebration: { bg: '#1A120C', fill: '#F5E6C8', muted: '#C8A878', accent: '#3A2A18' },
+  Friendship: { bg: '#1A3A42', fill: '#FFFFFF', muted: '#7EC8C4', accent: '#2A5058' },
   Modern: { bg: '#111111', fill: '#FFFFFF', muted: '#888888', accent: '#2A2A2A' },
   Portrait: { bg: '#F4F0EA', fill: '#2A2A2A', muted: '#8A8078', accent: '#D8D0C8' },
   Nature: { bg: '#E8F0E8', fill: '#1A3020', muted: '#5A7A60', accent: '#C8D8C8' },
@@ -279,6 +285,10 @@ function personalizeCoverText(elements: DE[], categoryKey: string, lang: 'sq' | 
       primary: lang === 'sq' ? 'Festë' : 'Celebrate',
       secondary: year,
     },
+    Friendship: {
+      primary: lang === 'sq' ? 'Miqësia jonë' : 'Our Friendship',
+      secondary: year,
+    },
     Modern: {
       primary: lang === 'sq' ? 'Albumi ynë' : 'Our Album',
       secondary: year,
@@ -372,6 +382,7 @@ function buildPhotoCover(
          categoryKey === 'Portrait' ? 'Portrete' :
          categoryKey === 'Nature' ? 'Natyra' :
          categoryKey === 'Celebration' ? 'Festë' :
+         categoryKey === 'Friendship' ? 'Miqësia jonë' :
          'Albumi ynë')
       : (categoryKey === 'Wedding' ? 'Our Wedding' :
          categoryKey === 'Travel' || categoryKey === 'Locations' ? 'Our Journey' :
@@ -379,16 +390,19 @@ function buildPhotoCover(
          categoryKey === 'Portrait' ? 'Portraits' :
          categoryKey === 'Nature' ? 'In Nature' :
          categoryKey === 'Celebration' ? 'Celebrate' :
+         categoryKey === 'Friendship' ? 'Our Friendship' :
          'Our Album');
   const backTitle =
     lang === 'sq'
       ? (categoryKey === 'Wedding' ? 'Me dashuri' :
          categoryKey === 'Travel' || categoryKey === 'Locations' ? 'Kujtime udhëtimi' :
          categoryKey === 'Baby & Family' ? 'Me dashuri' :
+         categoryKey === 'Friendship' ? 'Për gjithmonë' :
          'Faleminderit')
       : (categoryKey === 'Wedding' ? 'With love' :
          categoryKey === 'Travel' || categoryKey === 'Locations' ? 'Travel memories' :
          categoryKey === 'Baby & Family' ? 'With love' :
+         categoryKey === 'Friendship' ? 'Forever' :
          'Thank you');
 
   const title = variant === 'front' ? frontTitle : backTitle;

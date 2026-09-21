@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { imageFrameCoverFit, imageFrameFocusFromOffset } from './designs';
+import { imageFrameCoverFit, imageFrameFocusFromOffset, PHOTO_CORNER_ZOOM } from './designs';
 
 describe('imageFrameCoverFit', () => {
   it('landscape photo in square frame can pan horizontally only', () => {
@@ -35,6 +35,24 @@ describe('imageFrameCoverFit', () => {
     expect(lo.offY).toBe(0);
     expect(hi.offX).toBeCloseTo(hi.maxOffX);
     expect(hi.offY).toBeCloseTo(hi.maxOffY);
+  });
+
+  it('corner zoom unlocks 2D pan on landscape-in-square', () => {
+    const fit = imageFrameCoverFit(2000, 1000, 400, 400, 0, 0, PHOTO_CORNER_ZOOM);
+    expect(fit.maxOffX).toBeGreaterThan(1);
+    expect(fit.maxOffY).toBeGreaterThan(1);
+    expect(fit.offX).toBe(0);
+    expect(fit.offY).toBe(0);
+    const corner = imageFrameCoverFit(2000, 1000, 400, 400, 1, 1, PHOTO_CORNER_ZOOM);
+    expect(corner.offX).toBeCloseTo(corner.maxOffX);
+    expect(corner.offY).toBeCloseTo(corner.maxOffY);
+  });
+
+  it('corner zoom unlocks 2D pan on exact-aspect frames', () => {
+    const fit = imageFrameCoverFit(1000, 800, 500, 400, 0.5, 0.5, PHOTO_CORNER_ZOOM);
+    expect(fit.canPan).toBe(true);
+    expect(fit.maxOffX).toBeGreaterThan(1);
+    expect(fit.maxOffY).toBeGreaterThan(1);
   });
 });
 

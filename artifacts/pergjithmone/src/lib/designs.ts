@@ -63,6 +63,11 @@ export interface EditorElement {
   /** Cover-crop focus 0–1 (0.5 = centered). Lets users pan a photo inside its frame. */
   cropFocusX?: number;
   cropFocusY?: number;
+  /**
+   * Zoom past exact cover-fit (≥1). At 1, overflow is usually one-axis only so
+   * photo corners can't all be framed; ≥~1.15 unlocks 2D pan to every corner.
+   */
+  cropZoom?: number;
   /** How the bitmap fills its box — landmark cutouts use `contain`. */
   objectFit?: 'cover' | 'contain';
   /**
@@ -80,7 +85,7 @@ export interface EditorElement {
 }
 export type DE = Omit<EditorElement, 'id'>;
 
-/** object-fit: cover crop rect in source-image pixels, with optional focus (0–1). */
+/** object-fit: cover crop rect in source-image pixels, with optional focus (0–1) and zoom (≥1). */
 export function coverCropRect(
   naturalW: number,
   naturalH: number,
@@ -88,8 +93,10 @@ export function coverCropRect(
   boxH: number,
   focusX = 0.5,
   focusY = 0.5,
+  zoom = 1,
 ): { x: number; y: number; width: number; height: number; scale: number; maxX: number; maxY: number } {
-  const scale = Math.max(boxW / Math.max(1, naturalW), boxH / Math.max(1, naturalH));
+  const z = Math.max(1, Number.isFinite(zoom) ? zoom : 1);
+  const scale = Math.max(boxW / Math.max(1, naturalW), boxH / Math.max(1, naturalH)) * z;
   const width = boxW / scale;
   const height = boxH / scale;
   const maxX = Math.max(0, naturalW - width);
@@ -112,6 +119,9 @@ export function coverCropRect(
  * Offsets are how far the image is shifted left/up so focus sits in-frame.
  * canPan is true when the photo overflows the frame on either axis.
  */
+/** Minimum zoom so Adjust-photo can reach all four photo corners (2D pan). */
+export const PHOTO_CORNER_ZOOM = 1.2;
+
 export function imageFrameCoverFit(
   naturalW: number,
   naturalH: number,
@@ -119,6 +129,7 @@ export function imageFrameCoverFit(
   frameH: number,
   focusX = 0.5,
   focusY = 0.5,
+  zoom = 1,
 ): {
   scale: number;
   iw: number;
@@ -130,8 +141,10 @@ export function imageFrameCoverFit(
   canPan: boolean;
   focusX: number;
   focusY: number;
+  zoom: number;
 } {
-  const scale = Math.max(frameW / Math.max(1, naturalW), frameH / Math.max(1, naturalH));
+  const z = Math.max(1, Number.isFinite(zoom) ? zoom : 1);
+  const scale = Math.max(frameW / Math.max(1, naturalW), frameH / Math.max(1, naturalH)) * z;
   const iw = naturalW * scale;
   const ih = naturalH * scale;
   const maxOffX = Math.max(0, iw - frameW);
@@ -149,6 +162,7 @@ export function imageFrameCoverFit(
     canPan: maxOffX > 1 || maxOffY > 1,
     focusX: fx,
     focusY: fy,
+    zoom: z,
   };
 }
 
@@ -229,7 +243,7 @@ export interface DesignDef {
 }
 
 /** Shared rev for Travel builtins (Paris/Barcelona + city photo covers). */
-export const TRAVEL_LAYOUT_REV = 6;
+export const TRAVEL_LAYOUT_REV = 7;
 export interface LayoutZone { x:number; y:number; w:number; h:number; type:string; rotation?:number }
 export interface LayoutDef { id:string; category:string; label:{sq:string;en:string}; zones:LayoutZone[] }
 
@@ -326,6 +340,7 @@ export const CATEGORY_LABELS: Record<string, {sq: string; en: string}> = {
   'Locations':     { sq: 'Vendndodhje',    en: 'Locations'     },
   'Baby & Family': { sq: 'Bebe & Familja', en: 'Baby & Family' },
   'Celebration':   { sq: 'Festime',        en: 'Celebration'   },
+  'Friendship':    { sq: 'Miqësi',         en: 'Friendship'    },
   'Nature':        { sq: 'Natyrë',         en: 'Nature'        },
   'Modern':        { sq: 'Moderne',        en: 'Modern'        },
   'Portrait':      { sq: 'Portret',        en: 'Portrait'      },
@@ -489,16 +504,16 @@ function CITY(
       thumbAccents: [],
       elements: [
         BG(paper),
-        TX(label, 24, 48, DESIGN_W - 48, 100, {
-          fontSize: labelSize, fill, align: 'center',
-          fontFamily: "'Londrina Solid', cursive", letterSpacing: 5,
+        TX(label, 20, 28, DESIGN_W - 40, 78, {
+          fontSize: Math.min(labelSize, 78), fill, align: 'center',
+          fontFamily: "'Londrina Solid', cursive", letterSpacing: 4, lineHeight: 0.95,
         }),
-        TX(year, 180, 150, 240, 40, {
+        TX(year, 20, 104, DESIGN_W - 40, 36, {
           fontSize: 26, fill: yearFill, align: 'center',
-          fontFamily: "'Londrina Solid', cursive", letterSpacing: 3,
+          fontFamily: "'Londrina Solid', cursive", letterSpacing: 6,
         }),
-        SH('rect', 28, 210, DESIGN_W - 56, 4, accent, { opacity: 1, strokeWidth: 0 }),
-        IMG(thumbPhoto, 28, 230, DESIGN_W - 56, DESIGN_H - 258),
+        SH('rect', 220, 148, 160, 3, accent, { opacity: 1, strokeWidth: 0 }),
+        IMG(thumbPhoto, 24, 172, DESIGN_W - 48, DESIGN_H - 196),
       ],
     };
   }
@@ -511,21 +526,21 @@ function CITY(
       thumbAccents: [],
       elements: [
         BG(paper),
-        IMG(thumbPhoto, 0, 160, DESIGN_W, DESIGN_H - 160),
-        SH('rect', 0, 0, DESIGN_W, 168, paper, { opacity: 1, strokeWidth: 0 }),
-        TX(label, 20, 36, DESIGN_W - 40, 90, {
-          fontSize: labelSize, fill, align: 'center',
-          fontFamily: "'Londrina Solid', cursive", letterSpacing: 5,
+        IMG(thumbPhoto, 0, 148, DESIGN_W, DESIGN_H - 148),
+        SH('rect', 0, 0, DESIGN_W, 156, paper, { opacity: 1, strokeWidth: 0 }),
+        TX(label, 16, 28, DESIGN_W - 32, 72, {
+          fontSize: Math.min(labelSize, 72), fill, align: 'center',
+          fontFamily: "'Londrina Solid', cursive", letterSpacing: 4, lineHeight: 0.95,
         }),
-        TX(year, 200, 118, 200, 36, {
+        TX(year, 16, 100, DESIGN_W - 32, 34, {
           fontSize: 22, fill: yearFill, align: 'center',
-          fontFamily: "'Londrina Solid', cursive", letterSpacing: 4,
+          fontFamily: "'Londrina Solid', cursive", letterSpacing: 5,
         }),
       ],
     };
   }
 
-  // postcard (default) — color field, floating photo card, title/year
+  // postcard (default) — color field, full city photo, title then year
   return {
     id, name, category: 'Travel', thumbPhoto,
     layoutRev: TRAVEL_LAYOUT_REV,
@@ -533,24 +548,22 @@ function CITY(
     thumbAccents: [],
     elements: [
       BG(paper),
-      TX(label, 20, 36, DESIGN_W - 40, 100, {
-        fontSize: labelSize, fill, align: 'center',
+      TX(label, 16, 28, DESIGN_W - 32, 78, {
+        fontSize: Math.min(labelSize, 76), fill, align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 5, lineHeight: 0.95,
+      }),
+      TX(year, 16, 104, DESIGN_W - 32, 34, {
+        fontSize: 24, fill: yearFill, align: 'center',
         fontFamily: "'Londrina Solid', cursive", letterSpacing: 6,
       }),
-      SH('circle', 48, 150, 18, 18, accent, { opacity: 0.9, strokeWidth: 0 }),
-      SH('circle', DESIGN_W - 66, 160, 12, 12, fill, { opacity: 0.35, strokeWidth: 0 }),
-      IMG(thumbPhoto, 40, 180, DESIGN_W - 80, 460),
-      SH('rect', 40, 180, DESIGN_W - 80, 460, '#000000', { opacity: 0.08, strokeWidth: 0 }),
-      TX(year, 180, 680, 240, 52, {
-        fontSize: 30, fill: yearFill, align: 'center',
-        fontFamily: "'Londrina Solid', cursive", letterSpacing: 4,
-      }),
-      SH('rect', 220, 740, 160, 3, accent, { opacity: 1, strokeWidth: 0 }),
+      SH('rect', 230, 146, 140, 3, accent, { opacity: 0.9, strokeWidth: 0 }),
+      IMG(thumbPhoto, 32, 168, DESIGN_W - 64, 520),
+      SH('rect', 32, 168, DESIGN_W - 64, 520, '#000000', { opacity: 0.06, strokeWidth: 0 }),
     ],
   };
 }
 
-// Premade covers: wedding + ADOR + Paris/Barcelona landmarks + real city photos
+// Premade covers: wedding + family + friendship + celebration + travel cities
 export const DESIGNS: DesignDef[] = [
 
   // ── WEDDING ──────────────────────────────────────────────────────────────
@@ -558,55 +571,106 @@ export const DESIGNS: DesignDef[] = [
     id: 'cream-names',
     name: { sq: 'Emrat Tanë', en: 'Our Names' },
     category: 'Wedding',
-    thumb: { background: '#ECE7E1' },
+    thumb: { background: '#F3EEE6' },
     thumbAccents: [],
     elements: [
-      BG('#ECE7E1'),
-      TX('Elira & Ardit', 40, 330, DESIGN_W - 80, 90, {
-        fontSize: 42,
-        fill: '#1A1A1A',
-        fontStyle: 'normal',
-        align: 'center',
-        fontFamily: "'Great Vibes', cursive",
+      BG('#F3EEE6'),
+      SH('rect', 36, 36, DESIGN_W - 72, DESIGN_H - 72, '#000000', {
+        opacity: 0, strokeWidth: 1, strokeColor: '#C4B5A2',
       }),
-      TX('14.09.2024', 150, 430, DESIGN_W - 300, 40, {
-        fontSize: 16,
-        fill: '#1A1A1A',
-        align: 'center',
-        fontFamily: 'Arial, Helvetica, sans-serif',
-        letterSpacing: 2,
+      TX('EMRAT TANË', 80, 150, DESIGN_W - 160, 28, {
+        fontSize: 12, fill: '#9A8B7A', align: 'center',
+        fontFamily: "Arial, 'Helvetica Neue', sans-serif", letterSpacing: 6,
+      }),
+      TX('Elira & Ardit', 40, 280, DESIGN_W - 80, 120, {
+        fontSize: 56, fill: '#1A1612', align: 'center',
+        fontFamily: "'Great Vibes', cursive", fontStyle: 'normal', lineHeight: 1.05,
+      }),
+      SH('rect', 250, 430, 100, 1, '#C4B5A2', { opacity: 1, strokeWidth: 0 }),
+      TX('14 · 09 · 2024', 100, 460, DESIGN_W - 200, 36, {
+        fontSize: 14, fill: '#6A5C4E', align: 'center',
+        fontFamily: "Arial, 'Helvetica Neue', sans-serif", letterSpacing: 4,
+      }),
+      TX('përgjithmonë', 120, 700, DESIGN_W - 240, 36, {
+        fontSize: 16, fill: '#B8A898', align: 'center',
+        fontFamily: "Georgia, 'Times New Roman', serif", fontStyle: 'italic',
       }),
     ],
   },
   {
-    id: 'the-wedding-of',
-    name: { sq: 'Dasma', en: 'The Wedding' },
+    id: 'forever-vows',
+    name: { sq: 'Përjetë', en: 'Forever' },
     category: 'Wedding',
-    thumbPhoto: '/designs/wedding-spin-thumb.jpg',
-    thumb: { background: '#1A2A1A' },
+    thumb: { background: '#1C1814' },
     thumbAccents: [],
     elements: [
-      BG('#1A2A1A'),
-      IMG('/designs/wedding-spin-cover.jpg', 0, 0, DESIGN_W, DESIGN_H),
-      TX('THE', 48, 48, 80, 28, {
-        fontSize: 13, fill: '#FFFFFF', align: 'left',
-        fontFamily: "Arial, 'Helvetica Neue', sans-serif", letterSpacing: 3,
+      BG('#1C1814'),
+      TX('THE', 40, 200, DESIGN_W - 80, 28, {
+        fontSize: 13, fill: '#C9B59A', align: 'center',
+        fontFamily: "Arial, 'Helvetica Neue', sans-serif", letterSpacing: 8,
       }),
-      TX('WEDDING', 40, 70, DESIGN_W - 80, 88, {
-        fontSize: 64, fill: '#FFFFFF', fontStyle: 'bold', align: 'center',
-        fontFamily: "Georgia, 'Times New Roman', serif", letterSpacing: 4,
+      TX('FOREVER', 20, 240, DESIGN_W - 40, 90, {
+        fontSize: 68, fill: '#F5EDE3', align: 'center',
+        fontFamily: "Georgia, 'Times New Roman', serif", fontStyle: 'bold', letterSpacing: 6,
       }),
-      TX('OF', 48, 150, 80, 28, {
-        fontSize: 13, fill: '#FFFFFF', align: 'left',
-        fontFamily: "Arial, 'Helvetica Neue', sans-serif", letterSpacing: 3,
+      SH('rect', 240, 350, 120, 1.5, '#C9B59A', { opacity: 0.85, strokeWidth: 0 }),
+      TX('Elira & Ardit', 40, 380, DESIGN_W - 80, 70, {
+        fontSize: 36, fill: '#F5EDE3', align: 'center',
+        fontFamily: "'Great Vibes', cursive",
       }),
-      TX('ANISA & ENDRIT', 40, 200, DESIGN_W - 80, 48, {
-        fontSize: 22, fill: '#FFFFFF', fontStyle: 'bold', align: 'center',
-        fontFamily: "Georgia, 'Times New Roman', serif", letterSpacing: 3,
+      TX(String(new Date().getFullYear()), 180, 680, 240, 40, {
+        fontSize: 14, fill: '#8A7A68', align: 'center',
+        fontFamily: "Arial, 'Helvetica Neue', sans-serif", letterSpacing: 5,
       }),
-      TX('14 JUNE 2025', 100, 740, DESIGN_W - 200, 36, {
-        fontSize: 13, fill: '#1A1A1A', align: 'center',
-        fontFamily: "Arial, 'Helvetica Neue', sans-serif", letterSpacing: 2,
+    ],
+  },
+  {
+    id: 'ivory-union',
+    name: { sq: 'Bashkimi', en: 'Union' },
+    category: 'Wedding',
+    thumb: { background: '#FAF7F2' },
+    thumbAccents: [],
+    elements: [
+      BG('#FAF7F2'),
+      TX('&', 40, 220, DESIGN_W - 80, 100, {
+        fontSize: 92, fill: '#D4C4B0', align: 'center',
+        fontFamily: "Georgia, 'Times New Roman', serif",
+      }),
+      TX('ELIRA', 40, 340, DESIGN_W - 80, 48, {
+        fontSize: 28, fill: '#1A1612', align: 'center',
+        fontFamily: "Georgia, 'Times New Roman', serif", letterSpacing: 10,
+      }),
+      TX('ARDIT', 40, 400, DESIGN_W - 80, 48, {
+        fontSize: 28, fill: '#1A1612', align: 'center',
+        fontFamily: "Georgia, 'Times New Roman', serif", letterSpacing: 10,
+      }),
+      SH('rect', 250, 480, 100, 1, '#C4B5A2', { opacity: 1, strokeWidth: 0 }),
+      TX('DASMA JONË', 100, 510, DESIGN_W - 200, 32, {
+        fontSize: 12, fill: '#9A8B7A', align: 'center',
+        fontFamily: "Arial, 'Helvetica Neue', sans-serif", letterSpacing: 5,
+      }),
+    ],
+  },
+  {
+    id: 'rose-day',
+    name: { sq: 'Dita Jonë', en: 'Our Day' },
+    category: 'Wedding',
+    thumb: { background: '#E8D5D0' },
+    thumbAccents: [],
+    elements: [
+      BG('#E8D5D0', { from: '#E8D5D0', to: '#F5EBE6', dir: 'tb' }),
+      TX('OUR DAY', 40, 240, DESIGN_W - 80, 36, {
+        fontSize: 14, fill: '#8A6A62', align: 'center',
+        fontFamily: "Arial, 'Helvetica Neue', sans-serif", letterSpacing: 8,
+      }),
+      TX('Elira & Ardit', 32, 300, DESIGN_W - 64, 100, {
+        fontSize: 48, fill: '#3A2420', align: 'center',
+        fontFamily: "'Great Vibes', cursive",
+      }),
+      SH('rect', 255, 430, 90, 1, '#B89890', { opacity: 0.9, strokeWidth: 0 }),
+      TX('with love', 140, 460, DESIGN_W - 280, 36, {
+        fontSize: 16, fill: '#8A6A62', align: 'center',
+        fontFamily: "Georgia, 'Times New Roman', serif", fontStyle: 'italic',
       }),
     ],
   },
@@ -622,20 +686,16 @@ export const DESIGNS: DesignDef[] = [
     thumbAccents: [],
     elements: [
       BG('#FEC5D7'),
-      TX('PAR', 20, 28, DESIGN_W - 40, 78, {
-        fontSize: 86, fill: '#FFFFFF', align: 'center',
-        fontFamily: "'Londrina Solid', cursive", letterSpacing: 14, lineHeight: 0.92,
+      TX('PARIS', 12, 22, DESIGN_W - 24, 88, {
+        fontSize: 92, fill: '#FFFFFF', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 10, lineHeight: 0.92,
       }),
-      TX('IS', 20, 100, DESIGN_W - 40, 78, {
-        fontSize: 86, fill: '#FFFFFF', align: 'center',
-        fontFamily: "'Londrina Solid', cursive", letterSpacing: 18, lineHeight: 0.92,
-      }),
-      TX('2022', 20, 178, DESIGN_W - 40, 36, {
-        fontSize: 28, fill: '#F06BAF', align: 'center',
+      TX('2022', 12, 108, DESIGN_W - 24, 36, {
+        fontSize: 30, fill: '#F06BAF', align: 'center',
         fontFamily: "'Londrina Solid', cursive", letterSpacing: 8,
       }),
-      SH('rect', 250, 218, 100, 3, '#FFFFFF', { opacity: 0.55, strokeWidth: 0 }),
-      IMG('/designs/eiffel-tower.png', 90, 230, 420, 540, {
+      SH('rect', 240, 150, 120, 3, '#FFFFFF', { opacity: 0.55, strokeWidth: 0 }),
+      IMG('/designs/eiffel-tower.png', 40, 160, 520, 620, {
         objectFit: 'contain', mixBlendMode: 'screen',
       }),
     ],
@@ -650,21 +710,17 @@ export const DESIGNS: DesignDef[] = [
     thumbAccents: [],
     elements: [
       BG('#A83442'),
-      TX('BARCE', 12, 22, DESIGN_W - 24, 72, {
-        fontSize: 78, fill: '#FCB426', align: 'center',
-        fontFamily: "'Londrina Solid', cursive", letterSpacing: 8, lineHeight: 0.9,
+      TX('BARCELONA', 8, 24, DESIGN_W - 16, 72, {
+        fontSize: 58, fill: '#FCB426', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 4, lineHeight: 0.95,
       }),
-      TX('LONA', 12, 90, DESIGN_W - 24, 72, {
-        fontSize: 78, fill: '#FCB426', align: 'center',
-        fontFamily: "'Londrina Solid', cursive", letterSpacing: 10, lineHeight: 0.9,
+      TX('2026', 8, 96, DESIGN_W - 16, 36, {
+        fontSize: 30, fill: '#FCB426', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 8,
       }),
-      SH('rect', 230, 168, 140, 3, '#FCB426', { opacity: 0.75, strokeWidth: 0 }),
-      IMG('/designs/sagrada-familia.png', 40, 180, 520, 540, {
+      SH('rect', 230, 138, 140, 3, '#FCB426', { opacity: 0.7, strokeWidth: 0 }),
+      IMG('/designs/sagrada-familia.png', 20, 150, 560, 620, {
         objectFit: 'contain', mixBlendMode: 'screen',
-      }),
-      TX('2026', 20, 730, DESIGN_W - 40, 44, {
-        fontSize: 34, fill: '#FCB426', align: 'center',
-        fontFamily: "'Londrina Solid', cursive", letterSpacing: 10,
       }),
     ],
   },
@@ -687,6 +743,123 @@ export const DESIGNS: DesignDef[] = [
   CITY('lisbon',      { sq: 'Lisbonë', en: 'Lisbon' },      'LISBON',      '/designs/lisbon-cover-thumb.jpg',      '#E76F51', { labelSize: 82, accent: '#FFE8D6', layout: 'postcard' }),
   CITY('florence',    { sq: 'Firence', en: 'Florence' },    'FLORENCE',    '/designs/florence-cover-thumb.jpg',    '#BC6C25', { labelSize: 68, accent: '#FFE6C7', layout: 'banner' }),
 
+  // ── FRIENDSHIP — clean typography covers (travel-style) ───────────────────
+  {
+    id: 'friends-forever',
+    name: { sq: 'Miqësi', en: 'Friends' },
+    category: 'Friendship',
+    thumb: { background: '#1A3A42' },
+    thumbAccents: [],
+    elements: [
+      BG('#1A3A42'),
+      TX('FRIENDS', 16, 260, DESIGN_W - 32, 100, {
+        fontSize: 72, fill: '#FFFFFF', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 4,
+      }),
+      TX(String(new Date().getFullYear()), 16, 370, DESIGN_W - 32, 40, {
+        fontSize: 28, fill: '#7EC8C4', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 8,
+      }),
+      SH('rect', 240, 430, 120, 3, '#7EC8C4', { opacity: 0.7, strokeWidth: 0 }),
+      TX('forever', 100, 460, DESIGN_W - 200, 44, {
+        fontSize: 22, fill: '#C8E8E4', align: 'center',
+        fontFamily: "Georgia, 'Times New Roman', serif", fontStyle: 'italic',
+      }),
+    ],
+  },
+  {
+    id: 'us-together',
+    name: { sq: 'Ne', en: 'Us' },
+    category: 'Friendship',
+    thumb: { background: '#F0E6D8' },
+    thumbAccents: [],
+    elements: [
+      BG('#F0E6D8'),
+      TX('US', 20, 250, DESIGN_W - 40, 140, {
+        fontSize: 128, fill: '#1A1A1A', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 8,
+      }),
+      SH('rect', 240, 420, 120, 3, '#1A1A1A', { opacity: 0.35, strokeWidth: 0 }),
+      TX('togetherness', 80, 450, DESIGN_W - 160, 40, {
+        fontSize: 16, fill: '#6A5A4A', align: 'center',
+        fontFamily: "Arial, 'Helvetica Neue', sans-serif", letterSpacing: 5,
+      }),
+      TX(String(new Date().getFullYear()), 180, 680, 240, 40, {
+        fontSize: 20, fill: '#9A8A7A', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 4,
+      }),
+    ],
+  },
+  {
+    id: 'since-day-one',
+    name: { sq: 'Nga fillimi', en: 'Day One' },
+    category: 'Friendship',
+    thumb: { background: '#2A1F3D' },
+    thumbAccents: [],
+    elements: [
+      BG('#2A1F3D'),
+      TX('SINCE', 40, 240, DESIGN_W - 80, 48, {
+        fontSize: 28, fill: '#C4B5E0', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 10,
+      }),
+      TX('DAY ONE', 16, 300, DESIGN_W - 32, 100, {
+        fontSize: 68, fill: '#FFFFFF', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 3,
+      }),
+      SH('rect', 230, 430, 140, 3, '#A78BFA', { opacity: 0.75, strokeWidth: 0 }),
+      TX(String(new Date().getFullYear()), 180, 680, 240, 40, {
+        fontSize: 22, fill: '#A78BFA', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 4,
+      }),
+    ],
+  },
+  {
+    id: 'always-crew',
+    name: { sq: 'Ekipi', en: 'Crew' },
+    category: 'Friendship',
+    thumb: { background: '#E85D4C' },
+    thumbAccents: [],
+    elements: [
+      BG('#E85D4C'),
+      TX('CREW', 16, 270, DESIGN_W - 32, 110, {
+        fontSize: 96, fill: '#FFFFFF', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 6,
+      }),
+      TX(String(new Date().getFullYear()), 16, 390, DESIGN_W - 32, 40, {
+        fontSize: 28, fill: '#FFE8A3', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 8,
+      }),
+      SH('rect', 240, 450, 120, 3, '#FFE8A3', { opacity: 0.8, strokeWidth: 0 }),
+      TX('always', 140, 480, DESIGN_W - 280, 40, {
+        fontSize: 20, fill: '#FFFFFF', align: 'center',
+        fontFamily: "Georgia, 'Times New Roman', serif", fontStyle: 'italic',
+      }),
+    ],
+  },
+  {
+    id: 'good-times',
+    name: { sq: 'Kohë të mira', en: 'Good Times' },
+    category: 'Friendship',
+    thumb: { background: '#0F2A24' },
+    thumbAccents: [],
+    elements: [
+      BG('#0F2A24'),
+      TX('GOOD', 24, 250, DESIGN_W - 48, 70, {
+        fontSize: 56, fill: '#A8E6CF', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 10,
+      }),
+      TX('TIMES', 24, 330, DESIGN_W - 48, 90, {
+        fontSize: 80, fill: '#FFFFFF', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 4,
+      }),
+      SH('rect', 240, 450, 120, 3, '#A8E6CF', { opacity: 0.7, strokeWidth: 0 }),
+      TX(String(new Date().getFullYear()), 180, 680, 240, 40, {
+        fontSize: 22, fill: '#A8E6CF', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 4,
+      }),
+    ],
+  },
+
   // ── CELEBRATION ───────────────────────────────────────────────────────────
   {
     id: 'birthday-bloom',
@@ -696,23 +869,17 @@ export const DESIGNS: DesignDef[] = [
     thumbAccents: [],
     elements: [
       BG('#FF6B8A', { from: '#FF6B8A', to: '#FF8E53', dir: 'diag' }),
-      SH('circle', 40, 80, 70, 70, '#FFE08A', { opacity: 0.95, strokeWidth: 0 }),
-      SH('circle', 480, 140, 40, 40, '#FFFFFF', { opacity: 0.55, strokeWidth: 0 }),
-      SH('circle', 90, 620, 55, 55, '#7C5CFF', { opacity: 0.85, strokeWidth: 0 }),
-      SH('circle', 460, 560, 28, 28, '#FFE08A', { opacity: 0.9, strokeWidth: 0 }),
-      SH('circle', 300, 700, 22, 22, '#FFFFFF', { opacity: 0.4, strokeWidth: 0 }),
-      TX('HAPPY', 40, 240, DESIGN_W - 80, 70, {
-        fontSize: 48, fill: '#FFFFFF', align: 'center',
-        fontFamily: "'Londrina Solid', cursive", letterSpacing: 10,
+      TX('HAPPY', 32, 240, DESIGN_W - 64, 60, {
+        fontSize: 40, fill: '#FFFFFF', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 12,
       }),
-      TX('BIRTHDAY', 24, 310, DESIGN_W - 48, 100, {
+      TX('BIRTHDAY', 16, 310, DESIGN_W - 32, 100, {
         fontSize: 72, fill: '#1A1A1A', align: 'center',
-        fontFamily: "'Londrina Solid', cursive", letterSpacing: 4,
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 2,
       }),
-      SH('circle', 270, 450, 50, 50, '#FFFFFF', { opacity: 0.35, strokeWidth: 0 }),
-      SH('circle', 285, 465, 20, 20, '#7C5CFF', { opacity: 1, strokeWidth: 0 }),
+      SH('rect', 230, 440, 140, 3, '#FFFFFF', { opacity: 0.55, strokeWidth: 0 }),
       TX(String(new Date().getFullYear()), 180, 680, 240, 48, {
-        fontSize: 28, fill: '#FFFFFF', align: 'center',
+        fontSize: 26, fill: '#FFFFFF', align: 'center',
         fontFamily: "'Londrina Solid', cursive", letterSpacing: 4,
       }),
     ],
@@ -725,23 +892,17 @@ export const DESIGNS: DesignDef[] = [
     thumbAccents: [],
     elements: [
       BG('#1A0A2E', { from: '#1A0A2E', to: '#4C1D95', dir: 'tb' }),
-      SH('circle', -20, -20, 160, 160, '#7C3AED', { opacity: 0.35, strokeWidth: 0 }),
-      SH('circle', 420, 600, 200, 200, '#EC4899', { opacity: 0.25, strokeWidth: 0 }),
-      TX("LET'S", 40, 220, DESIGN_W - 80, 60, {
-        fontSize: 36, fill: '#E9D5FF', align: 'center',
-        fontFamily: "'Londrina Solid', cursive", letterSpacing: 12,
+      TX("LET'S", 32, 230, DESIGN_W - 64, 48, {
+        fontSize: 32, fill: '#E9D5FF', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 14,
       }),
-      TX('PARTY', 20, 290, DESIGN_W - 40, 120, {
+      TX('PARTY', 12, 290, DESIGN_W - 24, 120, {
         fontSize: 96, fill: '#F0ABFC', align: 'center',
-        fontFamily: "'Londrina Solid', cursive", letterSpacing: 6,
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 4,
       }),
-      SH('rect', 180, 430, 240, 4, '#F0ABFC', { opacity: 0.8, strokeWidth: 0 }),
-      TX('ALL NIGHT', 100, 460, DESIGN_W - 200, 40, {
-        fontSize: 18, fill: '#C4B5FD', align: 'center',
-        fontFamily: "Arial, 'Helvetica Neue', sans-serif", letterSpacing: 6,
-      }),
+      SH('rect', 200, 440, 200, 3, '#F0ABFC', { opacity: 0.75, strokeWidth: 0 }),
       TX(String(new Date().getFullYear()), 180, 700, 240, 48, {
-        fontSize: 26, fill: '#FFFFFF', align: 'center',
+        fontSize: 24, fill: '#FFFFFF', align: 'center',
         fontFamily: "'Londrina Solid', cursive", letterSpacing: 4,
       }),
     ],
@@ -755,43 +916,19 @@ export const DESIGNS: DesignDef[] = [
     elements: [
       BG('#1A120C'),
       SH('rect', 48, 48, DESIGN_W - 96, DESIGN_H - 96, '#000000', {
-        opacity: 0, strokeWidth: 2, strokeColor: '#C9A227',
+        opacity: 0, strokeWidth: 1.5, strokeColor: '#C9A227',
       }),
-      TX('CHEERS', 24, 300, DESIGN_W - 48, 110, {
+      TX('CHEERS', 20, 300, DESIGN_W - 40, 100, {
         fontSize: 78, fill: '#C9A227', align: 'center',
-        fontFamily: "'Londrina Solid', cursive", letterSpacing: 8,
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 6,
       }),
-      SH('rect', 160, 430, 280, 2, '#C9A227', { opacity: 1, strokeWidth: 0 }),
+      SH('rect', 180, 430, 240, 2, '#C9A227', { opacity: 1, strokeWidth: 0 }),
       TX('to us', 100, 460, DESIGN_W - 200, 48, {
         fontSize: 28, fill: '#F5E6C8', align: 'center',
         fontFamily: "Georgia, 'Times New Roman', serif", fontStyle: 'italic',
       }),
       TX(String(new Date().getFullYear()), 180, 680, 240, 48, {
-        fontSize: 24, fill: '#C9A227', align: 'center',
-        fontFamily: "'Londrina Solid', cursive", letterSpacing: 4,
-      }),
-    ],
-  },
-  {
-    id: 'friends-forever',
-    name: { sq: 'Miqësi', en: 'Friends' },
-    category: 'Celebration',
-    thumb: { background: '#0E4D5C' },
-    thumbAccents: [],
-    elements: [
-      BG('#0E4D5C', { from: '#0E4D5C', to: '#14919B', dir: 'diag' }),
-      TX('FRIENDS', 20, 260, DESIGN_W - 40, 100, {
-        fontSize: 68, fill: '#FFFFFF', align: 'center',
-        fontFamily: "'Londrina Solid', cursive", letterSpacing: 4,
-      }),
-      TX('forever', 100, 370, DESIGN_W - 200, 50, {
-        fontSize: 32, fill: '#A8E6E1', align: 'center',
-        fontFamily: "Georgia, 'Times New Roman', serif", fontStyle: 'italic',
-      }),
-      SH('circle', 270, 460, 60, 60, '#FFFFFF', { opacity: 0.15, strokeWidth: 0 }),
-      SH('circle', 250, 480, 40, 40, '#FF6B6B', { opacity: 0.9, strokeWidth: 0 }),
-      TX(String(new Date().getFullYear()), 180, 680, 240, 48, {
-        fontSize: 26, fill: '#FFFFFF', align: 'center',
+        fontSize: 22, fill: '#C9A227', align: 'center',
         fontFamily: "'Londrina Solid', cursive", letterSpacing: 4,
       }),
     ],
@@ -804,23 +941,17 @@ export const DESIGNS: DesignDef[] = [
     thumbAccents: [],
     elements: [
       BG('#FF8A3D'),
-      SH('circle', 30, 60, 24, 24, '#FFF', { opacity: 0.85, strokeWidth: 0 }),
-      SH('circle', 520, 100, 16, 16, '#FFE08A', { opacity: 1, strokeWidth: 0 }),
-      SH('circle', 80, 200, 12, 12, '#FF4D6D', { opacity: 1, strokeWidth: 0 }),
-      SH('circle', 480, 240, 20, 20, '#7C5CFF', { opacity: 0.85, strokeWidth: 0 }),
-      SH('circle', 60, 520, 18, 18, '#FFE08A', { opacity: 1, strokeWidth: 0 }),
-      SH('circle', 500, 560, 14, 14, '#FFF', { opacity: 0.7, strokeWidth: 0 }),
-      SH('circle', 200, 700, 10, 10, '#FF4D6D', { opacity: 1, strokeWidth: 0 }),
-      TX('YAY!', 40, 280, DESIGN_W - 80, 140, {
-        fontSize: 120, fill: '#1A1A1A', align: 'center',
-        fontFamily: "'Londrina Solid', cursive", letterSpacing: 4,
+      TX('YAY!', 24, 280, DESIGN_W - 48, 130, {
+        fontSize: 110, fill: '#1A1A1A', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 2,
       }),
-      TX('we celebrate', 80, 440, DESIGN_W - 160, 40, {
-        fontSize: 20, fill: '#FFFFFF', align: 'center',
-        fontFamily: "Arial, 'Helvetica Neue', sans-serif", letterSpacing: 4,
+      SH('rect', 230, 440, 140, 3, '#FFFFFF', { opacity: 0.65, strokeWidth: 0 }),
+      TX('we celebrate', 80, 470, DESIGN_W - 160, 40, {
+        fontSize: 16, fill: '#FFFFFF', align: 'center',
+        fontFamily: "Arial, 'Helvetica Neue', sans-serif", letterSpacing: 5,
       }),
-      TX(String(new Date().getFullYear()), 180, 660, 240, 48, {
-        fontSize: 28, fill: '#1A1A1A', align: 'center',
+      TX(String(new Date().getFullYear()), 180, 680, 240, 48, {
+        fontSize: 26, fill: '#1A1A1A', align: 'center',
         fontFamily: "'Londrina Solid', cursive", letterSpacing: 4,
       }),
     ],
@@ -835,12 +966,104 @@ export const DESIGNS: DesignDef[] = [
     thumbAccents: [],
     elements: [
       { ...BG('#BCC9D1'), src: '/designs/baby-ador-cover.jpg' },
-      TX('ADOR', 40, 210, DESIGN_W - 80, 72, {
-        fontSize: 48,
+      TX('ADOR', 40, 200, DESIGN_W - 80, 80, {
+        fontSize: 56,
         fill: '#4A7593',
         align: 'center',
         fontFamily: "Georgia, 'Times New Roman', serif",
-        letterSpacing: 10,
+        letterSpacing: 12,
+      }),
+    ],
+  },
+  {
+    id: 'family-us',
+    name: { sq: 'Familja', en: 'Family' },
+    category: 'Baby & Family',
+    thumb: { background: '#E8EEF2' },
+    thumbAccents: [],
+    elements: [
+      BG('#E8EEF2'),
+      TX('FAMILJA', 16, 270, DESIGN_W - 32, 100, {
+        fontSize: 64, fill: '#2A3A48', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 4,
+      }),
+      TX(String(new Date().getFullYear()), 16, 380, DESIGN_W - 32, 40, {
+        fontSize: 28, fill: '#7A9AAC', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 8,
+      }),
+      SH('rect', 240, 440, 120, 3, '#7A9AAC', { opacity: 0.65, strokeWidth: 0 }),
+      TX('our story', 140, 470, DESIGN_W - 280, 40, {
+        fontSize: 16, fill: '#6A8496', align: 'center',
+        fontFamily: "Georgia, 'Times New Roman', serif", fontStyle: 'italic',
+      }),
+    ],
+  },
+  {
+    id: 'little-years',
+    name: { sq: 'Vitet e vogla', en: 'Little Years' },
+    category: 'Baby & Family',
+    thumb: { background: '#F5EFE6' },
+    thumbAccents: [],
+    elements: [
+      BG('#F5EFE6'),
+      TX('LITTLE', 40, 250, DESIGN_W - 80, 56, {
+        fontSize: 36, fill: '#8A7A6A', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 10,
+      }),
+      TX('YEARS', 20, 320, DESIGN_W - 40, 100, {
+        fontSize: 78, fill: '#2A2218', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 4,
+      }),
+      SH('rect', 240, 450, 120, 3, '#C4B5A2', { opacity: 0.8, strokeWidth: 0 }),
+      TX(String(new Date().getFullYear()), 180, 680, 240, 40, {
+        fontSize: 20, fill: '#9A8A7A', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 4,
+      }),
+    ],
+  },
+  {
+    id: 'our-home',
+    name: { sq: 'Shtëpia', en: 'Home' },
+    category: 'Baby & Family',
+    thumb: { background: '#3A2E28' },
+    thumbAccents: [],
+    elements: [
+      BG('#3A2E28'),
+      TX('HOME', 20, 280, DESIGN_W - 40, 110, {
+        fontSize: 88, fill: '#F5EDE3', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 6,
+      }),
+      TX(String(new Date().getFullYear()), 16, 400, DESIGN_W - 32, 40, {
+        fontSize: 26, fill: '#C9B59A', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 8,
+      }),
+      SH('rect', 240, 460, 120, 3, '#C9B59A', { opacity: 0.7, strokeWidth: 0 }),
+      TX('where we belong', 80, 490, DESIGN_W - 160, 40, {
+        fontSize: 15, fill: '#B8A898', align: 'center',
+        fontFamily: "Georgia, 'Times New Roman', serif", fontStyle: 'italic',
+      }),
+    ],
+  },
+  {
+    id: 'first-chapter',
+    name: { sq: 'Kapitulli I', en: 'Chapter One' },
+    category: 'Baby & Family',
+    thumb: { background: '#D8E4EC' },
+    thumbAccents: [],
+    elements: [
+      BG('#D8E4EC'),
+      TX('CHAPTER', 40, 250, DESIGN_W - 80, 48, {
+        fontSize: 24, fill: '#5A7A90', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 10,
+      }),
+      TX('ONE', 20, 310, DESIGN_W - 40, 110, {
+        fontSize: 96, fill: '#1A2A38', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 6,
+      }),
+      SH('rect', 240, 450, 120, 3, '#5A7A90', { opacity: 0.6, strokeWidth: 0 }),
+      TX(String(new Date().getFullYear()), 180, 680, 240, 40, {
+        fontSize: 22, fill: '#5A7A90', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 4,
       }),
     ],
   },

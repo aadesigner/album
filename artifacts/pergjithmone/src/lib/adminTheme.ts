@@ -42,7 +42,9 @@ export type AdminPaletteId =
   | 'ink'
   | 'matcha'
   | 'merlot'
-  | 'cloud';
+  | 'cloud'
+  | 'classic'
+  | 'panel';
 
 export type AdminPalette = {
   id: AdminPaletteId;
@@ -312,6 +314,64 @@ export const ADMIN_PALETTES: AdminPalette[] = [
       fontSerif: SPACE,
       fontSans: DM_SANS,
       typePair: 'Space Grotesk · DM Sans',
+    }),
+  },
+  {
+    id: 'classic',
+    name: 'Classic',
+    tagline: 'Black · grey · white',
+    swatches: ['#F4F4F5', '#171717', '#E4E4E7'],
+    tokens: withAliases({
+      bg: '#F4F4F5',
+      sidebar: '#FAFAFA',
+      sidebarHover: '#F0F0F1',
+      sidebarActive: '#E4E4E7',
+      sidebarText: '#71717A',
+      sidebarTextActive: '#09090B',
+      sidebarLine: '#E4E4E7',
+      sidebarWash: 'linear-gradient(180deg, #FAFAFA 0%, #F4F4F5 100%)',
+      accent: '#171717',
+      accentSoft: '#E4E4E7',
+      accentDeep: '#09090B',
+      ink: '#09090B',
+      muted: '#71717A',
+      card: '#FFFFFF',
+      line: '#E4E4E7',
+      success: '#3F7A5C',
+      warn: '#B45309',
+      radius: '0.55rem',
+      fontSerif: INTER,
+      fontSans: INTER,
+      typePair: 'Inter · Inter',
+    }),
+  },
+  {
+    id: 'panel',
+    name: 'Panel',
+    tagline: 'Dark rail · light stage',
+    swatches: ['#F4F4F5', '#18181B', '#E4E4E7'],
+    tokens: withAliases({
+      bg: '#F4F4F5',
+      sidebar: '#18181B',
+      sidebarHover: '#27272A',
+      sidebarActive: '#3F3F46',
+      sidebarText: '#A1A1AA',
+      sidebarTextActive: '#FAFAFA',
+      sidebarLine: '#27272A',
+      sidebarWash: 'linear-gradient(180deg, #18181B 0%, #09090B 100%)',
+      accent: '#18181B',
+      accentSoft: '#E4E4E7',
+      accentDeep: '#09090B',
+      ink: '#09090B',
+      muted: '#71717A',
+      card: '#FFFFFF',
+      line: '#E4E4E7',
+      success: '#3F7A5C',
+      warn: '#B45309',
+      radius: '0.5rem',
+      fontSerif: SPACE,
+      fontSans: INTER,
+      typePair: 'Space Grotesk · Inter',
     }),
   },
 ];

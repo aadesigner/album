@@ -112,17 +112,36 @@ const PageMiniRender = memo(function PageMiniRender({ elements, w, h, paperColor
           );
         }
         if (el.type === 'image' && el.src) {
+          const zoom = Math.max(1, (el as any).cropZoom ?? 1);
+          const fx = (el.cropFocusX ?? 0.5) * 100;
+          const fy = (el.cropFocusY ?? 0.5) * 100;
           return (
-            <img key={key} src={el.src} draggable={false} alt="" decoding="async" style={{
-              position: 'absolute',
-              left: el.x * scX, top: el.y * scY,
-              width: el.w * scX, height: el.h * scY,
-              objectFit: 'cover',
-              objectPosition: `${(el.cropFocusX ?? 0.5) * 100}% ${(el.cropFocusY ?? 0.5) * 100}%`,
-              opacity: el.opacity ?? 1,
-              transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
-              transformOrigin: 'center',
-            }} />
+            <div
+              key={key}
+              style={{
+                position: 'absolute',
+                left: el.x * scX, top: el.y * scY,
+                width: el.w * scX, height: el.h * scY,
+                overflow: 'hidden',
+                opacity: el.opacity ?? 1,
+                transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
+                transformOrigin: 'center',
+              }}
+            >
+              <img
+                src={el.src}
+                draggable={false}
+                alt=""
+                decoding="async"
+                style={{
+                  width: '100%', height: '100%', display: 'block',
+                  objectFit: 'cover',
+                  objectPosition: `${fx}% ${fy}%`,
+                  transform: zoom > 1 ? `scale(${zoom})` : undefined,
+                  transformOrigin: `${fx}% ${fy}%`,
+                }}
+              />
+            </div>
           );
         }
         if (el.type === 'text') {

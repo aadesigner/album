@@ -44,7 +44,7 @@ import {
   DESIGN_W, DESIGN_H, LAYOUTS, DESIGNS, CATEGORY_LABELS, LAYOUT_CATEGORY_LABELS,
   getCanvasHeight, scaleElementsToCanvas, elementsWithCoverWallpaper,
   BLANK_STARTER_ID, blankFrontCoverElements, blankBackCoverElements,
-  coverCropRect, imageFrameCoverFit, imageFrameContainFit, imageFrameFocusFromOffset,
+  coverCropRect, imageFrameCoverFit, imageFrameContainFit, imageFrameFocusFromOffset, PHOTO_CORNER_ZOOM,
   designFrontElements, designBackElements, buildDesignCatalog, parseCustomDesigns,
   type EditorElement, type DE, type DesignDef, type LayoutZone, type LayoutDef, type DesignOverrides,
 } from '@/lib/designs';
@@ -464,12 +464,23 @@ function KImgEl({el,isSelected,onSelect,onChange,onGestureStart,onDragActive,onG
     i.src=el.src;
   },[el.src]);
 
+  // Sticky focus while / right after pan — avoids snap-back when React commits lag behind Konva.
+  const [liveFocus, setLiveFocus] = useState<{ x: number; y: number } | null>(null);
+  const focusX = liveFocus?.x ?? el.cropFocusX ?? 0.5;
+  const focusY = liveFocus?.y ?? el.cropFocusY ?? 0.5;
+  const cropZoom = Math.max(1, el.cropZoom ?? 1);
+
+  useEffect(() => {
+    setLiveFocus(null);
+  }, [el.cropFocusX, el.cropFocusY, el.cropZoom, el.src]);
+
   const fit = img
     ? (el.objectFit === 'contain'
         ? imageFrameContainFit(img.naturalWidth, img.naturalHeight, el.w, el.h)
-        : imageFrameCoverFit(img.naturalWidth, img.naturalHeight, el.w, el.h, el.cropFocusX ?? 0.5, el.cropFocusY ?? 0.5))
+        : imageFrameCoverFit(img.naturalWidth, img.naturalHeight, el.w, el.h, focusX, focusY, cropZoom))
     : null;
-  const canPan = !!fit?.canPan;
+  // Cover photos can always enter Adjust (we bump cropZoom to unlock corners).
+  const canPan = el.objectFit === 'contain' ? false : (img ? true : !!fit?.canPan);
 
   const onCanPanChangeRef = useRef(onCanPanChange);
   onCanPanChangeRef.current = onCanPanChange;
@@ -481,8 +492,8 @@ function KImgEl({el,isSelected,onSelect,onChange,onGestureStart,onDragActive,onG
   const onExitPhotoAdjustRef = useRef(onExitPhotoAdjust);
   onExitPhotoAdjustRef.current = onExitPhotoAdjust;
   useEffect(() => {
-    if (photoAdjust && img && !canPan) onExitPhotoAdjustRef.current?.();
-  }, [photoAdjust, img, canPan]);
+    if (photoAdjust && img && el.objectFit === 'contain') onExitPhotoAdjustRef.current?.();
+  }, [photoAdjust, img, el.objectFit]);
 
   const panInside = isSelected && !!photoAdjust && canPan;
   const moveFrame = isSelected && !panInside;
@@ -513,7 +524,7 @@ function KImgEl({el,isSelected,onSelect,onChange,onGestureStart,onDragActive,onG
           ? imageFrameContainFit(img.naturalWidth, img.naturalHeight, nw, nh)
           : imageFrameCoverFit(
               img.naturalWidth, img.naturalHeight, nw, nh,
-              el.cropFocusX ?? 0.5, el.cropFocusY ?? 0.5,
+              focusX, focusY, cropZoom,
             ))
       : null;
     n.getChildren().forEach((c: any) => {
@@ -673,7 +684,12 @@ function KImgEl({el,isSelected,onSelect,onChange,onGestureStart,onDragActive,onG
           const { maxOffX: mx, maxOffY: my } = panMaxRef.current;
           const next = imageFrameFocusFromOffset(e.target.x(), e.target.y(), mx, my);
           e.target.position({ x: next.x, y: next.y });
-          onChange({ cropFocusX: next.cropFocusX, cropFocusY: next.cropFocusY });
+          setLiveFocus({ x: next.cropFocusX, y: next.cropFocusY });
+          onChange({
+            cropFocusX: next.cropFocusX,
+            cropFocusY: next.cropFocusY,
+            cropZoom: Math.max(cropZoom, PHOTO_CORNER_ZOOM),
+          });
           setPanning(false);
           onDragActive?.(false);
           onGuides?.(null);
@@ -1083,7 +1099,11 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
                   shapeRefs={shapeRefs} canvasH={canvasH}
                   photoAdjust={photoAdjustId===el.id}
                   onTogglePhotoAdjust={()=>{
-                    if (imgCanPan[el.id] !== true) return;
+                    if (el.objectFit === 'contain') return;
+                    const entering = photoAdjustId !== el.id;
+                    if (entering && (el.cropZoom ?? 1) < PHOTO_CORNER_ZOOM) {
+                      onChangeEl(el.id, { cropZoom: PHOTO_CORNER_ZOOM });
+                    }
                     setPhotoAdjustId(cur => cur===el.id ? null : el.id);
                     onSelectId(el.id);
                   }}
@@ -1324,9 +1344,8 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
         const by=Math.max(sel.y*scY-14, 4);
         const isImg = sel.type === 'image' && !!sel.src;
         const adjusting = photoAdjustId === sel.id;
-        const canPanSel = isImg ? imgCanPan[sel.id] : undefined;
-        // Disable until the bitmap reports canPan (undefined = still loading).
-        const adjustDisabled = !isImg || canPanSel !== true;
+        // Landmark/contain cutouts can't pan; everything else can (cropZoom unlocks corners).
+        const adjustDisabled = !isImg || sel.objectFit === 'contain';
         const barLeft = Math.max(4, Math.min(sel.x * scX, pageW - 200));
         const barTop = Math.min(pageH - 40, (sel.y + sel.h) * scY + 8);
         return (
@@ -1373,10 +1392,16 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
                 <button
                   type="button"
                   disabled={adjustDisabled}
-                  onClick={()=>{ if (!adjustDisabled) setPhotoAdjustId(sel.id); }}
+                  onClick={()=>{
+                    if (adjustDisabled) return;
+                    if ((sel.cropZoom ?? 1) < PHOTO_CORNER_ZOOM) {
+                      onChangeEl(sel.id, { cropZoom: PHOTO_CORNER_ZOOM });
+                    }
+                    setPhotoAdjustId(sel.id);
+                  }}
                   title={
                     adjustDisabled
-                      ? (chipLang==='sq'?'Fotoja mbush kornizën — s’ka çfarë të rregullosh':'Photo fills the frame — nothing to adjust')
+                      ? (chipLang==='sq'?'Kjo grafikë nuk rregullohet brenda kornizës':'This graphic can’t be adjusted inside the frame')
                       : (chipLang==='sq'?'Tërhiq foton brenda kornizës (dyklik / Esc)':'Drag photo inside the frame (double-click / Esc)')
                   }
                   style={{
@@ -3260,7 +3285,7 @@ export default function Editor() {
     // Position/size commits after drag: sync update (node already at final place).
     // Toolbar text tweaks can be deferred.
     const isGeom='x' in changes||'y' in changes||'w' in changes||'h' in changes||'rotation' in changes
-      ||'cropFocusX' in changes||'cropFocusY' in changes;
+      ||'cropFocusX' in changes||'cropFocusY' in changes||'cropZoom' in changes;
     if (isGeom||wasGesture) setPagesContent(next);
     else startTransition(()=>setPagesContent(next));
     // Sync undo/redo button counts deferred from silent drag-start snapshot.

@@ -140,25 +140,25 @@ export function Navbar() {
         }}
       >
         <div
-          className="max-w-7xl mx-auto px-4 md:px-10 h-[42px] md:h-[64px] flex items-center justify-between"
+          className="max-w-7xl mx-auto px-4 md:px-10 h-[48px] md:h-[54px] flex items-center justify-between"
         >
           {/* Logo */}
           <Link href="/" className="flex items-center shrink-0 z-50">
             <img
               src="/logo-full.png"
               alt="Përgjithmonë"
-              className="w-[120px] h-[22px] md:w-[136px] md:h-[26px]"
-              style={{ objectFit: 'cover', objectPosition: 'center' }}
+              className="w-[118px] h-[22px] md:w-[128px] md:h-[24px]"
+              style={{ objectFit: 'contain', objectPosition: 'left center' }}
             />
           </Link>
 
           {/* Desktop center nav */}
-          <div className="hidden md:flex items-center gap-9">
+          <div className="hidden md:flex items-center gap-7">
             {navLinks.map(item => {
               const active = loc === item.href;
               return (
-                <Link key={item.href} href={item.href} className="group relative py-2">
-                  <span className={`text-[10.5px] uppercase tracking-[0.14em] font-medium transition-colors duration-200 ${
+                <Link key={item.href} href={item.href} className="group relative py-1.5">
+                  <span className={`text-[10px] uppercase tracking-[0.14em] font-medium transition-colors duration-200 ${
                     active ? 'text-neutral-900' : 'text-neutral-400 group-hover:text-neutral-800'
                   }`}>
                     {item.label}
@@ -374,28 +374,29 @@ export function Navbar() {
             )}
           </div>
 
-          {/* Mobile: animated hamburger */}
+          {/* Mobile: hamburger */}
           <button
             onClick={() => setIsOpen(v => !v)}
-            className="flex md:hidden flex-col justify-center items-end gap-[5px] w-10 h-10 -translate-x-1.5"
+            className="flex md:hidden flex-col justify-center items-center gap-[5px] w-11 h-11 -mr-1"
             aria-label="Toggle menu"
+            aria-expanded={isOpen}
           >
             <span
-              className="block h-px bg-neutral-900 transition-all duration-300 origin-right"
+              className="block h-[1.5px] bg-neutral-900 rounded-full transition-all duration-300"
               style={{
-                width: isOpen ? '20px' : '20px',
-                transform: isOpen ? 'rotate(-45deg) translateY(-4px)' : 'none',
+                width: 18,
+                transform: isOpen ? 'translateY(6.5px) rotate(45deg)' : 'none',
               }}
             />
             <span
-              className="block h-px bg-neutral-900 transition-all duration-200"
-              style={{ width: '14px', opacity: isOpen ? 0 : 1 }}
+              className="block h-[1.5px] bg-neutral-900 rounded-full transition-all duration-200"
+              style={{ width: 18, opacity: isOpen ? 0 : 1 }}
             />
             <span
-              className="block h-px bg-neutral-900 transition-all duration-300 origin-right"
+              className="block h-[1.5px] bg-neutral-900 rounded-full transition-all duration-300"
               style={{
-                width: isOpen ? '20px' : '20px',
-                transform: isOpen ? 'rotate(45deg) translateY(4px)' : 'none',
+                width: 18,
+                transform: isOpen ? 'translateY(-6.5px) rotate(-45deg)' : 'none',
               }}
             />
           </button>
@@ -407,21 +408,23 @@ export function Navbar() {
         <>
           <div
             className="fixed inset-0 z-40 md:hidden"
-            style={{ background: 'rgba(0,0,0,0.2)', backdropFilter: 'blur(6px)', animation: 'navFadeIn 0.18s ease' }}
+            style={{ background: 'rgba(0,0,0,0.22)', backdropFilter: 'blur(6px)', animation: 'navFadeIn 0.18s ease' }}
             onClick={() => setIsOpen(false)}
           />
 
           <div
             className="fixed z-50 md:hidden"
             style={{
-              top: 50 + 8,
-              left: 16,
-              right: 16,
+              top: 56,
+              left: 12,
+              right: 12,
               background: '#ffffff',
-              borderRadius: 20,
-              boxShadow: '0 24px 80px rgba(0,0,0,0.16), 0 0 0 1px rgba(0,0,0,0.06)',
+              borderRadius: 18,
+              boxShadow: '0 20px 60px rgba(0,0,0,0.14), 0 0 0 1px rgba(0,0,0,0.05)',
               overflow: 'hidden',
               animation: 'navSlideIn 0.2s cubic-bezier(0.32,0.72,0,1)',
+              maxHeight: 'min(78dvh, 560px)',
+              overflowY: 'auto',
             }}
           >
               <div className="px-2 pt-3 pb-1">

@@ -219,7 +219,7 @@ function ThemeSwitcher({
                   >
                     <span
                       className="text-[22px] leading-none font-semibold"
-                      style={{ color: p.tokens.accent, fontFamily: p.tokens.fontSerif }}
+                      style={{ color: p.tokens.sidebarTextActive, fontFamily: p.tokens.fontSerif }}
                     >
                       Aa
                     </span>

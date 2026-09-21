@@ -182,15 +182,14 @@ function MiniPage({ elements, w, h }: { elements: DE[]; w: number; h: number }) 
 function DemoSpine({ D, H, bgColor }: { D: number; H: number; bgColor: string }) {
   return (
     <div style={{ position: 'absolute', inset: 0, background: bgColor, overflow: 'hidden' }}>
-      {/* Edge shading only */}
       <div style={{ position: 'absolute', inset: 0,
-        background: 'linear-gradient(to right, rgba(0,0,0,0.38) 0%, rgba(0,0,0,0.08) 30%, rgba(0,0,0,0.04) 70%, rgba(0,0,0,0.28) 100%)' }} />
+        background: 'linear-gradient(to right, rgba(0,0,0,0.22) 0%, rgba(0,0,0,0.04) 40%, rgba(0,0,0,0.12) 100%)' }} />
       <div style={{ position: 'absolute', inset: 0,
         display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ transform: 'rotate(90deg)', whiteSpace: 'nowrap',
-          fontSize: Math.max(6, Math.min(9, D * 0.38)),
+          fontSize: Math.max(5, Math.min(8, D * 0.55)),
           fontFamily: 'Georgia, serif', fontStyle: 'italic',
-          color: 'rgba(255,255,255,0.45)', letterSpacing: '0.08em',
+          color: 'rgba(255,255,255,0.40)', letterSpacing: '0.08em',
           maxWidth: H * 0.7, overflow: 'hidden', textOverflow: 'ellipsis' }}>
           Ana & Erjon · 2023
         </div>
@@ -199,14 +198,22 @@ function DemoSpine({ D, H, bgColor }: { D: number; H: number; bgColor: string })
   );
 }
 
-// ─── Pages edge ───────────────────────────────────────────────────────────────
-function DemoPagesEdge({ H }: { H: number }) {
+// ─── Pages edge — slim block, few leaf lines (not a thick magazine stack) ─────
+function DemoPagesEdge() {
+  const leaves = 5;
   return (
-    <div style={{ position: 'absolute', inset: 0, background: '#f8f8f8', overflow: 'hidden' }}>
+    <div style={{ position: 'absolute', inset: 0, background: '#f4f0e8', overflow: 'hidden' }}>
+      {Array.from({ length: leaves }).map((_, i) => (
+        <div key={i} style={{
+          position: 'absolute', left: 0, right: 0,
+          top: `${((i + 0.5) / leaves) * 100}%`, height: 1,
+          background: i % 2 === 0 ? 'rgba(0,0,0,0.08)' : 'rgba(0,0,0,0.03)',
+        }} />
+      ))}
       <div style={{ position: 'absolute', inset: 0,
-        background: 'linear-gradient(to right, rgba(0,0,0,0.14) 0%, rgba(0,0,0,0.02) 35%, rgba(0,0,0,0.02) 60%, rgba(0,0,0,0.10) 100%)' }} />
+        background: 'linear-gradient(to right, rgba(0,0,0,0.12) 0%, transparent 55%, rgba(0,0,0,0.06) 100%)' }} />
       <div style={{ position: 'absolute', inset: 0,
-        background: 'linear-gradient(to bottom, rgba(0,0,0,0.08) 0%, transparent 12%, transparent 88%, rgba(0,0,0,0.10) 100%)' }} />
+        background: 'linear-gradient(to bottom, rgba(0,0,0,0.05) 0%, transparent 14%, transparent 86%, rgba(0,0,0,0.06) 100%)' }} />
     </div>
   );
 }
@@ -215,13 +222,14 @@ function DemoPagesEdge({ H }: { H: number }) {
 function DemoBook3D({ lang }: { lang: 'sq' | 'en' }) {
   const [rotY, setRotY] = useState(-30);
   const rotYRef = useRef(-30);
-  const rotXRef = useRef(13);
+  const rotXRef = useRef(10);
   const animRef = useRef<number>(0);
   const isDragging = useRef(false);
   const lastPos = useRef({ x: 0, y: 0 });
   const pauseTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  const W = 240, H = Math.round(240 * (DH / DW)), D = 14;
+  // Slim hardcover — few leaves, not a brick of pages
+  const W = 240, H = Math.round(240 * (DH / DW)), D = 7;
   const coverBgColor = (DEMO[1].find(e => e.type === 'background') as any)?.bgColor ?? '#1a1209';
 
   useEffect(() => {
@@ -250,7 +258,7 @@ function DemoBook3D({ lang }: { lang: 'sq' | 'en' }) {
   return (
     <div
       style={{ perspective: '1000px', perspectiveOrigin: '50% 46%',
-        height: H + 120, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        height: H + 80, display: 'flex', alignItems: 'center', justifyContent: 'center',
         position: 'relative', cursor: 'grab', userSelect: 'none' }}
       onMouseMove={e => {
         if (!isDragging.current) return;
@@ -271,13 +279,6 @@ function DemoBook3D({ lang }: { lang: 'sq' | 'en' }) {
       }}
       onTouchEnd={() => pauseAuto()}
     >
-      {/* Ground shadow */}
-      <div style={{ position: 'absolute', left: '50%', bottom: 16,
-        transform: 'translateX(-50%)',
-        width: W * 1.1, height: 44,
-        background: 'radial-gradient(ellipse, rgba(0,0,0,0.28) 0%, transparent 70%)',
-        filter: 'blur(18px)', pointerEvents: 'none' }} />
-
       {/* Book */}
       <div style={{ position: 'relative', width: W, height: H,
         transformStyle: 'preserve-3d',
@@ -287,13 +288,13 @@ function DemoBook3D({ lang }: { lang: 'sq' | 'en' }) {
         {/* Front cover */}
         <div style={{ position: 'absolute', inset: 0, transform: 'translateZ(0px)',
           borderRadius: '1px 4px 4px 1px', overflow: 'hidden',
-          backfaceVisibility: 'hidden', boxShadow: '0 0 0 1px rgba(0,0,0,0.7)' }}>
+          backfaceVisibility: 'hidden', boxShadow: '0 0 0 1px rgba(0,0,0,0.55)' }}>
           <MiniPage elements={coverEls} w={W} h={H} />
           <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
-            background: 'linear-gradient(118deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.04) 28%, transparent 52%, rgba(0,0,0,0.06) 100%)' }} />
-          <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: 20, pointerEvents: 'none',
-            background: 'linear-gradient(to right, rgba(0,0,0,0.40), rgba(0,0,0,0.08) 55%, transparent)' }} />
-          {/* Brand watermark */}
+            background: 'linear-gradient(118deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.03) 28%, transparent 52%, rgba(0,0,0,0.04) 100%)' }} />
+          {/* Soft hinge only — no heavy left shadow band */}
+          <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: 10, pointerEvents: 'none',
+            background: 'linear-gradient(to right, rgba(0,0,0,0.12), transparent)' }} />
           <div style={{ position: 'absolute', bottom: 12, left: 0, right: 0, display: 'flex', justifyContent: 'center', pointerEvents: 'none' }}>
             <span style={{ fontFamily: 'Georgia, serif', fontStyle: 'italic', fontSize: 10,
               letterSpacing: '0.10em', color: 'rgba(255,255,255,0.18)' }}>përgjithmonë</span>
@@ -304,10 +305,10 @@ function DemoBook3D({ lang }: { lang: 'sq' | 'en' }) {
         <div style={{ position: 'absolute', inset: 0,
           transform: `rotateY(180deg) translateZ(${D}px)`,
           borderRadius: '4px 1px 1px 4px', overflow: 'hidden',
-          backfaceVisibility: 'hidden', boxShadow: '0 0 0 1px rgba(0,0,0,0.5)' }}>
+          backfaceVisibility: 'hidden', boxShadow: '0 0 0 1px rgba(0,0,0,0.4)' }}>
           <MiniPage elements={DEMO[8]} w={W} h={H} />
           <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
-            background: 'linear-gradient(118deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.03) 28%, transparent 52%, rgba(0,0,0,0.10) 100%)' }} />
+            background: 'linear-gradient(118deg, rgba(255,255,255,0.08) 0%, transparent 50%, rgba(0,0,0,0.06) 100%)' }} />
         </div>
 
         {/* Spine (left) */}
@@ -319,28 +320,24 @@ function DemoBook3D({ lang }: { lang: 'sq' | 'en' }) {
         {/* Pages edge (right) */}
         <div style={{ position: 'absolute', left: W, top: 0, width: D, height: H,
           transformOrigin: 'left center', transform: 'rotateY(90deg)', overflow: 'hidden' }}>
-          <DemoPagesEdge H={H} />
+          <DemoPagesEdge />
         </div>
 
         {/* Top edge */}
         <div style={{ position: 'absolute', top: 0, left: 0, width: W, height: D,
           transformOrigin: 'top center', transform: 'rotateX(-90deg)', overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', inset: 0, background: '#ffffff' }}>
+          <div style={{ position: 'absolute', inset: 0, background: '#faf8f4' }}>
             <div style={{ position: 'absolute', inset: 0,
-              background: 'linear-gradient(to bottom, rgba(255,255,255,0.30) 0%, rgba(0,0,0,0.06) 100%)' }} />
-            <div style={{ position: 'absolute', inset: 0,
-              background: 'linear-gradient(to right, rgba(0,0,0,0.14) 0%, rgba(255,255,255,0.04) 45%, rgba(0,0,0,0.10) 100%)' }} />
+              background: 'linear-gradient(to right, rgba(0,0,0,0.08) 0%, rgba(255,255,255,0.04) 45%, rgba(0,0,0,0.06) 100%)' }} />
           </div>
         </div>
 
         {/* Bottom edge */}
         <div style={{ position: 'absolute', top: H, left: 0, width: W, height: D,
           transformOrigin: 'top center', transform: 'rotateX(-90deg)', overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', inset: 0, background: '#f5f5f5' }}>
+          <div style={{ position: 'absolute', inset: 0, background: '#f2efe8' }}>
             <div style={{ position: 'absolute', inset: 0,
-              background: 'linear-gradient(to bottom, rgba(0,0,0,0.08) 0%, rgba(255,255,255,0.06) 100%)' }} />
-            <div style={{ position: 'absolute', inset: 0,
-              background: 'linear-gradient(to right, rgba(0,0,0,0.12) 0%, rgba(255,255,255,0.04) 45%, rgba(0,0,0,0.08) 100%)' }} />
+              background: 'linear-gradient(to right, rgba(0,0,0,0.07) 0%, rgba(255,255,255,0.03) 45%, rgba(0,0,0,0.05) 100%)' }} />
           </div>
         </div>
       </div>

@@ -42,6 +42,9 @@ export interface PdfElement {
   src?: string;
   cropFocusX?: number;
   cropFocusY?: number;
+  cropZoom?: number;
+  objectFit?: 'cover' | 'contain';
+  mixBlendMode?: string;
   // text
   text?: string; fontSize?: number; fontFamily?: string; fontStyle?: string;
   align?: 'left'|'center'|'right'; lineHeight?: number; letterSpacing?: number;
@@ -250,25 +253,35 @@ async function renderPage(elements: PdfElement[], canvasH: number): Promise<stri
     else if (el.type === 'image' && el.src) {
       const img = imgCache.get(el.src);
       if (img) {
-        // object-fit: cover crop (honours saved crop focus)
-        const sx = el.w / img.naturalWidth;
-        const sy = el.h / img.naturalHeight;
-        const s  = Math.max(sx, sy);
-        const cw = el.w / s;
-        const ch = el.h / s;
-        const maxX = Math.max(0, img.naturalWidth - cw);
-        const maxY = Math.max(0, img.naturalHeight - ch);
-        const fx = Math.min(1, Math.max(0, el.cropFocusX ?? 0.5));
-        const fy = Math.min(1, Math.max(0, el.cropFocusY ?? 0.5));
-        const cx = maxX * fx;
-        const cy = maxY * fy;
-
+        if (el.mixBlendMode === 'screen') ctx.globalCompositeOperation = 'screen';
         ctx.save();
         ctx.beginPath();
         ctx.rect(el.x, el.y, el.w, el.h);
         ctx.clip();
-        ctx.drawImage(img, cx, cy, cw, ch, el.x, el.y, el.w, el.h);
+        if (el.objectFit === 'contain') {
+          const s = Math.min(el.w / img.naturalWidth, el.h / img.naturalHeight);
+          const dw = img.naturalWidth * s;
+          const dh = img.naturalHeight * s;
+          ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight,
+            el.x + (el.w - dw) / 2, el.y + (el.h - dh) / 2, dw, dh);
+        } else {
+          // object-fit: cover crop (honours saved crop focus + zoom)
+          const z = Math.max(1, el.cropZoom ?? 1);
+          const sx = el.w / img.naturalWidth;
+          const sy = el.h / img.naturalHeight;
+          const s  = Math.max(sx, sy) * z;
+          const cw = el.w / s;
+          const ch = el.h / s;
+          const maxX = Math.max(0, img.naturalWidth - cw);
+          const maxY = Math.max(0, img.naturalHeight - ch);
+          const fx = Math.min(1, Math.max(0, el.cropFocusX ?? 0.5));
+          const fy = Math.min(1, Math.max(0, el.cropFocusY ?? 0.5));
+          const cx = maxX * fx;
+          const cy = maxY * fy;
+          ctx.drawImage(img, cx, cy, cw, ch, el.x, el.y, el.w, el.h);
+        }
         ctx.restore();
+        ctx.globalCompositeOperation = 'source-over';
       } else {
         // Fallback: warm placeholder
         ctx.fillStyle = '#D8D0C4';

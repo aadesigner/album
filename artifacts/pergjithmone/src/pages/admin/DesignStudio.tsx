@@ -63,7 +63,7 @@ async function uploadStudioImage(file: File, token: string | null): Promise<stri
 }
 
 const CATEGORY_ORDER = [
-  'Wedding', 'Travel', 'Celebration', 'Baby & Family',
+  'Wedding', 'Travel', 'Friendship', 'Celebration', 'Baby & Family',
   'Modern', 'Portrait', 'Nature', 'Locations',
 ];
 
@@ -134,29 +134,80 @@ function StudioImage({ el, selected, onSelect, onChange, shapeRefs }: {
   shapeRefs: React.MutableRefObject<Record<string, any>>;
 }) {
   const img = useHtmlImage(el.src);
+  const startRef = useRef({ w: el.w, h: el.h });
+  const bake = (n: any, sx: number, sy: number) => {
+    // Uniform scale from corners (keepRatio) — avoid stretched icons.
+    const s = Math.max(sx, sy);
+    const nw = Math.max(20, startRef.current.w * s);
+    const nh = Math.max(20, startRef.current.h * s);
+    n.scaleX(1); n.scaleY(1);
+    n.width(nw); n.height(nh);
+    n.clip({ x: 0, y: 0, width: nw, height: nh });
+    n.getChildren().forEach((c: any) => {
+      const name = typeof c.getClassName === 'function' ? c.getClassName() : '';
+      if (name === 'Rect') {
+        c.width(nw); c.height(nh);
+      } else if (name === 'Image' && img) {
+        if (el.objectFit === 'contain' || el.mixBlendMode === 'screen') {
+          const is = Math.min(nw / Math.max(1, img.width), nh / Math.max(1, img.height));
+          const iw = img.width * is;
+          const ih = img.height * is;
+          c.width(iw); c.height(ih);
+          c.x((nw - iw) / 2); c.y((nh - ih) / 2);
+        } else {
+          c.width(nw); c.height(nh); c.x(0); c.y(0);
+        }
+      }
+    });
+    return { nw, nh };
+  };
   return (
     <Group
       ref={(n: any) => bindFrameNode(n, el.id, shapeRefs)}
       x={el.x} y={el.y} width={el.w} height={el.h} rotation={el.rotation || 0}
+      clipX={0} clipY={0} clipWidth={el.w} clipHeight={el.h}
       draggable
       onMouseDown={(e: any) => { e.cancelBubble = true; onSelect(); }}
       onTouchStart={(e: any) => { e.cancelBubble = true; onSelect(); }}
       onClick={(e: any) => { e.cancelBubble = true; onSelect(); }}
       onTap={(e: any) => { e.cancelBubble = true; onSelect(); }}
       onDragEnd={(e: any) => onChange({ x: e.target.x(), y: e.target.y() })}
+      onTransformStart={() => { startRef.current = { w: el.w, h: el.h }; }}
+      onTransform={(e: any) => { bake(e.target, e.target.scaleX(), e.target.scaleY()); }}
       onTransformEnd={(e: any) => {
         const n = e.target;
-        const sx = n.scaleX(), sy = n.scaleY();
         n.scaleX(1); n.scaleY(1);
-        const nw = Math.max(20, (n.width() || el.w) * sx);
-        const nh = Math.max(20, (n.height() || el.h) * sy);
+        const nw = Math.max(20, n.width() || startRef.current.w);
+        const nh = Math.max(20, n.height() || startRef.current.h);
         n.width(nw); n.height(nh);
+        n.clip({ x: 0, y: 0, width: nw, height: nh });
         onChange({ x: n.x(), y: n.y(), w: nw, h: nh, rotation: n.rotation() });
       }}
     >
       <Rect width={el.w} height={el.h} fill="rgba(0,0,0,0.001)" />
       {img && (
-        <KonvaImage image={img} width={el.w} height={el.h} perfectDrawEnabled={false} listening={false} />
+        <KonvaImage
+          image={img}
+          width={el.w}
+          height={el.h}
+          perfectDrawEnabled={false}
+          listening={false}
+          // Contain-style for landmark PNGs; stretch only if explicitly cover
+          {...(el.objectFit === 'contain' || el.mixBlendMode === 'screen'
+            ? (() => {
+                const s = Math.min(el.w / Math.max(1, img.width), el.h / Math.max(1, img.height));
+                const iw = img.width * s;
+                const ih = img.height * s;
+                return {
+                  width: iw,
+                  height: ih,
+                  x: (el.w - iw) / 2,
+                  y: (el.h - ih) / 2,
+                  globalCompositeOperation: (el.mixBlendMode as GlobalCompositeOperation) || undefined,
+                };
+              })()
+            : {})}
+        />
       )}
       {selected && (
         <Rect width={el.w} height={el.h} stroke="#C97B84" strokeWidth={2} listening={false} />
@@ -173,6 +224,22 @@ function StudioShape({ el, selected, onSelect, onChange, shapeRefs }: {
   shapeRefs: React.MutableRefObject<Record<string, any>>;
 }) {
   const isCircle = el.shapeKind === 'circle';
+  const startRef = useRef({ w: el.w, h: el.h });
+  const bake = (n: any, sx: number, sy: number) => {
+    const nw = Math.max(8, startRef.current.w * sx);
+    const nh = Math.max(8, startRef.current.h * sy);
+    n.scaleX(1); n.scaleY(1);
+    n.width(nw); n.height(nh);
+    n.getChildren().forEach((c: any) => {
+      if (typeof c.width === 'function') {
+        c.width(nw); c.height(nh);
+        if (isCircle && typeof c.cornerRadius === 'function') {
+          c.cornerRadius(Math.min(nw, nh) / 2);
+        }
+      }
+    });
+    return { nw, nh };
+  };
   return (
     <Group
       ref={(n: any) => bindFrameNode(n, el.id, shapeRefs)}
@@ -183,13 +250,13 @@ function StudioShape({ el, selected, onSelect, onChange, shapeRefs }: {
       onClick={(e: any) => { e.cancelBubble = true; onSelect(); }}
       onTap={(e: any) => { e.cancelBubble = true; onSelect(); }}
       onDragEnd={(e: any) => onChange({ x: e.target.x(), y: e.target.y() })}
+      onTransformStart={() => { startRef.current = { w: el.w, h: el.h }; }}
+      onTransform={(e: any) => { bake(e.target, e.target.scaleX(), e.target.scaleY()); }}
       onTransformEnd={(e: any) => {
         const n = e.target;
-        const sx = n.scaleX(), sy = n.scaleY();
         n.scaleX(1); n.scaleY(1);
-        const nw = Math.max(8, (n.width() || el.w) * sx);
-        const nh = Math.max(8, (n.height() || el.h) * sy);
-        n.width(nw); n.height(nh);
+        const nw = Math.max(8, n.width() || startRef.current.w);
+        const nh = Math.max(8, n.height() || startRef.current.h);
         onChange({ x: n.x(), y: n.y(), w: nw, h: nh, rotation: n.rotation() });
       }}
     >
@@ -217,27 +284,34 @@ function StudioText({ el, selected, onSelect, onChange, shapeRefs, fontEpoch }: 
   shapeRefs: React.MutableRefObject<Record<string, any>>;
   fontEpoch?: number;
 }) {
-  const startRef = useRef({ w: el.w, h: el.h });
+  const startRef = useRef({ w: el.w, h: el.h, fontSize: el.fontSize || 20 });
   return (
     <Group
       ref={(n: any) => bindFrameNode(n, el.id, shapeRefs)}
       x={el.x} y={el.y} width={el.w} height={el.h} rotation={el.rotation || 0}
+      clipX={0} clipY={0} clipWidth={el.w} clipHeight={el.h}
       draggable
       onMouseDown={(e: any) => { e.cancelBubble = true; onSelect(); }}
       onTouchStart={(e: any) => { e.cancelBubble = true; onSelect(); }}
       onClick={(e: any) => { e.cancelBubble = true; onSelect(); }}
       onTap={(e: any) => { e.cancelBubble = true; onSelect(); }}
       onDragEnd={(e: any) => onChange({ x: e.target.x(), y: e.target.y() })}
-      onTransformStart={() => { startRef.current = { w: el.w, h: el.h }; }}
+      onTransformStart={() => {
+        startRef.current = { w: el.w, h: el.h, fontSize: el.fontSize || 20 };
+      }}
       onTransform={(e: any) => {
         const n = e.target;
         const sx = n.scaleX(), sy = n.scaleY();
         n.scaleX(1); n.scaleY(1);
         const nw = Math.max(40, startRef.current.w * sx);
         const nh = Math.max(24, startRef.current.h * sy);
+        // Vertical stretch scales type so "bigger text" feels natural.
+        const fs = Math.max(10, startRef.current.fontSize * sy);
         n.width(nw); n.height(nh);
+        n.clip({ x: 0, y: 0, width: nw, height: nh });
         n.getChildren().forEach((c: any) => {
           if (typeof c.width === 'function') { c.width(nw); c.height(nh); }
+          if (typeof c.fontSize === 'function') c.fontSize(fs);
         });
       }}
       onTransformEnd={(e: any) => {
@@ -245,7 +319,9 @@ function StudioText({ el, selected, onSelect, onChange, shapeRefs, fontEpoch }: 
         n.scaleX(1); n.scaleY(1);
         const nw = Math.max(40, n.width() || el.w);
         const nh = Math.max(24, n.height() || el.h);
-        onChange({ x: n.x(), y: n.y(), w: nw, h: nh, rotation: n.rotation() });
+        const sy = nh / Math.max(1, startRef.current.h);
+        const fs = Math.max(10, Math.round(startRef.current.fontSize * sy));
+        onChange({ x: n.x(), y: n.y(), w: nw, h: nh, fontSize: fs, rotation: n.rotation() });
       }}
     >
       <Rect width={el.w} height={el.h} fill="rgba(0,0,0,0.001)" />
@@ -345,10 +421,13 @@ function DesignCanvas({
         <Transformer
           ref={trRef}
           rotateEnabled
+          keepRatio={selected?.type === 'image'}
           enabledAnchors={
             selected?.type === 'text'
               ? ['middle-left', 'middle-right', 'top-center', 'bottom-center']
-              : ['top-left', 'top-right', 'bottom-left', 'bottom-right', 'middle-left', 'middle-right']
+              : selected?.type === 'image'
+                ? ['top-left', 'top-right', 'bottom-left', 'bottom-right']
+                : ['top-left', 'top-right', 'bottom-left', 'bottom-right', 'middle-left', 'middle-right']
           }
           boundBoxFunc={(oldBox: any, newBox: any) =>
             newBox.width < 8 || newBox.height < 8 ? oldBox : newBox

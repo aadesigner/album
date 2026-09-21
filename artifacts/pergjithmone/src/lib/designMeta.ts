@@ -20,6 +20,7 @@ export const DESIGN_CATEGORY_LABELS: Record<string, { sq: string; en: string }> 
   'Travel':        { sq: 'Udhëtime',       en: 'Travel'        },
   'Baby & Family': { sq: 'Bebe & Familja', en: 'Baby & Family' },
   'Celebration':   { sq: 'Festime',        en: 'Celebration'   },
+  'Friendship':    { sq: 'Miqësi',         en: 'Friendship'    },
   'Modern':        { sq: 'Moderne',        en: 'Modern'        },
   'Portrait':      { sq: 'Portret',        en: 'Portrait'      },
   'Nature':        { sq: 'Natyrë',         en: 'Nature'        },
@@ -41,11 +42,11 @@ const DB_CAT_TO_DESIGN_CAT_RAW: Record<string, string> = {
   'Udhëtime': 'Travel', 'Udhëtim': 'Travel', 'Travel': 'Travel', 'udhetime': 'Travel',
   'Familje': 'Baby & Family', 'Fëmijë': 'Baby & Family', 'Bebe': 'Baby & Family',
   'Fëmijëri': 'Baby & Family', 'Family': 'Baby & Family', 'Baby': 'Baby & Family', 'familje': 'Baby & Family',
-  // Birthday / parties / friendship → Celebration (NOT travel)
+  // Birthday / parties → Celebration; friendship is its own clean catalog
   'Ditëlindje': 'Celebration', 'ditelindje': 'Celebration',
   'Festash': 'Celebration', 'Festë': 'Celebration', 'Festim': 'Celebration', 'festash': 'Celebration',
   'Birthday': 'Celebration', 'Celebrations': 'Celebration', 'Celebration': 'Celebration',
-  'Miqësi': 'Celebration', 'miqesi': 'Celebration', 'Friendship': 'Celebration',
+  'Miqësi': 'Friendship', 'miqesi': 'Friendship', 'Friendship': 'Friendship', 'Friends': 'Friendship',
   'Natyrë': 'Travel', 'Peizazh': 'Travel', 'Nature': 'Travel',
   'Çifte': 'Wedding', 'Dashurinë': 'Wedding', 'Portrait': 'Wedding', 'Couples': 'Wedding',
   'Sport': 'Travel', 'Arkitekturë': 'Travel', 'Graduim': 'Celebration',
@@ -84,15 +85,25 @@ export const DESIGN_METAS: DesignMeta[] = [
 
   // ── WEDDING ──────────────────────────────────────────────────────────────
   { id: 'cream-names', name: { sq: 'Emrat Tanë', en: 'Our Names' }, category: 'Wedding',
-    thumb: { background: '#ECE7E1' },
-    thumbPhoto: '/designs/wedding-cream-thumb.jpg',
+    thumb: { background: '#F3EEE6' },
     thumbLabel: 'EMRAT',
+    thumbAccents: [
+      { position: 'absolute', top: '18%', left: '12%', right: '12%', height: 1, background: '#C4B5A2' },
+      { position: 'absolute', bottom: '18%', left: '12%', right: '12%', height: 1, background: '#C4B5A2' },
+    ] },
+  { id: 'forever-vows', name: { sq: 'Përjetë', en: 'Forever' }, category: 'Wedding',
+    thumb: { background: '#1C1814' }, thumbLabel: 'FOREVER',
+    thumbAccents: [
+      { position: 'absolute', top: '42%', left: '28%', right: '28%', height: 1, background: '#C9B59A' },
+    ] },
+  { id: 'ivory-union', name: { sq: 'Bashkimi', en: 'Union' }, category: 'Wedding',
+    thumb: { background: '#FAF7F2' }, thumbLabel: '&',
     thumbAccents: [] },
-  { id: 'the-wedding-of', name: { sq: 'Dasma', en: 'The Wedding' }, category: 'Wedding',
-    thumb: { background: '#1A2A1A' },
-    thumbPhoto: '/designs/wedding-spin-thumb.jpg',
-    thumbLabel: 'WEDDING',
-    thumbAccents: cityAccent },
+  { id: 'rose-day', name: { sq: 'Dita Jonë', en: 'Our Day' }, category: 'Wedding',
+    thumb: { background: '#E8D5D0' }, thumbLabel: 'OUR DAY',
+    thumbAccents: [
+      { position: 'absolute', bottom: 0, left: 0, right: 0, height: '28%', background: 'linear-gradient(to top,rgba(180,140,130,0.25),transparent)' },
+    ] },
 
   // ── TRAVEL — landmark + real cities ──────────────────────────────────────
   { id: 'paris-pink', name: { sq: 'Paris', en: 'Paris' }, category: 'Travel',
@@ -145,13 +156,36 @@ export const DESIGN_METAS: DesignMeta[] = [
   { id: 'florence', name: { sq: 'Firence', en: 'Florence' }, category: 'Travel',
     thumb: { background: '#3A2818' }, thumbPhoto: '/designs/florence-cover-thumb.jpg', thumbLabel: 'FLORENCE', thumbAccents: cityAccent },
 
-  // ── CELEBRATION — birthday / parties / friendship ─────────────────────────
+  // ── FRIENDSHIP — clean typography (travel-style) ─────────────────────────
+  { id: 'friends-forever', name: { sq: 'Miqësi', en: 'Friends' }, category: 'Friendship',
+    thumb: { background: '#1A3A42' }, thumbLabel: 'FRIENDS',
+    thumbAccents: [
+      { position: 'absolute', top: '48%', left: '28%', right: '28%', height: 2, background: '#7EC8C4' },
+    ] },
+  { id: 'us-together', name: { sq: 'Ne', en: 'Us' }, category: 'Friendship',
+    thumb: { background: '#F0E6D8' }, thumbLabel: 'US',
+    thumbAccents: [] },
+  { id: 'since-day-one', name: { sq: 'Nga fillimi', en: 'Day One' }, category: 'Friendship',
+    thumb: { background: '#2A1F3D' }, thumbLabel: 'DAY ONE',
+    thumbAccents: [
+      { position: 'absolute', top: '52%', left: '26%', right: '26%', height: 2, background: '#A78BFA' },
+    ] },
+  { id: 'always-crew', name: { sq: 'Ekipi', en: 'Crew' }, category: 'Friendship',
+    thumb: { background: '#E85D4C' }, thumbLabel: 'CREW',
+    thumbAccents: [
+      { position: 'absolute', top: '52%', left: '28%', right: '28%', height: 2, background: '#FFE8A3' },
+    ] },
+  { id: 'good-times', name: { sq: 'Kohë të mira', en: 'Good Times' }, category: 'Friendship',
+    thumb: { background: '#0F2A24' }, thumbLabel: 'GOOD TIMES',
+    thumbAccents: [
+      { position: 'absolute', top: '52%', left: '28%', right: '28%', height: 2, background: '#A8E6CF' },
+    ] },
+
+  // ── CELEBRATION — birthday / parties ─────────────────────────────────────
   { id: 'birthday-bloom', name: { sq: 'Ditëlindje', en: 'Birthday' }, category: 'Celebration',
     thumb: { background: '#FF6B8A' }, thumbLabel: 'BIRTHDAY',
     thumbAccents: [
-      { position: 'absolute', top: '18%', left: '12%', width: 18, height: 18, borderRadius: '50%', background: '#FFE08A' },
-      { position: 'absolute', top: '28%', right: '16%', width: 12, height: 12, borderRadius: '50%', background: '#FFF' },
-      { position: 'absolute', bottom: '22%', left: '22%', width: 14, height: 14, borderRadius: '50%', background: '#7C5CFF' },
+      { position: 'absolute', bottom: 0, left: 0, right: 0, height: '30%', background: 'linear-gradient(to top,#FF8E5355,transparent)' },
     ] },
   { id: 'party-nights', name: { sq: 'Festë', en: 'Party Night' }, category: 'Celebration',
     thumb: { background: '#1A0A2E' }, thumbLabel: 'PARTY',
@@ -161,17 +195,12 @@ export const DESIGN_METAS: DesignMeta[] = [
   { id: 'cheers-gold', name: { sq: 'Gëzuar', en: 'Cheers' }, category: 'Celebration',
     thumb: { background: '#1A120C' }, thumbLabel: 'CHEERS',
     thumbAccents: [
-      { position: 'absolute', top: '35%', left: '10%', right: '10%', height: 2, background: '#C9A227' },
+      { position: 'absolute', top: '42%', left: '14%', right: '14%', height: 2, background: '#C9A227' },
     ] },
-  { id: 'friends-forever', name: { sq: 'Miqësi', en: 'Friends' }, category: 'Celebration',
-    thumb: { background: '#0E4D5C' }, thumbLabel: 'FRIENDS',
-    thumbAccents: cityAccent },
   { id: 'celebrate-confetti', name: { sq: 'Festojmë', en: 'Celebrate' }, category: 'Celebration',
     thumb: { background: '#FF8A3D' }, thumbLabel: 'YAY',
     thumbAccents: [
-      { position: 'absolute', top: '20%', left: '20%', width: 10, height: 10, borderRadius: '50%', background: '#FFF' },
-      { position: 'absolute', top: '40%', right: '18%', width: 16, height: 16, borderRadius: '50%', background: '#FFE08A' },
-      { position: 'absolute', bottom: '30%', left: '30%', width: 8, height: 8, borderRadius: '50%', background: '#FF4D6D' },
+      { position: 'absolute', top: '48%', left: '28%', right: '28%', height: 2, background: '#FFF' },
     ] },
 
   // ── BABY & FAMILY ────────────────────────────────────────────────────────
@@ -180,6 +209,24 @@ export const DESIGN_METAS: DesignMeta[] = [
     thumbPhoto: '/designs/baby-ador-thumb.jpg',
     thumbLabel: 'ADOR',
     thumbAccents: [] },
+  { id: 'family-us', name: { sq: 'Familja', en: 'Family' }, category: 'Baby & Family',
+    thumb: { background: '#E8EEF2' }, thumbLabel: 'FAMILJA',
+    thumbAccents: [
+      { position: 'absolute', top: '50%', left: '28%', right: '28%', height: 2, background: '#7A9AAC' },
+    ] },
+  { id: 'little-years', name: { sq: 'Vitet e vogla', en: 'Little Years' }, category: 'Baby & Family',
+    thumb: { background: '#F5EFE6' }, thumbLabel: 'LITTLE YEARS',
+    thumbAccents: [] },
+  { id: 'our-home', name: { sq: 'Shtëpia', en: 'Home' }, category: 'Baby & Family',
+    thumb: { background: '#3A2E28' }, thumbLabel: 'HOME',
+    thumbAccents: [
+      { position: 'absolute', top: '52%', left: '28%', right: '28%', height: 2, background: '#C9B59A' },
+    ] },
+  { id: 'first-chapter', name: { sq: 'Kapitulli I', en: 'Chapter One' }, category: 'Baby & Family',
+    thumb: { background: '#D8E4EC' }, thumbLabel: 'CHAPTER ONE',
+    thumbAccents: [
+      { position: 'absolute', top: '52%', left: '28%', right: '28%', height: 2, background: '#5A7A90' },
+    ] },
 ];
 
 /** Merge built-in DESIGN_METAS with admin custom designs for wizard/settings pickers. */

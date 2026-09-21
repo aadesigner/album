@@ -419,10 +419,10 @@ export default function Wizard() {
           </p>
         </div>
       )}
-      <div style={{ background: '#f7f5f2' }} className="flex flex-col min-h-[calc(100dvh-42px)] md:min-h-[calc(100dvh-64px)]">
+      <div style={{ background: '#f7f5f2' }} className="flex flex-col min-h-[calc(100dvh-48px)] md:min-h-[calc(100dvh-54px)]">
 
         {/* ── Progress header ── */}
-        <div className="sticky top-[42px] md:top-[64px] z-10 bg-white/90 backdrop-blur-md border-b border-neutral-100">
+        <div className="sticky top-[48px] md:top-[54px] z-10 bg-white/90 backdrop-blur-md border-b border-neutral-100">
           <div className="max-w-5xl mx-auto px-4 md:px-8 py-3 flex items-center gap-0">
             {progressSteps.map((p, i) => {
               const isActive = step === p.activeWhen;

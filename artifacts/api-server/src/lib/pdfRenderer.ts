@@ -130,6 +130,7 @@ export interface PdfRenderElement {
   letterSpacing?: number;
   cropFocusX?: number;
   cropFocusY?: number;
+  cropZoom?: number;
   objectFit?: "cover" | "contain";
   mixBlendMode?: string;
 }
@@ -148,8 +149,10 @@ function coverCropRect(
   boxH: number,
   focusX = 0.5,
   focusY = 0.5,
+  zoom = 1,
 ): { x: number; y: number; width: number; height: number } {
-  const scale = Math.max(boxW / Math.max(1, naturalW), boxH / Math.max(1, naturalH));
+  const z = Math.max(1, Number.isFinite(zoom) ? zoom : 1);
+  const scale = Math.max(boxW / Math.max(1, naturalW), boxH / Math.max(1, naturalH)) * z;
   const width = boxW / scale;
   const height = boxH / scale;
   const maxX = Math.max(0, naturalW - width);
@@ -487,6 +490,7 @@ async function renderPageToCanvas(
             el.h,
             el.cropFocusX ?? 0.5,
             el.cropFocusY ?? 0.5,
+            el.cropZoom ?? 1,
           );
           ctx.drawImage(
             img,
