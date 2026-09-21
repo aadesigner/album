@@ -2,7 +2,7 @@
 #   Root Directory      = /
 #   Dockerfile path     = Dockerfile
 #   Config-as-code      = /artifacts/api-server/railway.toml
-#   Custom Start        = START_APP=api sh /app/boot.sh
+#   Custom Start        = sh /app/boot-api.sh
 
 [build]
 builder = "DOCKERFILE"
@@ -17,6 +17,6 @@ watchPatterns = [
 ]
 
 [deploy]
-startCommand = "START_APP=api sh /app/boot.sh"
+startCommand = "sh /app/boot-api.sh"
 restartPolicyType = "ON_FAILURE"
 numReplicas = 1

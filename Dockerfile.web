@@ -3,9 +3,9 @@
 #   Root Directory  = /
 #   Dockerfile path = Dockerfile
 #
-# Only the Start Command / START_APP differs:
-#   frontend → START_APP=web
-#   api      → START_APP=api
+# Start commands (first token must be an executable — no VAR=value prefix):
+#   frontend → sh /app/boot-web.sh
+#   api      → sh /app/boot-api.sh
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
 
@@ -32,7 +32,6 @@ RUN test -f /app/artifacts/api-server/dist/index.mjs
 RUN test -f /app/artifacts/pergjithmone/server.mjs
 RUN test -f /app/artifacts/pergjithmone/dist/public/index.html
 
-# Drop heavy sources not needed at runtime (keep node_modules for native deps).
 RUN rm -rf \
       artifacts/mockup-sandbox \
       artifacts/api-server/src \
@@ -54,39 +53,27 @@ RUN corepack enable && corepack prepare pnpm@11.8.0 --activate
 
 COPY --from=build /app /app
 
-# Stable frontend entry paths (web start commands expect these).
 RUN cp /app/artifacts/pergjithmone/server.mjs /app/server.mjs \
  && ln -sfn /app/artifacts/pergjithmone/dist /app/dist \
- && cp /app/artifacts/pergjithmone/start.sh /app/start-web.sh \
- && cp /app/artifacts/api-server/start.sh /app/start-api.sh \
  && printf '%s\n' \
 '#!/bin/sh' \
 'set -eu' \
-'echo "[boot] START_APP=${START_APP:-auto} cwd=$(pwd)"' \
-'ls -la /app | head -n 40 || true' \
-'case "${START_APP:-auto}" in' \
-'  web|frontend|pergjithmone)' \
-'    exec sh /app/start-web.sh' \
-'    ;;' \
-'  api|api-server|backend)' \
-'    exec sh /app/start-api.sh' \
-'    ;;' \
-'  *)' \
-'    if [ -f /app/artifacts/api-server/dist/index.mjs ] && [ -f /app/server.mjs ]; then' \
-'      echo "[boot] FATAL: set START_APP=web or START_APP=api on this Railway service"' \
-'      exit 1' \
-'    fi' \
-'    if [ -f /app/server.mjs ]; then exec sh /app/start-web.sh; fi' \
-'    if [ -f /app/artifacts/api-server/dist/index.mjs ]; then exec sh /app/start-api.sh; fi' \
-'    echo "[boot] FATAL: no web or api entrypoint in image"' \
-'    exit 1' \
-'    ;;' \
-'esac' \
-> /app/boot.sh \
- && chmod +x /app/boot.sh /app/start-web.sh /app/start-api.sh /app/artifacts/pergjithmone/start.sh /app/artifacts/api-server/start.sh \
+'echo "[web] starting node /app/server.mjs"' \
+'if [ ! -f /app/server.mjs ]; then echo "[web] FATAL: /app/server.mjs missing"; ls -la /app; exit 1; fi' \
+'exec node /app/server.mjs' \
+> /app/boot-web.sh \
+ && printf '%s\n' \
+'#!/bin/sh' \
+'set -eu' \
+'echo "[api] starting node /app/artifacts/api-server/dist/index.mjs"' \
+'echo "[api] DATABASE_URL set: $([ -n "${DATABASE_URL:-}" ] && echo yes || echo NO)"' \
+'if [ ! -f /app/artifacts/api-server/dist/index.mjs ]; then echo "[api] FATAL: dist/index.mjs missing"; ls -la /app /app/artifacts 2>/dev/null; exit 1; fi' \
+'exec node /app/artifacts/api-server/dist/index.mjs' \
+> /app/boot-api.sh \
+ && chmod +x /app/boot-web.sh /app/boot-api.sh \
  && test -f /app/server.mjs \
  && test -f /app/artifacts/api-server/dist/index.mjs \
  && test -f /app/dist/public/index.html
 
 EXPOSE 8080
-CMD ["sh", "/app/boot.sh"]
+CMD ["sh", "/app/boot-web.sh"]

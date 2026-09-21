@@ -2,7 +2,7 @@
 #   Root Directory      = /
 #   Dockerfile path     = Dockerfile
 #   Config-as-code      = /artifacts/pergjithmone/railway.toml
-#   Custom Start        = START_APP=web sh /app/boot.sh
+#   Custom Start        = sh /app/boot-web.sh
 #
 # Variables:
 #   API_URL=https://workspaceapi-server-production-3940e.up.railway.app
@@ -21,7 +21,7 @@ watchPatterns = [
 ]
 
 [deploy]
-startCommand = "START_APP=web sh /app/boot.sh"
+startCommand = "sh /app/boot-web.sh"
 healthcheckPath = "/healthz"
 healthcheckTimeout = 60
 restartPolicyType = "ON_FAILURE"
