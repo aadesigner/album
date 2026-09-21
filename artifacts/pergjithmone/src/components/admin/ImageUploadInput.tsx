@@ -6,26 +6,36 @@ import { compressImageFile } from '@/lib/imageCompression';
 const BASE = (import.meta as any).env?.BASE_URL?.replace(/\/$/, '') || '';
 
 /**
- * Reusable cover-image uploader for admin forms (categories, templates, layouts).
- * Uploads the selected file to /api/uploads/image and reports back the resulting URL.
+ * Cover-image uploader for admin forms.
+ * Shows `value` when set; otherwise optional `fallbackPreview` (e.g. site default).
  */
 export function ImageUploadInput({
   value,
   onChange,
   label = 'Cover Image',
+  fallbackPreview,
+  fallbackHint,
 }: {
   value: string;
   onChange: (url: string) => void;
   label?: string;
+  /** Shown when value is empty — what customers currently see */
+  fallbackPreview?: string;
+  fallbackHint?: string;
 }) {
   const { getToken } = useAuth();
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
+  const [broken, setBroken] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const displaySrc = value || fallbackPreview || '';
+  const showingFallback = !value && !!fallbackPreview;
 
   const handleFile = async (file: File) => {
     setUploading(true);
     setError('');
+    setBroken(false);
     try {
       const compressed = await compressImageFile(file);
       const token = getToken();
@@ -52,7 +62,19 @@ export function ImageUploadInput({
 
   return (
     <div>
-      <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">{label}</label>
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide">{label}</label>
+        {showingFallback && (
+          <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+            Site default
+          </span>
+        )}
+        {value && (
+          <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+            Custom
+          </span>
+        )}
+      </div>
       <input
         ref={inputRef}
         type="file"
@@ -64,25 +86,38 @@ export function ImageUploadInput({
           e.target.value = '';
         }}
       />
-      {value ? (
-        <div className="relative w-full h-32 rounded-lg overflow-hidden border border-input group">
-          <img src={value} alt="Cover" className="w-full h-full object-cover" />
+      {displaySrc && !broken ? (
+        <div className="relative w-full h-36 rounded-xl overflow-hidden border border-neutral-200 group bg-neutral-100">
+          <img
+            src={displaySrc}
+            alt="Cover preview"
+            className="w-full h-full object-cover"
+            onError={() => setBroken(true)}
+          />
+          {showingFallback && (
+            <div className="absolute bottom-0 inset-x-0 px-2.5 py-1.5 bg-black/55 text-[10px] text-white/95">
+              {fallbackHint || 'Customers see this default until you upload a custom image.'}
+            </div>
+          )}
           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-2 transition-opacity">
             <button
               type="button"
               onClick={() => inputRef.current?.click()}
-              className="px-3 py-1.5 rounded-lg bg-white/90 text-xs font-medium hover:bg-white"
+              disabled={uploading}
+              className="px-3 py-1.5 rounded-lg bg-white/95 text-xs font-medium hover:bg-white"
             >
-              Replace
+              {uploading ? 'Uploading…' : value ? 'Replace' : 'Upload custom'}
             </button>
-            <button
-              type="button"
-              onClick={() => onChange('')}
-              className="p-1.5 rounded-lg bg-white/90 hover:bg-white text-red-500"
-              title="Remove"
-            >
-              <X size={14} />
-            </button>
+            {value && (
+              <button
+                type="button"
+                onClick={() => { onChange(''); setBroken(false); }}
+                className="p-1.5 rounded-lg bg-white/95 hover:bg-white text-red-500"
+                title="Revert to default"
+              >
+                <X size={14} />
+              </button>
+            )}
           </div>
         </div>
       ) : (
@@ -90,10 +125,10 @@ export function ImageUploadInput({
           type="button"
           onClick={() => inputRef.current?.click()}
           disabled={uploading}
-          className="w-full h-32 rounded-lg border-2 border-dashed border-input flex flex-col items-center justify-center gap-1.5 text-muted-foreground hover:border-rose-300 hover:text-rose-500 transition-colors disabled:opacity-60"
+          className="w-full h-36 rounded-xl border-2 border-dashed border-neutral-200 flex flex-col items-center justify-center gap-1.5 text-neutral-400 hover:border-rose-300 hover:text-rose-500 transition-colors disabled:opacity-60"
         >
           {uploading ? <Loader2 size={20} className="animate-spin" /> : <Upload size={20} />}
-          <span className="text-xs font-medium">{uploading ? 'Uploading…' : 'Click to upload'}</span>
+          <span className="text-xs font-medium">{uploading ? 'Uploading…' : broken ? 'Image failed — upload a new one' : 'Click to upload'}</span>
         </button>
       )}
       {error && <p className="text-xs text-red-500 mt-1.5">{error}</p>}

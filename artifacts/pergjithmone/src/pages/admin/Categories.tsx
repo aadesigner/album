@@ -11,6 +11,7 @@ import { ImageUploadInput } from '@/components/admin/ImageUploadInput';
 import { Plus, Edit2, Trash2, ChevronDown, ChevronRight, FolderTree } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
+import { getCategoryImage } from '@/lib/categoryImages';
 
 type Category = {
   id: number; slug: string; nameAl: string; nameEn: string; iconEmoji: string;
@@ -145,7 +146,19 @@ function CategoryFormModal({ category, onClose }: { category: Category | null; o
             <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Name (English) *</label>
             <Input value={form.nameEn} onChange={e => setForm(f => ({ ...f, nameEn: e.target.value }))} placeholder="Wedding" required />
           </div>
-          <ImageUploadInput value={form.coverImage} onChange={url => setForm(f => ({ ...f, coverImage: url }))} label="Cover Image" />
+          <ImageUploadInput
+            value={form.coverImage}
+            onChange={url => setForm(f => ({ ...f, coverImage: url }))}
+            label="Cover Image"
+            fallbackPreview={
+              isEdit
+                ? getCategoryImage(form.nameAl || category!.nameAl, null, form.slug || category!.slug)
+                : (form.slug || form.nameAl
+                    ? getCategoryImage(form.nameAl, null, form.slug)
+                    : undefined)
+            }
+            fallbackHint="This is what customers see on Home / Create. Upload to replace it."
+          />
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Sort Order</label>
@@ -425,9 +438,8 @@ export default function AdminCategories() {
               <thead style={{ background: ADMIN.bg }}>
                 <tr style={{ borderBottom: `1px solid ${ADMIN.line}` }}>
                   <th className="px-4 sm:px-6 py-3.5 font-medium w-8 text-[10px] uppercase tracking-wider" style={{ color: ADMIN.muted }}></th>
-                  <th className="px-4 sm:px-6 py-3.5 font-medium text-[10px] uppercase tracking-wider" style={{ color: ADMIN.muted }}>Icon</th>
-                  <th className="px-4 sm:px-6 py-3.5 font-medium text-[10px] uppercase tracking-wider" style={{ color: ADMIN.muted }}>Name (AL)</th>
-                  <th className="px-4 sm:px-6 py-3.5 font-medium text-[10px] uppercase tracking-wider" style={{ color: ADMIN.muted }}>Name (EN)</th>
+                  <th className="px-4 sm:px-6 py-3.5 font-medium text-[10px] uppercase tracking-wider" style={{ color: ADMIN.muted }}>Cover</th>
+                  <th className="px-4 sm:px-6 py-3.5 font-medium text-[10px] uppercase tracking-wider" style={{ color: ADMIN.muted }}>Name</th>
                   <th className="px-4 sm:px-6 py-3.5 font-medium text-[10px] uppercase tracking-wider" style={{ color: ADMIN.muted }}>Status</th>
                   <th className="px-4 sm:px-6 py-3.5 font-medium text-[10px] uppercase tracking-wider" style={{ color: ADMIN.muted }}>Order</th>
                   <th className="px-4 sm:px-6 py-3.5 font-medium text-[10px] uppercase tracking-wider text-right" style={{ color: ADMIN.muted }}>Actions</th>
@@ -435,13 +447,16 @@ export default function AdminCategories() {
               </thead>
               <tbody>
                 {isLoading ? (
-                  <tr><td colSpan={7} className="px-6 py-8 text-center text-sm" style={{ color: ADMIN.muted }}>Loading…</td></tr>
+                  <tr><td colSpan={6} className="px-6 py-8 text-center text-sm" style={{ color: ADMIN.muted }}>Loading…</td></tr>
                 ) : categories?.length === 0 ? (
-                  <tr><td colSpan={7} className="px-6 py-8 text-center text-sm" style={{ color: ADMIN.muted }}>No categories found.</td></tr>
+                  <tr><td colSpan={6} className="px-6 py-8 text-center text-sm" style={{ color: ADMIN.muted }}>No categories found.</td></tr>
                 ) : (
-                  categories?.map(cat => (
+                  categories?.map(cat => {
+                    const coverSrc = getCategoryImage(cat.nameAl, cat.coverImage, cat.slug);
+                    const isCustomCover = !!cat.coverImage;
+                    return (
                     <React.Fragment key={cat.id}>
-                      <tr className="transition-colors hover:bg-[#FBF7F5]" style={{ borderTop: `1px solid ${ADMIN.line}` }}>
+                      <tr className="transition-colors hover:bg-[#F5F6F8]" style={{ borderTop: `1px solid ${ADMIN.line}` }}>
                         <td className="px-4 sm:px-6 py-4">
                           <button
                             onClick={() => setExpanded(expanded === cat.id ? null : cat.id)}
@@ -452,9 +467,19 @@ export default function AdminCategories() {
                             {expanded === cat.id ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                           </button>
                         </td>
-                        <td className="px-4 sm:px-6 py-4 text-2xl">{cat.iconEmoji}</td>
-                        <td className="px-4 sm:px-6 py-4 font-medium" style={{ color: ADMIN.ink }}>{cat.nameAl}</td>
-                        <td className="px-4 sm:px-6 py-4" style={{ color: ADMIN.muted }}>{cat.nameEn}</td>
+                        <td className="px-4 sm:px-6 py-3">
+                          <div className="relative w-14 h-14 rounded-xl overflow-hidden border shrink-0" style={{ borderColor: ADMIN.line }}>
+                            <img src={coverSrc} alt="" className="w-full h-full object-cover" loading="lazy" />
+                            <span className="absolute bottom-0.5 left-0.5 text-[11px] leading-none drop-shadow">{cat.iconEmoji}</span>
+                          </div>
+                          <p className="text-[9px] mt-1 font-medium" style={{ color: isCustomCover ? ADMIN.success : ADMIN.warn }}>
+                            {isCustomCover ? 'Custom' : 'Default'}
+                          </p>
+                        </td>
+                        <td className="px-4 sm:px-6 py-4">
+                          <p className="font-medium" style={{ color: ADMIN.ink }}>{cat.nameAl}</p>
+                          <p className="text-xs" style={{ color: ADMIN.muted }}>{cat.nameEn} · <span className="font-mono">{cat.slug}</span></p>
+                        </td>
                         <td className="px-4 sm:px-6 py-4">
                           <ActiveToggle catId={cat.id} isActive={cat.isActive} />
                         </td>
@@ -481,13 +506,14 @@ export default function AdminCategories() {
                       </tr>
                       {expanded === cat.id && (
                         <tr>
-                          <td colSpan={7} className="p-0">
+                          <td colSpan={6} className="p-0">
                             <SubcategoryPanel categoryId={cat.id} />
                           </td>
                         </tr>
                       )}
                     </React.Fragment>
-                  ))
+                    );
+                  })
                 )}
               </tbody>
             </table>

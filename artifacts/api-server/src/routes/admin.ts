@@ -13,7 +13,7 @@ import {
   siteAnalyticsTable,
 } from "@workspace/db-tsconfig";
 import { ipBlocklistTable } from "@workspace/db-tsconfig";
-import { eq, count, sql, desc, ilike, and, or, ne, inArray } from "drizzle-orm";
+import { eq, count, sql, desc, ilike, and, or, ne, inArray, gte } from "drizzle-orm";
 import { requireAdmin, invalidateCachedUser, hashPassword } from "../lib/auth";
 import { invalidatePendingBooksLimitCache } from "./projects";
 import {
@@ -81,6 +81,14 @@ router.get("/admin/stats", requireAdmin, async (req, res): Promise<void> => {
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
+  // Money that counts as "earned" once the album has left the shop.
+  const earnedStatuses = inArray(ordersTable.status, ["shipped", "delivered"]);
+  // Pipeline revenue excludes cancelled only.
+  const activeOrder = ne(ordersTable.status, "cancelled");
+
+  // Prefer order.price_lek; if legacy rows stored 0, fall back to project price.
+  const orderAmountSql = sql<number>`coalesce(nullif(${ordersTable.priceLek}, 0), ${projectsTable.totalPriceLek}, 0)`;
+
   const [
     [usersCount],
     [ordersCount],
@@ -88,6 +96,8 @@ router.get("/admin/stats", requireAdmin, async (req, res): Promise<void> => {
     [ordersMonth],
     [revenue],
     [revenueMonth],
+    [earned],
+    [earnedMonth],
     [usersToday],
     [usersWeek],
     [visitorsToday],
@@ -104,15 +114,33 @@ router.get("/admin/stats", requireAdmin, async (req, res): Promise<void> => {
       .where(notHiddenUser),
     db.select({ count: count() }).from(ordersTable)
       .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
-      .where(and(notHiddenUser, sql`${ordersTable.createdAt} >= ${monthStart}`)),
-    db.select({ total: sql<number>`coalesce(sum(${ordersTable.priceLek}), 0)` }).from(ordersTable)
+      .where(and(notHiddenUser, gte(ordersTable.createdAt, monthStart))),
+    // All-time pipeline revenue (non-cancelled)
+    db.select({ total: sql<number>`coalesce(sum(${orderAmountSql}), 0)` })
+      .from(ordersTable)
       .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
-      .where(notHiddenUser),
-    db.select({ total: sql<number>`coalesce(sum(${ordersTable.priceLek}), 0)` }).from(ordersTable)
+      .leftJoin(projectsTable, eq(ordersTable.projectId, projectsTable.id))
+      .where(and(notHiddenUser, activeOrder)),
+    // This calendar month — by order created date
+    db.select({ total: sql<number>`coalesce(sum(${orderAmountSql}), 0)` })
+      .from(ordersTable)
       .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
-      .where(and(notHiddenUser, sql`${ordersTable.createdAt} >= ${monthStart}`)),
-    db.select({ count: count() }).from(usersTable).where(and(notHiddenUser, sql`${usersTable.createdAt} >= ${todayStart}`)),
-    db.select({ count: count() }).from(usersTable).where(and(notHiddenUser, sql`${usersTable.createdAt} >= ${weekAgo}`)),
+      .leftJoin(projectsTable, eq(ordersTable.projectId, projectsTable.id))
+      .where(and(notHiddenUser, activeOrder, gte(ordersTable.createdAt, monthStart))),
+    // Earned = shipped + delivered (all time). Use updatedAt so marking shipped
+    // this month counts even if the order was placed earlier.
+    db.select({ total: sql<number>`coalesce(sum(${orderAmountSql}), 0)` })
+      .from(ordersTable)
+      .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
+      .leftJoin(projectsTable, eq(ordersTable.projectId, projectsTable.id))
+      .where(and(notHiddenUser, earnedStatuses)),
+    db.select({ total: sql<number>`coalesce(sum(${orderAmountSql}), 0)` })
+      .from(ordersTable)
+      .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
+      .leftJoin(projectsTable, eq(ordersTable.projectId, projectsTable.id))
+      .where(and(notHiddenUser, earnedStatuses, gte(ordersTable.updatedAt, monthStart))),
+    db.select({ count: count() }).from(usersTable).where(and(notHiddenUser, gte(usersTable.createdAt, todayStart))),
+    db.select({ count: count() }).from(usersTable).where(and(notHiddenUser, gte(usersTable.createdAt, weekAgo))),
     db.select({ count: sql<number>`count(distinct ip)` }).from(siteAnalyticsTable).where(sql`${siteAnalyticsTable.event} = 'page_view' AND ${siteAnalyticsTable.createdAt} >= ${todayStart}`),
     db.select({ count: sql<number>`count(distinct ip)` }).from(siteAnalyticsTable).where(sql`${siteAnalyticsTable.event} = 'page_view' AND ${siteAnalyticsTable.createdAt} >= ${weekAgo}`),
     db.select({ count: sql<number>`count(distinct ip)` }).from(siteAnalyticsTable).where(sql`${siteAnalyticsTable.event} = 'page_view' AND ${siteAnalyticsTable.createdAt} >= ${monthStart}`),
@@ -128,7 +156,7 @@ router.get("/admin/stats", requireAdmin, async (req, res): Promise<void> => {
         userId: ordersTable.userId,
         projectId: ordersTable.projectId,
         status: ordersTable.status,
-        priceLek: ordersTable.priceLek,
+        priceLek: sql<number>`${orderAmountSql}`.as("price_lek"),
         notes: ordersTable.notes,
         createdAt: ordersTable.createdAt,
         userName: usersTable.name,
@@ -171,19 +199,28 @@ router.get("/admin/stats", requireAdmin, async (req, res): Promise<void> => {
     `),
   ]);
 
+  const toNum = (v: unknown) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  };
+
   res.json({
     totalUsers: usersCount.count,
     totalOrders: ordersCount.count,
     totalProjects: projectsCount.count,
     ordersThisMonth: ordersMonth.count,
-    revenue: Number(revenue.total) || 0,
-    revenueMonth: Number(revenueMonth.total) || 0,
-    usersToday: Number(usersToday.count) || 0,
-    usersWeek: Number(usersWeek.count) || 0,
-    visitorsToday: Number(visitorsToday.count) || 0,
-    visitorsWeek: Number(visitorsWeek.count) || 0,
-    visitorsMonth: Number(visitorsMonth.count) || 0,
-    wpClicksTotal: Number(wpClicksTotal.count) || 0,
+    // Back-compat: `revenue` = all-time non-cancelled pipeline
+    revenue: toNum(revenue.total),
+    revenueMonth: toNum(revenueMonth.total),
+    // Money actually earned once shipped/delivered
+    earned: toNum(earned.total),
+    earnedMonth: toNum(earnedMonth.total),
+    usersToday: toNum(usersToday.count),
+    usersWeek: toNum(usersWeek.count),
+    visitorsToday: toNum(visitorsToday.count),
+    visitorsWeek: toNum(visitorsWeek.count),
+    visitorsMonth: toNum(visitorsMonth.count),
+    wpClicksTotal: toNum(wpClicksTotal.count),
     recentOrders,
     recentUsers: recentUsers.map((u) => ({
       id: u.id,
@@ -621,7 +658,7 @@ router.patch(
 
     const [order] = await db
       .update(ordersTable)
-      .set(updates)
+      .set({ ...updates, updatedAt: new Date() })
       .where(eq(ordersTable.id, orderId))
       .returning();
 

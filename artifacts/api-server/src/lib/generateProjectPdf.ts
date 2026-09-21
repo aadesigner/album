@@ -8,8 +8,33 @@ import { uploadsDir } from "../routes/uploads";
 import { renderProjectPdf, type PdfRenderPage } from "./pdfRenderer";
 import { getSecuritySettings } from "./securitySettings";
 
-export const pdfsDir = path.join(process.cwd(), "pdfs");
+/** Prefer DATA_DIR (Railway volume) so PDFs survive redeploys. */
+const dataRoot = process.env.DATA_DIR || process.cwd();
+export const pdfsDir = path.join(dataRoot, "pdfs");
 if (!fs.existsSync(pdfsDir)) fs.mkdirSync(pdfsDir, { recursive: true });
+logger.info({ pdfsDir }, "PDF storage directory ready");
+
+export function projectPdfPath(projectId: number): string {
+  return path.join(pdfsDir, `project-${projectId}.pdf`);
+}
+
+export function projectPdfExists(projectId: number): boolean {
+  try {
+    const p = projectPdfPath(projectId);
+    return fs.existsSync(p) && fs.statSync(p).size > 0;
+  } catch {
+    return false;
+  }
+}
+
+export function deleteProjectPdfFile(projectId: number): void {
+  try {
+    const p = projectPdfPath(projectId);
+    if (fs.existsSync(p)) fs.unlinkSync(p);
+  } catch (err) {
+    logger.warn({ err, projectId }, "Failed to delete PDF file");
+  }
+}
 
 // Module-level in-process counter of PDFs currently rendering. Caps the
 // admin-configurable "max concurrent PDF generations" — the render pipeline
@@ -20,8 +45,168 @@ let activeGenerations = 0;
 /** Project IDs with an in-flight render — used when status stays "ordered". */
 const generatingProjectIds = new Set<number>();
 
+/** Coalesce concurrent ensure/queue work for the same project. */
+const inFlightRenders = new Map<number, Promise<string>>();
+
 export function isPdfGenerationInFlight(projectId: number): boolean {
-  return generatingProjectIds.has(projectId);
+  return generatingProjectIds.has(projectId) || inFlightRenders.has(projectId);
+}
+
+const PDF_URL = (projectId: number) => `/api/projects/${projectId}/pdf-download`;
+
+async function loadRenderInput(projectId: number): Promise<{
+  bookWidthCm: number;
+  bookHeightCm: number;
+  pages: PdfRenderPage[];
+  status: string;
+}> {
+  const [project] = await db
+    .select()
+    .from(projectsTable)
+    .where(eq(projectsTable.id, projectId))
+    .limit(1);
+  if (!project) throw new Error(`Project ${projectId} not found`);
+
+  const [bookSize] = await db
+    .select()
+    .from(bookSizesTable)
+    .where(eq(bookSizesTable.id, project.bookSizeId))
+    .limit(1);
+  if (!bookSize) throw new Error(`Project ${projectId} has no valid book size`);
+
+  const pages = await db
+    .select()
+    .from(projectPagesTable)
+    .where(eq(projectPagesTable.projectId, projectId));
+
+  const renderPages: PdfRenderPage[] = pages.map((p) => {
+    let elements: PdfRenderPage["elements"] = [];
+    try {
+      const parsed = p.contentJson ? JSON.parse(p.contentJson) : [];
+      if (Array.isArray(parsed)) elements = parsed;
+    } catch {
+      // Malformed content on a single page shouldn't abort the whole PDF.
+    }
+    return {
+      pageNumber: p.pageNumber,
+      role:
+        p.pageType === "inside_cover"
+          ? "locked_left"
+          : p.pageType === "inside_back_cover"
+            ? "locked_right"
+            : p.pageType,
+      elements,
+    };
+  });
+
+  return {
+    bookWidthCm: Number(bookSize.widthCm),
+    bookHeightCm: Number(bookSize.heightCm),
+    pages: renderPages,
+    status: project.status,
+  };
+}
+
+async function markPdfReady(projectId: number): Promise<void> {
+  const pdfUrl = PDF_URL(projectId);
+  const [current] = await db
+    .select({ status: projectsTable.status })
+    .from(projectsTable)
+    .where(eq(projectsTable.id, projectId))
+    .limit(1);
+  if (!current) return;
+
+  if (current.status === "ordered") {
+    await db
+      .update(projectsTable)
+      .set({ pdfUrl })
+      .where(eq(projectsTable.id, projectId));
+  } else {
+    await db
+      .update(projectsTable)
+      .set({ status: "pdf_ready", pdfUrl })
+      .where(eq(projectsTable.id, projectId));
+  }
+}
+
+async function markPdfFailed(projectId: number): Promise<void> {
+  const [current] = await db
+    .select({ status: projectsTable.status })
+    .from(projectsTable)
+    .where(eq(projectsTable.id, projectId))
+    .limit(1);
+  if (!current) return;
+
+  if (current.status === "ordered") {
+    await db
+      .update(projectsTable)
+      .set({ pdfUrl: null })
+      .where(eq(projectsTable.id, projectId));
+  } else {
+    await db
+      .update(projectsTable)
+      .set({ status: "draft", pdfUrl: null })
+      .where(eq(projectsTable.id, projectId));
+  }
+}
+
+/**
+ * Render the print PDF to disk and mark the project ready.
+ * Returns the absolute file path.
+ */
+async function renderProjectPdfToDisk(projectId: number): Promise<string> {
+  const existing = inFlightRenders.get(projectId);
+  if (existing) return existing;
+
+  const job = (async () => {
+    generatingProjectIds.add(projectId);
+    activeGenerations++;
+    try {
+      const input = await loadRenderInput(projectId);
+      const outputPath = projectPdfPath(projectId);
+      await renderProjectPdf({
+        pages: input.pages,
+        bookWidthCm: input.bookWidthCm,
+        bookHeightCm: input.bookHeightCm,
+        uploadsDir,
+        outputPath,
+      });
+
+      if (!fs.existsSync(outputPath) || fs.statSync(outputPath).size <= 0) {
+        throw new Error(`PDF write produced an empty file for project ${projectId}`);
+      }
+
+      await markPdfReady(projectId);
+      return outputPath;
+    } catch (err) {
+      logger.error({ err, projectId }, "PDF generation failed");
+      try {
+        await markPdfFailed(projectId);
+      } catch (e) {
+        logger.error({ err: e, projectId }, "Failed to reset project after PDF failure");
+      }
+      throw err;
+    } finally {
+      generatingProjectIds.delete(projectId);
+      activeGenerations--;
+      inFlightRenders.delete(projectId);
+    }
+  })();
+
+  inFlightRenders.set(projectId, job);
+  return job;
+}
+
+/**
+ * Ensure the PDF file exists on disk. Regenerates if missing (e.g. after
+ * ephemeral disk wipe / redeploy while pdfUrl is still set in the DB).
+ */
+export async function ensureProjectPdfFile(projectId: number): Promise<string> {
+  if (projectPdfExists(projectId)) {
+    return projectPdfPath(projectId);
+  }
+  logger.warn({ projectId, pdfsDir }, "PDF missing on disk — regenerating");
+  return renderProjectPdfToDisk(projectId);
 }
 
 /**
@@ -42,37 +227,24 @@ export function isPdfGenerationInFlight(projectId: number): boolean {
  */
 export async function queueProjectPdfGeneration(projectId: number): Promise<void> {
   const settings = await getSecuritySettings();
-  if (activeGenerations >= settings.maxConcurrentPdfGenerations) {
+  if (activeGenerations >= settings.maxConcurrentPdfGenerations && !inFlightRenders.has(projectId)) {
     throw new Error("TOO_MANY_CONCURRENT_PDFS: PDF generation concurrency cap reached");
   }
 
   const [project] = await db
-    .select()
+    .select({ id: projectsTable.id, status: projectsTable.status })
     .from(projectsTable)
     .where(eq(projectsTable.id, projectId))
     .limit(1);
   if (!project) throw new Error(`Project ${projectId} not found`);
 
-  const [bookSize] = await db
-    .select()
-    .from(bookSizesTable)
-    .where(eq(bookSizesTable.id, project.bookSizeId))
-    .limit(1);
-  if (!bookSize) throw new Error(`Project ${projectId} has no valid book size`);
-
-  const pages = await db
-    .select()
-    .from(projectPagesTable)
-    .where(eq(projectPagesTable.projectId, projectId));
-
-  // Snapshot whether this run must preserve checkout state. Re-read at the
-  // end too in case status changed mid-render, but the start snapshot decides
-  // whether we ever write pdf_generating.
   const preserveOrdered = project.status === "ordered";
 
+  // Drop any stale file so View PDF can't serve an outdated copy while a
+  // fresh render is pending.
+  deleteProjectPdfFile(projectId);
+
   if (preserveOrdered) {
-    // Clear stale URL so admins/UI know a fresh render is pending, but never
-    // leave "ordered" — that flag gates delete protection + pending caps.
     await db
       .update(projectsTable)
       .set({ pdfUrl: null })
@@ -84,91 +256,7 @@ export async function queueProjectPdfGeneration(projectId: number): Promise<void
       .where(eq(projectsTable.id, projectId));
   }
 
-  activeGenerations++;
-  generatingProjectIds.add(projectId);
-  void (async () => {
-    try {
-      const renderPages: PdfRenderPage[] = pages.map((p) => {
-        let elements: PdfRenderPage["elements"] = [];
-        try {
-          const parsed = p.contentJson ? JSON.parse(p.contentJson) : [];
-          if (Array.isArray(parsed)) elements = parsed;
-        } catch {
-          // Malformed content on a single page shouldn't abort the whole PDF.
-        }
-        return {
-          pageNumber: p.pageNumber,
-          role:
-            p.pageType === "inside_cover"
-              ? "locked_left"
-              : p.pageType === "inside_back_cover"
-                ? "locked_right"
-                : p.pageType,
-          elements,
-        };
-      });
-
-      const outputPath = path.join(pdfsDir, `project-${projectId}.pdf`);
-      await renderProjectPdf({
-        pages: renderPages,
-        bookWidthCm: Number(bookSize.widthCm),
-        bookHeightCm: Number(bookSize.heightCm),
-        uploadsDir,
-        outputPath,
-      });
-
-      const pdfUrl = `/api/projects/${projectId}/pdf-download`;
-
-      // Re-read status so a project ordered while a draft PDF was rendering
-      // still keeps "ordered" instead of being flipped to pdf_ready.
-      const [current] = await db
-        .select({ status: projectsTable.status })
-        .from(projectsTable)
-        .where(eq(projectsTable.id, projectId))
-        .limit(1);
-
-      if (!current) return;
-
-      if (current.status === "ordered") {
-        await db
-          .update(projectsTable)
-          .set({ pdfUrl })
-          .where(eq(projectsTable.id, projectId));
-      } else {
-        await db
-          .update(projectsTable)
-          .set({ status: "pdf_ready", pdfUrl })
-          .where(eq(projectsTable.id, projectId));
-      }
-    } catch (err) {
-      logger.error({ err, projectId }, "PDF generation failed");
-      try {
-        const [current] = await db
-          .select({ status: projectsTable.status })
-          .from(projectsTable)
-          .where(eq(projectsTable.id, projectId))
-          .limit(1);
-
-        if (!current) return;
-
-        if (current.status === "ordered") {
-          // Stay ordered with no pdfUrl — admin can regenerate; never demote.
-          await db
-            .update(projectsTable)
-            .set({ pdfUrl: null })
-            .where(eq(projectsTable.id, projectId));
-        } else {
-          await db
-            .update(projectsTable)
-            .set({ status: "draft", pdfUrl: null })
-            .where(eq(projectsTable.id, projectId));
-        }
-      } catch (e) {
-        logger.error({ err: e, projectId }, "Failed to reset project after PDF failure");
-      }
-    } finally {
-      generatingProjectIds.delete(projectId);
-      activeGenerations--;
-    }
-  })();
+  void renderProjectPdfToDisk(projectId).catch(() => {
+    // Errors already logged + status reset inside renderProjectPdfToDisk.
+  });
 }

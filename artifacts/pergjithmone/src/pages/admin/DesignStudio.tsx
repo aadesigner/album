@@ -13,15 +13,52 @@ import {
   blankCoverElements, newCustomDesignId,
   type CustomDesignRecord, type DesignDef, type DesignOverrides, type EditorElement, type DE,
 } from '@/lib/designs';
+import { applyCoverBackground, coverBgMode, type CoverBgMode } from '@/lib/coverBackground';
+import { compressImageFile, ImageTooLargeError } from '@/lib/imageCompression';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   Check, Loader2, RotateCcw, Save, Eye, EyeOff, AlertTriangle,
-  Plus, Trash2, X,
+  Plus, Trash2, X, Upload, Image as ImageIcon, Type, Square, Palette, Droplets,
+  Copy,
 } from 'lucide-react';
 import { useEditorFontsReady, ensureEditorFonts } from '@/lib/editorFonts';
 
 const PREVIEW_W = 300;
 const PREVIEW_H = Math.round(PREVIEW_W * (DESIGN_H / DESIGN_W));
 const SCALE = PREVIEW_W / DESIGN_W;
+
+const COVER_SWATCHES = [
+  '#FFFFFF', '#F7F5F2', '#ECE7E1', '#1A1A1A', '#2A2A2A',
+  '#C97B84', '#FEC5D7', '#A83442', '#1A2A1A', '#0D1B2A',
+  '#1A0A2E', '#FF6B8A', '#C9A227', '#0E4D5C', '#BCC9D1',
+];
+
+const COVER_GRADIENT_PRESETS: { from: string; to: string; dir: 'tb' | 'lr' | 'diag' }[] = [
+  { from: '#1A1A1A', to: '#4A4A4A', dir: 'tb' },
+  { from: '#FEC5D7', to: '#FFF5F8', dir: 'tb' },
+  { from: '#1A0A2E', to: '#7C3AED', dir: 'diag' },
+  { from: '#0D1B2A', to: '#1A4A6A', dir: 'lr' },
+  { from: '#A83442', to: '#1A1A1A', dir: 'tb' },
+  { from: '#ECE7E1', to: '#FFFFFF', dir: 'tb' },
+  { from: '#0E4D5C', to: '#1A3040', dir: 'diag' },
+  { from: '#C9A227', to: '#1A120C', dir: 'tb' },
+];
+
+async function uploadStudioImage(file: File, token: string | null): Promise<string> {
+  const compressed = await compressImageFile(file);
+  const fd = new FormData();
+  fd.append('file', compressed);
+  const r = await fetch('/api/uploads/image', {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    credentials: 'include',
+    body: fd,
+  });
+  if (!r.ok) throw new Error(await r.text().catch(() => 'Upload failed'));
+  const data = await r.json();
+  if (!data?.url) throw new Error('Upload returned no URL');
+  return data.url as string;
+}
 
 const CATEGORY_ORDER = [
   'Wedding', 'Travel', 'Celebration', 'Baby & Family',
@@ -358,6 +395,7 @@ export default function AdminDesignStudio() {
   const { data: settings, isLoading } = useGetAdminSettings();
   const updateSettings = useUpdateAdminSettings();
   const queryClient = useQueryClient();
+  const { getToken } = useAuth();
   const s = settings as any;
 
   const savedOverrides: DesignOverrides = (s?.designOverrides && typeof s.designOverrides === 'object' && !Array.isArray(s.designOverrides))
@@ -403,6 +441,11 @@ export default function AdminDesignStudio() {
   const [deleting, setDeleting] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [bgUiMode, setBgUiMode] = useState<CoverBgMode>('color');
+  const imageFileRef = useRef<HTMLInputElement>(null);
+  const bgFileRef = useRef<HTMLInputElement>(null);
+  const replaceFileRef = useRef<HTMLInputElement>(null);
   const [createForm, setCreateForm] = useState({
     nameEn: '',
     nameSq: '',
@@ -443,18 +486,136 @@ export default function AdminDesignStudio() {
 
   const draft = coverSide === 'front' ? draftFront : draftBack;
 
-  const onChangeEl = useCallback((id: string, patch: Partial<EditorElement>) => {
-    const apply = (prev: EditorElement[]) => prev.map(e => e.id === id ? { ...e, ...patch } : e);
+  const setDraft = useCallback((updater: (prev: EditorElement[]) => EditorElement[]) => {
     if (coverSide === 'front') {
-      setDraftFront(apply);
+      setDraftFront(updater);
       setDirtyFront(true);
     } else {
-      setDraftBack(apply);
+      setDraftBack(updater);
       setDirtyBack(true);
     }
   }, [coverSide]);
 
+  const onChangeEl = useCallback((id: string, patch: Partial<EditorElement>) => {
+    setDraft(prev => prev.map(e => e.id === id ? { ...e, ...patch } : e));
+  }, [setDraft]);
+
   const selected = draft.find(e => e.id === selectedId);
+  const bgEl = draft.find(e => e.type === 'background');
+
+  useEffect(() => {
+    setBgUiMode(coverBgMode(bgEl));
+  }, [bgEl?.id, bgEl?.src, bgEl?.bgGradientFrom, bgEl?.bgColor, coverSide, designId]);
+
+  const applyBgPatch = useCallback((patch: Parameters<typeof applyCoverBackground>[2]) => {
+    setDraft(prev => applyCoverBackground(prev, DESIGN_H, patch));
+    const bg = (coverSide === 'front' ? draftFront : draftBack).find(e => e.type === 'background')
+      || draft.find(e => e.type === 'background');
+    // Select background after patch so inspector stays on bg controls
+    const next = applyCoverBackground(draft, DESIGN_H, patch);
+    const nextBg = next.find(e => e.type === 'background');
+    if (nextBg) setSelectedId(nextBg.id);
+  }, [setDraft, coverSide, draftFront, draftBack, draft]);
+
+  // Simpler applyBg that doesn't double-read stale draft
+  const setCoverBg = useCallback((patch: Parameters<typeof applyCoverBackground>[2]) => {
+    setDraft(prev => {
+      const next = applyCoverBackground(prev, DESIGN_H, patch);
+      const nextBg = next.find(e => e.type === 'background');
+      if (nextBg) queueMicrotask(() => setSelectedId(nextBg.id));
+      return next;
+    });
+  }, [setDraft]);
+
+  const handleUploadError = (e: unknown) => {
+    const msg = e instanceof ImageTooLargeError
+      ? e.message
+      : (e instanceof Error ? e.message : 'Upload failed');
+    setSaveError(msg);
+  };
+
+  const uploadAndSetBgPhoto = async (file: File) => {
+    setUploading(true);
+    setSaveError(null);
+    try {
+      const url = await uploadStudioImage(file, getToken());
+      setBgUiMode('photo');
+      setCoverBg({ mode: 'photo', src: url });
+    } catch (e) {
+      handleUploadError(e);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const uploadAndReplaceImage = async (file: File, targetId?: string) => {
+    setUploading(true);
+    setSaveError(null);
+    try {
+      const url = await uploadStudioImage(file, getToken());
+      const id = targetId || selectedId;
+      if (id && draft.some(e => e.id === id && e.type === 'image')) {
+        onChangeEl(id, { src: url, cropFocusX: 0.5, cropFocusY: 0.5 });
+      } else {
+        const el: EditorElement = {
+          id: `img-${Date.now()}`,
+          type: 'image',
+          src: url,
+          x: 80, y: 160, w: 440, h: 280, rotation: 0,
+          cropFocusX: 0.5, cropFocusY: 0.5,
+        };
+        setDraft(prev => [...prev, el]);
+        setSelectedId(el.id);
+      }
+    } catch (e) {
+      handleUploadError(e);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const addText = () => {
+    const el: EditorElement = {
+      id: `tx-${Date.now()}`,
+      type: 'text',
+      text: 'New text',
+      x: 60, y: 260, w: DESIGN_W - 120, h: 60, rotation: 0,
+      fontSize: 32, fill: '#1A1A1A', align: 'center',
+      fontFamily: "'Londrina Solid', cursive",
+    };
+    setDraft(prev => [...prev, el]);
+    setSelectedId(el.id);
+  };
+
+  const addShape = () => {
+    const el: EditorElement = {
+      id: `sh-${Date.now()}`,
+      type: 'shape',
+      shapeKind: 'rect',
+      x: 100, y: 200, w: 400, h: 120, rotation: 0,
+      fill: '#E85A6B', opacity: 0.35,
+    };
+    setDraft(prev => [...prev, el]);
+    setSelectedId(el.id);
+  };
+
+  const deleteSelected = () => {
+    if (!selected || selected.type === 'background') return;
+    setDraft(prev => prev.filter(e => e.id !== selected.id));
+    setSelectedId(null);
+  };
+
+  const copyFrontToBack = () => {
+    if (!window.confirm('Replace back cover with a copy of the front?')) return;
+    const cloned = designElementsWithIds(
+      `${designId || 'd'}-b-copy`,
+      designElementsWithoutIds(draftFront),
+    );
+    setDraftBack(cloned);
+    setDirtyBack(true);
+    setCoverSide('back');
+    setSelectedId(null);
+  };
 
   const invalidate = async () => {
     await Promise.all([

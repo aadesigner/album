@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { AdminLayout, ADMIN } from '@/components/layout/AdminLayout';
-import { useGetAdminStats, useListAdminOrders, useUpdateAdminOrder } from '@workspace/api-client-react-tsconfig';
+import { useGetAdminStats, useListAdminOrders, useUpdateAdminOrder, getGetAdminStatsQueryKey } from '@workspace/api-client-react-tsconfig';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar, Legend,
@@ -64,6 +65,7 @@ function fillRegDates(rawData: any[], combined: any[]) {
 // their album via WhatsApp. Admin marks them "Shipped" once printed & sent.
 function PendingPrintingWidget() {
   const { getToken } = useAuth();
+  const queryClient = useQueryClient();
   const { data, isLoading, refetch } = useListAdminOrders(
     { page: 1, limit: 50, status: 'pending' },
     { query: { staleTime: 0, refetchOnMount: 'always', refetchInterval: 30_000 } } as any,
@@ -78,6 +80,8 @@ function PendingPrintingWidget() {
     try {
       await updateOrder.mutateAsync({ orderId, data: { status: 'shipped' as any } });
       refetch();
+      // Refresh earned / revenue cards immediately after shipping.
+      await queryClient.invalidateQueries({ queryKey: getGetAdminStatsQueryKey() });
     } finally { setShippingId(null); }
   };
 
@@ -187,14 +191,26 @@ export default function AdminDashboard() {
             ))}
           </div>
         ) : (
+          <>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 mb-7">
             <StatCard label="Visitors Today" value={s?.visitorsToday ?? 0} icon={<Eye size={18} />} accent={ADMIN.blush} />
             <StatCard label="Visitors Week" value={s?.visitorsWeek ?? 0} icon={<Eye size={18} />} accent="#D4A5A5" />
             <StatCard label="Users Total" value={s?.totalUsers ?? 0} icon={<Users size={18} />} accent="#8FA8A3" sub={`+${s?.usersToday ?? 0} today`} />
             <StatCard label="Orders / Month" value={s?.ordersThisMonth ?? 0} icon={<ShoppingBag size={18} />} accent="#C4A574" />
-            <StatCard label="Revenue" value={`${Number(s?.revenueMonth ?? 0).toLocaleString()} L`} icon={<CreditCard size={18} />} accent="#B8956C" sub="this month" />
+            <StatCard
+              label="Earned"
+              value={`${Number(s?.earned ?? s?.revenue ?? 0).toLocaleString()} L`}
+              icon={<CreditCard size={18} />}
+              accent="#0F766E"
+              sub={`${Number(s?.earnedMonth ?? 0).toLocaleString()} L this month · shipped/delivered`}
+            />
             <StatCard label="WA Clicks" value={s?.wpClicksTotal ?? 0} icon={<MessageCircle size={18} />} accent="#7BAF8E" sub="all time" />
           </div>
+          <p className="text-[11px] -mt-4 mb-7" style={{ color: ADMIN.muted }}>
+            Pipeline (non-cancelled) this month: {Number(s?.revenueMonth ?? 0).toLocaleString()} L · all-time {Number(s?.revenue ?? 0).toLocaleString()} L.
+            Earned counts only after an order is marked shipped or delivered.
+          </p>
+          </>
         )}
 
         {/* Pending for printing */}

@@ -63,13 +63,19 @@ router.post("/orders", requireAuth, async (req, res): Promise<void> => {
   // write here would either leave an order with a project stuck as "draft"
   // or (worse) silently drop the order after the project already looks
   // ordered to the user.
+  const settingsRows = await db.select().from(appSettingsTable);
+  const settingsMap: Record<string, string> = {};
+  for (const row of settingsRows) settingsMap[row.key] = row.value;
+  const fallbackPrice = parseInt(settingsMap["base_price_lek"] || "3100", 10);
+  const priceLek = Math.max(0, Number(project.totalPriceLek) || fallbackPrice);
+
   const order = await db.transaction(async (tx) => {
     const [ord] = await tx
       .insert(ordersTable)
       .values({
         userId: req.user!.id,
         projectId,
-        priceLek: project.totalPriceLek,
+        priceLek,
         notes: notes || null,
       })
       .returning();

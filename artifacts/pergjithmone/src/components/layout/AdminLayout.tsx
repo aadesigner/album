@@ -1,37 +1,115 @@
-import React, { useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Link, useLocation } from 'wouter';
 import {
   LayoutDashboard, Users, ShoppingBag, FolderOpen, Image,
-  Grid, Ruler, Settings, LogOut, Menu, X, Sparkles, ExternalLink, ShieldAlert,
+  Grid, Ruler, Settings, LogOut, Menu, X, Sparkles, ExternalLink, ShieldAlert, Check,
 } from 'lucide-react';
+import {
+  ADMIN_PALETTES,
+  DEFAULT_ADMIN_PALETTE_ID,
+  applyAdminTokens,
+  getAdminPalette,
+  readStoredAdminPaletteId,
+  writeStoredAdminPaletteId,
+  type AdminPaletteId,
+  type AdminTokens,
+} from '@/lib/adminTheme';
 
-/** Soft blush admin shell — dusty rose, charcoal, Playfair. No fuchsia/purple. */
-export const ADMIN = {
-  bg: '#FBF7F5',
-  blush: '#C97B84',
-  blushSoft: '#F3E4E6',
-  blushDeep: '#A85C66',
-  ink: '#2A2224',
-  muted: '#8A7A7C',
-  card: '#FFFFFF',
-  line: '#EDE4E5',
-} as const;
+/** Mutable theme bag — pages import this; palette switch mutates + re-renders admin shell. */
+export const ADMIN: AdminTokens = { ...getAdminPalette(DEFAULT_ADMIN_PALETTE_ID).tokens };
+
+type AdminThemeCtx = {
+  paletteId: AdminPaletteId;
+  setPaletteId: (id: AdminPaletteId) => void;
+  theme: AdminTokens;
+};
+
+const AdminThemeContext = createContext<AdminThemeCtx>({
+  paletteId: DEFAULT_ADMIN_PALETTE_ID,
+  setPaletteId: () => {},
+  theme: ADMIN,
+});
+
+export function useAdminTheme() {
+  return useContext(AdminThemeContext);
+}
 
 const navItems = [
-  { href: '/heyadmin',           label: 'Dashboard',     Icon: LayoutDashboard },
-  { href: '/heyadmin/porosi',    label: 'Orders',        Icon: ShoppingBag },
-  { href: '/heyadmin/perdorues', label: 'Users',         Icon: Users },
-  { href: '/heyadmin/kategori',  label: 'Categories',    Icon: FolderOpen },
-  { href: '/heyadmin/dizajne',   label: 'Design Studio', Icon: Sparkles },
-  { href: '/heyadmin/template',  label: 'Templates',     Icon: Image },
-  { href: '/heyadmin/layout',    label: 'Layouts',       Icon: Grid },
-  { href: '/heyadmin/madhesia',  label: 'Book Sizes',    Icon: Ruler },
-  { href: '/heyadmin/siguria',   label: 'Security',      Icon: ShieldAlert },
-  { href: '/heyadmin/cilesimet', label: 'Settings',      Icon: Settings },
-];
+  { href: '/heyadmin',           label: 'Dashboard',     Icon: LayoutDashboard, group: 'Overview' },
+  { href: '/heyadmin/porosi',    label: 'Orders',        Icon: ShoppingBag,     group: 'Overview' },
+  { href: '/heyadmin/perdorues', label: 'Users',         Icon: Users,           group: 'Overview' },
+  { href: '/heyadmin/dizajne',   label: 'Design Studio', Icon: Sparkles,        group: 'Catalog' },
+  { href: '/heyadmin/kategori',  label: 'Categories',    Icon: FolderOpen,      group: 'Catalog' },
+  { href: '/heyadmin/template',  label: 'Templates',     Icon: Image,           group: 'Catalog' },
+  { href: '/heyadmin/layout',    label: 'Layouts',       Icon: Grid,            group: 'Catalog' },
+  { href: '/heyadmin/madhesia',  label: 'Book Sizes',    Icon: Ruler,           group: 'Catalog' },
+  { href: '/heyadmin/siguria',   label: 'Security',      Icon: ShieldAlert,     group: 'System' },
+  { href: '/heyadmin/cilesimet', label: 'Settings',      Icon: Settings,        group: 'System' },
+] as const;
 
-function Sidebar({ onClose }: { onClose?: () => void }) {
+const navGroups = (['Overview', 'Catalog', 'System'] as const).map((title) => ({
+  title,
+  items: navItems.filter((i) => i.group === title),
+}));
+
+function PalettePicker({ theme, paletteId, onSelect }: {
+  theme: AdminTokens;
+  paletteId: AdminPaletteId;
+  onSelect: (id: AdminPaletteId) => void;
+}) {
+  return (
+    <div className="px-1 mb-3">
+      <p className="text-[10px] font-semibold tracking-[0.14em] uppercase text-white/30 px-2 mb-2">
+        Theme
+      </p>
+      <div className="grid grid-cols-7 gap-1.5 px-1">
+        {ADMIN_PALETTES.map((p) => {
+          const active = p.id === paletteId;
+          return (
+            <button
+              key={p.id}
+              type="button"
+              title={p.name}
+              onClick={() => onSelect(p.id)}
+              className="relative aspect-square rounded-lg overflow-hidden transition-transform hover:scale-110 focus:outline-none"
+              style={{
+                boxShadow: active
+                  ? `0 0 0 2px ${theme.sidebar}, 0 0 0 3.5px ${p.tokens.accent}`
+                  : '0 0 0 1px rgba(255,255,255,0.12)',
+              }}
+              aria-label={`Palette ${p.name}`}
+              aria-pressed={active}
+            >
+              <span className="absolute inset-0 flex">
+                <span className="w-[38%] h-full" style={{ background: p.swatches[0] }} />
+                <span className="flex-1 h-full" style={{ background: p.swatches[1] }} />
+                <span className="w-[28%] h-full" style={{ background: p.swatches[2] }} />
+              </span>
+              {active && (
+                <span className="absolute inset-0 flex items-center justify-center bg-black/25">
+                  <Check size={10} className="text-white drop-shadow" strokeWidth={3} />
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      <p className="text-[10px] text-white/35 px-2 mt-1.5 truncate">
+        {ADMIN_PALETTES.find((p) => p.id === paletteId)?.name}
+      </p>
+    </div>
+  );
+}
+
+function Sidebar({
+  onClose, theme, paletteId, onPalette,
+}: {
+  onClose?: () => void;
+  theme: AdminTokens;
+  paletteId: AdminPaletteId;
+  onPalette: (id: AdminPaletteId) => void;
+}) {
   const { user, logout } = useAuth();
   const [location] = useLocation();
   const initials = (user?.name || (user as any)?.phone || 'A')
@@ -42,20 +120,20 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
     .slice(0, 2);
 
   return (
-    <div className="h-full flex flex-col" style={{ background: ADMIN.card, borderRight: `1px solid ${ADMIN.line}` }}>
-      <div className="px-5 py-5 flex items-center justify-between" style={{ borderBottom: `1px solid ${ADMIN.line}` }}>
-        <div className="flex items-center gap-3">
+    <div className="h-full flex flex-col" style={{ background: theme.sidebar }}>
+      <div className="px-5 py-5 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        <div className="flex items-center gap-3 min-w-0">
           <div
-            className="w-9 h-9 rounded-2xl flex items-center justify-center shrink-0"
-            style={{ background: ADMIN.blushSoft }}
+            className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+            style={{ background: theme.accent }}
           >
-            <span className="font-serif text-base font-semibold" style={{ color: ADMIN.blushDeep }}>P</span>
+            <span className="font-serif text-base font-semibold text-white">P</span>
           </div>
-          <div>
-            <p className="text-[10px] font-semibold tracking-[0.18em] uppercase leading-none" style={{ color: ADMIN.blush }}>
-              Studio
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold tracking-[0.16em] uppercase leading-none text-white/45">
+              Admin
             </p>
-            <p className="text-[15px] font-serif font-semibold leading-tight mt-0.5" style={{ color: ADMIN.ink }}>
+            <p className="text-[15px] font-serif font-semibold leading-tight mt-0.5 text-white truncate">
               Përgjithmonë
             </p>
           </div>
@@ -64,8 +142,7 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
           <button
             type="button"
             onClick={onClose}
-            className="lg:hidden p-2 rounded-xl transition-colors"
-            style={{ color: ADMIN.muted }}
+            className="lg:hidden p-2 rounded-lg transition-colors text-white/50 hover:text-white hover:bg-white/5"
             aria-label="Close menu"
           >
             <X size={18} />
@@ -73,62 +150,83 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
         )}
       </div>
 
-      <nav className="flex-1 py-4 px-3 space-y-0.5 overflow-y-auto">
-        {navItems.map(({ href, label, Icon }) => {
-          const isActive = location === href || (href !== '/heyadmin' && location.startsWith(href));
-          return (
-            <Link
-              key={href}
-              href={href}
-              onClick={onClose}
-              className="flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-[13px] font-medium transition-all duration-150 relative"
-              style={
-                isActive
-                  ? { background: ADMIN.blushSoft, color: ADMIN.blushDeep }
-                  : { color: ADMIN.muted }
-              }
-            >
-              {isActive && (
-                <span
-                  className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full"
-                  style={{ background: ADMIN.blush }}
-                />
-              )}
-              <Icon size={16} strokeWidth={isActive ? 2.25 : 1.75} className="shrink-0 opacity-90" />
-              <span className="truncate">{label}</span>
-            </Link>
-          );
-        })}
+      <nav className="flex-1 py-4 px-3 overflow-y-auto">
+        {navGroups.map((group) => (
+          <div key={group.title} className="mb-4">
+            <p className="px-3 mb-1.5 text-[10px] font-semibold tracking-[0.14em] uppercase text-white/30">
+              {group.title}
+            </p>
+            <div className="space-y-0.5">
+              {group.items.map(({ href, label, Icon }) => {
+                const isActive = location === href || (href !== '/heyadmin' && location.startsWith(href));
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    onClick={onClose}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-colors duration-150"
+                    style={
+                      isActive
+                        ? { background: theme.sidebarActive, color: theme.sidebarTextActive }
+                        : { color: theme.sidebarText }
+                    }
+                    onMouseEnter={(e) => {
+                      if (!isActive) e.currentTarget.style.background = theme.sidebarHover;
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isActive) e.currentTarget.style.background = 'transparent';
+                    }}
+                  >
+                    <Icon
+                      size={16}
+                      strokeWidth={isActive ? 2.25 : 1.75}
+                      className="shrink-0"
+                      style={{ color: isActive ? theme.accent : undefined }}
+                    />
+                    <span className="truncate">{label}</span>
+                    {isActive && (
+                      <span
+                        className="ml-auto w-1.5 h-1.5 rounded-full shrink-0"
+                        style={{ background: theme.accent }}
+                      />
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
 
-      <div className="p-4" style={{ borderTop: `1px solid ${ADMIN.line}` }}>
-        <div className="flex items-center gap-3 px-2 mb-3">
+      <div className="p-4" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+        <PalettePicker theme={theme} paletteId={paletteId} onSelect={onPalette} />
+
+        <div className="flex items-center gap-3 px-1 mb-3">
           <div
-            className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold shrink-0"
-            style={{ background: ADMIN.blushSoft, color: ADMIN.blushDeep }}
+            className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 text-white"
+            style={{ background: theme.accent }}
           >
             {initials}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold truncate" style={{ color: ADMIN.ink }}>{user?.name || 'Admin'}</p>
-            <p className="text-[11px] truncate" style={{ color: ADMIN.muted }}>
+            <p className="text-sm font-semibold truncate text-white">{user?.name || 'Admin'}</p>
+            <p className="text-[11px] truncate text-white/40">
               {(user as any)?.phone || 'Administrator'}
             </p>
           </div>
         </div>
         <Link
           href="/"
-          className="flex items-center gap-2.5 px-3.5 py-2.5 w-full rounded-2xl text-[13px] font-medium transition-colors mb-0.5"
-          style={{ color: ADMIN.muted }}
+          className="flex items-center gap-2.5 px-3 py-2.5 w-full rounded-xl text-[13px] font-medium transition-colors text-white/45 hover:text-white hover:bg-white/5 mb-0.5"
         >
           <ExternalLink size={15} />
-          Back to site
+          View site
         </Link>
         <button
           type="button"
           onClick={() => logout()}
-          className="flex items-center gap-2.5 px-3.5 py-2.5 w-full rounded-2xl text-[13px] font-medium transition-colors"
-          style={{ color: ADMIN.blush }}
+          className="flex items-center gap-2.5 px-3 py-2.5 w-full rounded-xl text-[13px] font-medium transition-colors"
+          style={{ color: theme.accent }}
         >
           <LogOut size={15} />
           Sign out
@@ -141,6 +239,28 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
 export function AdminLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [paletteId, setPaletteIdState] = useState<AdminPaletteId>(DEFAULT_ADMIN_PALETTE_ID);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    const id = readStoredAdminPaletteId();
+    applyAdminTokens(ADMIN, getAdminPalette(id).tokens);
+    setPaletteIdState(id);
+    setReady(true);
+  }, []);
+
+  const setPaletteId = useCallback((id: AdminPaletteId) => {
+    applyAdminTokens(ADMIN, getAdminPalette(id).tokens);
+    writeStoredAdminPaletteId(id);
+    setPaletteIdState(id);
+  }, []);
+
+  const theme = useMemo(() => ({ ...ADMIN }), [paletteId, ready]);
+
+  const ctx = useMemo(
+    () => ({ paletteId, setPaletteId, theme }),
+    [paletteId, setPaletteId, theme],
+  );
 
   if (isLoading) {
     return (
@@ -148,7 +268,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
         <div className="flex flex-col items-center gap-3">
           <div
             className="w-8 h-8 rounded-full border-2 animate-spin"
-            style={{ borderColor: ADMIN.blushSoft, borderTopColor: ADMIN.blush }}
+            style={{ borderColor: ADMIN.line, borderTopColor: ADMIN.accent }}
           />
           <p className="text-sm font-medium" style={{ color: ADMIN.muted }}>Loading…</p>
         </div>
@@ -161,9 +281,9 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
       <div className="min-h-[100dvh] flex flex-col items-center justify-center p-6 text-center" style={{ background: ADMIN.bg }}>
         <div
           className="w-14 h-14 rounded-2xl flex items-center justify-center mb-5"
-          style={{ background: ADMIN.blushSoft }}
+          style={{ background: ADMIN.accentSoft }}
         >
-          <ShieldAlert size={22} style={{ color: ADMIN.blushDeep }} />
+          <ShieldAlert size={22} style={{ color: ADMIN.accentDeep }} />
         </div>
         <h1 className="text-2xl font-serif mb-2" style={{ color: ADMIN.ink }}>Access denied</h1>
         <p className="text-sm mb-8 max-w-xs" style={{ color: ADMIN.muted }}>
@@ -171,8 +291,8 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
         </p>
         <Link
           href="/"
-          className="px-6 py-2.5 text-white text-sm font-medium rounded-2xl transition-opacity hover:opacity-90"
-          style={{ background: ADMIN.blush }}
+          className="px-6 py-2.5 text-white text-sm font-medium rounded-xl transition-opacity hover:opacity-90"
+          style={{ background: ADMIN.accent }}
         >
           Back to site
         </Link>
@@ -181,54 +301,63 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-[100dvh] flex admin-shell" style={{ background: ADMIN.bg }}>
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 z-20 lg:hidden"
-          style={{ background: 'rgba(42,34,36,0.28)' }}
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      <aside className="w-[15.5rem] fixed inset-y-0 left-0 z-30 hidden lg:block">
-        <Sidebar />
-      </aside>
-
-      <aside
-        className={`w-[17rem] fixed inset-y-0 left-0 z-30 transition-transform duration-300 ease-out lg:hidden ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
-        style={{ boxShadow: sidebarOpen ? '8px 0 40px rgba(42,34,36,0.08)' : undefined }}
+    <AdminThemeContext.Provider value={ctx}>
+      <div
+        className="min-h-[100dvh] flex admin-shell"
+        style={{ background: theme.bg }}
+        data-admin-palette={paletteId}
       >
-        <Sidebar onClose={() => setSidebarOpen(false)} />
-      </aside>
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 z-20 lg:hidden"
+            style={{ background: 'rgba(18,20,26,0.5)' }}
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
 
-      <main className="flex-1 lg:ml-[15.5rem] min-h-[100dvh] flex flex-col min-w-0">
-        <div
-          className="lg:hidden flex items-center gap-3 px-4 py-3 sticky top-0 z-10 backdrop-blur-md"
-          style={{ background: 'rgba(251,247,245,0.92)', borderBottom: `1px solid ${ADMIN.line}` }}
+        <aside className="w-[15.75rem] fixed inset-y-0 left-0 z-30 hidden lg:block">
+          <Sidebar theme={theme} paletteId={paletteId} onPalette={setPaletteId} />
+        </aside>
+
+        <aside
+          className={`w-[17rem] fixed inset-y-0 left-0 z-30 transition-transform duration-300 ease-out lg:hidden ${
+            sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
+          style={{ boxShadow: sidebarOpen ? '12px 0 40px rgba(0,0,0,0.25)' : undefined }}
         >
-          <button
-            type="button"
-            onClick={() => setSidebarOpen(true)}
-            className="p-2.5 rounded-xl transition-colors"
-            style={{ color: ADMIN.ink }}
-            aria-label="Open menu"
-          >
-            <Menu size={20} />
-          </button>
-          <div className="min-w-0">
-            <p className="text-[10px] font-semibold tracking-[0.16em] uppercase" style={{ color: ADMIN.blush }}>
-              Studio
-            </p>
-            <p className="font-serif font-semibold text-[15px] leading-tight truncate" style={{ color: ADMIN.ink }}>
-              Përgjithmonë
-            </p>
-          </div>
-        </div>
+          <Sidebar
+            theme={theme}
+            paletteId={paletteId}
+            onPalette={setPaletteId}
+            onClose={() => setSidebarOpen(false)}
+          />
+        </aside>
 
-        <div className="flex-1 min-w-0">{children}</div>
-      </main>
-    </div>
+        <main className="flex-1 lg:ml-[15.75rem] min-h-[100dvh] flex flex-col min-w-0">
+          <div
+            className="lg:hidden flex items-center gap-3 px-4 py-3 sticky top-0 z-10"
+            style={{ background: theme.sidebar, borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+          >
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              className="p-2.5 rounded-xl text-white/80 hover:bg-white/5"
+              aria-label="Open menu"
+            >
+              <Menu size={20} />
+            </button>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-semibold tracking-[0.14em] uppercase text-white/40">Admin</p>
+              <p className="font-serif font-semibold text-[15px] leading-tight truncate text-white">
+                Përgjithmonë
+              </p>
+            </div>
+          </div>
+
+          {/* key forces page chrome to re-read ADMIN tokens after palette change */}
+          <div className="flex-1 min-w-0" key={paletteId}>{children}</div>
+        </main>
+      </div>
+    </AdminThemeContext.Provider>
   );
 }
