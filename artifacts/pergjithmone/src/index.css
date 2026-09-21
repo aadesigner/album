@@ -332,3 +332,61 @@
   from { opacity: 0; transform: translateY(-8px) scale(0.98); }
   to   { opacity: 1; transform: translateY(0)    scale(1);    }
 }
+
+/* ── Homepage hero atmosphere + book presence ── */
+@keyframes heroOrbDriftA {
+  0%, 100% { transform: translate3d(-4%, 2%, 0) scale(1); }
+  33%      { transform: translate3d(6%, -5%, 0) scale(1.08); }
+  66%      { transform: translate3d(-2%, 7%, 0) scale(0.96); }
+}
+@keyframes heroOrbDriftB {
+  0%, 100% { transform: translate3d(5%, -3%, 0) scale(1.05); }
+  40%      { transform: translate3d(-7%, 4%, 0) scale(0.94); }
+  70%      { transform: translate3d(3%, 8%, 0) scale(1.1); }
+}
+@keyframes heroSheen {
+  0%   { transform: translateX(-120%) skewX(-18deg); opacity: 0; }
+  15%  { opacity: 0.35; }
+  45%  { opacity: 0.12; }
+  100% { transform: translateX(180%) skewX(-18deg); opacity: 0; }
+}
+@keyframes bookFloat {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-10px); }
+}
+@keyframes bookIdleYaw {
+  0%, 100% { transform: rotateY(-6deg) rotateX(4deg); }
+  50%      { transform: rotateY(10deg) rotateX(-3deg); }
+}
+
+.hero-orb-a {
+  animation: heroOrbDriftA 14s ease-in-out infinite;
+  will-change: transform;
+}
+.hero-orb-b {
+  animation: heroOrbDriftB 18s ease-in-out infinite;
+  will-change: transform;
+}
+.hero-sheen {
+  animation: heroSheen 7.5s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+.book-float {
+  animation: bookFloat 5.5s ease-in-out infinite;
+  will-change: transform;
+}
+.book-idle-yaw {
+  animation: bookIdleYaw 7s ease-in-out infinite;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-orb-a,
+  .hero-orb-b,
+  .hero-sheen,
+  .book-float,
+  .book-idle-yaw {
+    animation: none !important;
+  }
+}

@@ -14,7 +14,7 @@ import {
   getCategorySublabel,
 } from '@/lib/categoryImages';
 import { DESIGNS, designFrontElements } from '@/lib/designs';
-import { PageThumb } from '@/components/PageThumb';
+import { PageThumb, ResponsivePageThumb } from '@/components/PageThumb';
 import { ensureEditorFonts } from '@/lib/editorFonts';
 
 // ── Hero + album starter (CSS 3D book — no WebGL) ─────────────────────────────
@@ -77,7 +77,7 @@ const ALBUM_STYLES: AlbumStyle[] = [
   },
 ];
 
-const HERO_CYCLE_MS = 5200;
+const HERO_CYCLE_MS = 3400;
 
 function usePrefersReducedMotion() {
   const [reduced, setReduced] = useState(false);
@@ -91,7 +91,7 @@ function usePrefersReducedMotion() {
   return reduced;
 }
 
-/** Lightweight CSS 3D photobook — one DOM book, cover image swaps (carousel reshaped). */
+/** CSS 3D photobook — thicker block, page stack, gloss, idle float. */
 function LivingAlbumBook({
   style,
   size = 'hero',
@@ -103,13 +103,14 @@ function LivingAlbumBook({
 }) {
   const reduced = usePrefersReducedMotion();
   const wrapRef = useRef<HTMLDivElement>(null);
+  const [hovering, setHovering] = useState(false);
   const mx = useMotionValue(0);
   const my = useMotionValue(0);
-  const rotY = useSpring(useTransform(mx, [-1, 1], interactive && !reduced ? [-14, 18] : [-8, 8]), {
-    stiffness: 120, damping: 22, mass: 0.4,
+  const rotY = useSpring(useTransform(mx, [-1, 1], interactive && !reduced ? [-22, 28] : [-10, 12]), {
+    stiffness: 140, damping: 20, mass: 0.35,
   });
-  const rotX = useSpring(useTransform(my, [-1, 1], interactive && !reduced ? [8, -8] : [4, -2]), {
-    stiffness: 120, damping: 22, mass: 0.4,
+  const rotX = useSpring(useTransform(my, [-1, 1], interactive && !reduced ? [12, -14] : [5, -4]), {
+    stiffness: 140, damping: 20, mass: 0.35,
   });
 
   const coverEls = useMemo(() => {
@@ -146,9 +147,10 @@ function LivingAlbumBook({
     }
   }, [coverEls]);
 
-  const d = size === 'hero' ? 22 : 16;
-  const maxW = size === 'hero' ? 280 : 200;
-  const maxH = size === 'hero' ? 372 : 266;
+  const spineD = size === 'hero' ? 28 : 20;
+  const pageBlock = size === 'hero' ? 18 : 13;
+  const maxW = size === 'hero' ? 300 : 210;
+  const maxH = size === 'hero' ? 400 : 280;
 
   const onMove = (e: React.MouseEvent) => {
     if (!interactive || reduced || !wrapRef.current) return;
@@ -156,134 +158,187 @@ function LivingAlbumBook({
     mx.set(((e.clientX - r.left) / r.width) * 2 - 1);
     my.set(((e.clientY - r.top) / r.height) * 2 - 1);
   };
-  const onLeave = () => { mx.set(0); my.set(0); };
+  const onLeave = () => {
+    mx.set(0);
+    my.set(0);
+    setHovering(false);
+  };
+
+  const coverBg = (DESIGNS.find(x => x.id === style.designId)?.thumb?.background as string) || '#1a1410';
+  const usePointerTilt = interactive && !reduced && hovering;
 
   return (
     <div
       ref={wrapRef}
       onMouseMove={onMove}
+      onMouseEnter={() => setHovering(true)}
       onMouseLeave={onLeave}
-      className="relative mx-auto"
+      className={`relative mx-auto ${!reduced ? 'book-float' : ''}`}
       style={{
-        width: `min(${size === 'hero' ? 42 : 48}vw, ${maxW}px)`,
-        height: `min(${size === 'hero' ? 56 : 64}vw, ${maxH}px)`,
+        width: `min(${size === 'hero' ? 46 : 50}vw, ${maxW}px)`,
+        height: `min(${size === 'hero' ? 60 : 66}vw, ${maxH}px)`,
         maxWidth: maxW,
         maxHeight: maxH,
-        perspective: 1100,
+        perspective: 1400,
         touchAction: 'manipulation',
       }}
     >
       <div
         aria-hidden
-        className="absolute left-1/2 -translate-x-1/2 bottom-[-7%] w-[78%] h-[11%] rounded-[100%] blur-xl opacity-45"
-        style={{ background: 'radial-gradient(ellipse, rgba(0,0,0,0.55), transparent 70%)' }}
+        className="absolute left-1/2 -translate-x-1/2 bottom-[-9%] w-[86%] h-[14%] rounded-[100%] blur-2xl opacity-55"
+        style={{ background: 'radial-gradient(ellipse, rgba(0,0,0,0.62), transparent 72%)' }}
       />
-      <motion.div
-        style={{
-          width: '100%',
-          height: '100%',
-          position: 'relative',
-          transformStyle: 'preserve-3d',
-          rotateY: rotY,
-          rotateX: rotX,
-        }}
+
+      <div
+        className={!usePointerTilt && !reduced ? 'book-idle-yaw' : undefined}
+        style={{ width: '100%', height: '100%', transformStyle: 'preserve-3d' }}
       >
-        <div
-          aria-hidden
+        <motion.div
           style={{
-            position: 'absolute',
-            left: -d, top: 0,
-            width: d, height: '100%',
-            transformOrigin: 'right center',
-            transform: 'rotateY(-90deg)',
-            background: `linear-gradient(to right, ${style.spine}66, ${style.spine})`,
-            borderRadius: '2px 0 0 2px',
-            overflow: 'hidden',
+            width: '100%',
+            height: '100%',
+            position: 'relative',
+            transformStyle: 'preserve-3d',
+            rotateY: usePointerTilt ? rotY : 0,
+            rotateX: usePointerTilt ? rotX : 0,
           }}
         >
-          <div style={{
-            position: 'absolute', inset: 0,
-            background: 'linear-gradient(to right, rgba(0,0,0,0.5), rgba(0,0,0,0.1))',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <span style={{
-              writingMode: 'vertical-rl',
-              fontSize: size === 'hero' ? 8 : 7,
-              letterSpacing: '0.28em',
-              textTransform: 'uppercase',
-              color: 'rgba(255,255,255,0.32)',
-              fontWeight: 600,
+          {/* Spine */}
+          <div
+            aria-hidden
+            style={{
+              position: 'absolute',
+              left: -spineD, top: 0,
+              width: spineD, height: '100%',
+              transformOrigin: 'right center',
+              transform: 'rotateY(-90deg)',
+              background: `linear-gradient(to right, ${style.spine}44, ${style.spine}, ${style.spine}cc)`,
+              borderRadius: '3px 0 0 3px',
+              boxShadow: 'inset -2px 0 6px rgba(0,0,0,0.35)',
+              overflow: 'hidden',
+            }}
+          >
+            <div style={{
+              position: 'absolute', inset: 0,
+              background: 'linear-gradient(to right, rgba(0,0,0,0.55), rgba(0,0,0,0.08))',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              përgjithmonë
-            </span>
+              <span style={{
+                writingMode: 'vertical-rl',
+                fontSize: size === 'hero' ? 9 : 7,
+                letterSpacing: '0.32em',
+                textTransform: 'uppercase',
+                color: 'rgba(255,255,255,0.38)',
+                fontWeight: 600,
+              }}>
+                përgjithmonë
+              </span>
+            </div>
           </div>
-        </div>
 
-        <div
-          ref={coverFaceRef}
-          style={{
-            position: 'absolute',
-            inset: 0,
-            borderRadius: '0 4px 4px 0',
-            overflow: 'hidden',
-            boxShadow: '10px 22px 44px rgba(0,0,0,0.32), 2px 4px 12px rgba(0,0,0,0.18)',
-            background: (DESIGNS.find(x => x.id === style.designId)?.thumb?.background as string) || '#1a1410',
-          }}
-        >
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div
-              key={style.designId}
-              initial={reduced ? { opacity: 1 } : { opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-              style={{ position: 'absolute', inset: 0 }}
-            >
-              {coverEls.length > 0 && coverSize.w > 0 ? (
-                <PageThumb elements={coverEls} width={coverSize.w} height={coverSize.h} />
-              ) : coverEls.length === 0 ? (
-                <img
-                  src={style.img}
-                  alt=""
-                  draggable={false}
-                  loading="eager"
-                  decoding="async"
-                  style={{
-                    position: 'absolute', inset: 0,
-                    width: '100%', height: '100%',
-                    objectFit: 'cover', display: 'block',
-                  }}
-                />
-              ) : null}
-            </motion.div>
-          </AnimatePresence>
-        </div>
-
-        <div
-          aria-hidden
-          style={{
-            position: 'absolute',
-            right: -d, top: '2%',
-            width: d, height: '96%',
-            transformOrigin: 'left center',
-            transform: 'rotateY(90deg)',
-            background: 'linear-gradient(to left, #c8c4bc, #ebe6de)',
-            overflow: 'hidden',
-          }}
-        >
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} style={{
-              position: 'absolute', left: 1, right: 1,
-              top: `${(i / 8) * 100}%`, height: 1,
-              background: 'rgba(0,0,0,0.07)',
+          {/* Page stack (depth) */}
+          <div
+            aria-hidden
+            style={{
+              position: 'absolute',
+              right: -pageBlock, top: '1.5%',
+              width: pageBlock, height: '97%',
+              transformOrigin: 'left center',
+              transform: 'rotateY(90deg)',
+              background: 'linear-gradient(to left, #bdb8ae, #f2eee6 55%, #e8e3d8)',
+              boxShadow: '2px 0 12px rgba(0,0,0,0.12)',
+              overflow: 'hidden',
+            }}
+          >
+            {Array.from({ length: 14 }).map((_, i) => (
+              <div key={i} style={{
+                position: 'absolute', left: 0, right: 0,
+                top: `${(i / 14) * 100}%`, height: 1,
+                background: i % 3 === 0 ? 'rgba(0,0,0,0.1)' : 'rgba(0,0,0,0.05)',
+              }} />
+            ))}
+            <div style={{
+              position: 'absolute', inset: 0,
+              background: 'linear-gradient(to right, rgba(0,0,0,0.28), transparent 55%)',
             }} />
-          ))}
-          <div style={{
-            position: 'absolute', inset: 0,
-            background: 'linear-gradient(to right, rgba(0,0,0,0.2), transparent 50%)',
-          }} />
-        </div>
-      </motion.div>
+          </div>
+
+          {/* Cover face */}
+          <div
+            ref={coverFaceRef}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              borderRadius: '0 5px 5px 0',
+              overflow: 'hidden',
+              boxShadow:
+                '14px 28px 50px rgba(0,0,0,0.38), 4px 8px 18px rgba(0,0,0,0.22), inset 0 0 0 1px rgba(255,255,255,0.08)',
+              background: coverBg,
+              transform: 'translateZ(1px)',
+            }}
+          >
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={style.designId}
+                initial={reduced ? { opacity: 1 } : { opacity: 0, rotateY: -12, scale: 0.97 }}
+                animate={{ opacity: 1, rotateY: 0, scale: 1 }}
+                exit={reduced ? { opacity: 0 } : { opacity: 0, rotateY: 10, scale: 1.02 }}
+                transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                style={{ position: 'absolute', inset: 0, transformStyle: 'preserve-3d' }}
+              >
+                {coverEls.length > 0 && coverSize.w > 0 ? (
+                  <PageThumb elements={coverEls} width={coverSize.w} height={coverSize.h} />
+                ) : coverEls.length === 0 ? (
+                  <img
+                    src={style.img}
+                    alt=""
+                    draggable={false}
+                    loading="eager"
+                    decoding="async"
+                    style={{
+                      position: 'absolute', inset: 0,
+                      width: '100%', height: '100%',
+                      objectFit: 'cover', display: 'block',
+                    }}
+                  />
+                ) : null}
+              </motion.div>
+            </AnimatePresence>
+
+            {/* Bevel + gloss */}
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0"
+              style={{
+                background:
+                  'linear-gradient(115deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.04) 28%, transparent 48%), linear-gradient(to left, rgba(0,0,0,0.18), transparent 12%)',
+              }}
+            />
+            {!reduced && (
+              <div
+                aria-hidden
+                className="hero-sheen pointer-events-none absolute inset-y-0 w-[38%] opacity-0"
+                style={{
+                  background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.28), transparent)',
+                }}
+              />
+            )}
+          </div>
+
+          {/* Back board hint */}
+          <div
+            aria-hidden
+            style={{
+              position: 'absolute',
+              inset: 0,
+              borderRadius: '0 5px 5px 0',
+              background: `linear-gradient(135deg, ${style.spine}dd, #1a1510)`,
+              transform: `translateZ(-${pageBlock}px)`,
+              boxShadow: 'inset 0 0 20px rgba(0,0,0,0.35)',
+            }}
+          />
+        </motion.div>
+      </div>
     </div>
   );
 }
@@ -325,8 +380,7 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
       className="relative w-full overflow-hidden"
       style={{
         minHeight: 'min(100svh, 920px)',
-        background: `radial-gradient(120% 80% at 70% 40%, ${style.ambient} 0%, #0a0908 55%, #060504 100%)`,
-        transition: reduced ? undefined : 'background 0.9s ease',
+        background: '#060504',
       }}
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
@@ -342,18 +396,50 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
         go(dx < 0 ? 1 : -1);
       }}
     >
-      {/* Atmosphere — CSS only, no extra images */}
+      {/* Crossfading ambient field */}
+      <AnimatePresence mode="sync" initial={false}>
+        <motion.div
+          key={`amb-${style.key}`}
+          aria-hidden
+          className="pointer-events-none absolute inset-0"
+          initial={reduced ? { opacity: 1 } : { opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: reduced ? 0 : 0.55, ease: 'easeOut' }}
+          style={{
+            background: `radial-gradient(120% 85% at 72% 38%, ${style.ambient} 0%, #0a0908 52%, #050403 100%)`,
+          }}
+        />
+      </AnimatePresence>
+
+      {/* Drifting color orbs */}
+      {!reduced && (
+        <>
+          <div
+            aria-hidden
+            className="hero-orb-a pointer-events-none absolute -top-[18%] right-[-8%] w-[70%] h-[70%] rounded-full opacity-50 blur-3xl"
+            style={{ background: `radial-gradient(circle, ${style.spine}66 0%, transparent 68%)` }}
+          />
+          <div
+            aria-hidden
+            className="hero-orb-b pointer-events-none absolute bottom-[-22%] left-[-14%] w-[65%] h-[65%] rounded-full opacity-40 blur-3xl"
+            style={{ background: `radial-gradient(circle, ${style.ambient}aa 0%, transparent 70%)` }}
+          />
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 opacity-[0.2]"
+            style={{
+              backgroundImage: `linear-gradient(115deg, transparent 40%, ${style.spine}22 50%, transparent 60%)`,
+              backgroundSize: '220% 220%',
+              animation: 'heroOrbDriftA 20s linear infinite',
+            }}
+          />
+        </>
+      )}
+
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-[0.35]"
-        style={{
-          backgroundImage: `radial-gradient(ellipse 60% 50% at 75% 45%, ${style.spine}55, transparent 70%)`,
-          transition: reduced ? undefined : 'background 0.9s ease',
-        }}
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-[0.04]"
+        className="pointer-events-none absolute inset-0 opacity-[0.05]"
         style={{
           backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=\'0 0 200 200\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cfilter id=\'n\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'0.85\' numOctaves=\'3\' stitchTiles=\'stitch\'/%3E%3C/filter%3E%3Crect width=\'100%25\' height=\'100%25\' filter=\'url(%23n)\'/%3E%3C/svg%3E")',
           backgroundSize: '180px',
@@ -400,10 +486,10 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
               <AnimatePresence mode="wait" initial={false}>
                 <motion.h1
                   key={style.key}
-                  initial={{ opacity: 0, y: 16 }}
+                  initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -12 }}
-                  transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
                   className="absolute inset-x-0 md:inset-x-auto top-0 font-serif text-[clamp(1.35rem,3.4vw,2rem)] text-white/88 leading-[1.2] font-medium"
                 >
                   {style.line[lang]}
@@ -464,107 +550,138 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
 function AlbumStarter({ lang }: { lang: 'sq' | 'en' }) {
   const [idx, setIdx] = useState(0);
   const style = ALBUM_STYLES[idx];
-  const railRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const el = railRef.current;
-    if (!el) return;
-    const child = el.children[idx] as HTMLElement | undefined;
-    if (!child) return;
-    const left = child.offsetLeft - (el.clientWidth - child.clientWidth) / 2;
-    el.scrollTo({ left: Math.max(0, left), behavior: 'smooth' });
-  }, [idx]);
-
   const href = `/krijo?category=${encodeURIComponent(style.key)}&design=${encodeURIComponent(style.designId)}`;
+
+  const coverElsById = useMemo(() => {
+    const map: Record<string, ReturnType<typeof designFrontElements>> = {};
+    for (const s of ALBUM_STYLES) {
+      const d = DESIGNS.find(x => x.id === s.designId);
+      map[s.designId] = d ? designFrontElements(d) : [];
+    }
+    return map;
+  }, []);
 
   return (
     <section className="relative bg-[#f3efe9] overflow-hidden">
       <div
         aria-hidden
         className="pointer-events-none absolute -top-24 right-[-10%] w-[55%] h-[55%] rounded-full opacity-40 blur-3xl"
-        style={{ background: `radial-gradient(circle, ${style.spine}33, transparent 70%)` }}
+        style={{
+          background: `radial-gradient(circle, ${style.spine}33, transparent 70%)`,
+          transition: 'background 0.45s ease',
+        }}
       />
 
       <div className="relative max-w-7xl mx-auto px-5 md:px-10 pt-14 pb-16 md:pt-20 md:pb-24">
-        <div className="grid grid-cols-1 lg:grid-cols-[0.9fr_1.1fr] gap-10 lg:gap-16 items-center">
-          {/* Book preview */}
-          <div className="flex justify-center lg:justify-start">
+        <div className="grid grid-cols-1 lg:grid-cols-[0.85fr_1.15fr] gap-10 lg:gap-14 items-center">
+          {/* Live book preview */}
+          <div className="flex flex-col items-center lg:items-start">
             <LivingAlbumBook style={style} size="starter" interactive={false} />
+            <p className="mt-5 text-[11px] tracking-[0.18em] uppercase text-neutral-400 text-center lg:text-left">
+              {lang === 'sq' ? 'pamja e kopertinës' : 'cover preview'}
+              <span className="mx-2 text-neutral-300">·</span>
+              <span className="text-neutral-600 normal-case tracking-normal font-medium">
+                {style.label[lang]}
+              </span>
+            </p>
           </div>
 
-          {/* Starter controls */}
           <div>
             <p className="text-[10px] uppercase tracking-[0.32em] text-neutral-400 mb-3">
-              {lang === 'sq' ? 'filloni këtu' : 'start here'}
+              {lang === 'sq' ? 'hapi 1 nga 2' : 'step 1 of 2'}
             </p>
             <h2 className="font-serif text-[clamp(1.75rem,3.5vw,2.75rem)] text-neutral-900 font-medium leading-[1.15] mb-3">
               {lang === 'sq' ? 'Çfarë po krijoni sot?' : 'What are you creating today?'}
             </h2>
-            <p className="text-[14px] text-neutral-500 max-w-md leading-relaxed mb-7">
+            <p className="text-[14px] text-neutral-500 max-w-md leading-relaxed mb-6">
               {lang === 'sq'
-                ? 'Zgjidhni një moment — albumi hapet me stilin e duhur. Pastaj shtoni fotot tuaja.'
-                : 'Pick a moment — your book opens with the right style. Then add your photos.'}
+                ? 'Zgjidhni llojin e albumit. Hapeni me atë stil — pastaj shtoni fotot tuaja.'
+                : 'Choose your album type. It opens with that style — then you add your photos.'}
             </p>
 
-            {/* Occasion rail — snap carousel of choices, not a pill dump */}
+            {/* Occasion cards with real cover thumbs */}
             <div
-              ref={railRef}
-              className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 mb-8 -mx-1 px-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-              style={{ WebkitOverflowScrolling: 'touch' }}
+              role="listbox"
+              aria-label={lang === 'sq' ? 'Lloji i albumit' : 'Album type'}
+              className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 mb-7"
             >
               {ALBUM_STYLES.map((s, i) => {
                 const active = i === idx;
+                const els = coverElsById[s.designId] || [];
                 return (
                   <button
                     key={s.key}
                     type="button"
+                    role="option"
+                    aria-selected={active}
                     onClick={() => setIdx(i)}
-                    className="snap-center shrink-0 text-left transition-all"
+                    className="group relative text-left rounded-2xl overflow-hidden transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/40"
                     style={{
-                      width: 118,
-                      padding: '14px 12px',
-                      borderRadius: 14,
-                      border: active ? '1px solid rgba(26,26,26,0.55)' : '1px solid rgba(26,26,26,0.1)',
-                      background: active ? '#1a1a1a' : 'rgba(255,255,255,0.55)',
-                      color: active ? '#fff' : '#1a1a1a',
-                      boxShadow: active ? '0 10px 28px rgba(0,0,0,0.12)' : 'none',
+                      border: active ? '2px solid #1a1a1a' : '1px solid rgba(26,26,26,0.1)',
+                      background: active ? '#fff' : 'rgba(255,255,255,0.55)',
+                      boxShadow: active ? '0 12px 28px rgba(0,0,0,0.1)' : 'none',
+                      transform: active ? 'translateY(-1px)' : undefined,
                     }}
                   >
-                    <span
-                      className="block w-7 h-1 rounded-full mb-3"
-                      style={{ background: s.spine, opacity: active ? 1 : 0.7 }}
-                    />
-                    <span className="block font-serif text-[15px] leading-tight mb-1">
-                      {s.label[lang]}
-                    </span>
-                    <span
-                      className="block text-[10px] leading-snug"
-                      style={{ color: active ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.38)' }}
-                    >
-                      {s.line[lang]}
-                    </span>
+                    <div className="relative aspect-[3/4] bg-[#ebe6de] overflow-hidden">
+                      {els.length > 0 ? (
+                        <ResponsivePageThumb elements={els} className="absolute inset-0" />
+                      ) : (
+                        <div className="absolute inset-0" style={{ background: s.spine }} />
+                      )}
+                      {active && (
+                        <span className="absolute top-2 right-2 w-5 h-5 rounded-full bg-[#1a1a1a] text-white flex items-center justify-center text-[10px] font-bold shadow-sm">
+                          ✓
+                        </span>
+                      )}
+                    </div>
+                    <div className="px-2.5 py-2.5">
+                      <span className="block font-serif text-[14px] text-neutral-900 leading-tight">
+                        {s.label[lang]}
+                      </span>
+                      <span className="block text-[10px] text-neutral-400 mt-0.5 leading-snug line-clamp-2">
+                        {s.line[lang]}
+                      </span>
+                    </div>
                   </button>
                 );
               })}
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-              <Link href={href}>
-                <motion.button
-                  whileTap={{ scale: 0.97 }}
-                  className="px-8 py-3.5 bg-[#1a1a1a] text-white rounded-full text-[12.5px] font-semibold"
-                >
-                  {lang === 'sq'
-                    ? `krijo · ${style.label.sq}`
-                    : `create · ${style.label.en}`}
-                </motion.button>
-              </Link>
-              <Link href="/krijo">
-                <button className="px-5 py-3.5 text-[12px] text-neutral-500 hover:text-neutral-800 transition-colors tracking-wide">
-                  {lang === 'sq' ? 'shfletoni të gjitha →' : 'browse all styles →'}
-                </button>
-              </Link>
+            <div className="rounded-2xl border border-neutral-200/80 bg-white/70 p-4 sm:p-5">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-400 mb-1">
+                    {lang === 'sq' ? 'hapi 2' : 'step 2'}
+                  </p>
+                  <p className="text-[14px] text-neutral-800 font-medium leading-snug">
+                    {lang === 'sq'
+                      ? `Fillo albumin “${style.label.sq}”`
+                      : `Start your “${style.label.en}” album`}
+                  </p>
+                  <p className="text-[12px] text-neutral-500 mt-1 leading-snug">
+                    {lang === 'sq'
+                      ? 'Editori hapet me këtë kopertinë. Fotot i shtoni menjëherë.'
+                      : 'The editor opens with this cover. Add your photos next.'}
+                  </p>
+                </div>
+                <Link href={href} className="shrink-0">
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    className="w-full sm:w-auto px-7 py-3.5 bg-[#1a1a1a] text-white rounded-full text-[12.5px] font-semibold shadow-md shadow-black/10"
+                  >
+                    {lang === 'sq' ? 'Fillo tani →' : 'Start now →'}
+                  </motion.button>
+                </Link>
+              </div>
             </div>
+
+            <p className="mt-4 text-[12px] text-neutral-400">
+              {lang === 'sq' ? 'Ose ' : 'Or '}
+              <Link href="/krijo" className="text-neutral-700 underline underline-offset-2 hover:text-neutral-900">
+                {lang === 'sq' ? 'shfletoni të gjitha stilet' : 'browse all styles'}
+              </Link>
+            </p>
           </div>
         </div>
       </div>
