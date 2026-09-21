@@ -7,16 +7,30 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   DESIGNS, DESIGN_W, DESIGN_H, CATEGORY_LABELS,
-  applyDesignOverrides, designElementsWithIds, designElementsWithoutIds,
-  type DesignDef, type DesignOverrides, type EditorElement,
+  buildDesignCatalog, parseCustomDesigns,
+  designFrontElements, designBackElements,
+  designElementsWithIds, designElementsWithoutIds,
+  blankCoverElements, newCustomDesignId,
+  type CustomDesignRecord, type DesignDef, type DesignOverrides, type EditorElement, type DE,
 } from '@/lib/designs';
-import { DESIGN_METAS } from '@/lib/designMeta';
-import { Check, Loader2, RotateCcw, Save, Eye, EyeOff, AlertTriangle } from 'lucide-react';
+import {
+  Check, Loader2, RotateCcw, Save, Eye, EyeOff, AlertTriangle,
+  Plus, Trash2, X,
+} from 'lucide-react';
 import { useEditorFontsReady, ensureEditorFonts } from '@/lib/editorFonts';
 
 const PREVIEW_W = 300;
 const PREVIEW_H = Math.round(PREVIEW_W * (DESIGN_H / DESIGN_W));
 const SCALE = PREVIEW_W / DESIGN_W;
+
+const CATEGORY_ORDER = [
+  'Wedding', 'Travel', 'Celebration', 'Baby & Family',
+  'Modern', 'Portrait', 'Nature', 'Locations',
+];
+
+const VIS_FILTERS = ['all', 'visible', 'hidden'] as const;
+type VisFilter = (typeof VIS_FILTERS)[number];
+type CoverSide = 'front' | 'back';
 
 function bindFrameNode(n: any, id: string, shapeRefs: React.MutableRefObject<Record<string, any>>) {
   if (!n) return;
@@ -305,45 +319,66 @@ function DesignCanvas({
   );
 }
 
-function CatalogThumb({ designId }: { designId: string }) {
-  const meta = DESIGN_METAS.find(d => d.id === designId);
+function CatalogThumb({ design }: { design: DesignDef }) {
   return (
     <div
       className="w-12 h-16 rounded-md overflow-hidden flex-shrink-0 relative"
-      style={{ border: `1px solid ${ADMIN.line}`, background: (meta?.thumb?.background as string) || ADMIN.bg }}
+      style={{ border: `1px solid ${ADMIN.line}`, background: (design.thumb?.background as string) || ADMIN.bg }}
     >
-      {meta?.thumbPhoto ? (
-        <img src={meta.thumbPhoto} alt="" loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover" />
+      {design.thumbPhoto ? (
+        <img src={design.thumbPhoto} alt="" loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover" />
       ) : null}
-      {meta?.thumbAccents?.map((style, i) => (
+      {design.thumbAccents?.map((style, i) => (
         <div key={i} style={{ position: 'absolute', ...style }} />
       ))}
-      {meta?.thumbLabel ? (
+      {design.thumbLabel ? (
         <span className="absolute bottom-0.5 left-0 right-0 text-center text-[7px] font-bold tracking-wide text-white"
-          style={{ textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>{meta.thumbLabel}</span>
+          style={{ textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>{design.thumbLabel}</span>
       ) : null}
     </div>
   );
 }
 
+function loadCoverDrafts(design: DesignDef): { front: EditorElement[]; back: EditorElement[] } {
+  const frontSrc = designFrontElements(design);
+  const explicitBack = Array.isArray(design.backElements) && design.backElements.length > 0
+    ? design.backElements
+    : null;
+  const backSrc = explicitBack
+    ?? (design.isCustom ? [] : designBackElements(design));
+  const front = frontSrc.length ? frontSrc : blankCoverElements('FRONT');
+  const back = backSrc.length ? backSrc : blankCoverElements('BACK');
+  return {
+    front: designElementsWithIds(`${design.id}-f`, front),
+    back: designElementsWithIds(`${design.id}-b`, back),
+  };
+}
 
 export default function AdminDesignStudio() {
   const { data: settings, isLoading } = useGetAdminSettings();
   const updateSettings = useUpdateAdminSettings();
   const queryClient = useQueryClient();
   const s = settings as any;
-  const savedOverrides: DesignOverrides = (s?.designOverrides && typeof s.designOverrides === 'object')
+
+  const savedOverrides: DesignOverrides = (s?.designOverrides && typeof s.designOverrides === 'object' && !Array.isArray(s.designOverrides))
     ? s.designOverrides as DesignOverrides
     : {};
+  const savedCustomDesigns = useMemo(
+    () => parseCustomDesigns(s?.customDesigns),
+    [s?.customDesigns],
+  );
   const savedHiddenIds: string[] = Array.isArray(s?.hiddenDesignIds) ? s.hiddenDesignIds as string[] : [];
 
-  const catalog = useMemo(() => applyDesignOverrides(DESIGNS, savedOverrides), [savedOverrides]);
+  const catalog = useMemo(
+    () => buildDesignCatalog(savedOverrides, savedCustomDesigns),
+    [savedOverrides, savedCustomDesigns],
+  );
+
   const categories = useMemo(() => {
-    const order = ['Wedding', 'Travel', 'Celebration', 'Baby & Family', 'Modern', 'Portrait', 'Nature', 'Locations'];
     const present = [...new Set(catalog.map(d => d.category))];
     return [
-      ...order.filter(c => present.includes(c)),
-      ...present.filter(c => !order.includes(c)),
+      ...CATEGORY_ORDER.filter(c => present.includes(c)),
+      ...present.filter(c => !CATEGORY_ORDER.includes(c)),
     ];
   }, [catalog]);
 
@@ -351,62 +386,139 @@ export default function AdminDesignStudio() {
     const hasTravel = DESIGNS.some(d => d.category === 'Travel');
     return hasTravel ? 'Travel' : (DESIGNS[0]?.category || 'Travel');
   });
+  const [visFilter, setVisFilter] = useState<VisFilter>('all');
   const [designId, setDesignId] = useState(() =>
     DESIGNS.find(d => d.category === 'Travel')?.id || DESIGNS[0]?.id || 'paris-pink',
   );
-  const [draft, setDraft] = useState<EditorElement[]>([]);
+  const [coverSide, setCoverSide] = useState<CoverSide>('front');
+  const [draftFront, setDraftFront] = useState<EditorElement[]>([]);
+  const [draftBack, setDraftBack] = useState<EditorElement[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [dirty, setDirty] = useState(false);
+  const [dirtyFront, setDirtyFront] = useState(false);
+  const [dirtyBack, setDirtyBack] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [hiding, setHiding] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    nameEn: '',
+    nameSq: '',
+    category: 'Travel',
+    duplicateFrom: '',
+    thumbColor: '#2A2A2A',
+    thumbLabel: '',
+  });
+
+  const dirty = dirtyFront || dirtyBack;
   const dirtyRef = useRef(false);
   dirtyRef.current = dirty;
 
   const design: DesignDef | undefined = catalog.find(d => d.id === designId);
   const isHidden = !!design && savedHiddenIds.includes(design.id);
+  const hasOverride = !!design && !design.isCustom && !!savedOverrides[design.id];
+
   const overrideFingerprint = design
     ? JSON.stringify(savedOverrides[design.id] ?? null)
     : '';
+  const customFingerprint = design?.isCustom
+    ? JSON.stringify(savedCustomDesigns.find(c => c.id === design.id) ?? null)
+    : '';
 
-  // Shared album webfonts (Great Vibes, Londrina, …) — same pipeline as Editor.
   useEffect(() => { void ensureEditorFonts(); }, []);
 
-  // Reload draft when switching designs or when the saved override for this id
-  // changes — but never wipe in-progress edits on a background settings refetch.
   useEffect(() => {
     if (!design) return;
     if (dirtyRef.current) return;
-    setDraft(designElementsWithIds(design.id, design.elements));
+    const { front, back } = loadCoverDrafts(design);
+    setDraftFront(front);
+    setDraftBack(back);
     setSelectedId(null);
-    setDirty(false);
-  }, [design?.id, overrideFingerprint]);
+    setDirtyFront(false);
+    setDirtyBack(false);
+    setCoverSide('front');
+  }, [design?.id, overrideFingerprint, customFingerprint]);
+
+  const draft = coverSide === 'front' ? draftFront : draftBack;
 
   const onChangeEl = useCallback((id: string, patch: Partial<EditorElement>) => {
-    setDraft(prev => prev.map(e => e.id === id ? { ...e, ...patch } : e));
-    setDirty(true);
-  }, []);
+    const apply = (prev: EditorElement[]) => prev.map(e => e.id === id ? { ...e, ...patch } : e);
+    if (coverSide === 'front') {
+      setDraftFront(apply);
+      setDirtyFront(true);
+    } else {
+      setDraftBack(apply);
+      setDirtyBack(true);
+    }
+  }, [coverSide]);
 
   const selected = draft.find(e => e.id === selectedId);
+
+  const invalidate = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: getGetAdminSettingsQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: getGetAppSettingsQueryKey() }),
+    ]);
+  };
+
+  const confirmDiscardIfDirty = () => {
+    if (!dirty) return true;
+    return window.confirm('Discard unsaved cover changes?');
+  };
+
+  const selectDesign = (id: string) => {
+    if (designId === id) return;
+    if (!confirmDiscardIfDirty()) return;
+    dirtyRef.current = false;
+    setDirtyFront(false);
+    setDirtyBack(false);
+    setDesignId(id);
+    setCoverSide('front');
+    setSelectedId(null);
+  };
 
   const save = async () => {
     if (!design) return;
     setSaving(true);
     setSaveError(null);
     try {
-      const next: DesignOverrides = {
-        ...savedOverrides,
-        [design.id]: designElementsWithoutIds(draft),
-      };
-      await updateSettings.mutateAsync({
-        data: { designOverrides: next } as any,
-      });
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: getGetAdminSettingsQueryKey() }),
-        queryClient.invalidateQueries({ queryKey: getGetAppSettingsQueryKey() }),
-      ]);
-      setDirty(false);
+      const frontElements = designElementsWithoutIds(draftFront);
+      const backElements = designElementsWithoutIds(draftBack);
+
+      if (design.isCustom) {
+        const now = new Date().toISOString();
+        const nextCustoms = savedCustomDesigns.map((c): CustomDesignRecord =>
+          c.id === design.id
+            ? {
+                ...c,
+                name: design.name,
+                category: design.category,
+                thumbLabel: design.thumbLabel,
+                thumbColor: (design.thumb?.background as string) || c.thumbColor,
+                thumbPhoto: design.thumbPhoto,
+                frontElements,
+                backElements,
+                updatedAt: now,
+              }
+            : c,
+        );
+        await updateSettings.mutateAsync({
+          data: { customDesigns: nextCustoms } as any,
+        });
+      } else {
+        const next: DesignOverrides = {
+          ...savedOverrides,
+          [design.id]: { frontElements, backElements },
+        };
+        await updateSettings.mutateAsync({
+          data: { designOverrides: next } as any,
+        });
+      }
+      await invalidate();
+      setDirtyFront(false);
+      setDirtyBack(false);
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 2200);
     } catch (err: any) {
@@ -418,12 +530,29 @@ export default function AdminDesignStudio() {
 
   const resetToDefault = async () => {
     if (!design) return;
+    if (design.isCustom) {
+      if (!window.confirm(`Reset "${design.name.en}" to blank front & back covers?`)) return;
+      const front = blankCoverElements('FRONT');
+      const back = blankCoverElements('BACK');
+      setDraftFront(designElementsWithIds(`${design.id}-f`, front));
+      setDraftBack(designElementsWithIds(`${design.id}-b`, back));
+      setDirtyFront(true);
+      setDirtyBack(true);
+      setSelectedId(null);
+      setSaveError(null);
+      return;
+    }
+
     const base = DESIGNS.find(d => d.id === design.id);
     if (!base) return;
     if (!window.confirm(`Reset "${base.name.en}" to the built-in layout?`)) return;
-    setDraft(designElementsWithIds(base.id, base.elements));
-    setDirty(false);
+    const { front, back } = loadCoverDrafts(base);
+    setDraftFront(front);
+    setDraftBack(back);
+    setDirtyFront(false);
+    setDirtyBack(false);
     setSaveError(null);
+    setSelectedId(null);
     const next = { ...savedOverrides };
     delete next[design.id];
     setSaving(true);
@@ -431,13 +560,11 @@ export default function AdminDesignStudio() {
       await updateSettings.mutateAsync({
         data: { designOverrides: next } as any,
       });
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: getGetAdminSettingsQueryKey() }),
-        queryClient.invalidateQueries({ queryKey: getGetAppSettingsQueryKey() }),
-      ]);
+      await invalidate();
     } catch (err: any) {
       setSaveError(err?.data?.error || err?.message || 'Failed to reset layout.');
-      setDirty(true);
+      setDirtyFront(true);
+      setDirtyBack(true);
     } finally {
       setSaving(false);
     }
@@ -454,10 +581,7 @@ export default function AdminDesignStudio() {
       await updateSettings.mutateAsync({
         data: { hiddenDesignIds: next } as any,
       });
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: getGetAdminSettingsQueryKey() }),
-        queryClient.invalidateQueries({ queryKey: getGetAppSettingsQueryKey() }),
-      ]);
+      await invalidate();
     } catch (err: any) {
       setSaveError(err?.data?.error || err?.message || 'Failed to update visibility.');
     } finally {
@@ -465,7 +589,123 @@ export default function AdminDesignStudio() {
     }
   };
 
-  const catDesigns = catalog.filter(d => d.category === activeCat);
+  const deleteCustom = async () => {
+    if (!design?.isCustom) return;
+    if (!window.confirm(`Permanently delete custom design "${design.name.en}"?`)) return;
+    setDeleting(true);
+    setSaveError(null);
+    try {
+      const nextCustoms = savedCustomDesigns.filter(c => c.id !== design.id);
+      const nextHidden = savedHiddenIds.filter(id => id !== design.id);
+      await updateSettings.mutateAsync({
+        data: { customDesigns: nextCustoms, hiddenDesignIds: nextHidden } as any,
+      });
+      await invalidate();
+      dirtyRef.current = false;
+      setDirtyFront(false);
+      setDirtyBack(false);
+      const fallback = catalog.find(d => d.id !== design.id && d.category === activeCat)
+        || catalog.find(d => d.id !== design.id)
+        || DESIGNS[0];
+      if (fallback) {
+        setDesignId(fallback.id);
+        setActiveCat(fallback.category);
+      }
+    } catch (err: any) {
+      setSaveError(err?.data?.error || err?.message || 'Failed to delete design.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const createDesign = async () => {
+    const nameEn = createForm.nameEn.trim();
+    const nameSq = createForm.nameSq.trim() || nameEn;
+    if (!nameEn) {
+      setSaveError('English name is required.');
+      return;
+    }
+    if (!confirmDiscardIfDirty()) return;
+    setCreating(true);
+    setSaveError(null);
+    try {
+      const id = newCustomDesignId();
+      const now = new Date().toISOString();
+      const source = createForm.duplicateFrom
+        ? catalog.find(d => d.id === createForm.duplicateFrom)
+        : undefined;
+
+      let frontElements: DE[];
+      let backElements: DE[];
+      if (source) {
+        frontElements = [...designFrontElements(source)];
+        const srcBack = Array.isArray(source.backElements) && source.backElements.length
+          ? source.backElements
+          : designBackElements(source);
+        backElements = [...srcBack];
+        if (!frontElements.length) frontElements = blankCoverElements('FRONT');
+        if (!backElements.length) backElements = blankCoverElements('BACK');
+      } else {
+        frontElements = blankCoverElements('FRONT', createForm.thumbColor || '#F7F5F2');
+        backElements = blankCoverElements('BACK', createForm.thumbColor || '#F7F5F2');
+      }
+
+      const record: CustomDesignRecord = {
+        id,
+        name: { en: nameEn, sq: nameSq },
+        category: createForm.category || 'Travel',
+        thumbLabel: createForm.thumbLabel.trim() || nameEn.slice(0, 12).toUpperCase(),
+        thumbColor: createForm.thumbColor || '#2A2A2A',
+        frontElements,
+        backElements,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      const nextCustoms = [...savedCustomDesigns, record];
+      await updateSettings.mutateAsync({
+        data: { customDesigns: nextCustoms } as any,
+      });
+      await invalidate();
+      dirtyRef.current = false;
+      setDirtyFront(false);
+      setDirtyBack(false);
+      setShowCreate(false);
+      setCreateForm({
+        nameEn: '',
+        nameSq: '',
+        category: createForm.category,
+        duplicateFrom: '',
+        thumbColor: '#2A2A2A',
+        thumbLabel: '',
+      });
+      setActiveCat(record.category);
+      setDesignId(id);
+      setCoverSide('front');
+    } catch (err: any) {
+      setSaveError(err?.data?.error || err?.message || 'Failed to create design.');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const catDesigns = useMemo(() => {
+    return catalog.filter(d => {
+      if (d.category !== activeCat) return false;
+      const hidden = savedHiddenIds.includes(d.id);
+      if (visFilter === 'visible' && hidden) return false;
+      if (visFilter === 'hidden' && !hidden) return false;
+      return true;
+    });
+  }, [catalog, activeCat, visFilter, savedHiddenIds]);
+
+  const categoryOptions = useMemo(() => {
+    const keys = [
+      ...CATEGORY_ORDER,
+      ...Object.keys(CATEGORY_LABELS).filter(k => !CATEGORY_ORDER.includes(k)),
+    ];
+    return [...new Set(keys)];
+  }, []);
 
   return (
     <AdminLayout>
@@ -477,10 +717,22 @@ export default function AdminDesignStudio() {
             </p>
             <h1 className="text-2xl md:text-3xl font-serif font-semibold mb-1" style={{ color: ADMIN.ink }}>Design Studio</h1>
             <p className="text-sm max-w-xl" style={{ color: ADMIN.muted }}>
-              Edit cover layouts — drag text and landmark art, tweak colors, then save. Wizard and editor pick up the new layout.
+              Edit <strong style={{ color: ADMIN.ink, fontWeight: 600 }}>Front</strong> and{' '}
+              <strong style={{ color: ADMIN.ink, fontWeight: 600 }}>Back</strong> covers separately —
+              the front is what customers see first; the back closes the book. Create custom designs
+              or tweak built-ins; Wizard and Editor pick up the layouts after save.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowCreate(true)}
+              disabled={saving || creating}
+              className="rounded-2xl flex-1 sm:flex-none"
+            >
+              <Plus size={14} className="mr-1.5" /> Create design
+            </Button>
             <Button
               type="button"
               variant="outline"
@@ -493,6 +745,18 @@ export default function AdminDesignStudio() {
                 isHidden ? <Eye size={14} className="mr-1.5" /> : <EyeOff size={14} className="mr-1.5" />}
               {isHidden ? 'Show design' : 'Hide design'}
             </Button>
+            {design?.isCustom && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={deleteCustom}
+                disabled={deleting || saving}
+                className="rounded-2xl flex-1 sm:flex-none text-red-700"
+              >
+                {deleting ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <Trash2 size={14} className="mr-1.5" />}
+                Delete
+              </Button>
+            )}
             <Button type="button" variant="outline" onClick={resetToDefault} disabled={!design || saving} className="rounded-2xl flex-1 sm:flex-none">
               <RotateCcw size={14} className="mr-1.5" /> Reset
             </Button>
@@ -502,7 +766,7 @@ export default function AdminDesignStudio() {
               {saving ? <Loader2 size={14} className="mr-1.5 animate-spin" /> :
                 savedFlash ? <Check size={14} className="mr-1.5" /> :
                 <Save size={14} className="mr-1.5" />}
-              {savedFlash ? 'Saved' : 'Save layout'}
+              {savedFlash ? 'Saved' : 'Save covers'}
             </Button>
           </div>
         </div>
@@ -522,6 +786,109 @@ export default function AdminDesignStudio() {
           </div>
         )}
 
+        {showCreate && (
+          <div
+            className="mb-5 rounded-2xl p-4 sm:p-5 space-y-4"
+            style={{ background: ADMIN.card, border: `1px solid ${ADMIN.line}` }}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-serif font-semibold" style={{ color: ADMIN.ink }}>Create custom design</p>
+                <p className="text-[11px] mt-0.5" style={{ color: ADMIN.muted }}>
+                  Starts with blank Front &amp; Back covers, or duplicates an existing design&apos;s layouts.
+                </p>
+              </div>
+              <button type="button" onClick={() => setShowCreate(false)} className="p-1 rounded-lg" style={{ color: ADMIN.muted }}>
+                <X size={16} />
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-medium mb-1" style={{ color: ADMIN.ink }}>Name (EN)</label>
+                <Input
+                  value={createForm.nameEn}
+                  onChange={e => setCreateForm(f => ({ ...f, nameEn: e.target.value }))}
+                  placeholder="My Cover"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium mb-1" style={{ color: ADMIN.ink }}>Name (SQ)</label>
+                <Input
+                  value={createForm.nameSq}
+                  onChange={e => setCreateForm(f => ({ ...f, nameSq: e.target.value }))}
+                  placeholder="Kopertina ime"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium mb-1" style={{ color: ADMIN.ink }}>Category</label>
+                <select
+                  value={createForm.category}
+                  onChange={e => setCreateForm(f => ({ ...f, category: e.target.value }))}
+                  className="w-full h-9 rounded-md border bg-white px-3 text-sm"
+                  style={{ borderColor: ADMIN.line }}
+                >
+                  {categoryOptions.map(cat => (
+                    <option key={cat} value={cat}>{CATEGORY_LABELS[cat]?.en ?? cat}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium mb-1" style={{ color: ADMIN.ink }}>Duplicate from (optional)</label>
+                <select
+                  value={createForm.duplicateFrom}
+                  onChange={e => setCreateForm(f => ({ ...f, duplicateFrom: e.target.value }))}
+                  className="w-full h-9 rounded-md border bg-white px-3 text-sm"
+                  style={{ borderColor: ADMIN.line }}
+                >
+                  <option value="">Blank covers</option>
+                  {catalog.map(d => (
+                    <option key={d.id} value={d.id}>{d.name.en} ({d.category})</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium mb-1" style={{ color: ADMIN.ink }}>Thumb color</label>
+                <div className="flex gap-2">
+                  <input
+                    type="color"
+                    value={createForm.thumbColor}
+                    onChange={e => setCreateForm(f => ({ ...f, thumbColor: e.target.value }))}
+                    className="h-9 w-12 rounded border cursor-pointer"
+                    style={{ borderColor: ADMIN.line }}
+                  />
+                  <Input
+                    value={createForm.thumbColor}
+                    onChange={e => setCreateForm(f => ({ ...f, thumbColor: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium mb-1" style={{ color: ADMIN.ink }}>Thumb label</label>
+                <Input
+                  value={createForm.thumbLabel}
+                  onChange={e => setCreateForm(f => ({ ...f, thumbLabel: e.target.value }))}
+                  placeholder="Optional short label"
+                />
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                onClick={createDesign}
+                disabled={creating}
+                className="rounded-2xl text-white"
+                style={{ background: ADMIN.blush }}
+              >
+                {creating ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <Plus size={14} className="mr-1.5" />}
+                Create
+              </Button>
+              <Button type="button" variant="outline" onClick={() => setShowCreate(false)} className="rounded-2xl">
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+
         {isLoading ? (
           <div className="flex items-center gap-2 text-sm py-20 justify-center" style={{ color: ADMIN.muted }}>
             <Loader2 className="animate-spin" size={16} /> Loading designs…
@@ -537,8 +904,14 @@ export default function AdminDesignStudio() {
                     type="button"
                     onClick={() => {
                       setActiveCat(cat);
-                      const first = catalog.find(d => d.category === cat);
-                      if (first) setDesignId(first.id);
+                      const first = catalog.find(d => {
+                        if (d.category !== cat) return false;
+                        const hidden = savedHiddenIds.includes(d.id);
+                        if (visFilter === 'visible' && hidden) return false;
+                        if (visFilter === 'hidden' && !hidden) return false;
+                        return true;
+                      });
+                      if (first) selectDesign(first.id);
                     }}
                     className="px-2.5 py-1 rounded-full text-[10px] font-semibold whitespace-nowrap transition-colors"
                     style={
@@ -547,27 +920,39 @@ export default function AdminDesignStudio() {
                         : { background: ADMIN.blushSoft, color: ADMIN.blushDeep }
                     }
                   >
-                    {(CATEGORY_LABELS[cat] as any)?.en ?? cat}
+                    {CATEGORY_LABELS[cat]?.en ?? cat}
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-1 p-2" style={{ borderBottom: `1px solid ${ADMIN.line}` }}>
+                {VIS_FILTERS.map(f => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => setVisFilter(f)}
+                    className="flex-1 px-2 py-1 rounded-lg text-[10px] font-semibold capitalize"
+                    style={
+                      visFilter === f
+                        ? { background: ADMIN.ink, color: '#fff' }
+                        : { background: ADMIN.bg, color: ADMIN.muted }
+                    }
+                  >
+                    {f}
                   </button>
                 ))}
               </div>
               <div className="overflow-y-auto p-3 space-y-2 flex-1">
+                {catDesigns.length === 0 && (
+                  <p className="text-[11px] py-4 text-center" style={{ color: ADMIN.muted }}>No designs in this filter.</p>
+                )}
                 {catDesigns.map(d => {
-                  const overridden = !!savedOverrides[d.id];
+                  const overridden = !d.isCustom && !!savedOverrides[d.id];
                   const hidden = savedHiddenIds.includes(d.id);
                   return (
                     <button
                       key={d.id}
                       type="button"
-                      onClick={() => {
-                        if (designId === d.id) return;
-                        if (dirty) {
-                          if (!window.confirm('Discard unsaved layout changes?')) return;
-                        }
-                        dirtyRef.current = false;
-                        setDirty(false);
-                        setDesignId(d.id);
-                      }}
+                      onClick={() => selectDesign(d.id)}
                       className="w-full flex items-center gap-3 p-2 rounded-xl border text-left transition-all"
                       style={
                         designId === d.id
@@ -575,14 +960,19 @@ export default function AdminDesignStudio() {
                           : { borderColor: ADMIN.line, opacity: hidden ? 0.55 : 1 }
                       }
                     >
-                      <CatalogThumb designId={d.id} />
+                      <CatalogThumb design={d} />
                       <div className="min-w-0">
                         <p className="text-xs font-semibold truncate" style={{ color: ADMIN.ink }}>{d.name.en}</p>
                         <p className="text-[10px] truncate" style={{ color: ADMIN.muted }}>{d.name.sq}</p>
                         <div className="flex flex-wrap gap-1 mt-1">
+                          {d.isCustom && (
+                            <span className="inline-block text-[9px] font-semibold uppercase tracking-wide" style={{ color: ADMIN.blush }}>
+                              Yours
+                            </span>
+                          )}
                           {overridden && (
                             <span className="inline-block text-[9px] font-semibold uppercase tracking-wide" style={{ color: ADMIN.blush }}>
-                              Custom
+                              Edited
                             </span>
                           )}
                           {hidden && (
@@ -604,9 +994,33 @@ export default function AdminDesignStudio() {
               {design ? (
                 <>
                   <p className="text-sm font-serif font-semibold mb-1" style={{ color: ADMIN.ink }}>{design.name.en}</p>
-                  <p className="text-[11px] mb-4 text-center" style={{ color: ADMIN.muted }}>
-                    Drag text &amp; images · resize with handles · edit on the right
+                  <div className="flex gap-1 mb-3">
+                    {(['front', 'back'] as const).map(side => (
+                      <button
+                        key={side}
+                        type="button"
+                        onClick={() => {
+                          setCoverSide(side);
+                          setSelectedId(null);
+                        }}
+                        className="px-3 py-1.5 rounded-full text-[11px] font-semibold capitalize"
+                        style={
+                          coverSide === side
+                            ? { background: ADMIN.blush, color: '#fff' }
+                            : { background: ADMIN.blushSoft, color: ADMIN.blushDeep }
+                        }
+                      >
+                        {side}
+                        {(side === 'front' ? dirtyFront : dirtyBack) ? ' ·' : ''}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[11px] mb-4 text-center max-w-sm" style={{ color: ADMIN.muted }}>
+                    {coverSide === 'front'
+                      ? 'Front cover — the opening face of the book. Drag text & images · resize with handles · edit on the right.'
+                      : 'Back cover — the closing face. Edit independently from the front.'}
                     {isHidden ? ' · currently hidden from customers' : ''}
+                    {hasOverride ? ' · built-in override saved' : ''}
                   </p>
                   <div className="rounded-sm shadow-xl overflow-hidden bg-white max-w-full" style={{ width: PREVIEW_W, height: PREVIEW_H }}>
                     <DesignCanvas
@@ -617,7 +1031,9 @@ export default function AdminDesignStudio() {
                     />
                   </div>
                   {dirty && (
-                    <p className="mt-3 text-[11px] text-amber-700 font-medium">Unsaved changes</p>
+                    <p className="mt-3 text-[11px] text-amber-700 font-medium">
+                      Unsaved changes{dirtyFront && dirtyBack ? ' (front & back)' : dirtyFront ? ' (front)' : ' (back)'}
+                    </p>
                   )}
                 </>
               ) : (
@@ -628,10 +1044,12 @@ export default function AdminDesignStudio() {
             {/* Inspector */}
             <div className="rounded-2xl p-4 space-y-4 max-h-[70vh] lg:max-h-[78vh] overflow-y-auto order-3"
               style={{ background: ADMIN.card, border: `1px solid ${ADMIN.line}` }}>
-              <p className="text-[10px] uppercase tracking-[0.14em] font-semibold" style={{ color: ADMIN.muted }}>Properties</p>
+              <p className="text-[10px] uppercase tracking-[0.14em] font-semibold" style={{ color: ADMIN.muted }}>
+                Properties · {coverSide === 'front' ? 'Front' : 'Back'}
+              </p>
               {!selected ? (
                 <p className="text-sm leading-relaxed" style={{ color: ADMIN.muted }}>
-                  Tap text, shapes, or landmark art on the cover to edit.
+                  Tap text, shapes, or landmark art on the {coverSide} cover to edit.
                 </p>
               ) : selected.type === 'text' ? (
                 <div className="space-y-3">

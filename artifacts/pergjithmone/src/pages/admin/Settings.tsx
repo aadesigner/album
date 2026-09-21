@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { AdminLayout, ADMIN } from '@/components/layout/AdminLayout';
 import {
   useGetAdminSettings, useUpdateAdminSettings,
@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useForm } from 'react-hook-form';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormDescription } from '@/components/ui/form';
-import { DESIGN_METAS, DESIGN_CATEGORY_LABELS } from '@/lib/designMeta';
+import { DESIGN_CATEGORY_LABELS, mergeDesignMetas } from '@/lib/designMeta';
+import { parseCustomDesigns } from '@/lib/designs';
 import { Eye, EyeOff, Check, AlertTriangle, BookX, BookHeart, Settings, Wrench, DollarSign, Palette, ShieldAlert, FileLock2 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -179,11 +180,23 @@ export default function AdminSettings() {
     }
   };
 
-  const designsByCategory = CATEGORY_ORDER.map(cat => ({
-    cat,
-    label: DESIGN_CATEGORY_LABELS[cat]?.en || cat,
-    designs: DESIGN_METAS.filter(d => d.category === cat),
-  }));
+  const allDesignMetas = useMemo(
+    () => mergeDesignMetas(parseCustomDesigns(s?.customDesigns)),
+    [s?.customDesigns],
+  );
+
+  const designsByCategory = useMemo(() => {
+    const present = [...new Set(allDesignMetas.map(d => d.category))];
+    const order = [
+      ...CATEGORY_ORDER.filter(c => present.includes(c)),
+      ...present.filter(c => !CATEGORY_ORDER.includes(c)),
+    ];
+    return order.map(cat => ({
+      cat,
+      label: DESIGN_CATEGORY_LABELS[cat]?.en || cat,
+      designs: allDesignMetas.filter(d => d.category === cat),
+    }));
+  }, [allDesignMetas]);
 
   const maintenanceOn  = form.watch('maintenanceMode');
   const bookEnabled    = form.watch('bookCreationEnabled');

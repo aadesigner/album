@@ -168,7 +168,14 @@ export interface DesignDef {
   thumbAccents: CSSProperties[];
   /** Optional photo URL shown in the picker thumbnail only — doesn't affect what's applied to pages. */
   thumbPhoto?: string;
+  /** Short label for lightweight picker thumbs (admin customs + metas). */
+  thumbLabel?: string;
+  /** Front cover elements (canonical). */
   elements: DE[];
+  /** Back cover elements — when omitted, front `elements` are reused. */
+  backElements?: DE[];
+  /** Admin-created design (persisted in app settings). */
+  isCustom?: boolean;
 }
 export interface LayoutZone { x:number; y:number; w:number; h:number; type:string; rotation?:number }
 export interface LayoutDef { id:string; category:string; label:{sq:string;en:string}; zones:LayoutZone[] }
@@ -766,27 +773,169 @@ export const DESIGNS: DesignDef[] = [
 
 ];
 
-/** Admin / runtime overrides of built-in design element layouts (keyed by design id). */
-export type DesignOverrides = Record<string, DE[]>;
+/** Front cover elements for a design. */
+export function designFrontElements(d: DesignDef): DE[] {
+  return Array.isArray(d.elements) ? d.elements : [];
+}
 
-/** Merge persisted admin overrides onto the built-in DESIGNS catalog. */
+/** Back cover elements — falls back to front when unset/empty. */
+export function designBackElements(d: DesignDef): DE[] {
+  if (Array.isArray(d.backElements) && d.backElements.length) return d.backElements;
+  return designFrontElements(d);
+}
+
+/** Per-design layout override: legacy DE[] = both sides, or explicit front/back. */
+export type DesignSideOverride = {
+  frontElements?: DE[];
+  backElements?: DE[];
+};
+
+export type DesignOverrides = Record<string, DE[] | DesignSideOverride>;
+
+/** Admin-created cover designs persisted in app_settings.custom_designs. */
+export interface CustomDesignRecord {
+  id: string;
+  name: { sq: string; en: string };
+  category: string;
+  thumbLabel?: string;
+  thumbColor?: string;
+  thumbPhoto?: string;
+  frontElements: DE[];
+  backElements: DE[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export function normalizeOverride(raw: unknown): DesignSideOverride | null {
+  if (!raw) return null;
+  if (Array.isArray(raw)) {
+    if (!raw.length) return null;
+    return { frontElements: raw as DE[], backElements: raw as DE[] };
+  }
+  if (typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+  const front = Array.isArray(o.frontElements)
+    ? (o.frontElements as DE[])
+    : Array.isArray(o.elements)
+      ? (o.elements as DE[])
+      : undefined;
+  const back = Array.isArray(o.backElements) ? (o.backElements as DE[]) : undefined;
+  if ((!front || !front.length) && (!back || !back.length)) return null;
+  return {
+    frontElements: front?.length ? front : back,
+    backElements: back?.length ? back : front,
+  };
+}
+
+/** Merge persisted admin overrides onto a design list. */
 export function applyDesignOverrides(
   designs: DesignDef[] = DESIGNS,
   overrides?: DesignOverrides | null,
 ): DesignDef[] {
   if (!overrides || typeof overrides !== 'object') return designs;
   return designs.map((d) => {
-    const els = overrides[d.id];
-    if (!Array.isArray(els) || !els.length) return d;
-    return { ...d, elements: els };
+    const norm = normalizeOverride(overrides[d.id]);
+    if (!norm) return d;
+    return {
+      ...d,
+      elements: norm.frontElements?.length ? norm.frontElements : d.elements,
+      backElements: norm.backElements?.length
+        ? norm.backElements
+        : (d.backElements ?? d.elements),
+    };
   });
 }
 
 export function getDesignWithOverrides(
   id: string,
   overrides?: DesignOverrides | null,
+  customDesigns?: CustomDesignRecord[] | null,
 ): DesignDef | undefined {
-  return applyDesignOverrides(DESIGNS, overrides).find((d) => d.id === id);
+  return buildDesignCatalog(overrides, customDesigns).find((d) => d.id === id);
+}
+
+export function customDesignToDef(c: CustomDesignRecord): DesignDef {
+  const color = c.thumbColor || '#2A2A2A';
+  return {
+    id: c.id,
+    name: c.name,
+    category: c.category,
+    thumb: { background: color },
+    thumbAccents: [],
+    thumbPhoto: c.thumbPhoto,
+    thumbLabel: c.thumbLabel || c.name.en?.slice(0, 12).toUpperCase(),
+    elements: Array.isArray(c.frontElements) ? c.frontElements : [],
+    backElements: Array.isArray(c.backElements) ? c.backElements : [],
+    isCustom: true,
+  };
+}
+
+export function parseCustomDesigns(raw: unknown): CustomDesignRecord[] {
+  if (!Array.isArray(raw)) return [];
+  const out: CustomDesignRecord[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const c = item as Partial<CustomDesignRecord>;
+    if (!c.id || typeof c.id !== 'string') continue;
+    if (!c.name || typeof c.name !== 'object') continue;
+    const nameEn = String((c.name as any).en || '').trim();
+    const nameSq = String((c.name as any).sq || nameEn).trim();
+    if (!nameEn && !nameSq) continue;
+    const category = String(c.category || 'Travel').trim() || 'Travel';
+    const frontElements = Array.isArray(c.frontElements) ? c.frontElements : [];
+    const backElements = Array.isArray(c.backElements) ? c.backElements : frontElements;
+    out.push({
+      id: c.id,
+      name: { en: nameEn || nameSq, sq: nameSq || nameEn },
+      category,
+      thumbLabel: c.thumbLabel ? String(c.thumbLabel) : undefined,
+      thumbColor: c.thumbColor ? String(c.thumbColor) : undefined,
+      thumbPhoto: c.thumbPhoto ? String(c.thumbPhoto) : undefined,
+      frontElements,
+      backElements,
+      createdAt: c.createdAt ? String(c.createdAt) : undefined,
+      updatedAt: c.updatedAt ? String(c.updatedAt) : undefined,
+    });
+  }
+  return out;
+}
+
+/** Built-ins (with overrides) + admin custom designs. */
+export function buildDesignCatalog(
+  overrides?: DesignOverrides | null,
+  customDesigns?: CustomDesignRecord[] | null,
+): DesignDef[] {
+  const builtIn = applyDesignOverrides(DESIGNS, overrides);
+  const customs = parseCustomDesigns(customDesigns).map(customDesignToDef);
+  const customsApplied = applyDesignOverrides(customs, overrides);
+  return [...builtIn, ...customsApplied];
+}
+
+/** Starter canvas for a new admin cover. */
+export function blankCoverElements(title: string, color = '#F7F5F2'): DE[] {
+  return [
+    BG(color),
+    TX(title, 40, 300, DESIGN_W - 80, 90, {
+      fontSize: 48,
+      fill: '#1A1A1A',
+      align: 'center',
+      fontFamily: "'Londrina Solid', cursive",
+      letterSpacing: 4,
+    }),
+    TX('Tap to edit', 80, 400, DESIGN_W - 160, 40, {
+      fontSize: 14,
+      fill: '#8A8A8A',
+      align: 'center',
+      fontFamily: "Arial, 'Helvetica Neue', sans-serif",
+    }),
+  ];
+}
+
+export function newCustomDesignId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `custom-${crypto.randomUUID()}`;
+  }
+  return `custom-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 /** Attach stable ids for Konva editing; strip them again before saving. */

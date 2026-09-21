@@ -13,6 +13,8 @@ import {
   scaleElementsToCanvas,
   elementsWithCoverWallpaper,
   wallpaperSrc as resolveWallpaperUrl,
+  designFrontElements,
+  designBackElements,
   type DE,
   type DesignDef,
   type LayoutDef,
@@ -318,10 +320,12 @@ function prepareCover(
   nextPhoto: () => string | undefined,
   categoryKey: string,
   lang: 'sq' | 'en',
+  side: 'front' | 'back' = 'front',
 ): DE[] {
-  const hasCoverArt = design.elements.some((e) => e.type === 'image' && !!e.src);
+  const sideEls = side === 'back' ? designBackElements(design) : designFrontElements(design);
+  const hasCoverArt = sideEls.some((e) => e.type === 'image' && !!e.src);
   const userWallpaper = nextPhoto();
-  let source = design.elements;
+  let source = sideEls;
 
   if (userWallpaper) {
     source = elementsWithCoverWallpaper(
@@ -337,7 +341,7 @@ function prepareCover(
       return true;
     });
   } else if (!hasCoverArt && design.thumbPhoto) {
-    source = elementsWithCoverWallpaper(design.elements, design.thumbPhoto);
+    source = elementsWithCoverWallpaper(sideEls, design.thumbPhoto);
     const baked = resolveWallpaperUrl(design.thumbPhoto);
     source = source.filter((el) => {
       if (el.type === 'image' && el.src === baked) return false;
@@ -515,7 +519,7 @@ export function generateAlbum(
     const frontDesign = pick(pool);
     frontDesignId = frontDesign.id;
     frontCover = withIds(
-      prepareCover(frontDesign, canvasH, nextPhoto, cat, lang),
+      prepareCover(frontDesign, canvasH, nextPhoto, cat, lang, 'front'),
       'cover-front',
     );
   }
@@ -530,7 +534,7 @@ export function generateAlbum(
     const backDesign = pick(pool.filter((d) => d.id !== frontId)) || pool[0];
     backDesignId = backDesign.id;
     backCover = withIds(
-      prepareCover(backDesign, canvasH, nextPhoto, cat, lang),
+      prepareCover(backDesign, canvasH, nextPhoto, cat, lang, 'back'),
       'cover-back',
     );
   }

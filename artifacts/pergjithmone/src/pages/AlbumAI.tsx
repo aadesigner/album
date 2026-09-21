@@ -14,7 +14,7 @@ import {
 import { useLocation } from 'wouter';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { DB_CAT_TO_DESIGN_CAT } from '@/lib/designMeta';
+import { resolveDesignCategory } from '@/lib/designMeta';
 import { generateAlbum, suggestInnerPageCount } from '@/lib/albumGenerator';
 import { compressImageFile } from '@/lib/imageCompression';
 import { pendingBooksLimitMessage } from '@/lib/projectErrors';
@@ -207,11 +207,7 @@ export default function AlbumAI() {
     setGenError(null);
     try {
       const cat = (categories as any[])?.find((c: any) => c.id === catId);
-      const catName = cat?.nameAl || cat?.nameEn || '';
-      const designCategoryKey =
-        DB_CAT_TO_DESIGN_CAT[catName] ||
-        DB_CAT_TO_DESIGN_CAT[cat?.nameEn || ''] ||
-        '';
+      const designCategoryKey = resolveDesignCategory(cat);
 
       if (!photoUrls.length) {
         throw new Error('NO_PHOTOS');

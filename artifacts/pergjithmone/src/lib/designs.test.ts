@@ -6,6 +6,14 @@ import {
   wallpaperSrc,
   DESIGN_H,
   DESIGN_W,
+  normalizeOverride,
+  designFrontElements,
+  designBackElements,
+  buildDesignCatalog,
+  parseCustomDesigns,
+  applyDesignOverrides,
+  blankCoverElements,
+  DESIGNS,
 } from "./designs";
 
 // ── getCanvasHeight ────────────────────────────────────────────────────────────
@@ -108,5 +116,62 @@ describe("elementsWithCoverWallpaper", () => {
     expect(out[1].type).toBe("placeholder");
     expect(out[1].src).toBeUndefined();
     expect(out[2].type).toBe("text");
+  });
+});
+
+describe("front/back design helpers", () => {
+  it("normalizes legacy DE[] overrides to both sides", () => {
+    const els = blankCoverElements("A");
+    const norm = normalizeOverride(els);
+    expect(norm?.frontElements).toEqual(els);
+    expect(norm?.backElements).toEqual(els);
+  });
+
+  it("normalizes explicit front/back override objects", () => {
+    const front = blankCoverElements("F");
+    const back = blankCoverElements("B");
+    const norm = normalizeOverride({ frontElements: front, backElements: back });
+    expect(norm?.frontElements).toEqual(front);
+    expect(norm?.backElements).toEqual(back);
+  });
+
+  it("falls back backElements to front when unset", () => {
+    const d = DESIGNS[0];
+    expect(designBackElements(d)).toEqual(designFrontElements(d));
+  });
+
+  it("merges custom designs into catalog", () => {
+    const customs = parseCustomDesigns([
+      {
+        id: "custom-test-1",
+        name: { en: "Test", sq: "Test" },
+        category: "Celebration",
+        frontElements: blankCoverElements("FRONT"),
+        backElements: blankCoverElements("BACK"),
+      },
+    ]);
+    const catalog = buildDesignCatalog({}, customs);
+    expect(catalog.some((d) => d.id === "custom-test-1")).toBe(true);
+    const custom = catalog.find((d) => d.id === "custom-test-1")!;
+    expect(custom.isCustom).toBe(true);
+    expect(designFrontElements(custom)[1].text).toBe("FRONT");
+    expect(designBackElements(custom)[1].text).toBe("BACK");
+  });
+
+  it("applies side overrides onto built-ins", () => {
+    const id = DESIGNS[0].id;
+    const front = blankCoverElements("OV-F");
+    const back = blankCoverElements("OV-B");
+    const [patched] = applyDesignOverrides(
+      [DESIGNS[0]],
+      { [id]: { frontElements: front, backElements: back } },
+    );
+    expect(designFrontElements(patched)[1].text).toBe("OV-F");
+    expect(designBackElements(patched)[1].text).toBe("OV-B");
+  });
+
+  it("rejects malformed custom designs", () => {
+    expect(parseCustomDesigns([{ id: "nope" }])).toEqual([]);
+    expect(parseCustomDesigns("x")).toEqual([]);
   });
 });

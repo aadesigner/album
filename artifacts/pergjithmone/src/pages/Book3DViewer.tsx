@@ -231,8 +231,10 @@ function SpreadBrowser({
       setPgW(Math.max(140, Math.min(maxByWidth, maxByHeight, cap)));
     };
     measure();
+    const el = containerRef.current;
+    if (!el) return;
     const ro = new ResizeObserver(measure);
-    ro.observe(containerRef.current);
+    ro.observe(el);
     return () => ro.disconnect();
   }, [canvasH]);
   const pgH = Math.round(pgW * (canvasH / DESIGN_W));

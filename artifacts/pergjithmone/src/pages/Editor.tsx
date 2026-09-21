@@ -44,7 +44,8 @@ import {
   DESIGN_W, DESIGN_H, LAYOUTS, DESIGNS, CATEGORY_LABELS, LAYOUT_CATEGORY_LABELS,
   getCanvasHeight, scaleElementsToCanvas, elementsWithCoverWallpaper,
   BLANK_STARTER_ID, blankFrontCoverElements, blankBackCoverElements,
-  coverCropRect, imageFrameCoverFit, imageFrameFocusFromOffset, applyDesignOverrides,
+  coverCropRect, imageFrameCoverFit, imageFrameFocusFromOffset,
+  designFrontElements, designBackElements, buildDesignCatalog, parseCustomDesigns,
   type EditorElement, type DE, type DesignDef, type LayoutZone, type DesignOverrides,
 } from '@/lib/designs';
 import { DESIGN_METAS } from '@/lib/designMeta';
@@ -2010,21 +2011,25 @@ function LayoutThumb({ zones }: { zones: LayoutZone[] }) {
 
 function DesignThumb({design,lang,onApply}: {design:DesignDef;lang:'sq'|'en';onApply:()=>void}) {
   const meta = DESIGN_METAS.find(d => d.id === design.id);
+  const thumbStyle = design.thumb || meta?.thumb || { background: '#ECE7E1' };
+  const thumbPhoto = design.thumbPhoto || meta?.thumbPhoto;
+  const thumbLabel = design.thumbLabel || meta?.thumbLabel;
+  const previewEls = designFrontElements(design);
   return (
     <button onClick={onApply}
       className="flex flex-col items-center gap-1.5 group transition-transform hover:scale-105 active:scale-95 outline-none">
       <div
         className="relative overflow-hidden rounded-md border border-neutral-200 group-hover:border-neutral-700 shadow-sm transition-all group-hover:shadow-md"
-        style={{ width: 72, height: 96, ...(meta?.thumb || { background: '#ECE7E1' }) }}
+        style={{ width: 72, height: 96, ...thumbStyle }}
       >
-        {meta?.thumbPhoto ? (
-          <img src={meta.thumbPhoto} alt="" loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover" />
-        ) : (
-          <PageThumb elements={design.elements} width={72} height={96} />
-        )}
-        {meta?.thumbLabel ? (
+        {thumbPhoto ? (
+          <img src={thumbPhoto} alt="" loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover" />
+        ) : previewEls.length > 0 ? (
+          <PageThumb elements={previewEls} width={72} height={96} />
+        ) : null}
+        {thumbLabel ? (
           <span className="absolute bottom-1 left-0 right-0 text-center text-[8px] font-bold tracking-wider text-white"
-            style={{ textShadow: '0 1px 3px rgba(0,0,0,0.5)' }}>{meta.thumbLabel}</span>
+            style={{ textShadow: '0 1px 3px rgba(0,0,0,0.5)' }}>{thumbLabel}</span>
         ) : null}
       </div>
       <span className="text-[9px] text-neutral-500 group-hover:text-neutral-800 transition-colors text-center leading-tight w-full truncate px-1">
@@ -3360,12 +3365,13 @@ export default function Editor() {
   const [deletingSpread,setDeletingSpread]=useState(false);
   const {data:appSettings}=useGetAppSettings();
   const designOverrides = ((appSettings as any)?.designOverrides || {}) as DesignOverrides;
+  const customDesigns = parseCustomDesigns((appSettings as any)?.customDesigns);
   const hiddenDesignIds: string[] = (appSettings as any)?.hiddenDesignIds || [];
   const designsCatalog = useMemo(() => {
-    const all = applyDesignOverrides(DESIGNS, designOverrides);
+    const all = buildDesignCatalog(designOverrides, customDesigns);
     if (!hiddenDesignIds.length) return all;
     return all.filter(d => !hiddenDesignIds.includes(d.id));
-  }, [designOverrides, hiddenDesignIds]);
+  }, [designOverrides, customDesigns, hiddenDesignIds]);
   const minInnerPages=Number(bookSize?.minPages)
     || Number((appSettings as any)?.minPages)
     || 30;
@@ -3454,14 +3460,17 @@ export default function Editor() {
     const ts=Date.now();
     const updates:Record<number,EditorElement[]>={};
 
-    // Wallpaper designs bake the picker photo onto covers — skip when the
-    // design already ships movable cover art (e.g. Paris tower / Barcelona).
-    const hasCoverArt = design.elements.some((e) => e.type === "image" && !!e.src);
-    const coverSource =
-      !hasCoverArt && design.thumbPhoto
-        ? elementsWithCoverWallpaper(design.elements, design.thumbPhoto)
-        : design.elements;
-    const coverProjected = scaleElementsToCanvas(coverSource, canvasH);
+    const projectSide = (sideEls: typeof design.elements) => {
+      const hasCoverArt = sideEls.some((e) => e.type === "image" && !!e.src);
+      const coverSource =
+        !hasCoverArt && design.thumbPhoto
+          ? elementsWithCoverWallpaper(sideEls, design.thumbPhoto)
+          : sideEls;
+      return scaleElementsToCanvas(coverSource, canvasH);
+    };
+
+    const frontProjected = projectSide(designFrontElements(design));
+    const backProjected = projectSide(designBackElements(design));
 
     // Inner pages (and inside linings) are ALWAYS white — never inherit the
     // cover color. Covers keep the design palette; everything else is paper.
@@ -3476,10 +3485,15 @@ export default function Editor() {
     };
 
     for (const page of allPages) {
-      if (page.role === "front_cover" || page.role === "back_cover") {
-        updates[page.dbId] = coverProjected.map((el, i) => ({
+      if (page.role === "front_cover") {
+        updates[page.dbId] = frontProjected.map((el, i) => ({
           ...el,
-          id: `${design.id}-${page.dbId}-${i}-${ts}`,
+          id: `${design.id}-front-${page.dbId}-${i}-${ts}`,
+        }));
+      } else if (page.role === "back_cover") {
+        updates[page.dbId] = backProjected.map((el, i) => ({
+          ...el,
+          id: `${design.id}-back-${page.dbId}-${i}-${ts}`,
         }));
       } else if (page.role === "locked_left" || page.role === "locked_right") {
         updates[page.dbId] = [

@@ -7,8 +7,8 @@ import { useLocation } from 'wouter';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Link } from 'wouter';
-import { DESIGN_METAS, DESIGN_CATEGORY_LABELS, resolveDesignCategory, type DesignMeta } from '@/lib/designMeta';
-import { BLANK_STARTER_ID } from '@/lib/designs';
+import { DB_CAT_TO_DESIGN_CAT, DESIGN_CATEGORY_LABELS, mergeDesignMetas, resolveDesignCategory, type DesignMeta } from '@/lib/designMeta';
+import { BLANK_STARTER_ID, parseCustomDesigns } from '@/lib/designs';
 import { SEOMeta } from '@/components/SEOMeta';
 import { useToast } from '@/hooks/use-toast';
 import { getCategoryImage } from '@/lib/categoryImages';
@@ -194,10 +194,19 @@ export default function Wizard() {
   const createProject = useCreateProject();
   const { toast } = useToast();
 
+  const siteSettings = settings as any;
+  const bookCreationEnabled = siteSettings?.bookCreationEnabled !== false;
+  const hiddenDesignIds: string[] = siteSettings?.hiddenDesignIds || [];
+
+  const allDesignMetas = useMemo(
+    () => mergeDesignMetas(parseCustomDesigns(siteSettings?.customDesigns)),
+    [siteSettings?.customDesigns],
+  );
+
   // Prefetch all picker thumbs once — category switch then feels instant.
   useEffect(() => {
     let cancelled = false;
-    const run = () => { if (!cancelled) preloadDesignThumbs(DESIGN_METAS); };
+    const run = () => { if (!cancelled) preloadDesignThumbs(allDesignMetas); };
     let idleId: number | undefined;
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
     if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
@@ -210,7 +219,7 @@ export default function Wizard() {
       if (idleId != null && 'cancelIdleCallback' in window) window.cancelIdleCallback(idleId);
       if (timeoutId != null) clearTimeout(timeoutId);
     };
-  }, []);
+  }, [allDesignMetas]);
 
   // Home category cards deep-link to cover/style selection via ?category=slug
   // Showcase albums also pass ?design=id so the cover is pre-highlighted.
@@ -220,9 +229,9 @@ export default function Wizard() {
     const slug = (params.get('category') || '').trim().toLowerCase();
     const designId = (params.get('design') || '').trim();
 
-    if (designId && DESIGN_METAS.some(d => d.id === designId)) {
+    if (designId && allDesignMetas.some(d => d.id === designId)) {
       setSelectedDesignId(designId);
-      const designCat = DESIGN_METAS.find(d => d.id === designId)?.category;
+      const designCat = allDesignMetas.find(d => d.id === designId)?.category;
       if (designCat) {
         const match = (categories as any[]).find((c: any) =>
           DB_CAT_TO_DESIGN_CAT[c.nameAl] === designCat
@@ -248,11 +257,7 @@ export default function Wizard() {
       setStep(2);
     }
     setPreselectDone(true);
-  }, [categories, loadingCat, preselectDone]);
-
-  const siteSettings = settings as any;
-  const bookCreationEnabled = siteSettings?.bookCreationEnabled !== false;
-  const hiddenDesignIds: string[] = siteSettings?.hiddenDesignIds || [];
+  }, [categories, loadingCat, preselectDone, allDesignMetas]);
 
   // Map selected DB category → design category → filter designs
   const selectedCat = useMemo(() => {
@@ -264,12 +269,12 @@ export default function Wizard() {
     // Never fall back to ALL designs — that dumped travel cities into parties
     // whenever the DB category name didn't exact-match the map.
     const base = designCategoryKey
-      ? DESIGN_METAS.filter(d => d.category === designCategoryKey)
+      ? allDesignMetas.filter(d => d.category === designCategoryKey)
       : [];
     return hiddenDesignIds.length > 0
       ? base.filter(d => !hiddenDesignIds.includes(d.id))
       : base;
-  }, [designCategoryKey, hiddenDesignIds]);
+  }, [designCategoryKey, hiddenDesignIds, allDesignMetas]);
   const designCategoryLabel = designCategoryKey
     ? (DESIGN_CATEGORY_LABELS[designCategoryKey]?.[lang] || designCategoryKey)
     : (lang === 'sq' ? 'Të gjitha stilet' : 'All styles');
@@ -282,7 +287,7 @@ export default function Wizard() {
     if (catId !== 'blank') {
       const cat = (categories as any[])?.find((c: any) => c.id === catId);
       const key = resolveDesignCategory(cat);
-      if (key) preloadDesignThumbs(DESIGN_METAS.filter(d => d.category === key));
+      if (key) preloadDesignThumbs(allDesignMetas.filter(d => d.category === key));
     }
     // Blank canvas skips the style step entirely.
     setStep(catId === 'blank' ? 3 : 2);

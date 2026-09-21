@@ -870,6 +870,8 @@ router.get(
     try { hiddenDesignIds = JSON.parse(map["hidden_design_ids"] || "[]"); } catch { hiddenDesignIds = []; }
     let designOverrides: Record<string, unknown> = {};
     try { designOverrides = JSON.parse(map["design_overrides"] || "{}"); } catch { designOverrides = {}; }
+    let customDesigns: unknown[] = [];
+    try { customDesigns = JSON.parse(map["custom_designs"] || "[]"); } catch { customDesigns = []; }
 
     res.json({
       whatsappNumber: map["whatsapp_number"] || "+355688755833",
@@ -887,6 +889,7 @@ router.get(
       bookDisabledNoticeEn: map["book_disabled_notice_en"] || "Book creation is temporarily unavailable.",
       hiddenDesignIds,
       designOverrides,
+      customDesigns,
       requireLoginForPdf: map["require_login_for_pdf"] === "true",
       pendingBooksLimitEnabled: map["pending_books_limit_enabled"] !== "false",
       pendingBooksLimit: parseInt(map["pending_books_limit"] || "3", 10),
@@ -916,6 +919,7 @@ router.patch(
       bookDisabledNoticeEn: "book_disabled_notice_en",
       hiddenDesignIds: "hidden_design_ids",
       designOverrides: "design_overrides",
+      customDesigns: "custom_designs",
       requireLoginForPdf: "require_login_for_pdf",
       pendingBooksLimitEnabled: "pending_books_limit_enabled",
       pendingBooksLimit: "pending_books_limit",
@@ -929,6 +933,38 @@ router.patch(
         if (typeof raw === "string") value = raw;
         else if (Array.isArray(raw) || (raw && typeof raw === "object")) value = JSON.stringify(raw);
         else value = String(raw);
+
+        // Soft QA limits for custom cover designs
+        if (jsKey === "customDesigns") {
+          let list: unknown[] = [];
+          try { list = typeof raw === "string" ? JSON.parse(raw) : (Array.isArray(raw) ? raw : []); } catch {
+            res.status(400).json({ error: "customDesigns must be a JSON array" });
+            return;
+          }
+          if (list.length > 80) {
+            res.status(400).json({ error: "Too many custom designs (max 80)" });
+            return;
+          }
+          for (const item of list) {
+            if (!item || typeof item !== "object") {
+              res.status(400).json({ error: "Invalid custom design entry" });
+              return;
+            }
+            const d = item as Record<string, unknown>;
+            if (typeof d.id !== "string" || !d.id.startsWith("custom-")) {
+              res.status(400).json({ error: "Custom design id must start with custom-" });
+              return;
+            }
+            const front = Array.isArray(d.frontElements) ? d.frontElements : [];
+            const back = Array.isArray(d.backElements) ? d.backElements : [];
+            if (front.length > 80 || back.length > 80) {
+              res.status(400).json({ error: "A cover can have at most 80 elements" });
+              return;
+            }
+          }
+          value = JSON.stringify(list);
+        }
+
         await db
           .insert(appSettingsTable)
           .values({ key: dbKey, value })
@@ -944,6 +980,8 @@ router.patch(
     try { hiddenDesignIds2 = JSON.parse(map2["hidden_design_ids"] || "[]"); } catch { hiddenDesignIds2 = []; }
     let designOverrides2: Record<string, unknown> = {};
     try { designOverrides2 = JSON.parse(map2["design_overrides"] || "{}"); } catch { designOverrides2 = {}; }
+    let customDesigns2: unknown[] = [];
+    try { customDesigns2 = JSON.parse(map2["custom_designs"] || "[]"); } catch { customDesigns2 = []; }
 
     res.json({
       whatsappNumber: map2["whatsapp_number"] || "+355688755833",
@@ -961,6 +999,7 @@ router.patch(
       bookDisabledNoticeEn: map2["book_disabled_notice_en"] || "Book creation is temporarily unavailable.",
       hiddenDesignIds: hiddenDesignIds2,
       designOverrides: designOverrides2,
+      customDesigns: customDesigns2,
       requireLoginForPdf: map2["require_login_for_pdf"] === "true",
       pendingBooksLimitEnabled: map2["pending_books_limit_enabled"] !== "false",
       pendingBooksLimit: parseInt(map2["pending_books_limit"] || "3", 10),

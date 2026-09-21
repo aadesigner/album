@@ -181,3 +181,31 @@ export const DESIGN_METAS: DesignMeta[] = [
     thumbLabel: 'ADOR',
     thumbAccents: [] },
 ];
+
+/** Merge built-in DESIGN_METAS with admin custom designs for wizard/settings pickers. */
+export function mergeDesignMetas(
+  customs: Array<{
+    id: string;
+    name: { sq: string; en: string };
+    category: string;
+    thumbLabel?: string;
+    thumbColor?: string;
+    thumbPhoto?: string;
+  }> = [],
+): DesignMeta[] {
+  const builtInIds = new Set(DESIGN_METAS.map((d) => d.id));
+  const extras: DesignMeta[] = [];
+  for (const c of customs) {
+    if (!c?.id || builtInIds.has(c.id)) continue;
+    extras.push({
+      id: c.id,
+      name: c.name,
+      category: c.category,
+      thumb: { background: c.thumbColor || '#2A2A2A' },
+      thumbAccents: [],
+      thumbPhoto: c.thumbPhoto,
+      thumbLabel: c.thumbLabel || c.name.en?.slice(0, 12).toUpperCase(),
+    });
+  }
+  return [...DESIGN_METAS, ...extras];
+}
