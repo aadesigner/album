@@ -197,8 +197,8 @@ function LivingAlbumBook({
     }
   }, [coverEls]);
 
-  const spineD = size === 'hero' ? 34 : 22;
-  const pageBlock = size === 'hero' ? 22 : 14;
+  const spineD = size === 'hero' ? 16 : 10;
+  const pageBlock = size === 'hero' ? 9 : 6;
   const maxW = size === 'hero' ? 280 : 200;
   const maxH = size === 'hero' ? 380 : 270;
 
@@ -233,9 +233,9 @@ function LivingAlbumBook({
         perspective: size === 'hero' ? 1600 : 1200,
         perspectiveOrigin: '42% 45%',
         touchAction: 'manipulation',
-        // Room for spine / page edge in 3D space
-        paddingLeft: spineD * 0.35,
-        paddingRight: pageBlock * 0.4,
+        // Slim spine / page edge — reads as a thin keepsake, not a brick
+        paddingLeft: spineD * 0.55,
+        paddingRight: pageBlock * 0.7,
       }}
     >
       <div
@@ -275,22 +275,22 @@ function LivingAlbumBook({
               transformOrigin: 'right center',
               transform: 'rotateY(-90deg)',
               background: `linear-gradient(to right, ${style.spine}33, ${style.spine}, ${style.spine}aa)`,
-              borderRadius: '4px 0 0 4px',
-              boxShadow: 'inset -3px 0 8px rgba(0,0,0,0.4)',
+              borderRadius: '3px 0 0 3px',
+              boxShadow: 'inset -2px 0 5px rgba(0,0,0,0.35)',
               overflow: 'hidden',
             }}
           >
             <div style={{
               position: 'absolute', inset: 0,
-              background: 'linear-gradient(to right, rgba(0,0,0,0.6), rgba(0,0,0,0.05))',
+              background: 'linear-gradient(to right, rgba(0,0,0,0.55), rgba(0,0,0,0.05))',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
               <span style={{
                 writingMode: 'vertical-rl',
-                fontSize: size === 'hero' ? 10 : 7,
-                letterSpacing: '0.36em',
+                fontSize: size === 'hero' ? 8 : 6,
+                letterSpacing: '0.28em',
                 textTransform: 'uppercase',
-                color: 'rgba(255,255,255,0.42)',
+                color: 'rgba(255,255,255,0.38)',
                 fontWeight: 600,
               }}>
                 përgjithmonë
@@ -298,30 +298,30 @@ function LivingAlbumBook({
             </div>
           </div>
 
-          {/* Page stack (right edge depth) */}
+          {/* Page stack (right edge depth) — few leaves for a slim album */}
           <div
             aria-hidden
             style={{
               position: 'absolute',
-              right: -pageBlock, top: '1.2%',
-              width: pageBlock, height: '97.5%',
+              right: -pageBlock, top: '1.5%',
+              width: pageBlock, height: '97%',
               transformOrigin: 'left center',
               transform: 'rotateY(90deg)',
-              background: 'linear-gradient(to left, #a8a39a, #f4f0e8 50%, #e6e1d6)',
-              boxShadow: '3px 0 14px rgba(0,0,0,0.18)',
+              background: 'linear-gradient(to left, #b0aaa0, #f7f3eb 55%, #ebe6dc)',
+              boxShadow: '2px 0 8px rgba(0,0,0,0.14)',
               overflow: 'hidden',
             }}
           >
-            {Array.from({ length: 16 }).map((_, i) => (
+            {Array.from({ length: 7 }).map((_, i) => (
               <div key={i} style={{
                 position: 'absolute', left: 0, right: 0,
-                top: `${(i / 16) * 100}%`, height: 1,
-                background: i % 3 === 0 ? 'rgba(0,0,0,0.12)' : 'rgba(0,0,0,0.05)',
+                top: `${(i / 7) * 100}%`, height: 1,
+                background: i % 2 === 0 ? 'rgba(0,0,0,0.10)' : 'rgba(0,0,0,0.04)',
               }} />
             ))}
             <div style={{
               position: 'absolute', inset: 0,
-              background: 'linear-gradient(to right, rgba(0,0,0,0.32), transparent 55%)',
+              background: 'linear-gradient(to right, rgba(0,0,0,0.28), transparent 60%)',
             }} />
           </div>
 
@@ -334,9 +334,9 @@ function LivingAlbumBook({
               borderRadius: '0 5px 5px 0',
               overflow: 'hidden',
               boxShadow:
-                '18px 32px 56px rgba(0,0,0,0.42), 6px 10px 22px rgba(0,0,0,0.28), inset 0 0 0 1px rgba(255,255,255,0.1)',
+                '12px 22px 40px rgba(0,0,0,0.38), 4px 8px 16px rgba(0,0,0,0.22), inset 0 0 0 1px rgba(255,255,255,0.1)',
               background: coverBg,
-              transform: 'translateZ(2px)',
+              transform: 'translateZ(1px)',
               backfaceVisibility: 'hidden',
             }}
           >

@@ -71,10 +71,11 @@ export const PageThumb = React.memo(function PageThumb({
           if (el.type === 'image' && el.src) {
             return <img key={key} src={el.src} alt="" loading="lazy" style={{
               position: 'absolute', left: el.x, top: el.y, width: el.w, height: el.h,
-              objectFit: 'cover',
+              objectFit: el.objectFit === 'contain' ? 'contain' : 'cover',
               objectPosition: `${(el.cropFocusX ?? 0.5) * 100}% ${(el.cropFocusY ?? 0.5) * 100}%`,
               display: 'block', pointerEvents: 'none',
               opacity: el.opacity ?? 1,
+              mixBlendMode: (el.mixBlendMode as React.CSSProperties['mixBlendMode']) || undefined,
               transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
               transformOrigin: 'top left',
             }}/>;

@@ -63,6 +63,13 @@ export interface EditorElement {
   /** Cover-crop focus 0–1 (0.5 = centered). Lets users pan a photo inside its frame. */
   cropFocusX?: number;
   cropFocusY?: number;
+  /** How the bitmap fills its box — landmark cutouts use `contain`. */
+  objectFit?: 'cover' | 'contain';
+  /**
+   * CSS / canvas blend. Landmark gold-on-black PNGs use `screen` so the
+   * black plate disappears on colored covers (no blank band under the graphic).
+   */
+  mixBlendMode?: string;
   text?: string; fontSize?: number; fontFamily?: string;
   fill?: string; align?: 'left' | 'center' | 'right'; fontStyle?: string;
   lineHeight?: number; letterSpacing?: number;
@@ -145,6 +152,44 @@ export function imageFrameCoverFit(
   };
 }
 
+/** object-fit: contain — whole bitmap visible, letterboxed inside the frame. */
+export function imageFrameContainFit(
+  naturalW: number,
+  naturalH: number,
+  frameW: number,
+  frameH: number,
+): {
+  scale: number;
+  iw: number;
+  ih: number;
+  maxOffX: number;
+  maxOffY: number;
+  offX: number;
+  offY: number;
+  canPan: boolean;
+  focusX: number;
+  focusY: number;
+} {
+  const scale = Math.min(frameW / Math.max(1, naturalW), frameH / Math.max(1, naturalH));
+  const iw = naturalW * scale;
+  const ih = naturalH * scale;
+  // Negative offs = inset from top-left (same sign convention as cover fit).
+  const offX = -(frameW - iw) / 2;
+  const offY = -(frameH - ih) / 2;
+  return {
+    scale,
+    iw,
+    ih,
+    maxOffX: 0,
+    maxOffY: 0,
+    offX,
+    offY,
+    canPan: false,
+    focusX: 0.5,
+    focusY: 0.5,
+  };
+}
+
 /** Clamp a dragged image offset back into cover-fit bounds and derive focus (0–1). */
 export function imageFrameFocusFromOffset(
   offsetX: number,
@@ -184,7 +229,7 @@ export interface DesignDef {
 }
 
 /** Shared rev for Travel builtins (Paris/Barcelona + city photo covers). */
-export const TRAVEL_LAYOUT_REV = 5;
+export const TRAVEL_LAYOUT_REV = 6;
 export interface LayoutZone { x:number; y:number; w:number; h:number; type:string; rotation?:number }
 export interface LayoutDef { id:string; category:string; label:{sq:string;en:string}; zones:LayoutZone[] }
 
@@ -577,16 +622,22 @@ export const DESIGNS: DesignDef[] = [
     thumbAccents: [],
     elements: [
       BG('#FEC5D7'),
-      TX('PARIS', 16, 24, DESIGN_W - 32, 100, {
-        fontSize: 100, fill: '#FFFFFF', align: 'center',
-        fontFamily: "'Londrina Solid', cursive", letterSpacing: 12,
+      TX('PAR', 20, 28, DESIGN_W - 40, 78, {
+        fontSize: 86, fill: '#FFFFFF', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 14, lineHeight: 0.92,
       }),
-      TX('2022', 410, 128, 160, 44, {
-        fontSize: 34, fill: '#F06BAF', align: 'left',
-        fontFamily: "'Londrina Solid', cursive", letterSpacing: 4,
+      TX('IS', 20, 100, DESIGN_W - 40, 78, {
+        fontSize: 86, fill: '#FFFFFF', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 18, lineHeight: 0.92,
       }),
-      SH('rect', 248, 124, 40, 3, '#FFFFFF', { opacity: 0.55, strokeWidth: 0 }),
-      IMG('/designs/eiffel-tower.png', 70, 105, 460, 680),
+      TX('2022', 20, 178, DESIGN_W - 40, 36, {
+        fontSize: 28, fill: '#F06BAF', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 8,
+      }),
+      SH('rect', 250, 218, 100, 3, '#FFFFFF', { opacity: 0.55, strokeWidth: 0 }),
+      IMG('/designs/eiffel-tower.png', 90, 230, 420, 540, {
+        objectFit: 'contain', mixBlendMode: 'screen',
+      }),
     ],
   },
   {
@@ -599,15 +650,21 @@ export const DESIGNS: DesignDef[] = [
     thumbAccents: [],
     elements: [
       BG('#A83442'),
-      TX('BARCELONA', 8, 36, DESIGN_W - 16, 90, {
-        fontSize: 64, fill: '#FCB426', align: 'center',
-        fontFamily: "'Londrina Solid', cursive", letterSpacing: 6,
+      TX('BARCE', 12, 22, DESIGN_W - 24, 72, {
+        fontSize: 78, fill: '#FCB426', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 8, lineHeight: 0.9,
       }),
-      SH('rect', 220, 126, 160, 3, '#FCB426', { opacity: 0.7, strokeWidth: 0 }),
-      IMG('/designs/sagrada-familia.png', 50, 140, 500, 560),
-      TX('2026', 170, 728, 260, 48, {
-        fontSize: 36, fill: '#FCB426', align: 'center',
-        fontFamily: "'Londrina Solid', cursive", letterSpacing: 5,
+      TX('LONA', 12, 90, DESIGN_W - 24, 72, {
+        fontSize: 78, fill: '#FCB426', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 10, lineHeight: 0.9,
+      }),
+      SH('rect', 230, 168, 140, 3, '#FCB426', { opacity: 0.75, strokeWidth: 0 }),
+      IMG('/designs/sagrada-familia.png', 40, 180, 520, 540, {
+        objectFit: 'contain', mixBlendMode: 'screen',
+      }),
+      TX('2026', 20, 730, DESIGN_W - 40, 44, {
+        fontSize: 34, fill: '#FCB426', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 10,
       }),
     ],
   },

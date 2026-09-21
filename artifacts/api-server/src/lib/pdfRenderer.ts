@@ -130,6 +130,8 @@ export interface PdfRenderElement {
   letterSpacing?: number;
   cropFocusX?: number;
   cropFocusY?: number;
+  objectFit?: "cover" | "contain";
+  mixBlendMode?: string;
 }
 
 export interface PdfRenderPage {
@@ -462,24 +464,38 @@ async function renderPageToCanvas(
     } else if (el.type === "image" && el.src) {
       const img = images.get(el.src);
       if (img) {
-        const crop = coverCropRect(
-          img.width,
-          img.height,
-          el.w,
-          el.h,
-          el.cropFocusX ?? 0.5,
-          el.cropFocusY ?? 0.5,
-        );
+        if (el.mixBlendMode === "screen") ctx.globalCompositeOperation = "screen";
         ctx.save();
         ctx.beginPath();
         ctx.rect(el.x, el.y, el.w, el.h);
         ctx.clip();
-        ctx.drawImage(
-          img,
-          crop.x, crop.y, crop.width, crop.height,
-          el.x, el.y, el.w, el.h,
-        );
+        if (el.objectFit === "contain") {
+          const scale = Math.min(
+            el.w / Math.max(1, img.width),
+            el.h / Math.max(1, img.height),
+          );
+          const dw = img.width * scale;
+          const dh = img.height * scale;
+          const dx = el.x + (el.w - dw) / 2;
+          const dy = el.y + (el.h - dh) / 2;
+          ctx.drawImage(img, 0, 0, img.width, img.height, dx, dy, dw, dh);
+        } else {
+          const crop = coverCropRect(
+            img.width,
+            img.height,
+            el.w,
+            el.h,
+            el.cropFocusX ?? 0.5,
+            el.cropFocusY ?? 0.5,
+          );
+          ctx.drawImage(
+            img,
+            crop.x, crop.y, crop.width, crop.height,
+            el.x, el.y, el.w, el.h,
+          );
+        }
         ctx.restore();
+        ctx.globalCompositeOperation = "source-over";
       } else {
         ctx.fillStyle = "#D8D0C4";
         ctx.fillRect(el.x, el.y, el.w, el.h);

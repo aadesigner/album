@@ -44,7 +44,7 @@ import {
   DESIGN_W, DESIGN_H, LAYOUTS, DESIGNS, CATEGORY_LABELS, LAYOUT_CATEGORY_LABELS,
   getCanvasHeight, scaleElementsToCanvas, elementsWithCoverWallpaper,
   BLANK_STARTER_ID, blankFrontCoverElements, blankBackCoverElements,
-  coverCropRect, imageFrameCoverFit, imageFrameFocusFromOffset,
+  coverCropRect, imageFrameCoverFit, imageFrameContainFit, imageFrameFocusFromOffset,
   designFrontElements, designBackElements, buildDesignCatalog, parseCustomDesigns,
   type EditorElement, type DE, type DesignDef, type LayoutZone, type LayoutDef, type DesignOverrides,
 } from '@/lib/designs';
@@ -465,7 +465,9 @@ function KImgEl({el,isSelected,onSelect,onChange,onGestureStart,onDragActive,onG
   },[el.src]);
 
   const fit = img
-    ? imageFrameCoverFit(img.naturalWidth, img.naturalHeight, el.w, el.h, el.cropFocusX ?? 0.5, el.cropFocusY ?? 0.5)
+    ? (el.objectFit === 'contain'
+        ? imageFrameContainFit(img.naturalWidth, img.naturalHeight, el.w, el.h)
+        : imageFrameCoverFit(img.naturalWidth, img.naturalHeight, el.w, el.h, el.cropFocusX ?? 0.5, el.cropFocusY ?? 0.5))
     : null;
   const canPan = !!fit?.canPan;
 
@@ -507,10 +509,12 @@ function KImgEl({el,isSelected,onSelect,onChange,onGestureStart,onDragActive,onG
     // Keep the photo cover-fit in sync while resizing — otherwise the KonvaImage
     // stays at the old iw/ih until transformEnd and the crop snaps.
     const live = img
-      ? imageFrameCoverFit(
-          img.naturalWidth, img.naturalHeight, nw, nh,
-          el.cropFocusX ?? 0.5, el.cropFocusY ?? 0.5,
-        )
+      ? (el.objectFit === 'contain'
+          ? imageFrameContainFit(img.naturalWidth, img.naturalHeight, nw, nh)
+          : imageFrameCoverFit(
+              img.naturalWidth, img.naturalHeight, nw, nh,
+              el.cropFocusX ?? 0.5, el.cropFocusY ?? 0.5,
+            ))
       : null;
     n.getChildren().forEach((c: any) => {
       const name = typeof c.getClassName === 'function' ? c.getClassName() : '';
@@ -645,6 +649,7 @@ function KImgEl({el,isSelected,onSelect,onChange,onGestureStart,onDragActive,onG
         perfectDrawEnabled={false}
         listening={panInside}
         draggable={panInside}
+        globalCompositeOperation={(el.mixBlendMode as GlobalCompositeOperation | undefined) || undefined}
         dragDistance={2}
         dragBoundFunc={(pos: any) => {
           const { maxOffX: mx, maxOffY: my } = panMaxRef.current;
