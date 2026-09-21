@@ -54,7 +54,7 @@ const navGroups = (['Overview', 'Catalog', 'System'] as const).map((title) => ({
   items: navItems.filter((i) => i.group === title),
 }));
 
-/** Compact theme menu — dropdown (desktop sticky) / dropup (mobile). */
+/** Compact theme menu — dropdown (desktop) / dropup (mobile). Live type + color cards. */
 function ThemeSwitcher({
   theme,
   paletteId,
@@ -87,8 +87,8 @@ function ThemeSwitcher({
   }, [open]);
 
   const panelPos = placement === 'dropup'
-    ? 'bottom-full mb-2 right-0 origin-bottom-right'
-    : 'top-full mt-2 right-0 origin-top-right';
+    ? 'bottom-full mb-2.5 right-0 origin-bottom-right'
+    : 'top-full mt-2.5 right-0 origin-top-right';
 
   return (
     <div ref={rootRef} className="relative">
@@ -98,35 +98,50 @@ function ThemeSwitcher({
         aria-expanded={open}
         aria-haspopup="listbox"
         aria-label={`Theme: ${active.name}`}
-        className="group flex items-center gap-2 pl-1.5 pr-2.5 py-1.5 rounded-2xl transition-all active:scale-[0.98] focus:outline-none"
+        className="group flex items-center gap-2.5 pl-1.5 pr-3 py-1.5 transition-all active:scale-[0.98] focus:outline-none"
         style={{
-          background: theme.card,
+          background: `linear-gradient(135deg, ${theme.card} 0%, ${theme.accentSoft}88 100%)`,
           border: `1px solid ${theme.line}`,
+          borderRadius: theme.radius,
           boxShadow: open
-            ? `0 8px 28px rgba(40,20,30,0.10), 0 0 0 1px ${theme.accent}33`
-            : '0 4px 16px rgba(40,20,30,0.06)',
+            ? `0 10px 32px rgba(40,20,30,0.12), 0 0 0 1px ${theme.accent}40`
+            : '0 6px 20px rgba(40,20,30,0.07)',
+          backdropFilter: 'blur(12px)',
         }}
       >
         <span
-          className="w-7 h-7 rounded-xl overflow-hidden shrink-0 flex shadow-inner"
-          style={{ boxShadow: `inset 0 0 0 1px ${theme.line}` }}
+          className="relative w-8 h-8 overflow-hidden shrink-0 flex"
+          style={{
+            borderRadius: `calc(${theme.radius} - 4px)`,
+            boxShadow: `inset 0 0 0 1px ${theme.line}, 0 2px 6px ${theme.accent}22`,
+          }}
         >
-          <span className="w-[34%] h-full" style={{ background: active.swatches[0] }} />
+          <span className="w-[32%] h-full" style={{ background: active.swatches[0] }} />
           <span className="flex-1 h-full" style={{ background: active.swatches[1] }} />
-          <span className="w-[28%] h-full" style={{ background: active.swatches[2] }} />
-        </span>
-        <span className="hidden sm:flex flex-col items-start min-w-0 leading-none">
+          <span className="w-[30%] h-full" style={{ background: active.swatches[2] }} />
           <span
-            className="text-[9px] font-semibold tracking-[0.14em] uppercase"
-            style={{ color: theme.muted, opacity: 0.85 }}
+            className="absolute inset-0 flex items-center justify-center text-[11px] font-semibold text-white"
+            style={{
+              background: `${active.tokens.accent}cc`,
+              fontFamily: active.tokens.fontSerif,
+              textShadow: '0 1px 2px rgba(0,0,0,0.2)',
+            }}
           >
-            Theme
+            Aa
           </span>
+        </span>
+        <span className="hidden sm:flex flex-col items-start min-w-0 leading-none gap-1">
           <span
-            className="text-[12px] font-semibold truncate max-w-[5.5rem] mt-0.5"
+            className="text-[12.5px] font-semibold truncate max-w-[6.5rem]"
             style={{ color: theme.ink, fontFamily: theme.fontSerif }}
           >
             {active.name}
+          </span>
+          <span
+            className="text-[9px] font-medium tracking-[0.02em] truncate max-w-[6.5rem]"
+            style={{ color: theme.muted, fontFamily: theme.fontSans }}
+          >
+            {active.tokens.typePair.split(' · ')[0]}
           </span>
         </span>
         <Palette size={14} className="sm:hidden shrink-0" style={{ color: theme.accent }} />
@@ -136,33 +151,40 @@ function ThemeSwitcher({
         <div
           role="listbox"
           aria-label="Admin themes"
-          className={`absolute z-50 w-[min(17.5rem,calc(100vw-1.5rem))] rounded-2xl overflow-hidden ${panelPos}`}
+          className={`absolute z-50 w-[min(20.5rem,calc(100vw-1.25rem))] overflow-hidden ${panelPos}`}
           style={{
             background: theme.card,
             border: `1px solid ${theme.line}`,
-            boxShadow: '0 18px 48px rgba(40,16,28,0.14), 0 2px 8px rgba(40,16,28,0.06)',
-            animation: 'adminThemeIn 160ms ease-out',
+            borderRadius: `calc(${theme.radius} + 0.35rem)`,
+            boxShadow: '0 24px 56px rgba(40,16,28,0.16), 0 4px 12px rgba(40,16,28,0.06)',
+            animation: 'adminThemeIn 180ms cubic-bezier(0.22,1,0.36,1)',
           }}
         >
           <div
-            className="px-3.5 pt-3.5 pb-2.5"
-            style={{ borderBottom: `1px solid ${theme.line}` }}
+            className="relative px-4 pt-4 pb-3 overflow-hidden"
+            style={{
+              background: `linear-gradient(135deg, ${theme.accentSoft} 0%, ${theme.card} 70%)`,
+              borderBottom: `1px solid ${theme.line}`,
+            }}
           >
             <p
-              className="text-[10px] font-semibold tracking-[0.16em] uppercase"
+              className="text-[10px] font-semibold tracking-[0.18em] uppercase"
               style={{ color: theme.muted }}
+            >
+              Studio look
+            </p>
+            <p
+              className="text-[18px] font-semibold mt-1 leading-none"
+              style={{ color: theme.ink, fontFamily: theme.fontSerif }}
             >
               Color & type
             </p>
-            <p
-              className="text-[15px] font-semibold mt-0.5 leading-tight"
-              style={{ color: theme.ink, fontFamily: theme.fontSerif }}
-            >
-              Pick a look
+            <p className="text-[11px] mt-1.5" style={{ color: theme.muted, fontFamily: theme.fontSans }}>
+              Each look has its own voice
             </p>
           </div>
 
-          <div className="p-2 max-h-[min(22rem,55vh)] overflow-y-auto overscroll-contain">
+          <div className="p-2.5 grid grid-cols-2 gap-2 max-h-[min(26rem,58vh)] overflow-y-auto overscroll-contain">
             {ADMIN_PALETTES.map((p) => {
               const isActive = p.id === paletteId;
               const isStandard = p.id === 'standard';
@@ -176,54 +198,78 @@ function ThemeSwitcher({
                     onSelect(p.id);
                     setOpen(false);
                   }}
-                  className="w-full flex items-center gap-3 px-2.5 py-2 rounded-xl text-left transition-colors"
+                  className="relative text-left transition-transform active:scale-[0.98] focus:outline-none overflow-hidden"
                   style={{
-                    background: isActive ? p.tokens.accentSoft : 'transparent',
-                    boxShadow: isActive ? `inset 0 0 0 1px ${p.tokens.accent}44` : undefined,
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isActive) e.currentTarget.style.background = theme.bg;
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = isActive ? p.tokens.accentSoft : 'transparent';
+                    background: p.tokens.bg,
+                    borderRadius: p.tokens.radius,
+                    border: isActive
+                      ? `1.5px solid ${p.tokens.accent}`
+                      : `1px solid ${p.tokens.line}`,
+                    boxShadow: isActive
+                      ? `0 8px 22px ${p.tokens.accent}28, inset 0 0 0 1px ${p.tokens.accent}22`
+                      : '0 2px 8px rgba(40,20,30,0.04)',
                   }}
                 >
-                  <span
-                    className="w-9 h-9 rounded-xl overflow-hidden shrink-0 flex"
+                  <div
+                    className="h-11 flex items-end justify-between px-2.5 pb-1.5 pt-2"
                     style={{
-                      boxShadow: isActive
-                        ? `0 0 0 2px ${theme.card}, 0 0 0 3.5px ${p.tokens.accent}`
-                        : `0 0 0 1px ${theme.line}`,
+                      background: p.tokens.sidebarWash,
                     }}
                   >
-                    <span className="w-[36%] h-full" style={{ background: p.swatches[0] }} />
-                    <span className="flex-1 h-full" style={{ background: p.swatches[1] }} />
-                    <span className="w-[26%] h-full" style={{ background: p.swatches[2] }} />
-                  </span>
-                  <span className="flex-1 min-w-0">
-                    <span className="flex items-center gap-1.5">
+                    <span
+                      className="text-[22px] leading-none font-semibold"
+                      style={{ color: p.tokens.accent, fontFamily: p.tokens.fontSerif }}
+                    >
+                      Aa
+                    </span>
+                    {isActive && (
                       <span
-                        className="text-[13px] font-semibold truncate"
-                        style={{ color: theme.ink, fontFamily: p.tokens.fontSerif }}
+                        className="w-5 h-5 rounded-full flex items-center justify-center shrink-0"
+                        style={{ background: p.tokens.accent }}
                       >
-                        {p.name}
+                        <Check size={11} strokeWidth={3} className="text-white" />
                       </span>
-                      {isStandard && (
+                    )}
+                    {isStandard && !isActive && (
+                      <span
+                        className="text-[8px] font-bold tracking-wider uppercase px-1.5 py-0.5"
+                        style={{
+                          background: p.tokens.accent,
+                          color: '#fff',
+                          borderRadius: '999px',
+                        }}
+                      >
+                        Default
+                      </span>
+                    )}
+                  </div>
+                  <div className="px-2.5 pt-2 pb-2.5">
+                    <p
+                      className="text-[13px] font-semibold leading-tight truncate"
+                      style={{ color: p.tokens.ink, fontFamily: p.tokens.fontSerif }}
+                    >
+                      {p.name}
+                    </p>
+                    <p
+                      className="text-[10px] mt-0.5 truncate leading-snug"
+                      style={{ color: p.tokens.muted, fontFamily: p.tokens.fontSans }}
+                    >
+                      {p.tokens.typePair}
+                    </p>
+                    <div className="flex gap-1 mt-2">
+                      {p.swatches.map((c, i) => (
                         <span
-                          className="text-[9px] font-semibold tracking-wide uppercase px-1.5 py-0.5 rounded-full shrink-0"
-                          style={{ background: p.tokens.accent, color: '#fff' }}
-                        >
-                          Default
-                        </span>
-                      )}
-                    </span>
-                    <span className="block text-[11px] truncate mt-0.5" style={{ color: theme.muted }}>
-                      {p.tagline}
-                    </span>
-                  </span>
-                  {isActive && (
-                    <Check size={14} strokeWidth={2.75} className="shrink-0" style={{ color: p.tokens.accent }} />
-                  )}
+                          key={i}
+                          className="h-1.5 flex-1"
+                          style={{
+                            background: c,
+                            borderRadius: '999px',
+                            boxShadow: `inset 0 0 0 1px ${p.tokens.line}`,
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
                 </button>
               );
             })}
@@ -233,7 +279,7 @@ function ThemeSwitcher({
 
       <style>{`
         @keyframes adminThemeIn {
-          from { opacity: 0; transform: translateY(${placement === 'dropup' ? '6px' : '-6px'}) scale(0.98); }
+          from { opacity: 0; transform: translateY(${placement === 'dropup' ? '8px' : '-8px'}) scale(0.97); }
           to { opacity: 1; transform: translateY(0) scale(1); }
         }
       `}</style>
@@ -262,32 +308,38 @@ function Sidebar({
     <div
       className="h-full flex flex-col relative overflow-hidden"
       style={{
-        background: theme.sidebar,
+        background: theme.sidebarWash || theme.sidebar,
         fontFamily: theme.fontSans,
-        ...(isMobile ? {
-          backgroundImage: `linear-gradient(165deg, ${theme.accentSoft} 0%, ${theme.sidebar} 42%, ${theme.sidebar} 100%)`,
-        } : {}),
       }}
     >
+      {/* Soft accent orb — subtle atmosphere */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-20 -right-16 w-52 h-52 rounded-full blur-3xl opacity-30"
+        style={{ background: theme.accent }}
+      />
       {isMobile && (
         <div
           aria-hidden
-          className="pointer-events-none absolute -top-16 -right-10 w-44 h-44 rounded-full blur-3xl opacity-50"
+          className="pointer-events-none absolute bottom-24 -left-12 w-40 h-40 rounded-full blur-3xl opacity-20"
           style={{ background: theme.accent }}
         />
       )}
 
       <div
-        className={`relative flex items-center justify-between ${isMobile ? 'px-5 pt-[max(1.1rem,env(safe-area-inset-top))] pb-4' : 'px-5 py-5'}`}
+        className={`relative flex items-center justify-between ${isMobile ? 'px-5 pt-[max(1.1rem,env(safe-area-inset-top))] pb-4' : 'px-5 py-6'}`}
         style={{ borderBottom: `1px solid ${theme.sidebarLine}` }}
       >
         <div className="flex items-center gap-3 min-w-0">
           <div
-            className={`${isMobile ? 'w-11 h-11 rounded-2xl shadow-sm' : 'w-9 h-9 rounded-xl'} flex items-center justify-center shrink-0`}
-            style={{ background: theme.accent }}
+            className={`${isMobile ? 'w-11 h-11' : 'w-10 h-10'} flex items-center justify-center shrink-0 text-white shadow-sm`}
+            style={{
+              background: `linear-gradient(145deg, ${theme.accent} 0%, ${theme.accentDeep} 100%)`,
+              borderRadius: theme.radius,
+            }}
           >
             <span
-              className={`font-semibold text-white ${isMobile ? 'text-lg' : 'text-base'}`}
+              className={`font-semibold ${isMobile ? 'text-lg' : 'text-[17px]'}`}
               style={{ fontFamily: theme.fontSerif }}
             >
               P
@@ -295,10 +347,10 @@ function Sidebar({
           </div>
           <div className="min-w-0">
             <p
-              className="text-[10px] font-semibold tracking-[0.18em] uppercase leading-none"
-              style={{ color: theme.sidebarText, opacity: 0.7 }}
+              className="text-[9px] font-semibold tracking-[0.2em] uppercase leading-none"
+              style={{ color: theme.sidebarText, opacity: 0.65, fontFamily: theme.fontSans }}
             >
-              Admin
+              Studio
             </p>
             <p
               className={`font-semibold leading-tight mt-1 truncate ${isMobile ? 'text-[17px]' : 'text-[15px]'}`}
@@ -312,11 +364,12 @@ function Sidebar({
           <button
             type="button"
             onClick={onClose}
-            className="lg:hidden w-10 h-10 rounded-2xl flex items-center justify-center transition-transform active:scale-95"
+            className="lg:hidden w-10 h-10 flex items-center justify-center transition-transform active:scale-95"
             style={{
               color: theme.sidebarTextActive,
               background: theme.card,
               border: `1px solid ${theme.sidebarLine}`,
+              borderRadius: theme.radius,
               boxShadow: '0 4px 14px rgba(40,20,30,0.06)',
             }}
             aria-label="Close menu"
@@ -326,12 +379,12 @@ function Sidebar({
         )}
       </div>
 
-      <nav className={`relative flex-1 overflow-y-auto overscroll-contain ${isMobile ? 'py-5 px-4' : 'py-4 px-3'}`}>
+      <nav className={`relative flex-1 overflow-y-auto overscroll-contain ${isMobile ? 'py-5 px-4' : 'py-5 px-3'}`}>
         {navGroups.map((group) => (
-          <div key={group.title} className={isMobile ? 'mb-5' : 'mb-4'}>
+          <div key={group.title} className={isMobile ? 'mb-6' : 'mb-5'}>
             <p
-              className={`font-semibold tracking-[0.16em] uppercase ${isMobile ? 'px-3 mb-2 text-[10px]' : 'px-3 mb-1.5 text-[10px]'}`}
-              style={{ color: theme.sidebarText, opacity: 0.5 }}
+              className={`font-semibold tracking-[0.18em] uppercase ${isMobile ? 'px-3 mb-2.5 text-[9px]' : 'px-3 mb-2 text-[9px]'}`}
+              style={{ color: theme.sidebarText, opacity: 0.45, fontFamily: theme.fontSans }}
             >
               {group.title}
             </p>
@@ -345,22 +398,19 @@ function Sidebar({
                     onClick={onClose}
                     className={`flex items-center gap-3 font-medium transition-all duration-200 ${
                       isMobile
-                        ? 'px-3.5 py-[0.85rem] rounded-2xl text-[14px]'
-                        : 'px-3 py-2.5 rounded-xl text-[13px]'
+                        ? 'px-3.5 py-[0.85rem] text-[14px]'
+                        : 'px-3 py-2.5 text-[13px]'
                     }`}
-                    style={
-                      isActive
+                    style={{
+                      borderRadius: theme.radius,
+                      ...(isActive
                         ? {
                             background: theme.card,
                             color: theme.sidebarTextActive,
-                            boxShadow: isMobile
-                              ? `0 6px 20px rgba(40,20,30,0.07), inset 0 0 0 1px ${theme.sidebarLine}`
-                              : undefined,
-                            borderLeft: isMobile ? `3px solid ${theme.accent}` : undefined,
-                            paddingLeft: isMobile ? '0.8rem' : undefined,
+                            boxShadow: `0 4px 16px rgba(40,20,30,0.06), inset 3px 0 0 ${theme.accent}`,
                           }
-                        : { color: theme.sidebarText }
-                    }
+                        : { color: theme.sidebarText }),
+                    }}
                     onMouseEnter={(e) => {
                       if (!isActive) e.currentTarget.style.background = theme.sidebarHover;
                     }}
@@ -369,26 +419,20 @@ function Sidebar({
                     }}
                   >
                     <span
-                      className={`flex items-center justify-center shrink-0 ${isMobile ? 'w-9 h-9 rounded-xl' : ''}`}
-                      style={isMobile ? {
+                      className={`flex items-center justify-center shrink-0 ${isMobile ? 'w-9 h-9' : 'w-7 h-7'}`}
+                      style={{
+                        borderRadius: `calc(${theme.radius} - 4px)`,
                         background: isActive ? theme.accentSoft : 'transparent',
                         color: isActive ? theme.accent : theme.sidebarText,
-                      } : undefined}
+                      }}
                     >
                       <Icon
-                        size={isMobile ? 17 : 16}
+                        size={isMobile ? 17 : 15}
                         strokeWidth={isActive ? 2.35 : 1.75}
                         className="shrink-0"
-                        style={!isMobile && isActive ? { color: theme.accent } : undefined}
                       />
                     </span>
-                    <span className="truncate flex-1">{label}</span>
-                    {isActive && (
-                      <span
-                        className="w-1.5 h-1.5 rounded-full shrink-0"
-                        style={{ background: theme.accent }}
-                      />
-                    )}
+                    <span className="truncate flex-1" style={{ fontFamily: theme.fontSans }}>{label}</span>
                   </Link>
                 );
               })}
@@ -402,21 +446,25 @@ function Sidebar({
         style={{ borderTop: `1px solid ${theme.sidebarLine}` }}
       >
         <div
-          className={`flex items-center gap-3 mb-3 ${isMobile ? 'p-3 rounded-2xl' : 'px-1'}`}
+          className={`flex items-center gap-3 mb-3 ${isMobile ? 'p-3' : 'px-1'}`}
           style={isMobile ? {
             background: theme.card,
             border: `1px solid ${theme.sidebarLine}`,
+            borderRadius: theme.radius,
             boxShadow: '0 4px 16px rgba(40,20,30,0.04)',
           } : undefined}
         >
           <div
-            className={`${isMobile ? 'w-10 h-10' : 'w-9 h-9'} rounded-full flex items-center justify-center text-xs font-semibold shrink-0 text-white`}
-            style={{ background: theme.accent }}
+            className={`${isMobile ? 'w-10 h-10' : 'w-9 h-9'} flex items-center justify-center text-xs font-semibold shrink-0 text-white`}
+            style={{
+              background: `linear-gradient(145deg, ${theme.accent}, ${theme.accentDeep})`,
+              borderRadius: '999px',
+            }}
           >
             {initials}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold truncate" style={{ color: theme.sidebarTextActive }}>
+            <p className="text-sm font-semibold truncate" style={{ color: theme.sidebarTextActive, fontFamily: theme.fontSans }}>
               {user?.name || 'Admin'}
             </p>
             <p className="text-[11px] truncate" style={{ color: theme.sidebarText, opacity: 0.7 }}>
@@ -430,14 +478,15 @@ function Sidebar({
             href="/"
             className={`flex items-center justify-center gap-2 font-medium transition-colors ${
               isMobile
-                ? 'px-3 py-3 rounded-2xl text-[13px]'
-                : 'px-3 py-2.5 w-full rounded-xl text-[13px] mb-0.5'
+                ? 'px-3 py-3 text-[13px]'
+                : 'px-3 py-2.5 w-full text-[13px] mb-0.5'
             }`}
-            style={
-              isMobile
+            style={{
+              borderRadius: theme.radius,
+              ...(isMobile
                 ? { color: theme.sidebarTextActive, background: theme.card, border: `1px solid ${theme.sidebarLine}` }
-                : { color: theme.sidebarText }
-            }
+                : { color: theme.sidebarText }),
+            }}
             onMouseEnter={(e) => {
               if (!isMobile) e.currentTarget.style.background = theme.sidebarHover;
             }}
@@ -453,10 +502,13 @@ function Sidebar({
             onClick={() => logout()}
             className={`flex items-center justify-center gap-2 font-medium transition-colors ${
               isMobile
-                ? 'px-3 py-3 rounded-2xl text-[13px] text-white'
-                : 'px-3 py-2.5 w-full rounded-xl text-[13px]'
+                ? 'px-3 py-3 text-[13px] text-white'
+                : 'px-3 py-2.5 w-full text-[13px]'
             }`}
-            style={isMobile ? { background: theme.accent } : { color: theme.accent }}
+            style={{
+              borderRadius: theme.radius,
+              ...(isMobile ? { background: theme.accent } : { color: theme.accent }),
+            }}
           >
             <LogOut size={15} />
             Sign out
@@ -479,11 +531,12 @@ function MenuToggle({ open, onClick, theme }: {
       onClick={onClick}
       aria-label={open ? 'Close menu' : 'Open menu'}
       aria-expanded={open}
-      className="relative w-11 h-11 rounded-2xl flex items-center justify-center transition-transform active:scale-95 shrink-0"
+      className="relative w-11 h-11 flex items-center justify-center transition-transform active:scale-95 shrink-0"
       style={{
         background: open ? theme.accent : theme.card,
         color: open ? '#fff' : theme.sidebarTextActive,
         border: open ? 'none' : `1px solid ${theme.sidebarLine}`,
+        borderRadius: theme.radius,
         boxShadow: open
           ? `0 8px 22px ${theme.accent}55`
           : '0 4px 16px rgba(40,20,30,0.07)',
@@ -623,11 +676,15 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
           fontFamily: theme.fontSans,
           ['--admin-font-serif' as string]: theme.fontSerif,
           ['--admin-font-sans' as string]: theme.fontSans,
+          ['--admin-radius' as string]: theme.radius,
         }}
         data-admin-palette={paletteId}
       >
-        {/* Desktop: left rail (no theme picker) */}
-        <aside className="w-[15.75rem] fixed inset-y-0 left-0 z-30 hidden lg:block">
+        {/* Desktop: left rail */}
+        <aside
+          className="w-[16rem] fixed inset-y-0 left-0 z-30 hidden lg:block"
+          style={{ borderRight: `1px solid ${theme.sidebarLine}` }}
+        >
           <Sidebar theme={theme} variant="desktop" />
         </aside>
 
@@ -665,7 +722,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
           />
         </aside>
 
-        <main className="flex-1 lg:ml-[15.75rem] min-h-[100dvh] flex flex-col min-w-0 relative">
+        <main className="flex-1 lg:ml-[16rem] min-h-[100dvh] flex flex-col min-w-0 relative">
           {/* Desktop: sticky theme control, top-right — floats so pages keep full width */}
           <div
             className="hidden lg:block fixed z-40"
@@ -682,30 +739,34 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
             />
           </div>
 
-          {/* Mobile top bar — brand + page, theme dropup, menu */}
+          {/* Mobile top bar */}
           <header
             className="lg:hidden sticky top-0 z-30 px-3.5 pt-[max(0.55rem,env(safe-area-inset-top))] pb-2.5"
             style={{
-              background: `linear-gradient(180deg, ${theme.sidebar} 0%, ${theme.bg}ee 100%)`,
+              background: `linear-gradient(180deg, ${theme.sidebar}f5 0%, ${theme.bg}f0 100%)`,
               borderBottom: `1px solid ${theme.sidebarLine}`,
-              backdropFilter: 'blur(14px)',
-              WebkitBackdropFilter: 'blur(14px)',
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)',
             }}
           >
             <div className="flex items-center gap-2.5">
               <div className="flex items-center gap-2.5 min-w-0 flex-1">
                 <div
-                  className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 text-white font-semibold text-sm shadow-sm"
-                  style={{ background: theme.accent, fontFamily: theme.fontSerif }}
+                  className="w-9 h-9 flex items-center justify-center shrink-0 text-white font-semibold text-sm shadow-sm"
+                  style={{
+                    background: `linear-gradient(145deg, ${theme.accent}, ${theme.accentDeep})`,
+                    borderRadius: theme.radius,
+                    fontFamily: theme.fontSerif,
+                  }}
                 >
                   P
                 </div>
                 <div className="min-w-0">
                   <p
                     className="text-[9px] font-semibold tracking-[0.16em] uppercase leading-none"
-                    style={{ color: theme.sidebarText, opacity: 0.65 }}
+                    style={{ color: theme.sidebarText, opacity: 0.65, fontFamily: theme.fontSans }}
                   >
-                    Admin
+                    Studio
                   </p>
                   <p
                     className="font-semibold text-[15px] leading-tight truncate mt-0.5"
@@ -731,20 +792,27 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
             </div>
           </header>
 
-          {/* key forces page chrome to re-read ADMIN tokens after palette change */}
           <div
             className="flex-1 min-w-0 admin-content"
             key={paletteId}
-            style={{
-              fontFamily: theme.fontSans,
-            }}
+            style={{ fontFamily: theme.fontSans }}
           >
             <style>{`
+              .admin-shell {
+                --admin-font-serif: ${theme.fontSerif};
+                --admin-font-sans: ${theme.fontSans};
+                --admin-radius: ${theme.radius};
+              }
+              .admin-shell,
+              .admin-content {
+                font-family: var(--admin-font-sans) !important;
+              }
               .admin-shell .font-serif,
               .admin-content h1,
               .admin-content h2,
-              .admin-content h3 {
-                font-family: var(--admin-font-serif, ${theme.fontSerif}) !important;
+              .admin-content h3,
+              .admin-content .font-serif {
+                font-family: var(--admin-font-serif) !important;
               }
             `}</style>
             {children}

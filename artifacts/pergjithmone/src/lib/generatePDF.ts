@@ -87,25 +87,74 @@ function roundRect(
   ctx.closePath();
 }
 
-// ── Simple word-wrap ─────────────────────────────────────────────────────────
-function wrapLines(ctx: CanvasRenderingContext2D, text: string, maxW: number): string[] {
+// ── Simple word-wrap (letterSpacing-aware — matches Konva Text) ─────────────
+function measureLineWidth(ctx: CanvasRenderingContext2D, text: string, letterSpacing: number): number {
+  if (!text) return 0;
+  if (!letterSpacing) return ctx.measureText(text).width;
+  const chars = [...text];
+  let w = 0;
+  for (let i = 0; i < chars.length; i++) {
+    w += ctx.measureText(chars[i]).width;
+    if (i < chars.length - 1) w += letterSpacing;
+  }
+  return w;
+}
+
+function wrapLines(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxW: number,
+  letterSpacing = 0,
+): string[] {
   const paragraphs = text.split('\n');
   const out: string[] = [];
   for (const para of paragraphs) {
+    if (!para) { out.push(''); continue; }
     const words = para.split(' ');
     let line = '';
     for (const word of words) {
       const test = line ? `${line} ${word}` : word;
-      if (ctx.measureText(test).width <= maxW) {
+      if (measureLineWidth(ctx, test, letterSpacing) <= maxW || !line) {
         line = test;
+        if (measureLineWidth(ctx, line, letterSpacing) > maxW && [...line].length > 1) {
+          let chunk = '';
+          for (const ch of [...line]) {
+            const next = chunk + ch;
+            if (chunk && measureLineWidth(ctx, next, letterSpacing) > maxW) {
+              out.push(chunk);
+              chunk = ch;
+            } else {
+              chunk = next;
+            }
+          }
+          line = chunk;
+        }
       } else {
-        if (line) out.push(line);
+        out.push(line);
         line = word;
       }
     }
     out.push(line);
   }
   return out;
+}
+
+function drawSpacedText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  letterSpacing: number,
+) {
+  if (!letterSpacing) {
+    ctx.fillText(text, x, y);
+    return;
+  }
+  let cursor = x;
+  for (const ch of [...text]) {
+    ctx.fillText(ch, cursor, y);
+    cursor += ctx.measureText(ch).width + letterSpacing;
+  }
 }
 
 // ── Render one page to a JPEG data-URL ──────────────────────────────────────
@@ -229,6 +278,7 @@ async function renderPage(elements: PdfElement[], canvasH: number): Promise<stri
 
     // ── Text ───────────────────────────────────────────────────────────────
     else if (el.type === 'text' && el.text) {
+      // Match KonvaText: padding=6, verticalAlign=top, wrap=word, letterSpacing.
       const pad       = 6;
       const fontSize  = el.fontSize  ?? 20;
       const lh        = el.lineHeight ?? 1.2;
@@ -236,8 +286,8 @@ async function renderPage(elements: PdfElement[], canvasH: number): Promise<stri
       const style     = el.fontStyle  ?? 'normal';
       const color     = el.fill       ?? '#1a1a1a';
       const alignment = el.align      ?? 'center';
+      const letterSpacing = el.letterSpacing ?? 0;
 
-      // Build Canvas font string
       const isBold   = style.includes('bold');
       const isItalic = style.includes('italic');
       const fontStr  = `${isItalic ? 'italic ' : ''}${isBold ? 'bold ' : ''}${fontSize}px ${family}`;
@@ -245,29 +295,26 @@ async function renderPage(elements: PdfElement[], canvasH: number): Promise<stri
       ctx.fillStyle    = color;
       ctx.textBaseline = 'top';
 
-      if (el.letterSpacing) ctx.letterSpacing = `${el.letterSpacing}px`;
-
-      const maxW = el.w - pad * 2;
-      const lines = wrapLines(ctx, el.text, maxW);
+      const maxW = Math.max(1, el.w - pad * 2);
+      const lines = wrapLines(ctx, el.text, maxW, letterSpacing);
       const lineH = fontSize * lh;
 
-      // Clip to element bounds
       ctx.save();
       ctx.beginPath();
-      ctx.rect(el.x, el.y, el.w, el.h);
+      ctx.rect(el.x - 1, el.y - 1, el.w + 2, el.h + 2);
       ctx.clip();
 
       let startY = el.y + pad;
       for (const line of lines) {
+        if (startY >= el.y + el.h) break;
+        const lineW = measureLineWidth(ctx, line, letterSpacing);
         let x = el.x + pad;
-        if (alignment === 'center') x = el.x + el.w / 2 - ctx.measureText(line).width / 2;
-        if (alignment === 'right')  x = el.x + el.w - pad - ctx.measureText(line).width;
-        ctx.fillText(line, x, startY);
+        if (alignment === 'center') x = el.x + (el.w - lineW) / 2;
+        if (alignment === 'right')  x = el.x + el.w - pad - lineW;
+        drawSpacedText(ctx, line, x, startY, letterSpacing);
         startY += lineH;
-        if (startY > el.y + el.h) break;
       }
       ctx.restore();
-      ctx.letterSpacing = '0px';
     }
 
     // Placeholders: render as empty warm box so PDF looks intentional

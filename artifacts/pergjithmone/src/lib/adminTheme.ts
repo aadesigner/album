@@ -9,6 +9,8 @@ export type AdminTokens = {
   sidebarTextActive: string;
   /** Hairline rules inside the sidebar / mobile bar */
   sidebarLine: string;
+  /** Optional soft wash behind the sidebar (CSS gradient) */
+  sidebarWash: string;
   accent: string;
   accentSoft: string;
   accentDeep: string;
@@ -18,10 +20,14 @@ export type AdminTokens = {
   line: string;
   success: string;
   warn: string;
-  /** Display headings (maps to --admin-font-serif) */
+  /** Corner radius used by the shell chrome */
+  radius: string;
+  /** Display / headings */
   fontSerif: string;
-  /** UI / body (maps to --admin-font-sans) */
+  /** UI / body */
   fontSans: string;
+  /** Human-readable type pair for the picker */
+  typePair: string;
   /** Back-compat aliases used across admin pages */
   blush: string;
   blushSoft: string;
@@ -30,29 +36,39 @@ export type AdminTokens = {
 
 export type AdminPaletteId =
   | 'standard'
-  | 'blush'
-  | 'lilac'
-  | 'petal'
-  | 'cream'
-  | 'porcelain'
-  | 'sakura'
-  | 'powder';
+  | 'ballet'
+  | 'orchid'
+  | 'honey'
+  | 'ink'
+  | 'matcha'
+  | 'merlot'
+  | 'cloud';
 
 export type AdminPalette = {
   id: AdminPaletteId;
   name: string;
-  /** One-line vibe for the picker */
   tagline: string;
-  /** Short swatch colors for the picker UI [bg, accent, soft] */
+  /** [bg, accent, soft] for swatch strips */
   swatches: [string, string, string];
   tokens: AdminTokens;
 };
 
-const SERIF_PLAYFAIR = "'Playfair Display', Georgia, serif";
-const SERIF_CORMORANT = "'Cormorant Garamond', Georgia, serif";
-const SANS_INTER = "'Inter', system-ui, sans-serif";
-const SANS_RALWAY = "'Raleway', system-ui, sans-serif";
-const SANS_MONTSERRAT = "'Montserrat', system-ui, sans-serif";
+/* Distinct faces — each palette gets a unique pairing so switching themes
+   changes the *voice* of the admin, not just the pink. */
+const FRAUNCES = "'Fraunces', Georgia, serif";
+const INSTRUMENT = "'Instrument Serif', Georgia, serif";
+const LIBRE = "'Libre Baskerville', Georgia, serif";
+const LORA = "'Lora', Georgia, serif";
+const PLAYFAIR = "'Playfair Display', Georgia, serif";
+const CORMORANT = "'Cormorant Garamond', Georgia, serif";
+const OUTFIT = "'Outfit', system-ui, sans-serif";
+const DM_SANS = "'DM Sans', system-ui, sans-serif";
+const JOSEFIN = "'Josefin Sans', system-ui, sans-serif";
+const NUNITO = "'Nunito', system-ui, sans-serif";
+const SPACE = "'Space Grotesk', system-ui, sans-serif";
+const RALEWAY = "'Raleway', system-ui, sans-serif";
+const MONTSERRAT = "'Montserrat', system-ui, sans-serif";
+const INTER = "'Inter', system-ui, sans-serif";
 
 function withAliases(
   t: Omit<AdminTokens, 'blush' | 'blushSoft' | 'blushDeep'>,
@@ -68,226 +84,255 @@ function withAliases(
 export const ADMIN_PALETTES: AdminPalette[] = [
   {
     id: 'standard',
-    name: 'Standard',
-    tagline: 'Soft peony · house look',
-    swatches: ['#FFF6F8', '#E86B84', '#FFE8EE'],
+    name: 'Peony',
+    tagline: 'House default · soft rose',
+    swatches: ['#FFF5F8', '#E25575', '#FFDCE6'],
     tokens: withAliases({
-      bg: '#FFF8FA',
-      sidebar: '#FFF1F5',
-      sidebarHover: '#FFE4EC',
-      sidebarActive: '#FFD6E2',
-      sidebarText: '#9A6474',
-      sidebarTextActive: '#4A2234',
-      sidebarLine: '#F3D4DE',
-      accent: '#E86B84',
-      accentSoft: '#FFE8EE',
-      accentDeep: '#C44D66',
-      ink: '#3A1F2C',
-      muted: '#8B6572',
+      bg: '#FFF7FA',
+      sidebar: '#FFEBF1',
+      sidebarHover: '#FFD9E4',
+      sidebarActive: '#FFC8D8',
+      sidebarText: '#9A5A6C',
+      sidebarTextActive: '#3F1528',
+      sidebarLine: '#F5CDD8',
+      sidebarWash: 'linear-gradient(175deg, #FFE0EA 0%, #FFF0F4 38%, #FFEBF1 100%)',
+      accent: '#E25575',
+      accentSoft: '#FFE3EB',
+      accentDeep: '#C23A58',
+      ink: '#2E1420',
+      muted: '#8A5A68',
       card: '#FFFFFF',
-      line: '#F0D8E0',
+      line: '#F0D4DE',
       success: '#0F766E',
       warn: '#B45309',
-      fontSerif: SERIF_PLAYFAIR,
-      fontSans: SANS_INTER,
+      radius: '1.15rem',
+      fontSerif: FRAUNCES,
+      fontSans: OUTFIT,
+      typePair: 'Fraunces · Outfit',
     }),
   },
   {
-    id: 'blush',
-    name: 'Blush',
-    tagline: 'Dusty rose · warm',
-    swatches: ['#FBF5F2', '#C97B88', '#F5E6E4'],
-    tokens: withAliases({
-      bg: '#FBF7F5',
-      sidebar: '#F8EFEC',
-      sidebarHover: '#F0DFDA',
-      sidebarActive: '#E8D2CC',
-      sidebarText: '#8F6B68',
-      sidebarTextActive: '#4A2E2C',
-      sidebarLine: '#E8D5D0',
-      accent: '#C97B88',
-      accentSoft: '#F5E6E4',
-      accentDeep: '#A85A68',
-      ink: '#3F2A28',
-      muted: '#8A6E6A',
-      card: '#FFFFFF',
-      line: '#EADDD8',
-      success: '#0F766E',
-      warn: '#B45309',
-      fontSerif: SERIF_CORMORANT,
-      fontSans: SANS_RALWAY,
-    }),
-  },
-  {
-    id: 'lilac',
-    name: 'Lilac',
-    tagline: 'Soft violet · dreamy',
-    swatches: ['#F7F4FB', '#A78BBE', '#EDE6F7'],
-    tokens: withAliases({
-      bg: '#F9F6FC',
-      sidebar: '#F3EEF9',
-      sidebarHover: '#E9E0F4',
-      sidebarActive: '#DDD2EC',
-      sidebarText: '#7A6A94',
-      sidebarTextActive: '#3D2F55',
-      sidebarLine: '#DDD0EC',
-      accent: '#A78BBE',
-      accentSoft: '#EDE6F7',
-      accentDeep: '#8569A8',
-      ink: '#2F2545',
-      muted: '#716688',
-      card: '#FFFFFF',
-      line: '#E4DCEF',
-      success: '#0F766E',
-      warn: '#B45309',
-      fontSerif: SERIF_PLAYFAIR,
-      fontSans: SANS_INTER,
-    }),
-  },
-  {
-    id: 'petal',
-    name: 'Petal',
-    tagline: 'Candy pink · playful',
-    swatches: ['#FFF8FB', '#EC6AA8', '#FCE7F3'],
+    id: 'ballet',
+    name: 'Ballet',
+    tagline: 'Tutu pink · airy',
+    swatches: ['#FFF8FC', '#F06BA8', '#FCE4F1'],
     tokens: withAliases({
       bg: '#FFF9FC',
-      sidebar: '#FFF1F7',
-      sidebarHover: '#FCE4EF',
-      sidebarActive: '#F9D0E4',
+      sidebar: '#FFF0F7',
+      sidebarHover: '#FCE0EF',
+      sidebarActive: '#F9CDE4',
       sidebarText: '#A85888',
-      sidebarTextActive: '#6B2148',
-      sidebarLine: '#F5D0E4',
-      accent: '#EC6AA8',
-      accentSoft: '#FCE7F3',
-      accentDeep: '#DB2777',
-      ink: '#4A1D36',
+      sidebarTextActive: '#5C1F48',
+      sidebarLine: '#F5CFE4',
+      sidebarWash: 'linear-gradient(175deg, #FCE4F1 0%, #FFF5FA 45%, #FFF0F7 100%)',
+      accent: '#F06BA8',
+      accentSoft: '#FCE4F1',
+      accentDeep: '#D9488E',
+      ink: '#3A1530',
       muted: '#916078',
       card: '#FFFFFF',
-      line: '#F5D6E6',
+      line: '#F5D6E8',
       success: '#0F766E',
       warn: '#B45309',
-      fontSerif: SERIF_CORMORANT,
-      fontSans: SANS_MONTSERRAT,
+      radius: '1.35rem',
+      fontSerif: JOSEFIN,
+      fontSans: NUNITO,
+      typePair: 'Josefin · Nunito',
     }),
   },
   {
-    id: 'cream',
-    name: 'Cream',
-    tagline: 'Champagne · soft gold',
-    swatches: ['#FBF7F0', '#C9A87C', '#F3EBD8'],
+    id: 'orchid',
+    name: 'Orchid',
+    tagline: 'Muted mauve · dreamy',
+    swatches: ['#F8F4FB', '#9B7BB0', '#EDE4F5'],
     tokens: withAliases({
-      bg: '#FBF8F2',
-      sidebar: '#F7F1E6',
-      sidebarHover: '#EEE4D2',
-      sidebarActive: '#E5D7BE',
-      sidebarText: '#8A7A5E',
-      sidebarTextActive: '#3F3424',
-      sidebarLine: '#E5D7BE',
-      accent: '#C9A87C',
-      accentSoft: '#F3EBD8',
-      accentDeep: '#A88858',
-      ink: '#3A3124',
-      muted: '#7A6E58',
+      bg: '#F9F5FC',
+      sidebar: '#F2EAF8',
+      sidebarHover: '#E8DCF2',
+      sidebarActive: '#DDCEE9',
+      sidebarText: '#7A6890',
+      sidebarTextActive: '#352445',
+      sidebarLine: '#DDD0E8',
+      sidebarWash: 'linear-gradient(175deg, #EDE4F5 0%, #F7F2FB 42%, #F2EAF8 100%)',
+      accent: '#9B7BB0',
+      accentSoft: '#EDE4F5',
+      accentDeep: '#7A5C92',
+      ink: '#281C38',
+      muted: '#6E6280',
       card: '#FFFFFF',
-      line: '#E8DFD0',
+      line: '#E4DAEF',
       success: '#0F766E',
       warn: '#B45309',
-      fontSerif: SERIF_CORMORANT,
-      fontSans: SANS_RALWAY,
+      radius: '1rem',
+      fontSerif: INSTRUMENT,
+      fontSans: DM_SANS,
+      typePair: 'Instrument · DM Sans',
     }),
   },
   {
-    id: 'porcelain',
-    name: 'Porcelain',
-    tagline: 'Clean white · whisper pink',
-    swatches: ['#FAF8F7', '#E8A0B0', '#FCEEF1'],
+    id: 'honey',
+    name: 'Honey',
+    tagline: 'Champagne · rose gold',
+    swatches: ['#FBF6EE', '#C9A06A', '#F3E8D4'],
     tokens: withAliases({
-      bg: '#F7F5F3',
+      bg: '#FBF7F0',
+      sidebar: '#F5ECDE',
+      sidebarHover: '#EDE0CC',
+      sidebarActive: '#E4D3B8',
+      sidebarText: '#8A7358',
+      sidebarTextActive: '#3A2C1C',
+      sidebarLine: '#E5D4BC',
+      sidebarWash: 'linear-gradient(175deg, #F3E8D4 0%, #FAF4EA 40%, #F5ECDE 100%)',
+      accent: '#C9A06A',
+      accentSoft: '#F3E8D4',
+      accentDeep: '#A8824A',
+      ink: '#2E2418',
+      muted: '#7A6A52',
+      card: '#FFFEFB',
+      line: '#E8DDCE',
+      success: '#0F766E',
+      warn: '#B45309',
+      radius: '0.85rem',
+      fontSerif: LIBRE,
+      fontSans: RALEWAY,
+      typePair: 'Libre Baskerville · Raleway',
+    }),
+  },
+  {
+    id: 'ink',
+    name: 'Ink',
+    tagline: 'Editorial · rose stamp',
+    swatches: ['#F4F2F1', '#D46A82', '#F5E6EA'],
+    tokens: withAliases({
+      bg: '#F3F1F0',
       sidebar: '#FFFFFF',
-      sidebarHover: '#F5F0EE',
-      sidebarActive: '#F0E8E6',
-      sidebarText: '#8A7A78',
-      sidebarTextActive: '#3A2E2C',
-      sidebarLine: '#EDE6E3',
-      accent: '#E8A0B0',
-      accentSoft: '#FCEEF1',
-      accentDeep: '#D48496',
-      ink: '#2C2422',
-      muted: '#7A6E6C',
+      sidebarHover: '#F5F1F0',
+      sidebarActive: '#EFE8E6',
+      sidebarText: '#7A7070',
+      sidebarTextActive: '#1A1616',
+      sidebarLine: '#E8E2E0',
+      sidebarWash: 'linear-gradient(180deg, #FFFFFF 0%, #FAF8F7 100%)',
+      accent: '#D46A82',
+      accentSoft: '#F5E6EA',
+      accentDeep: '#B84E66',
+      ink: '#1A1616',
+      muted: '#6E6666',
       card: '#FFFFFF',
-      line: '#E8E2DF',
+      line: '#E4DEDC',
       success: '#0F766E',
       warn: '#B45309',
-      fontSerif: SERIF_PLAYFAIR,
-      fontSans: SANS_INTER,
+      radius: '0.65rem',
+      fontSerif: PLAYFAIR,
+      fontSans: INTER,
+      typePair: 'Playfair · Inter',
     }),
   },
   {
-    id: 'sakura',
-    name: 'Sakura',
-    tagline: 'Cherry soft · fresh',
-    swatches: ['#FFF6F4', '#E88B86', '#FFE8E4'],
+    id: 'matcha',
+    name: 'Matcha',
+    tagline: 'Sage wash · dusty rose',
+    swatches: ['#F4F6F1', '#C97B8A', '#E8EFE3'],
     tokens: withAliases({
-      bg: '#FFF8F6',
-      sidebar: '#FFF2EF',
-      sidebarHover: '#FFE4DE',
-      sidebarActive: '#FFD5CC',
-      sidebarText: '#A86B66',
-      sidebarTextActive: '#5C2E2A',
-      sidebarLine: '#F5D5CE',
-      accent: '#E88B86',
-      accentSoft: '#FFE8E4',
-      accentDeep: '#D46E68',
-      ink: '#3D2422',
-      muted: '#8B6A66',
+      bg: '#F5F7F2',
+      sidebar: '#EBF0E6',
+      sidebarHover: '#DFE8D6',
+      sidebarActive: '#D2DCC8',
+      sidebarText: '#6A7A62',
+      sidebarTextActive: '#2A3224',
+      sidebarLine: '#D4DEC8',
+      sidebarWash: 'linear-gradient(175deg, #E4EDDC 0%, #F2F5EE 40%, #EBF0E6 100%)',
+      accent: '#C97B8A',
+      accentSoft: '#F3E4E8',
+      accentDeep: '#A85A6A',
+      ink: '#243028',
+      muted: '#667060',
       card: '#FFFFFF',
-      line: '#F0DCD8',
-      success: '#0F766E',
+      line: '#DCE4D4',
+      success: '#3F7A5C',
       warn: '#B45309',
-      fontSerif: SERIF_CORMORANT,
-      fontSans: SANS_RALWAY,
+      radius: '1.1rem',
+      fontSerif: LORA,
+      fontSans: OUTFIT,
+      typePair: 'Lora · Outfit',
     }),
   },
   {
-    id: 'powder',
-    name: 'Powder',
-    tagline: 'Sky soft · cool calm',
-    swatches: ['#F5F8FB', '#8BAFCA', '#E4EEF5'],
+    id: 'merlot',
+    name: 'Merlot',
+    tagline: 'Wine blush · rich',
+    swatches: ['#FBF4F5', '#A84D62', '#F3DCE2'],
     tokens: withAliases({
-      bg: '#F5F8FB',
-      sidebar: '#EEF3F8',
-      sidebarHover: '#E0EAF2',
-      sidebarActive: '#D0DEEA',
-      sidebarText: '#6A8094',
-      sidebarTextActive: '#2A3A4A',
-      sidebarLine: '#D0DEEA',
-      accent: '#8BAFCA',
-      accentSoft: '#E4EEF5',
-      accentDeep: '#5A849E',
-      ink: '#243040',
-      muted: '#657888',
+      bg: '#FBF5F6',
+      sidebar: '#F6E8EB',
+      sidebarHover: '#EED6DC',
+      sidebarActive: '#E4C4CC',
+      sidebarText: '#8A5866',
+      sidebarTextActive: '#3A1824',
+      sidebarLine: '#E8CCD4',
+      sidebarWash: 'linear-gradient(175deg, #F3DCE2 0%, #FAF0F2 42%, #F6E8EB 100%)',
+      accent: '#A84D62',
+      accentSoft: '#F3DCE2',
+      accentDeep: '#8A354C',
+      ink: '#2A1218',
+      muted: '#7A5460',
       card: '#FFFFFF',
-      line: '#D8E2EA',
+      line: '#EAD4DA',
       success: '#0F766E',
       warn: '#B45309',
-      fontSerif: SERIF_PLAYFAIR,
-      fontSans: SANS_INTER,
+      radius: '0.95rem',
+      fontSerif: CORMORANT,
+      fontSans: MONTSERRAT,
+      typePair: 'Cormorant · Montserrat',
+    }),
+  },
+  {
+    id: 'cloud',
+    name: 'Cloud',
+    tagline: 'Cool mist · modern',
+    swatches: ['#F3F6F9', '#E07A92', '#E2EAF2'],
+    tokens: withAliases({
+      bg: '#F2F5F8',
+      sidebar: '#E8EEF4',
+      sidebarHover: '#DCE5EE',
+      sidebarActive: '#CEDAE6',
+      sidebarText: '#5A7084',
+      sidebarTextActive: '#1C2834',
+      sidebarLine: '#CDD8E4',
+      sidebarWash: 'linear-gradient(175deg, #DCE6F0 0%, #F0F4F8 40%, #E8EEF4 100%)',
+      accent: '#E07A92',
+      accentSoft: '#F5E4E9',
+      accentDeep: '#C45A72',
+      ink: '#1A2430',
+      muted: '#5A6C7C',
+      card: '#FFFFFF',
+      line: '#D4DEE8',
+      success: '#0F766E',
+      warn: '#B45309',
+      radius: '0.75rem',
+      fontSerif: SPACE,
+      fontSans: DM_SANS,
+      typePair: 'Space Grotesk · DM Sans',
     }),
   },
 ];
 
-/** Bumped when palette ids / shape change (v2 → v3: Standard + typography). */
-export const ADMIN_PALETTE_STORAGE_KEY = 'perg_admin_palette_v3';
+export const ADMIN_PALETTE_STORAGE_KEY = 'perg_admin_palette_v4';
 export const DEFAULT_ADMIN_PALETTE_ID: AdminPaletteId = 'standard';
 
-/** Map legacy stored ids onto the new set. */
 const LEGACY_PALETTE_MAP: Record<string, AdminPaletteId> = {
   peony: 'standard',
-  roseate: 'blush',
-  champagne: 'cream',
-  mist: 'powder',
-  coral: 'sakura',
-  midnight: 'porcelain',
+  roseate: 'ballet',
+  blush: 'ballet',
+  petal: 'ballet',
+  lilac: 'orchid',
+  champagne: 'honey',
+  cream: 'honey',
+  porcelain: 'ink',
+  sakura: 'merlot',
+  mist: 'cloud',
+  powder: 'cloud',
+  coral: 'merlot',
+  midnight: 'ink',
 };
 
 export function getAdminPalette(id: string | null | undefined): AdminPalette {
@@ -298,10 +343,12 @@ export function readStoredAdminPaletteId(): AdminPaletteId {
   try {
     const raw = localStorage.getItem(ADMIN_PALETTE_STORAGE_KEY);
     if (raw && ADMIN_PALETTES.some((p) => p.id === raw)) return raw as AdminPaletteId;
-    // Migrate from v2 key if present
-    const legacy = localStorage.getItem('perg_admin_palette_v2');
-    if (legacy) {
-      const mapped = LEGACY_PALETTE_MAP[legacy] || (ADMIN_PALETTES.some((p) => p.id === legacy) ? legacy as AdminPaletteId : null);
+    for (const key of ['perg_admin_palette_v3', 'perg_admin_palette_v2']) {
+      const legacy = localStorage.getItem(key);
+      if (!legacy) continue;
+      const mapped =
+        LEGACY_PALETTE_MAP[legacy] ||
+        (ADMIN_PALETTES.some((p) => p.id === legacy) ? (legacy as AdminPaletteId) : null);
       if (mapped) {
         localStorage.setItem(ADMIN_PALETTE_STORAGE_KEY, mapped);
         return mapped;
@@ -321,16 +368,20 @@ export function writeStoredAdminPaletteId(id: AdminPaletteId): void {
   }
 }
 
-/** Apply palette tokens onto a shared ADMIN object (in-place) so all pages pick them up on re-render. */
 export function applyAdminTokens(target: AdminTokens, tokens: AdminTokens): void {
   (Object.keys(tokens) as (keyof AdminTokens)[]).forEach((k) => {
     target[k] = tokens[k];
   });
 }
 
-/** Push typography CSS vars onto the admin shell element. */
 export function applyAdminTypography(el: HTMLElement | null, tokens: AdminTokens): void {
   if (!el) return;
   el.style.setProperty('--admin-font-serif', tokens.fontSerif);
   el.style.setProperty('--admin-font-sans', tokens.fontSans);
+  el.style.setProperty('--admin-radius', tokens.radius);
+  el.style.setProperty('--admin-accent', tokens.accent);
+  el.style.setProperty('--admin-accent-soft', tokens.accentSoft);
+  el.style.setProperty('--admin-bg', tokens.bg);
+  el.style.setProperty('--admin-ink', tokens.ink);
+  el.style.setProperty('--admin-line', tokens.line);
 }

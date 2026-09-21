@@ -8,54 +8,79 @@ import { logger } from "./logger";
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 
 // ── Fonts ────────────────────────────────────────────────────────────────────
-// Prefer bundled fonts next to the API package; fall back to common OS paths.
+// Same faces as the Konva editor so wrap width / glyph metrics match.
 let fontsRegistered = false;
 function ensureFonts() {
   if (fontsRegistered) return;
   fontsRegistered = true;
 
-  const bundled = [
-    [path.join(MODULE_DIR, "..", "assets", "fonts", "DejaVuSerif.ttf"), "DejaVu Serif"],
-    [path.join(MODULE_DIR, "..", "assets", "fonts", "DejaVuSerif-Bold.ttf"), "DejaVu Serif"],
-    [path.join(MODULE_DIR, "..", "assets", "fonts", "DejaVuSans.ttf"), "DejaVu Sans"],
-    [path.join(MODULE_DIR, "..", "assets", "fonts", "DejaVuSans-Bold.ttf"), "DejaVu Sans"],
-    [path.join(process.cwd(), "assets", "fonts", "DejaVuSerif.ttf"), "DejaVu Serif"],
-    [path.join(process.cwd(), "assets", "fonts", "DejaVuSans.ttf"), "DejaVu Sans"],
-  ] as const;
+  const fontDirs = [
+    path.join(MODULE_DIR, "assets", "fonts"),
+    path.join(MODULE_DIR, "..", "assets", "fonts"),
+    path.join(process.cwd(), "assets", "fonts"),
+    path.join(process.cwd(), "artifacts", "api-server", "assets", "fonts"),
+  ];
+
+  const faces: [string, string][] = [
+    ["GreatVibes-Regular.ttf", "Great Vibes"],
+    ["LondrinaSolid-Regular.ttf", "Londrina Solid"],
+    ["Pacifico-Regular.ttf", "Pacifico"],
+    ["DancingScript-Regular.ttf", "Dancing Script"],
+    ["PlayfairDisplay-Regular.ttf", "Playfair Display"],
+    ["PlayfairDisplay-Italic.ttf", "Playfair Display"],
+    ["CormorantGaramond-Regular.ttf", "Cormorant Garamond"],
+    ["CormorantGaramond-Italic.ttf", "Cormorant Garamond"],
+    ["Raleway-Regular.ttf", "Raleway"],
+    ["Montserrat-Regular.ttf", "Montserrat"],
+    ["DejaVuSerif.ttf", "DejaVu Serif"],
+    ["DejaVuSerif-Bold.ttf", "DejaVu Serif"],
+    ["DejaVuSans.ttf", "DejaVu Sans"],
+    ["DejaVuSans-Bold.ttf", "DejaVu Sans"],
+    ["DejaVuSerif.ttf", "Georgia"],
+    ["DejaVuSans.ttf", "Arial"],
+  ];
+
+  for (const dir of fontDirs) {
+    for (const [file, family] of faces) {
+      const full = path.join(dir, file);
+      try {
+        if (fs.existsSync(full)) GlobalFonts.registerFromPath(full, family);
+      } catch (err) {
+        logger.warn({ err, file: full }, "Failed to register PDF render font");
+      }
+    }
+  }
 
   const system: [string, string][] = [
     ["/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf", "DejaVu Serif"],
     ["/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf", "DejaVu Serif"],
     ["/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "DejaVu Sans"],
     ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", "DejaVu Sans"],
-    ["C:/Windows/Fonts/georgia.ttf", "DejaVu Serif"],
-    ["C:/Windows/Fonts/arial.ttf", "DejaVu Sans"],
+    ["C:/Windows/Fonts/georgia.ttf", "Georgia"],
+    ["C:/Windows/Fonts/arial.ttf", "Arial"],
   ];
-
-  for (const [file, family] of [...bundled, ...system]) {
+  for (const [file, family] of system) {
     try {
       if (fs.existsSync(file)) GlobalFonts.registerFromPath(file, family);
-    } catch (err) {
-      logger.warn({ err, file }, "Failed to register PDF render font");
+    } catch {
+      // ignore
     }
   }
 }
 
 function resolveFontFamily(family?: string): string {
   const f = (family || "").toLowerCase();
-  if (
-    f.includes("georgia") ||
-    f.includes("playfair") ||
-    f.includes("cormorant") ||
-    f.includes("times") ||
-    f.includes("serif") ||
-    f.includes("vibes") ||
-    f.includes("script") ||
-    f.includes("pacifico") ||
-    f.includes("dancing")
-  ) {
-    return "DejaVu Serif";
-  }
+  if (f.includes("great vibes") || f.includes("greatvibes")) return "Great Vibes";
+  if (f.includes("londrina")) return "Londrina Solid";
+  if (f.includes("pacifico")) return "Pacifico";
+  if (f.includes("dancing")) return "Dancing Script";
+  if (f.includes("playfair")) return "Playfair Display";
+  if (f.includes("cormorant")) return "Cormorant Garamond";
+  if (f.includes("raleway")) return "Raleway";
+  if (f.includes("montserrat")) return "Montserrat";
+  if (f.includes("georgia") || f.includes("times")) return "Georgia";
+  if (f.includes("arial") || f.includes("helvetica")) return "Arial";
+  if (f.includes("serif") || f.includes("script") || f.includes("vibes")) return "DejaVu Serif";
   return "DejaVu Sans";
 }
 
@@ -154,28 +179,87 @@ function roundRectPath(
   ctx.closePath();
 }
 
+/** Width of a string including letterSpacing (Konva-compatible). */
+function measureLineWidth(
+  ctx: import("@napi-rs/canvas").SKRSContext2D,
+  text: string,
+  letterSpacing: number,
+): number {
+  if (!text) return 0;
+  if (!letterSpacing) return ctx.measureText(text).width;
+  const chars = [...text];
+  let w = 0;
+  for (let i = 0; i < chars.length; i++) {
+    w += ctx.measureText(chars[i]).width;
+    if (i < chars.length - 1) w += letterSpacing;
+  }
+  return w;
+}
+
+/**
+ * Word-wrap matching Konva Text (wrap="word", padding inset).
+ * MUST honour letterSpacing — cover titles use 4–12px tracking; ignoring it
+ * packs too many glyphs per line and the clip rect crops them.
+ */
 function wrapLines(
   ctx: import("@napi-rs/canvas").SKRSContext2D,
   text: string,
   maxW: number,
+  letterSpacing = 0,
 ): string[] {
   const paragraphs = text.split("\n");
   const out: string[] = [];
   for (const para of paragraphs) {
+    if (!para) {
+      out.push("");
+      continue;
+    }
     const words = para.split(" ");
     let line = "";
     for (const word of words) {
       const test = line ? `${line} ${word}` : word;
-      if (ctx.measureText(test).width <= maxW) {
+      if (measureLineWidth(ctx, test, letterSpacing) <= maxW || !line) {
         line = test;
+        // Break a single overlong token so the rest of the paragraph can wrap.
+        if (measureLineWidth(ctx, line, letterSpacing) > maxW && [...line].length > 1) {
+          let chunk = "";
+          for (const ch of [...line]) {
+            const next = chunk + ch;
+            if (chunk && measureLineWidth(ctx, next, letterSpacing) > maxW) {
+              out.push(chunk);
+              chunk = ch;
+            } else {
+              chunk = next;
+            }
+          }
+          line = chunk;
+        }
       } else {
-        if (line) out.push(line);
+        out.push(line);
         line = word;
       }
     }
     out.push(line);
   }
   return out;
+}
+
+function drawSpacedText(
+  ctx: import("@napi-rs/canvas").SKRSContext2D,
+  text: string,
+  x: number,
+  y: number,
+  letterSpacing: number,
+) {
+  if (!letterSpacing) {
+    ctx.fillText(text, x, y);
+    return;
+  }
+  let cursor = x;
+  for (const ch of [...text]) {
+    ctx.fillText(ch, cursor, y);
+    cursor += ctx.measureText(ch).width + letterSpacing;
+  }
 }
 
 function designAssetDirs(): string[] {
@@ -404,6 +488,7 @@ async function renderPageToCanvas(
         ctx.strokeRect(el.x + 1, el.y + 1, el.w - 2, el.h - 2);
       }
     } else if (el.type === "text" && el.text) {
+      // Match KonvaText: padding=6, verticalAlign=top, wrap=word, letterSpacing.
       const pad = 6;
       const fontSize = el.fontSize ?? 20;
       const lh = el.lineHeight ?? 1.2;
@@ -419,37 +504,29 @@ async function renderPageToCanvas(
       ctx.fillStyle = color;
       ctx.textBaseline = "top";
 
-      const maxW = el.w - pad * 2;
-      const lines = wrapLines(ctx, el.text, maxW);
+      const maxW = Math.max(1, el.w - pad * 2);
+      const lines = wrapLines(ctx, el.text, maxW, letterSpacing);
       const lineH = fontSize * lh;
 
       ctx.save();
+      // Clip to the text box like Konva — but leave a tiny bleed so antialiased
+      // edges / italic overhang aren't shaved off.
       ctx.beginPath();
-      ctx.rect(el.x, el.y, el.w, el.h);
+      ctx.rect(el.x - 1, el.y - 1, el.w + 2, el.h + 2);
       ctx.clip();
 
       let startY = el.y + pad;
       for (const line of lines) {
-        if (letterSpacing) {
-          const chars = [...line];
-          let totalW = 0;
-          for (const ch of chars) totalW += ctx.measureText(ch).width + letterSpacing;
-          totalW -= letterSpacing;
-          let x = el.x + pad;
-          if (alignment === "center") x = el.x + (el.w - totalW) / 2;
-          if (alignment === "right") x = el.x + el.w - pad - totalW;
-          for (const ch of chars) {
-            ctx.fillText(ch, x, startY);
-            x += ctx.measureText(ch).width + letterSpacing;
-          }
-        } else {
-          let x = el.x + pad;
-          if (alignment === "center") x = el.x + el.w / 2 - ctx.measureText(line).width / 2;
-          if (alignment === "right") x = el.x + el.w - pad - ctx.measureText(line).width;
-          ctx.fillText(line, x, startY);
-        }
+        // Draw any line that still intersects the box (Konva shows partial last lines).
+        if (startY >= el.y + el.h) break;
+
+        const lineW = measureLineWidth(ctx, line, letterSpacing);
+        let x = el.x + pad;
+        if (alignment === "center") x = el.x + (el.w - lineW) / 2;
+        if (alignment === "right") x = el.x + el.w - pad - lineW;
+
+        drawSpacedText(ctx, line, x, startY, letterSpacing);
         startY += lineH;
-        if (startY > el.y + el.h) break;
       }
       ctx.restore();
     } else if (el.type === "placeholder") {
