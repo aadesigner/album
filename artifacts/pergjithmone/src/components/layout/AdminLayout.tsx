@@ -60,10 +60,13 @@ function PalettePicker({ theme, paletteId, onSelect }: {
 }) {
   return (
     <div className="px-1 mb-3">
-      <p className="text-[10px] font-semibold tracking-[0.14em] uppercase text-white/30 px-2 mb-2">
+      <p
+        className="text-[10px] font-semibold tracking-[0.14em] uppercase px-2 mb-2"
+        style={{ color: theme.sidebarText, opacity: 0.55 }}
+      >
         Theme
       </p>
-      <div className="grid grid-cols-7 gap-1.5 px-1">
+      <div className="grid grid-cols-5 gap-1.5 px-1">
         {ADMIN_PALETTES.map((p) => {
           const active = p.id === paletteId;
           return (
@@ -76,7 +79,7 @@ function PalettePicker({ theme, paletteId, onSelect }: {
               style={{
                 boxShadow: active
                   ? `0 0 0 2px ${theme.sidebar}, 0 0 0 3.5px ${p.tokens.accent}`
-                  : '0 0 0 1px rgba(255,255,255,0.12)',
+                  : `0 0 0 1px ${theme.sidebarLine}`,
               }}
               aria-label={`Palette ${p.name}`}
               aria-pressed={active}
@@ -87,7 +90,7 @@ function PalettePicker({ theme, paletteId, onSelect }: {
                 <span className="w-[28%] h-full" style={{ background: p.swatches[2] }} />
               </span>
               {active && (
-                <span className="absolute inset-0 flex items-center justify-center bg-black/25">
+                <span className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.2)' }}>
                   <Check size={10} className="text-white drop-shadow" strokeWidth={3} />
                 </span>
               )}
@@ -95,7 +98,7 @@ function PalettePicker({ theme, paletteId, onSelect }: {
           );
         })}
       </div>
-      <p className="text-[10px] text-white/35 px-2 mt-1.5 truncate">
+      <p className="text-[10px] px-2 mt-1.5 truncate" style={{ color: theme.sidebarText, opacity: 0.7 }}>
         {ADMIN_PALETTES.find((p) => p.id === paletteId)?.name}
       </p>
     </div>
@@ -121,7 +124,7 @@ function Sidebar({
 
   return (
     <div className="h-full flex flex-col" style={{ background: theme.sidebar }}>
-      <div className="px-5 py-5 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+      <div className="px-5 py-5 flex items-center justify-between" style={{ borderBottom: `1px solid ${theme.sidebarLine}` }}>
         <div className="flex items-center gap-3 min-w-0">
           <div
             className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
@@ -130,10 +133,16 @@ function Sidebar({
             <span className="font-serif text-base font-semibold text-white">P</span>
           </div>
           <div className="min-w-0">
-            <p className="text-[10px] font-semibold tracking-[0.16em] uppercase leading-none text-white/45">
+            <p
+              className="text-[10px] font-semibold tracking-[0.16em] uppercase leading-none"
+              style={{ color: theme.sidebarText, opacity: 0.75 }}
+            >
               Admin
             </p>
-            <p className="text-[15px] font-serif font-semibold leading-tight mt-0.5 text-white truncate">
+            <p
+              className="text-[15px] font-serif font-semibold leading-tight mt-0.5 truncate"
+              style={{ color: theme.sidebarTextActive }}
+            >
               Përgjithmonë
             </p>
           </div>
@@ -142,7 +151,8 @@ function Sidebar({
           <button
             type="button"
             onClick={onClose}
-            className="lg:hidden p-2 rounded-lg transition-colors text-white/50 hover:text-white hover:bg-white/5"
+            className="lg:hidden p-2 rounded-lg transition-colors"
+            style={{ color: theme.sidebarText }}
             aria-label="Close menu"
           >
             <X size={18} />
@@ -153,7 +163,10 @@ function Sidebar({
       <nav className="flex-1 py-4 px-3 overflow-y-auto">
         {navGroups.map((group) => (
           <div key={group.title} className="mb-4">
-            <p className="px-3 mb-1.5 text-[10px] font-semibold tracking-[0.14em] uppercase text-white/30">
+            <p
+              className="px-3 mb-1.5 text-[10px] font-semibold tracking-[0.14em] uppercase"
+              style={{ color: theme.sidebarText, opacity: 0.55 }}
+            >
               {group.title}
             </p>
             <div className="space-y-0.5">
@@ -198,7 +211,7 @@ function Sidebar({
         ))}
       </nav>
 
-      <div className="p-4" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+      <div className="p-4" style={{ borderTop: `1px solid ${theme.sidebarLine}` }}>
         <PalettePicker theme={theme} paletteId={paletteId} onSelect={onPalette} />
 
         <div className="flex items-center gap-3 px-1 mb-3">
@@ -209,15 +222,20 @@ function Sidebar({
             {initials}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold truncate text-white">{user?.name || 'Admin'}</p>
-            <p className="text-[11px] truncate text-white/40">
+            <p className="text-sm font-semibold truncate" style={{ color: theme.sidebarTextActive }}>
+              {user?.name || 'Admin'}
+            </p>
+            <p className="text-[11px] truncate" style={{ color: theme.sidebarText, opacity: 0.7 }}>
               {(user as any)?.phone || 'Administrator'}
             </p>
           </div>
         </div>
         <Link
           href="/"
-          className="flex items-center gap-2.5 px-3 py-2.5 w-full rounded-xl text-[13px] font-medium transition-colors text-white/45 hover:text-white hover:bg-white/5 mb-0.5"
+          className="flex items-center gap-2.5 px-3 py-2.5 w-full rounded-xl text-[13px] font-medium transition-colors mb-0.5"
+          style={{ color: theme.sidebarText }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = theme.sidebarHover; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
         >
           <ExternalLink size={15} />
           View site
@@ -336,19 +354,28 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
         <main className="flex-1 lg:ml-[15.75rem] min-h-[100dvh] flex flex-col min-w-0">
           <div
             className="lg:hidden flex items-center gap-3 px-4 py-3 sticky top-0 z-10"
-            style={{ background: theme.sidebar, borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+            style={{ background: theme.sidebar, borderBottom: `1px solid ${theme.sidebarLine}` }}
           >
             <button
               type="button"
               onClick={() => setSidebarOpen(true)}
-              className="p-2.5 rounded-xl text-white/80 hover:bg-white/5"
+              className="p-2.5 rounded-xl"
+              style={{ color: theme.sidebarTextActive }}
               aria-label="Open menu"
             >
               <Menu size={20} />
             </button>
             <div className="min-w-0 flex-1">
-              <p className="text-[10px] font-semibold tracking-[0.14em] uppercase text-white/40">Admin</p>
-              <p className="font-serif font-semibold text-[15px] leading-tight truncate text-white">
+              <p
+                className="text-[10px] font-semibold tracking-[0.14em] uppercase"
+                style={{ color: theme.sidebarText, opacity: 0.7 }}
+              >
+                Admin
+              </p>
+              <p
+                className="font-serif font-semibold text-[15px] leading-tight truncate"
+                style={{ color: theme.sidebarTextActive }}
+              >
                 Përgjithmonë
               </p>
             </div>
