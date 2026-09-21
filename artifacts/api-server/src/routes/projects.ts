@@ -793,6 +793,25 @@ router.post(
       return;
     }
 
+    if (project.status === "ordered") {
+      res.status(403).json({
+        error: "PDF download is not available for ordered albums.",
+      });
+      return;
+    }
+
+    const [linkedOrder] = await db
+      .select({ id: ordersTable.id })
+      .from(ordersTable)
+      .where(eq(ordersTable.projectId, projectId))
+      .limit(1);
+    if (linkedOrder) {
+      res.status(403).json({
+        error: "PDF download is not available for ordered albums.",
+      });
+      return;
+    }
+
     const shareToken = project.shareToken || uuidv4();
     if (!project.shareToken) {
       await db
@@ -841,7 +860,11 @@ router.get(
     }
 
     const [project] = await db
-      .select({ userId: projectsTable.userId, title: projectsTable.title })
+      .select({
+        userId: projectsTable.userId,
+        title: projectsTable.title,
+        status: projectsTable.status,
+      })
       .from(projectsTable)
       .where(eq(projectsTable.id, projectId))
       .limit(1);
@@ -849,6 +872,27 @@ router.get(
     if (!project || (project.userId !== req.user!.id && req.user!.role !== "admin")) {
       res.status(404).json({ error: "Project not found" });
       return;
+    }
+
+    // Print PDFs are for the studio — clients cannot download after checkout.
+    if (req.user!.role !== "admin") {
+      if (project.status === "ordered") {
+        res.status(403).json({
+          error: "PDF download is not available for ordered albums.",
+        });
+        return;
+      }
+      const [linkedOrder] = await db
+        .select({ id: ordersTable.id })
+        .from(ordersTable)
+        .where(eq(ordersTable.projectId, projectId))
+        .limit(1);
+      if (linkedOrder) {
+        res.status(403).json({
+          error: "PDF download is not available for ordered albums.",
+        });
+        return;
+      }
     }
 
     let filePath: string;

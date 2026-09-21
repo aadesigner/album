@@ -3723,7 +3723,7 @@ export default function Editor() {
   },[]);
 
   const handleDownloadPDF=useCallback(async()=>{
-    if (!project?.pages) return;
+    if (isOrdered || !project?.pages) return;
     const pages=(project.pages as any[]).map(p=>({
       dbId:p.id as number,
       role:(p.pageType==='inside_cover'?'locked_left':p.pageType==='inside_back_cover'?'locked_right':p.pageType) as string,
@@ -3738,7 +3738,7 @@ export default function Editor() {
     } finally {
       setPdfProgress(null);
     }
-  },[project,pagesContent,bookSize]);
+  },[project,pagesContent,bookSize,isOrdered]);
 
   if (isLoading) return (
     <div className="flex flex-col" style={{height:'100dvh',overflow:'hidden',background:'#F4F1EC'}}>
@@ -3868,6 +3868,7 @@ export default function Editor() {
             <Undo2 size={13} className="scale-x-[-1]"/>
             {redoLen>0 && <span className="hidden md:inline tabular-nums">{redoLen}</span>}
           </button>
+          {!isOrdered && (
           <button
             onClick={handleDownloadPDF}
             disabled={!!pdfProgress}
@@ -3876,6 +3877,7 @@ export default function Editor() {
             {pdfProgress ? <Loader2 size={13} className="animate-spin"/> : <FileDown size={13}/>}
             <span>PDF</span>
           </button>
+          )}
           <button
             onClick={()=>setShow3D(v=>!v)}
             title={lang==='sq'?'Pamje 3D':'3D View'}

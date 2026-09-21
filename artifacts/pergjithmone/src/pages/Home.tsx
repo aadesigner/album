@@ -92,17 +92,31 @@ const ALBUM_STYLES: AlbumStyle[] = [
 
 /** Wider Unsplash crop for full-bleed hero BGs. */
 function heroBgUrl(src: string): string {
-  if (!src.includes('images.unsplash.com')) return src;
-  return src
-    .replace(/([?&])w=\d+/, '$1w=1600')
-    .replace(/([?&])q=\d+/, '$1q=82');
+  try {
+    const u = new URL(src);
+    if (!u.hostname.includes('unsplash.com')) return src;
+    u.searchParams.set('w', '1600');
+    u.searchParams.set('q', '80');
+    u.searchParams.set('auto', 'format');
+    u.searchParams.set('fit', 'crop');
+    return u.toString();
+  } catch {
+    return src;
+  }
 }
 
 function starterWashUrl(src: string): string {
-  if (!src.includes('images.unsplash.com')) return src;
-  return src
-    .replace(/([?&])w=\d+/, '$1w=900')
-    .replace(/([?&])q=\d+/, '$1q=75');
+  try {
+    const u = new URL(src);
+    if (!u.hostname.includes('unsplash.com')) return src;
+    u.searchParams.set('w', '1200');
+    u.searchParams.set('q', '72');
+    u.searchParams.set('auto', 'format');
+    u.searchParams.set('fit', 'crop');
+    return u.toString();
+  } catch {
+    return src;
+  }
 }
 const HERO_CYCLE_MS = 3400;
 
@@ -438,27 +452,31 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
           key={`bg-${style.key}`}
           aria-hidden
           className="pointer-events-none absolute inset-0"
-          initial={reduced ? { opacity: 1 } : { opacity: 0, scale: 1.04 }}
-          animate={{ opacity: 1, scale: 1 }}
+          initial={reduced ? { opacity: 1 } : { opacity: 0 }}
+          animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: reduced ? 0 : 0.7, ease: [0.22, 1, 0.36, 1] }}
-          style={{
-            backgroundImage: `url(${heroBgUrl(style.img)})`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-          }}
-        />
+          transition={{ duration: reduced ? 0 : 0.65, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <img
+            src={heroBgUrl(style.img)}
+            alt=""
+            decoding="async"
+            fetchPriority="high"
+            className="absolute inset-0 h-full w-full object-cover"
+            style={{ transform: reduced ? undefined : 'scale(1.04)' }}
+          />
+        </motion.div>
       </AnimatePresence>
 
-      {/* Readable wash + ambient tint */}
+      {/* Light wash — keeps type readable without hiding the photo */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0"
         style={{
           background: `
-            linear-gradient(105deg, rgba(6,5,4,0.88) 0%, rgba(6,5,4,0.55) 42%, rgba(6,5,4,0.28) 68%, rgba(6,5,4,0.5) 100%),
-            linear-gradient(to top, rgba(6,5,4,0.75) 0%, transparent 42%),
-            radial-gradient(90% 70% at 78% 40%, ${style.ambient}99 0%, transparent 62%)
+            linear-gradient(105deg, rgba(8,6,5,0.72) 0%, rgba(8,6,5,0.38) 38%, rgba(8,6,5,0.12) 62%, rgba(8,6,5,0.35) 100%),
+            linear-gradient(to top, rgba(8,6,5,0.55) 0%, transparent 38%),
+            radial-gradient(80% 60% at 78% 42%, ${style.ambient}66 0%, transparent 65%)
           `,
           transition: 'background 0.55s ease',
         }}
