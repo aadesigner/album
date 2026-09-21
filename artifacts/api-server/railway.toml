@@ -1,6 +1,7 @@
 # Railway → api-server → Settings:
 #   Root Directory     = /
 #   Config-as-code     = /artifacts/api-server/railway.toml
+#   Dockerfile path    = Dockerfile.api
 #
 # COST (memory is ~99% of the bill):
 #   1. Settings → Deploy → enable "Serverless" (sleep after ~10min idle).
