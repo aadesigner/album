@@ -565,15 +565,16 @@ export const DESIGNS: DesignDef[] = [
     thumbAccents: [],
     elements: [
       BG('#FEC5D7'),
-      TX('PARIS', 20, 28, DESIGN_W - 40, 120, {
-        fontSize: 92, fill: '#FFFFFF', align: 'center',
-        fontFamily: "'Londrina Solid', cursive", letterSpacing: 8,
+      TX('PARIS', 16, 22, DESIGN_W - 32, 110, {
+        fontSize: 108, fill: '#FFFFFF', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 14,
       }),
-      TX('2022', 388, 148, 170, 52, {
-        fontSize: 34, fill: '#F878C3', align: 'left',
-        fontFamily: "'Londrina Solid', cursive", letterSpacing: 2,
+      TX('2022', 400, 132, 170, 48, {
+        fontSize: 36, fill: '#F06BAF', align: 'left',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 4,
       }),
-      IMG('/designs/eiffel-tower.png', 95, 120, 410, 640),
+      SH('rect', 250, 128, 36, 3, '#FFFFFF', { opacity: 0.55, strokeWidth: 0 }),
+      IMG('/designs/eiffel-tower.png', 55, 95, 490, 720),
     ],
   },
   {
@@ -585,14 +586,15 @@ export const DESIGNS: DesignDef[] = [
     thumbAccents: [],
     elements: [
       BG('#A83442'),
-      TX('BARCELONA', 12, 42, DESIGN_W - 24, 100, {
-        fontSize: 58, fill: '#FCB426', align: 'center',
-        fontFamily: "'Londrina Solid', cursive", letterSpacing: 4,
+      TX('BARCELONA', 8, 34, DESIGN_W - 16, 96, {
+        fontSize: 68, fill: '#FCB426', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 7,
       }),
-      IMG('/designs/sagrada-familia.png', 70, 160, 460, 520),
-      TX('2026', 180, 718, 240, 52, {
-        fontSize: 32, fill: '#FCB426', align: 'center',
-        fontFamily: "'Londrina Solid', cursive", letterSpacing: 3,
+      SH('rect', 220, 128, 160, 3, '#FCB426', { opacity: 0.7, strokeWidth: 0 }),
+      IMG('/designs/sagrada-familia.png', 35, 130, 530, 600),
+      TX('2026', 170, 732, 260, 48, {
+        fontSize: 38, fill: '#FCB426', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 6,
       }),
     ],
   },
