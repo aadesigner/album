@@ -1,7 +1,14 @@
-# Railway pergjithmone (frontend) service:
-#   Root Directory = /
-#   Config-as-code  = /artifacts/pergjithmone/railway.toml
-FROM node:22-bookworm-slim
+# Railway pergjithmone (frontend):
+#   Root Directory     = /   (repo root — NOT artifacts/pergjithmone)
+#   Builder            = Dockerfile
+#   Dockerfile path    = Dockerfile.web
+#   Config file        = /artifacts/pergjithmone/railway.toml  (or clear it)
+#   Custom Start Command = node /app/server.mjs
+#
+# Runtime layout is ALWAYS:
+#   /app/server.mjs
+#   /app/dist/public/...
+FROM node:22-bookworm-slim AS build
 WORKDIR /app
 
 ENV CI=true \
@@ -21,15 +28,21 @@ COPY attached_assets ./attached_assets
 
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @workspace/pergjithmone build
+# Fail the build early if the static output is missing
+RUN test -f /app/artifacts/pergjithmone/dist/public/index.html
+RUN test -f /app/artifacts/pergjithmone/server.mjs
 
-# Primary layout (WORKDIR for CMD)
-WORKDIR /app/artifacts/pergjithmone
+FROM node:22-bookworm-slim AS runner
+WORKDIR /app
 
-# Compat paths so either start command works:
-#   node /app/server.mjs
-#   node /app/artifacts/pergjithmone/server.mjs
-RUN cp /app/artifacts/pergjithmone/server.mjs /app/server.mjs \
-  && ln -sfn /app/artifacts/pergjithmone/dist /app/dist
+ENV NODE_ENV=production \
+    BASE_PATH=/ \
+    NODE_OPTIONS="--max-old-space-size=192"
+
+COPY --from=build /app/artifacts/pergjithmone/dist ./dist
+COPY --from=build /app/artifacts/pergjithmone/server.mjs ./server.mjs
+
+RUN test -f /app/server.mjs && test -f /app/dist/public/index.html
 
 EXPOSE 8080
-CMD ["node", "server.mjs"]
+CMD ["node", "/app/server.mjs"]
