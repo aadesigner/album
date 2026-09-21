@@ -1,16 +1,27 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo, useDeferredValue, startTransition } from 'react';
-import { Stage, Layer, Rect, Text as KonvaText, Image as KonvaImage, Transformer } from 'react-konva';
-import { useGetProject, useCreateOrder, useListBookSizes, getGetProjectQueryKey, getListProjectsQueryKey } from '@workspace/api-client-react-tsconfig';
+import { Stage, Layer, Rect, Text as KonvaText, Image as KonvaImage, Transformer, Line, Group } from 'react-konva';
+import { useGetProject, useCreateOrder, useListBookSizes, useGetAppSettings, getGetProjectQueryKey, getListProjectsQueryKey } from '@workspace/api-client-react-tsconfig';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, ShoppingBag, LayoutTemplate, Image as ImageIcon, Type,
   Trash2, Check, X, Plus, Camera, Lock, Loader2, Wand2, Box, Undo2, FileDown,
+  Palette, Droplets,
 } from 'lucide-react';
 import { generatePDF } from '@/lib/generatePDF';
 import { Link, useRoute } from 'wouter';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 const Book3DViewer = React.lazy(() =>
   import('./Book3DViewer').then(m => ({ default: m.Book3DViewer }))
 );
@@ -26,16 +37,20 @@ export {
   DESIGN_W, DESIGN_H, LAYOUTS, DESIGNS, CATEGORY_LABELS, LAYOUT_CATEGORY_LABELS,
   getCanvasHeight, scaleElementsToCanvas, elementsWithCoverWallpaper,
   BLANK_STARTER_ID, blankFrontCoverElements, blankBackCoverElements,
+  coverCropRect,
   type EditorElement, type DE, type DesignDef, type LayoutZone, type LayoutDef,
 } from '@/lib/designs';
 import {
   DESIGN_W, DESIGN_H, LAYOUTS, DESIGNS, CATEGORY_LABELS, LAYOUT_CATEGORY_LABELS,
   getCanvasHeight, scaleElementsToCanvas, elementsWithCoverWallpaper,
   BLANK_STARTER_ID, blankFrontCoverElements, blankBackCoverElements,
-  type EditorElement, type DE, type DesignDef, type LayoutZone,
+  coverCropRect, imageFrameCoverFit, imageFrameFocusFromOffset, applyDesignOverrides,
+  type EditorElement, type DE, type DesignDef, type LayoutZone, type DesignOverrides,
 } from '@/lib/designs';
 import { PageThumb } from '@/components/PageThumb';
 import { compressImageFile, ImageTooLargeError } from '@/lib/imageCompression';
+import { applyCoverBackground, coverBgMode, type CoverBgMode } from '@/lib/coverBackground';
+import { useEditorFontsReady, ensureEditorFonts } from '@/lib/editorFonts';
 
 const PAPER_COLOR = '#FEFDF9';
 const SPINE_W = 1;
@@ -50,6 +65,33 @@ function dragBoundBox(pos: { x: number; y: number }, w: number, h: number, canva
     y: Math.min(Math.max(pos.y, 0), maxY),
   };
 }
+
+const GUIDE_SNAP_PX = 5;
+
+/** Clamp + snap element center to page midlines; returns guide flags for UI. */
+function dragBoundWithGuides(
+  pos: { x: number; y: number },
+  w: number, h: number, canvasH: number,
+): { x: number; y: number; guideV: boolean; guideH: boolean } {
+  let { x, y } = dragBoundBox(pos, w, h, canvasH);
+  const midX = DESIGN_W / 2;
+  const midY = canvasH / 2;
+  let guideV = false;
+  let guideH = false;
+  if (Math.abs(x + w / 2 - midX) <= GUIDE_SNAP_PX) {
+    x = midX - w / 2;
+    guideV = true;
+  }
+  if (Math.abs(y + h / 2 - midY) <= GUIDE_SNAP_PX) {
+    y = midY - h / 2;
+    guideH = true;
+  }
+  // Re-clamp after snap (edge cases when w/h > canvas)
+  const clamped = dragBoundBox({ x, y }, w, h, canvasH);
+  return { ...clamped, guideV, guideH };
+}
+
+type GuideState = { v: boolean; h: boolean } | null;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -76,15 +118,60 @@ const FONTS = [
   { label: 'Cormorant',  value: "'Cormorant Garamond', serif" },
   { label: 'Raleway',    value: "'Raleway', sans-serif" },
   { label: 'Montserrat', value: "'Montserrat', sans-serif" },
+  { label: 'Arial',      value: 'Arial, Helvetica, sans-serif' },
+  { label: 'Londrina',   value: "'Londrina Solid', cursive" },
   { label: 'Dancing',    value: "'Dancing Script', cursive" },
   { label: 'Vibes',      value: "'Great Vibes', cursive" },
   { label: 'Pacifico',   value: "'Pacifico', cursive" },
 ];
 
+/** Map design font stacks onto FONTS option values so the toolbar <select>
+ *  always has a matching option (mismatched values made the browser jump to Georgia). */
+function normalizeFontFamily(ff?: string | null): string {
+  const raw = (ff || 'Georgia, serif').trim();
+  if (FONTS.some(f => f.value === raw)) return raw;
+  const lower = raw.toLowerCase();
+  const byPrimary = FONTS.find(f => {
+    const primary = f.value.split(',')[0].replace(/['"]/g, '').trim().toLowerCase();
+    return primary.length > 0 && lower.includes(primary);
+  });
+  if (byPrimary) return byPrimary.value;
+  if (lower.includes('great vibes') || lower.includes('segoescript') || lower.includes('segoe script')) {
+    return "'Great Vibes', cursive";
+  }
+  if (lower.includes('londrina')) return "'Londrina Solid', cursive";
+  if (lower.includes('dancing')) return "'Dancing Script', cursive";
+  if (lower.includes('pacifico')) return "'Pacifico', cursive";
+  if (lower.includes('playfair')) return "'Playfair Display', serif";
+  if (lower.includes('cormorant')) return "'Cormorant Garamond', serif";
+  if (lower.includes('raleway')) return "'Raleway', sans-serif";
+  if (lower.includes('montserrat')) return "'Montserrat', sans-serif";
+  if (lower.includes('arial') || lower.includes('helvetica') || lower.includes('impact') || lower === 'sans-serif') {
+    return 'Arial, Helvetica, sans-serif';
+  }
+  if (lower.includes('georgia') || lower.includes('times')) return 'Georgia, serif';
+  if (lower.includes('mono')) return "'Montserrat', sans-serif";
+  return 'Georgia, serif';
+}
+
+/** Script faces ship as a single cut — Konva "italic" looks for a missing
+ *  italic file and silently falls back (often to Georgia), so the text jumps
+ *  when the HTML editor overlay (which synthesizes oblique) appears. */
+function canvasFontStyle(ff?: string | null, fs?: string | null): string {
+  const family = normalizeFontFamily(ff).toLowerCase();
+  const isScript =
+    family.includes('great vibes') ||
+    family.includes('dancing script') ||
+    family.includes('pacifico');
+  const bold = !!fs?.includes('bold');
+  if (isScript) return bold ? 'bold' : 'normal';
+  return fs || 'normal';
+}
+
 // Preset text colours shown in the inline toolbar
 const TEXT_COLORS = [
   '#FFFFFF','#1A1A1A','#555555','#AAAAAA',
-  '#D4AF37','#E63946','#457B9D','#2A9D8F','#F4A261',
+  '#D4AF37','#FCB426','#E63946','#F878C3','#457B9D','#2A9D8F','#F4A261',
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -142,168 +229,542 @@ function buildSpreads(pages: any[], lang: 'sq'|'en' = 'sq'): SpreadDef[] {
 // Konva element renderers
 // ─────────────────────────────────────────────────────────────────────────────
 
-function KBgEl({el,canvasH}: {el: EditorElement; canvasH:number}) {
+function KBgEl({el,canvasH,interactive,isSelected,onChange,onGestureStart}: {
+  el: EditorElement; canvasH:number;
+  interactive?: boolean; isSelected?: boolean;
+  onChange?: (c: Partial<EditorElement>) => void;
+  onGestureStart?: () => void;
+}) {
   const [img,setImg]=useState<HTMLImageElement>();
+  const panStartRef=useRef<{focusX:number;focusY:number;px:number;py:number}|null>(null);
   useEffect(()=>{
     if (!el.src) { setImg(undefined); return; }
     const i=new window.Image(); i.crossOrigin='anonymous';
     i.onload=()=>setImg(i); i.onerror=()=>setImg(undefined); i.src=el.src;
   },[el.src]);
 
-  // Wallpaper backgrounds (travel/location designs): object-fit cover the page.
-  if (el.src && img) {
-    const sx=DESIGN_W/img.naturalWidth, sy=canvasH/img.naturalHeight;
-    const s=Math.max(sx,sy);
-    const cw=DESIGN_W/s, ch=canvasH/s;
-    return <KonvaImage image={img} x={0} y={0} width={DESIGN_W} height={canvasH}
-      crop={{x:(img.naturalWidth-cw)/2,y:(img.naturalHeight-ch)/2,width:cw,height:ch}}
-      listening={false}/>;
-  }
+  const focusX = el.cropFocusX ?? 0.5;
+  const focusY = el.cropFocusY ?? 0.5;
+  const cover = (el.src && img)
+    ? coverCropRect(img.naturalWidth, img.naturalHeight, DESIGN_W, canvasH, focusX, focusY)
+    : null;
+  // Only listen when already selected (for photo pan). Never steal clicks from
+  // text/shapes/images — cover bg is selected via the Background chip only.
+  const canPan = !!(interactive && isSelected && cover && onChange && (cover.maxX > 1 || cover.maxY > 1));
+  const listen = canPan;
 
-  if (el.bgGradientFrom) {
+  let fillNode: React.ReactNode;
+  if (el.src && img && cover) {
+    fillNode = <KonvaImage image={img} x={0} y={0} width={DESIGN_W} height={canvasH}
+      crop={{ x: cover.x, y: cover.y, width: cover.width, height: cover.height }}
+      listening={listen}
+      draggable={listen}
+      dragDistance={3}
+      dragBoundFunc={() => ({ x: 0, y: 0 })}
+      onDragStart={(e: any) => {
+        if (!canPan || !cover) return;
+        onGestureStart?.();
+        const p = e.target.getStage()?.getRelativePointerPosition() ?? e.target.getStage()?.getPointerPosition();
+        panStartRef.current = {
+          focusX: el.cropFocusX ?? 0.5,
+          focusY: el.cropFocusY ?? 0.5,
+          px: p?.x ?? 0,
+          py: p?.y ?? 0,
+        };
+      }}
+      onDragMove={(e: any) => {
+        if (!canPan || !cover || !panStartRef.current) return;
+        e.target.position({ x: 0, y: 0 });
+        const p = e.target.getStage()?.getRelativePointerPosition() ?? e.target.getStage()?.getPointerPosition();
+        if (!p) return;
+        const dx = p.x - panStartRef.current.px;
+        const dy = p.y - panStartRef.current.py;
+        const startCropX = panStartRef.current.focusX * cover.maxX;
+        const startCropY = panStartRef.current.focusY * cover.maxY;
+        const newCropX = Math.min(cover.maxX, Math.max(0, startCropX - dx / cover.scale));
+        const newCropY = Math.min(cover.maxY, Math.max(0, startCropY - dy / cover.scale));
+        e.target.crop({ x: newCropX, y: newCropY, width: cover.width, height: cover.height });
+        e.target.getLayer()?.batchDraw();
+      }}
+      onDragEnd={(e: any) => {
+        e.target.position({ x: 0, y: 0 });
+        if (!canPan || !cover || !panStartRef.current) return;
+        const p = e.target.getStage()?.getRelativePointerPosition() ?? e.target.getStage()?.getPointerPosition();
+        let fx = el.cropFocusX ?? 0.5;
+        let fy = el.cropFocusY ?? 0.5;
+        if (p) {
+          const dx = p.x - panStartRef.current.px;
+          const dy = p.y - panStartRef.current.py;
+          const startCropX = panStartRef.current.focusX * cover.maxX;
+          const startCropY = panStartRef.current.focusY * cover.maxY;
+          const newCropX = Math.min(cover.maxX, Math.max(0, startCropX - dx / cover.scale));
+          const newCropY = Math.min(cover.maxY, Math.max(0, startCropY - dy / cover.scale));
+          fx = cover.maxX <= 0 ? 0.5 : newCropX / cover.maxX;
+          fy = cover.maxY <= 0 ? 0.5 : newCropY / cover.maxY;
+        }
+        onChange?.({ cropFocusX: fx, cropFocusY: fy });
+        panStartRef.current = null;
+      }}
+    />;
+  } else if (el.bgGradientFrom) {
     const ep = el.bgGradientDir==='lr' ? {x:DESIGN_W,y:0}
              : el.bgGradientDir==='diag' ? {x:DESIGN_W,y:canvasH}
              : {x:0,y:canvasH};
-    return <Rect x={0} y={0} width={DESIGN_W} height={canvasH}
+    fillNode = <Rect x={0} y={0} width={DESIGN_W} height={canvasH}
       fillLinearGradientStartPoint={{x:0,y:0}} fillLinearGradientEndPoint={ep}
-      fillLinearGradientColorStops={[0,el.bgGradientFrom,1,el.bgGradientTo||'#fff']} listening={false}/>;
+      fillLinearGradientColorStops={[0,el.bgGradientFrom,1,el.bgGradientTo||'#fff']}
+      listening={false}/>;
+  } else {
+    fillNode = <Rect x={0} y={0} width={DESIGN_W} height={canvasH}
+      fill={el.bgColor||PAPER_COLOR}
+      listening={false}/>;
   }
-  return <Rect x={0} y={0} width={DESIGN_W} height={canvasH} fill={el.bgColor||PAPER_COLOR} listening={false}/>;
+
+  return <>
+    {fillNode}
+    {isSelected && interactive && (
+      <Rect x={0} y={0} width={DESIGN_W} height={canvasH}
+        stroke="#2563EB" strokeWidth={3} dash={[10, 6]} listening={false}/>
+    )}
+  </>;
 }
 
-function KShapeEl({el,isSelected,onSelect,onChange,onGestureStart,onDragActive,shapeRefs,canvasH}: {
+function KShapeEl({el,isSelected,onSelect,onChange,onGestureStart,onDragActive,onGuides,shapeRefs,canvasH}: {
   el: EditorElement; isSelected: boolean; onSelect:()=>void;
   onChange:(c:Partial<EditorElement>)=>void; onGestureStart?:()=>void;
-  onDragActive?:(active:boolean)=>void;
+  onDragActive?:(active:boolean, opts?: { keepTransformer?: boolean })=>void; onGuides?:(g:GuideState)=>void;
   shapeRefs:React.MutableRefObject<Record<string,any>>; canvasH:number;
 }) {
   const cr = el.shapeKind==='circle' ? Math.min(el.w,el.h)/2 : (el.cornerRadius??0);
-  return <Rect ref={(n:any)=>{if(n) shapeRefs.current[el.id]=n;}}
-    x={el.x} y={el.y} width={el.w} height={el.h} fill={el.fill||'transparent'}
+  const transformStartRef = useRef({ w: el.w, h: el.h });
+  // Soft scrims / overlays (city cover vignettes) — visible but not selectable.
+  const decorative = (el.opacity ?? 1) < 0.5 && !(el.strokeWidth);
+  // Transparent fills must still hit-test — otherwise clicks fall through to the cover bg.
+  const visualFill = el.fill && el.fill !== 'transparent' ? el.fill : undefined;
+  const hitFill = visualFill || 'rgba(0,0,0,0.001)';
+  return <Rect ref={(n:any)=>{if(n && !decorative) shapeRefs.current[el.id]=n;}}
+    x={el.x} y={el.y} width={el.w} height={el.h} fill={hitFill}
     stroke={el.strokeColor} strokeWidth={el.strokeWidth||0} dash={el.strokeDash}
     cornerRadius={cr} rotation={el.rotation} opacity={el.opacity??1}
     perfectDrawEnabled={false}
-    onClick={onSelect} onTap={onSelect} draggable={isSelected}
-    dragDistance={14}
-    dragBoundFunc={(pos:any)=>dragBoundBox(pos,el.w,el.h,canvasH)}
-    onDragStart={()=>{onGestureStart?.();onDragActive?.(true);}}
-    onDragEnd={(e:any)=>{
-      const b=dragBoundBox({x:e.target.x(),y:e.target.y()},el.w,el.h,canvasH);
-      e.target.position(b); onChange(b); onDragActive?.(false);
+    listening={!decorative}
+    onMouseDown={(e:any)=>{ if (decorative) return; e.cancelBubble=true; onSelect(); }}
+    onTouchStart={(e:any)=>{ if (decorative) return; e.cancelBubble=true; onSelect(); }}
+    onClick={(e:any)=>{ if (decorative) return; e.cancelBubble=true; onSelect(); }}
+    onTap={(e:any)=>{ if (decorative) return; e.cancelBubble=true; onSelect(); }}
+    draggable={isSelected && !decorative}
+    dragDistance={4}
+    dragBoundFunc={(pos:any)=>{
+      const b=dragBoundWithGuides(pos,el.w,el.h,canvasH);
+      onGuides?.({v:b.guideV,h:b.guideH});
+      return {x:b.x,y:b.y};
     }}
-    onTransformStart={()=>{onGestureStart?.();onDragActive?.(true);}}
+    onDragStart={()=>{onGestureStart?.();onDragActive?.(true,{keepTransformer:true});}}
+    onDragEnd={(e:any)=>{
+      const b=dragBoundWithGuides({x:e.target.x(),y:e.target.y()},el.w,el.h,canvasH);
+      e.target.position({x:b.x,y:b.y}); onChange({x:b.x,y:b.y}); onDragActive?.(false); onGuides?.(null);
+    }}
+    onTransformStart={()=>{
+      transformStartRef.current={w:el.w,h:el.h};
+      onGestureStart?.();onDragActive?.(true,{keepTransformer:true});
+    }}
+    onTransform={(e:any)=>{
+      const n=e.target;
+      const nw=Math.max(10, transformStartRef.current.w * n.scaleX());
+      const nh=Math.max(10, transformStartRef.current.h * n.scaleY());
+      n.scaleX(1); n.scaleY(1);
+      n.width(nw); n.height(nh);
+    }}
     onTransformEnd={(e:any)=>{
-      const n=e.target,sx=n.scaleX(),sy=n.scaleY(); n.scaleX(1); n.scaleY(1);
-      const nw=n.width()*sx,nh=n.height()*sy;
+      const n=e.target;
+      n.scaleX(1); n.scaleY(1);
+      const nw=Math.max(10,n.width()||transformStartRef.current.w);
+      const nh=Math.max(10,n.height()||transformStartRef.current.h);
       const b=dragBoundBox({x:n.x(),y:n.y()},nw,nh,canvasH);
-      n.position(b); onChange({...b,w:nw,h:nh,rotation:n.rotation()});
-      onDragActive?.(false);
+      n.position(b); n.width(nw); n.height(nh);
+      onChange({...b,w:nw,h:nh,rotation:n.rotation()});
+      onDragActive?.(false); onGuides?.(null);
     }}/>;
 }
 
-function KImgEl({el,isSelected,onSelect,onChange,onGestureStart,onDragActive,shapeRefs,canvasH}: {
+function KImgEl({el,isSelected,onSelect,onChange,onGestureStart,onDragActive,onGuides,shapeRefs,canvasH,photoAdjust,onTogglePhotoAdjust,onExitPhotoAdjust,onCanPanChange}: {
   el: EditorElement; isSelected:boolean; onSelect:()=>void;
   onChange:(c:Partial<EditorElement>)=>void; onGestureStart?:()=>void;
-  onDragActive?:(active:boolean)=>void;
+  onDragActive?:(active:boolean, opts?: { keepTransformer?: boolean })=>void; onGuides?:(g:GuideState)=>void;
   shapeRefs:React.MutableRefObject<Record<string,any>>; canvasH:number;
+  /** When true, drag pans the photo inside the frame; when false, drag moves the frame. */
+  photoAdjust?: boolean;
+  onTogglePhotoAdjust?: () => void;
+  onExitPhotoAdjust?: () => void;
+  onCanPanChange?: (canPan: boolean) => void;
 }) {
   const [img,setImg]=useState<HTMLImageElement>();
+  const transformStartRef = useRef({ w: el.w, h: el.h });
   useEffect(()=>{
-    if (!el.src) return;
+    if (!el.src) { setImg(undefined); return; }
     const i=new window.Image(); i.crossOrigin='anonymous';
-    i.onload=()=>setImg(i); i.src=el.src;
+    i.onload=()=>setImg(i);
+    i.onerror=()=>setImg(undefined);
+    i.src=el.src;
   },[el.src]);
 
-  // object-fit: cover — crop the image so it fills el.w × el.h with no distortion
-  const coverCrop = img ? (()=>{
-    const sx=el.w/img.naturalWidth, sy=el.h/img.naturalHeight;
-    const s=Math.max(sx,sy);          // scale that makes image cover the box
-    const cw=el.w/s, ch=el.h/s;      // crop region size in image-space
-    return { x:(img.naturalWidth-cw)/2, y:(img.naturalHeight-ch)/2, width:cw, height:ch };
-  })() : undefined;
-
-  // A crisp blue outline directly on the photo so selection reads instantly —
-  // the Transformer's handles alone are easy to miss on a busy photo.
-  const selectionStroke = isSelected
-    ? <Rect x={el.x} y={el.y} width={el.w} height={el.h} rotation={el.rotation}
-        stroke="#2563EB" strokeWidth={2.5} listening={false} cornerRadius={2}/>
+  const fit = img
+    ? imageFrameCoverFit(img.naturalWidth, img.naturalHeight, el.w, el.h, el.cropFocusX ?? 0.5, el.cropFocusY ?? 0.5)
     : null;
+  const canPan = !!fit?.canPan;
 
-  if (!img) return <>
-    <Rect x={el.x} y={el.y} width={el.w} height={el.h} fill="#D0C8BC"
-      rotation={el.rotation} onClick={onSelect} onTap={onSelect} cornerRadius={2}/>
-    {selectionStroke}
-  </>;
-  return <>
-    <KonvaImage ref={(n:any)=>{if(n) shapeRefs.current[el.id]=n;}}
-    image={img} x={el.x} y={el.y} width={el.w} height={el.h} rotation={el.rotation}
-    crop={coverCrop}
-    onClick={onSelect} onTap={onSelect} draggable={isSelected}
-    perfectDrawEnabled={false}
-    dragDistance={14}
-    dragBoundFunc={(pos:any)=>dragBoundBox(pos,el.w,el.h,canvasH)}
-    onDragStart={()=>{onGestureStart?.();onDragActive?.(true);}}
-    onDragEnd={(e:any)=>{
-      const b=dragBoundBox({x:e.target.x(),y:e.target.y()},el.w,el.h,canvasH);
-      e.target.position(b); onChange(b); onDragActive?.(false);
-    }}
-    onTransformStart={()=>{onGestureStart?.();onDragActive?.(true);}}
-    onTransformEnd={(e:any)=>{
-      const n=e.target,sx=n.scaleX(),sy=n.scaleY(); n.scaleX(1); n.scaleY(1);
-      const nw=Math.max(20,n.width()*sx),nh=Math.max(20,n.height()*sy);
-      const b=dragBoundBox({x:n.x(),y:n.y()},nw,nh,canvasH);
-      n.position(b); onChange({...b,w:nw,h:nh,rotation:n.rotation()});
-      onDragActive?.(false);
-    }}/>
-    {selectionStroke}
-  </>;
+  const onCanPanChangeRef = useRef(onCanPanChange);
+  onCanPanChangeRef.current = onCanPanChange;
+  useEffect(() => {
+    if (!img) return;
+    onCanPanChangeRef.current?.(canPan);
+  }, [img, canPan]);
+
+  const onExitPhotoAdjustRef = useRef(onExitPhotoAdjust);
+  onExitPhotoAdjustRef.current = onExitPhotoAdjust;
+  useEffect(() => {
+    if (photoAdjust && img && !canPan) onExitPhotoAdjustRef.current?.();
+  }, [photoAdjust, img, canPan]);
+
+  const panInside = isSelected && !!photoAdjust && canPan;
+  const moveFrame = isSelected && !panInside;
+  const adjustingVisual = panInside;
+
+  const setStageCursor = (cursor: string) => {
+    const stage = shapeRefs.current[el.id]?.getStage?.();
+    const container = stage?.container?.() as HTMLElement | undefined;
+    if (container) container.style.cursor = cursor;
+  };
+
+  const bakeImageFrame = (n: any, sx: number, sy: number) => {
+    const nw = Math.max(20, transformStartRef.current.w * sx);
+    const nh = Math.max(20, transformStartRef.current.h * sy);
+    n.scaleX(1);
+    n.scaleY(1);
+    n.width(nw);
+    n.height(nh);
+    n.clip({ x: 0, y: 0, width: nw, height: nh });
+    // Keep the photo cover-fit in sync while resizing — otherwise the KonvaImage
+    // stays at the old iw/ih until transformEnd and the crop snaps.
+    const live = img
+      ? imageFrameCoverFit(
+          img.naturalWidth, img.naturalHeight, nw, nh,
+          el.cropFocusX ?? 0.5, el.cropFocusY ?? 0.5,
+        )
+      : null;
+    n.getChildren().forEach((c: any) => {
+      const name = typeof c.getClassName === 'function' ? c.getClassName() : '';
+      if (name === 'Rect') {
+        c.width(nw);
+        c.height(nh);
+      } else if (name === 'Image' && live) {
+        c.width(live.iw);
+        c.height(live.ih);
+        c.x(-live.offX);
+        c.y(-live.offY);
+      }
+    });
+    return { nw, nh };
+  };
+
+  if (!img || !fit) return (
+    <Group
+      ref={(n: any) => { if (n) shapeRefs.current[el.id] = n; }}
+      x={el.x} y={el.y} width={el.w} height={el.h} rotation={el.rotation}
+      draggable={isSelected}
+      dragDistance={3}
+      dragBoundFunc={(pos: any) => {
+        const b = dragBoundWithGuides(pos, el.w, el.h, canvasH);
+        onGuides?.({ v: b.guideV, h: b.guideH });
+        return { x: b.x, y: b.y };
+      }}
+      onMouseDown={(e: any) => { e.cancelBubble = true; onSelect(); }}
+      onTouchStart={(e: any) => { e.cancelBubble = true; onSelect(); }}
+      onClick={(e: any) => { e.cancelBubble = true; onSelect(); }}
+      onTap={(e: any) => { e.cancelBubble = true; onSelect(); }}
+      onDragStart={() => { onGestureStart?.(); onDragActive?.(true, { keepTransformer: true }); }}
+      onDragEnd={(e: any) => {
+        const b = dragBoundWithGuides({ x: e.target.x(), y: e.target.y() }, el.w, el.h, canvasH);
+        e.target.position({ x: b.x, y: b.y });
+        onChange({ x: b.x, y: b.y });
+        onDragActive?.(false);
+        onGuides?.(null);
+      }}
+    >
+      <Rect width={el.w} height={el.h} fill="#D0C8BC" cornerRadius={2} />
+      {isSelected && (
+        <Rect width={el.w} height={el.h} stroke="#2563EB" strokeWidth={2.5} listening={false} cornerRadius={2} />
+      )}
+    </Group>
+  );
+
+  const { iw, ih, maxOffX, maxOffY, offX, offY } = fit;
+
+  return (
+    <Group
+      ref={(n: any) => { if (n) shapeRefs.current[el.id] = n; }}
+      x={el.x}
+      y={el.y}
+      width={el.w}
+      height={el.h}
+      rotation={el.rotation}
+      clipX={0}
+      clipY={0}
+      clipWidth={el.w}
+      clipHeight={el.h}
+      onMouseDown={(e: any) => { e.cancelBubble = true; onSelect(); }}
+      onTouchStart={(e: any) => { e.cancelBubble = true; onSelect(); }}
+      onClick={(e: any) => { e.cancelBubble = true; onSelect(); }}
+      onTap={(e: any) => { e.cancelBubble = true; onSelect(); }}
+      onDblClick={(e: any) => {
+        e.cancelBubble = true;
+        if (canPan) onTogglePhotoAdjust?.();
+      }}
+      onDblTap={(e: any) => {
+        e.cancelBubble = true;
+        if (canPan) onTogglePhotoAdjust?.();
+      }}
+      onMouseEnter={() => { if (moveFrame) setStageCursor('move'); }}
+      onMouseLeave={() => setStageCursor('default')}
+      draggable={moveFrame}
+      dragDistance={3}
+      dragBoundFunc={(pos: any) => {
+        const b = dragBoundWithGuides(pos, el.w, el.h, canvasH);
+        onGuides?.({ v: b.guideV, h: b.guideH });
+        return { x: b.x, y: b.y };
+      }}
+      onDragStart={() => {
+        setStageCursor('move');
+        onGestureStart?.();
+        onDragActive?.(true, { keepTransformer: true });
+      }}
+      onDragEnd={(e: any) => {
+        const b = dragBoundWithGuides({ x: e.target.x(), y: e.target.y() }, el.w, el.h, canvasH);
+        e.target.position({ x: b.x, y: b.y });
+        onChange({ x: b.x, y: b.y });
+        onDragActive?.(false);
+        onGuides?.(null);
+        setStageCursor(moveFrame ? 'move' : 'default');
+      }}
+      onTransformStart={() => {
+        transformStartRef.current = { w: el.w, h: el.h };
+        onGestureStart?.();
+        onDragActive?.(true, { keepTransformer: true });
+      }}
+      onTransform={(e: any) => {
+        bakeImageFrame(e.target, e.target.scaleX(), e.target.scaleY());
+      }}
+      onTransformEnd={(e: any) => {
+        const n = e.target;
+        n.scaleX(1);
+        n.scaleY(1);
+        const nw = Math.max(20, n.width() || transformStartRef.current.w);
+        const nh = Math.max(20, n.height() || transformStartRef.current.h);
+        const b = dragBoundBox({ x: n.x(), y: n.y() }, nw, nh, canvasH);
+        n.position(b);
+        n.width(nw);
+        n.height(nh);
+        n.clip({ x: 0, y: 0, width: nw, height: nh });
+        onChange({ ...b, w: nw, h: nh, rotation: n.rotation() });
+        onDragActive?.(false);
+        onGuides?.(null);
+      }}
+    >
+      <Rect width={el.w} height={el.h} fill="rgba(0,0,0,0.001)" listening={!panInside} />
+      <KonvaImage
+        image={img}
+        x={-offX}
+        y={-offY}
+        width={iw}
+        height={ih}
+        perfectDrawEnabled={false}
+        listening={panInside}
+        draggable={panInside}
+        dragDistance={2}
+        dragBoundFunc={(pos: any) => ({
+          x: Math.min(0, Math.max(-maxOffX, pos.x)),
+          y: Math.min(0, Math.max(-maxOffY, pos.y)),
+        })}
+        onMouseEnter={() => { if (panInside) setStageCursor('grab'); }}
+        onMouseLeave={() => setStageCursor(moveFrame ? 'move' : 'default')}
+        onDragStart={(e: any) => {
+          e.cancelBubble = true;
+          setStageCursor('grabbing');
+          onGestureStart?.();
+          onDragActive?.(true, { keepTransformer: true });
+        }}
+        onDragMove={(e: any) => { e.cancelBubble = true; }}
+        onDragEnd={(e: any) => {
+          e.cancelBubble = true;
+          const next = imageFrameFocusFromOffset(e.target.x(), e.target.y(), maxOffX, maxOffY);
+          e.target.position({ x: next.x, y: next.y });
+          onChange({ cropFocusX: next.cropFocusX, cropFocusY: next.cropFocusY });
+          onDragActive?.(false);
+          onGuides?.(null);
+          setStageCursor(panInside ? 'grab' : 'default');
+        }}
+        onMouseDown={(e: any) => { e.cancelBubble = true; onSelect(); }}
+        onTouchStart={(e: any) => { e.cancelBubble = true; onSelect(); }}
+        onClick={(e: any) => { e.cancelBubble = true; onSelect(); }}
+        onTap={(e: any) => { e.cancelBubble = true; onSelect(); }}
+        onDblClick={(e: any) => {
+          e.cancelBubble = true;
+          if (canPan) onTogglePhotoAdjust?.();
+        }}
+        onDblTap={(e: any) => {
+          e.cancelBubble = true;
+          if (canPan) onTogglePhotoAdjust?.();
+        }}
+      />
+      {/* Stroke inside the group so it tracks during drag/resize */}
+      {isSelected && (
+        <Rect
+          width={el.w}
+          height={el.h}
+          stroke={adjustingVisual ? '#0D9488' : '#2563EB'}
+          strokeWidth={2.5}
+          listening={false}
+          cornerRadius={2}
+          dash={adjustingVisual ? [8, 5] : undefined}
+        />
+      )}
+    </Group>
+  );
 }
 
-function KTxtEl({el,onSelect,onChange,onStartEdit,onGestureStart,onDragActive,isEditing,isSelected,shapeRefs,canvasH}: {
+function KTxtEl({el,onSelect,onChange,onStartEdit,onGestureStart,onDragActive,onGuides,isEditing,isSelected,shapeRefs,canvasH,fontEpoch}: {
   el: EditorElement; onSelect:()=>void; onChange:(c:Partial<EditorElement>)=>void;
-  onStartEdit:()=>void; onGestureStart?:()=>void; onDragActive?:(active:boolean)=>void;
+  onStartEdit:()=>void; onGestureStart?:()=>void;
+  onDragActive?:(active:boolean, opts?: { keepTransformer?: boolean })=>void;
+  onGuides?:(g:GuideState)=>void;
   isEditing:boolean; isSelected:boolean;
   shapeRefs:React.MutableRefObject<Record<string,any>>; canvasH:number;
+  /** Bumps when webfonts finish loading so Konva remounts text with the real face. */
+  fontEpoch?: number;
 }) {
-  return <KonvaText ref={(n:any)=>{if(n) shapeRefs.current[el.id]=n;}}
-    text={el.text||'Double-tap to edit'} x={el.x} y={el.y} width={el.w} height={el.h}
-    rotation={el.rotation} fontSize={el.fontSize||20} fontFamily={el.fontFamily||'Georgia, serif'}
-    fill={el.fill||'#1a1a1a'} align={el.align||'center'} fontStyle={el.fontStyle||'normal'}
-    lineHeight={el.lineHeight??1.2} letterSpacing={el.letterSpacing??0} padding={6}
-    opacity={isEditing?0:(el.opacity??1)}
-    wrap="word" perfectDrawEnabled={false} shadowForStrokeEnabled={false}
-    transformsEnabled="all"
-    dragDistance={14}
-    onClick={onSelect} onTap={onSelect} onDblClick={onStartEdit} onDblTap={onStartEdit}
-    draggable={isSelected && !isEditing}
-    dragBoundFunc={(pos:any)=>dragBoundBox(pos,el.w,el.h,canvasH)}
-    onDragStart={()=>{onGestureStart?.();onDragActive?.(true);}}
-    onDragEnd={(e:any)=>{
-      const b=dragBoundBox({x:e.target.x(),y:e.target.y()},el.w,el.h,canvasH);
-      e.target.position(b);
-      onChange(b);
-      onDragActive?.(false);
-    }}
-    onTransformStart={()=>{onGestureStart?.();onDragActive?.(true);}}
-    onTransformEnd={(e:any)=>{
-      const n=e.target,sx=n.scaleX(); n.scaleX(1); n.scaleY(1);
-      const nw=Math.max(50,n.width()*sx);
-      const b=dragBoundBox({x:n.x(),y:n.y()},nw,el.h,canvasH);
-      n.position(b); onChange({...b,w:nw,rotation:n.rotation()});
-      onDragActive?.(false);
-    }}/>;
+  const family = normalizeFontFamily(el.fontFamily);
+  const style = canvasFontStyle(el.fontFamily, el.fontStyle);
+  const minH = Math.max(24, (el.fontSize || 20) * (el.lineHeight ?? 1.2) + 12);
+  // Snapshot size at transform start — Konva scale is always relative to that.
+  const transformStartRef = useRef({ w: el.w, h: el.h });
+
+  const bakeTextFrame = (n: any, sx: number, sy: number) => {
+    const nw = Math.max(40, transformStartRef.current.w * sx);
+    const nh = Math.max(minH, transformStartRef.current.h * sy);
+    n.scaleX(1);
+    n.scaleY(1);
+    n.width(nw);
+    n.height(nh);
+    n.getChildren().forEach((c: any) => {
+      if (typeof c.width === 'function') {
+        c.width(nw);
+        c.height(nh);
+      }
+    });
+    return { nw, nh };
+  };
+
+  // Group + invisible hit rect: whole box is clickable (not just glyph pixels).
+  // Live-bake width/height during transform so the typeface never scales/jumps.
+  return (
+    <Group
+      ref={(n: any) => { if (n) shapeRefs.current[el.id] = n; }}
+      x={el.x}
+      y={el.y}
+      width={el.w}
+      height={el.h}
+      rotation={el.rotation}
+      draggable={isSelected && !isEditing}
+      dragDistance={3}
+      onMouseDown={(e: any) => { e.cancelBubble = true; if (!isEditing) onSelect(); }}
+      onTouchStart={(e: any) => { e.cancelBubble = true; if (!isEditing) onSelect(); }}
+      onClick={(e: any) => { e.cancelBubble = true; if (!isEditing) onSelect(); }}
+      onTap={(e: any) => { e.cancelBubble = true; if (!isEditing) onSelect(); }}
+      onDblClick={(e: any) => { e.cancelBubble = true; onStartEdit(); }}
+      onDblTap={(e: any) => { e.cancelBubble = true; onStartEdit(); }}
+      dragBoundFunc={(pos: any) => {
+        const b = dragBoundWithGuides(pos, el.w, el.h, canvasH);
+        onGuides?.({ v: b.guideV, h: b.guideH });
+        return { x: b.x, y: b.y };
+      }}
+      onDragStart={() => { onGestureStart?.(); onDragActive?.(true, { keepTransformer: true }); }}
+      onDragEnd={(e: any) => {
+        const b = dragBoundWithGuides({ x: e.target.x(), y: e.target.y() }, el.w, el.h, canvasH);
+        e.target.position({ x: b.x, y: b.y });
+        onChange({ x: b.x, y: b.y });
+        onDragActive?.(false);
+        onGuides?.(null);
+      }}
+      onTransformStart={() => {
+        transformStartRef.current = { w: el.w, h: el.h };
+        onGestureStart?.();
+        onDragActive?.(true, { keepTransformer: true });
+      }}
+      onTransform={(e: any) => {
+        bakeTextFrame(e.target, e.target.scaleX(), e.target.scaleY());
+      }}
+      onTransformEnd={(e: any) => {
+        const n = e.target;
+        // Size was already baked in onTransform; don't multiply by scale again.
+        n.scaleX(1);
+        n.scaleY(1);
+        const nw = Math.max(40, n.width() || transformStartRef.current.w);
+        const nh = Math.max(minH, n.height() || transformStartRef.current.h);
+        n.width(nw);
+        n.height(nh);
+        n.getChildren().forEach((c: any) => {
+          if (typeof c.width === 'function') {
+            c.width(nw);
+            c.height(nh);
+          }
+        });
+        const b = dragBoundBox({ x: n.x(), y: n.y() }, nw, nh, canvasH);
+        n.position(b);
+        onChange({ ...b, w: nw, h: nh, rotation: n.rotation() });
+        onDragActive?.(false);
+        onGuides?.(null);
+      }}
+    >
+      <Rect width={el.w} height={el.h} fill="rgba(0,0,0,0.001)" />
+      <KonvaText
+        key={`txt-${el.id}-f${fontEpoch ?? 0}`}
+        text={el.text || 'Double-tap to edit'}
+        x={0}
+        y={0}
+        width={el.w}
+        height={el.h}
+        fontSize={el.fontSize || 20}
+        fontFamily={family}
+        fill={el.fill || '#1a1a1a'}
+        align={el.align || 'center'}
+        verticalAlign="top"
+        fontStyle={style}
+        lineHeight={el.lineHeight ?? 1.2}
+        letterSpacing={el.letterSpacing ?? 0}
+        padding={6}
+        opacity={isEditing ? 0 : (el.opacity ?? 1)}
+        wrap="word"
+        ellipsis={false}
+        perfectDrawEnabled={false}
+        shadowForStrokeEnabled={false}
+        listening={false}
+      />
+    </Group>
+  );
 }
 
 function KPlaceholderEl({el,isSelected,onSelect,onOpenPhotos,shapeRefs}: {
   el: EditorElement; isSelected:boolean; onSelect:()=>void; onOpenPhotos?:()=>void;
   shapeRefs:React.MutableRefObject<Record<string,any>>;
 }) {
-  const handleTap=()=>{ onSelect(); onOpenPhotos?.(); };
+  const handleTap=(e?: any)=>{ if (e) e.cancelBubble = true; onSelect(); onOpenPhotos?.(); };
   return <>
     <Rect ref={(n:any)=>{if(n) shapeRefs.current[el.id]=n;}}
       x={el.x} y={el.y} width={el.w} height={el.h} rotation={el.rotation}
       fill={isSelected?'#E8E0D5':'#EDE8E0'} stroke={isSelected?'#8B7355':'#C8BDA8'}
       strokeWidth={isSelected?2:1.5} dash={[10,6]} cornerRadius={3}
+      onMouseDown={(e:any)=>{ e.cancelBubble=true; onSelect(); }}
+      onTouchStart={(e:any)=>{ e.cancelBubble=true; onSelect(); }}
       onClick={handleTap} onTap={handleTap}/>
     <KonvaText x={el.x} y={el.y+el.h/2-16} width={el.w}
       text="📷  tap to place photo" fontSize={12} fill="#A09080" align="center" listening={false}/>
@@ -327,9 +788,32 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
   const trRef = useRef<any>(null);
   const stageRef = useRef<any>(null);
   const scX = pageW/DESIGN_W, scY = pageH/canvasH;
+  const {lang: chipLang} = useLanguage();
 
   const [editId,setEditId]=useState<string|null>(null);
   const [editText,setEditText]=useState('');
+  // Image dual-mode: null = move/resize frame; id = pan photo inside that frame.
+  const [photoAdjustId,setPhotoAdjustId]=useState<string|null>(null);
+  const [imgCanPan,setImgCanPan]=useState<Record<string,boolean>>({});
+  const reportImgCanPan=useCallback((id:string, can:boolean)=>{
+    setImgCanPan(prev => prev[id] === can ? prev : { ...prev, [id]: can });
+  },[]);
+  // Konva paints with fallback faces until webfonts are ready — remount text when loaded.
+  const fontsReady = useEditorFontsReady();
+  const fontEpoch = fontsReady ? 1 : 0;
+  const guidesRef=useRef<GuideState>(null);
+  const guideVRef=useRef<any>(null);
+  const guideHRef=useRef<any>(null);
+  // Imperative guides — never setState mid-drag (that re-renders Konva from stale
+  // React x/y and causes the scratched/ghosted text while moving).
+  const reportGuides=useCallback((g:GuideState)=>{
+    const prev=guidesRef.current;
+    if ((!prev && !g) || (prev && g && prev.v===g.v && prev.h===g.h)) return;
+    guidesRef.current=g;
+    if (guideVRef.current) guideVRef.current.visible(!!g?.v);
+    if (guideHRef.current) guideHRef.current.visible(!!g?.h);
+    (guideVRef.current || guideHRef.current)?.getLayer()?.batchDraw();
+  },[]);
   const textareaRef=useRef<HTMLTextAreaElement>(null);
   const deleteBtnRef=useRef<HTMLDivElement>(null);
   const draggingRef=useRef(false);
@@ -339,25 +823,31 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
   // (the template's design height), but grows to fit longer text.
   const editMinHRef=useRef(0);
 
-  // Hide transformer + delete chip without setState (avoids Stage re-render mid-drag).
-  const setDragActive=useCallback((active:boolean)=>{
+  // Hide delete chip without detaching the Transformer mid-gesture — detaching
+  // during drag was aborting transforms and leaving a scratched preview.
+  const setDragActive=useCallback((active:boolean, _opts?: { keepTransformer?: boolean })=>{
     draggingRef.current=active;
     onElementDragActive?.(active);
     if (deleteBtnRef.current) deleteBtnRef.current.style.visibility=active?'hidden':'visible';
-    if (!trRef.current) return;
-    if (active) {
-      trRef.current.nodes([]);
-      trRef.current.getLayer()?.batchDraw();
-    } else if (selectedId && selectedId!==editId) {
-      const node=shapeRefs.current[selectedId];
-      trRef.current.nodes(node?[node]:[]);
-      trRef.current.getLayer()?.batchDraw();
+    if (!active) {
+      guidesRef.current=null;
+      if (guideVRef.current) guideVRef.current.visible(false);
+      if (guideHRef.current) guideHRef.current.visible(false);
+      (guideVRef.current || guideHRef.current)?.getLayer()?.batchDraw();
     }
-  },[selectedId,editId,shapeRefs,onElementDragActive]);
+  },[onElementDragActive]);
 
   const startEdit=useCallback((el:EditorElement)=>{
+    // Persist a Konva/toolbar-safe font stack so canvas + HTML editor match
+    // (legacy designs used long stacks + italic on script fonts → visible jump).
+    const family = normalizeFontFamily(el.fontFamily);
+    const style = canvasFontStyle(el.fontFamily, el.fontStyle);
+    const patch: Partial<EditorElement> = {};
+    if (family !== el.fontFamily) patch.fontFamily = family;
+    if (style !== (el.fontStyle || 'normal')) patch.fontStyle = style;
+    if (Object.keys(patch).length) onChangeEl(el.id, patch);
     setEditId(el.id); setEditText(el.text||''); editMinHRef.current=el.h; onSelectId(el.id);
-  },[onSelectId]);
+  },[onSelectId,onChangeEl]);
 
   const commitEdit=useCallback(()=>{
     setEditId(prev=>{
@@ -367,6 +857,24 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
   },[editText,onChangeEl]);
 
   useEffect(()=>{ if(editId) setTimeout(()=>textareaRef.current?.focus(),30); },[editId]);
+
+  // Leaving an image clears photo-adjust mode.
+  useEffect(()=>{
+    if (photoAdjustId && photoAdjustId !== selectedId) setPhotoAdjustId(null);
+  },[selectedId,photoAdjustId]);
+
+  // Esc exits Adjust → back to Move (frame stays selected).
+  useEffect(()=>{
+    if (!photoAdjustId || !isActive) return;
+    const onKey=(e:KeyboardEvent)=>{
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setPhotoAdjustId(null);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return ()=>window.removeEventListener('keydown', onKey);
+  },[photoAdjustId,isActive]);
 
   // Newly added text opens the editor immediately (desktop + mobile).
   useEffect(()=>{
@@ -385,11 +893,12 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
     let start:{x:number;y:number;t:number}|null=null;
 
     const onStart=(e:TouchEvent)=>{
-      if(e.touches.length!==1||draggingRef.current||editId){ start=null; return; }
+      // Don't steal swipes while editing text, dragging, or panning a photo inside a frame.
+      if(e.touches.length!==1||draggingRef.current||editId||photoAdjustId){ start=null; return; }
       start={x:e.touches[0].clientX,y:e.touches[0].clientY,t:Date.now()};
     };
     const onEnd=(e:TouchEvent)=>{
-      if(!start||draggingRef.current){ start=null; return; }
+      if(!start||draggingRef.current||photoAdjustId){ start=null; return; }
       const dx=e.changedTouches[0].clientX-start.x;
       const dy=e.changedTouches[0].clientY-start.y;
       const dt=Math.max(1,Date.now()-start.t);
@@ -419,13 +928,26 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
       el.removeEventListener('touchend',onEnd);
       el.removeEventListener('touchcancel',onCancel);
     };
-  },[isMobile,onPageSwipe,editId,pageW,pageH]);
+  },[isMobile,onPageSwipe,editId,photoAdjustId,pageW,pageH]);
+
+  useEffect(()=>{
+    if (!fontsReady || !stageRef.current) return;
+    stageRef.current.getLayers?.().forEach((layer: any) => layer.batchDraw?.());
+  }, [fontsReady]);
 
   useEffect(()=>{
     if (!trRef.current) return;
-    const node=(isActive&&selectedId&&selectedId!==editId)?shapeRefs.current[selectedId]:null;
-    trRef.current.nodes(node?[node]:[]); trRef.current.getLayer()?.batchDraw();
-  },[isActive,selectedId,editId,shapeRefs]);
+    const sel = selectedId ? elements.find(e => e.id === selectedId) : null;
+    // Backgrounds use their own dock panel — never attach the Transformer.
+    // While Adjust-photo is active, detach too: Transformer would still move the
+    // frame even though Group.draggable is false (classic builder crop mode).
+    const adjusting = !!(photoAdjustId && photoAdjustId === selectedId);
+    const node = (isActive && selectedId && selectedId !== editId && sel && sel.type !== 'background' && !adjusting)
+      ? shapeRefs.current[selectedId]
+      : null;
+    trRef.current.nodes(node ? [node] : []);
+    trRef.current.getLayer()?.batchDraw();
+  },[isActive,selectedId,editId,shapeRefs,elements,photoAdjustId,imgCanPan]);
 
   const editEl=editId?elements.find(e=>e.id===editId):null;
   const bgs    = elements.filter(e=>e.type==='background');
@@ -434,15 +956,10 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
   const imgs   = elements.filter(e=>e.type==='image');
   const txts   = elements.filter(e=>e.type==='text');
 
-  const innerShadow = side==='left'
-    ? 'linear-gradient(to left, rgba(0,0,0,0.30) 0%, rgba(0,0,0,0.12) 7%, transparent 24%)'
-    : side==='right'
-    ? 'linear-gradient(to right, rgba(0,0,0,0.28) 0%, rgba(0,0,0,0.10) 7%, transparent 24%)'
-    : undefined;
-
   const toolbarEl=editEl?elements.find(e=>e.id===editId):null;
-  const isBold=toolbarEl?.fontStyle?.includes('bold')??false;
-  const isItalic=toolbarEl?.fontStyle?.includes('italic')??false;
+  const toolbarStyle=canvasFontStyle(toolbarEl?.fontFamily, toolbarEl?.fontStyle);
+  const isBold=toolbarStyle.includes('bold');
+  const isItalic=toolbarStyle.includes('italic');
   // Smart panel placement: below the text if room, otherwise above
   const PANEL_W=366; const PANEL_H=90;
   const elBottom=toolbarEl?(toolbarEl.y+toolbarEl.h)*scY:0;
@@ -459,43 +976,82 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
         onTouchStart={(e:any)=>{if(e.target===e.target.getStage()){if(editId)commitEdit();onSelectId(null);}}}>
         <Layer>
           <Rect x={0} y={0} width={DESIGN_W} height={canvasH} fill={PAPER_COLOR} listening={false}/>
-          {bgs.map(el => <KBgEl key={el.id} el={el} canvasH={canvasH}/>)}
+          {bgs.map(el => {
+            const coverInteractive = page.role === 'front_cover' || page.role === 'back_cover';
+            return (
+              <KBgEl key={el.id} el={el} canvasH={canvasH}
+                interactive={coverInteractive}
+                isSelected={selectedId === el.id}
+                onChange={coverInteractive ? (c => onChangeEl(el.id, c)) : undefined}
+                onGestureStart={onGestureStart}
+              />
+            );
+          })}
           {shapes.map(el => <KShapeEl key={el.id} el={el} isSelected={selectedId===el.id}
             onSelect={()=>{if(editId)commitEdit();onSelectId(el.id);}}
             onChange={c=>onChangeEl(el.id,c)} onGestureStart={onGestureStart} onDragActive={setDragActive}
+            onGuides={reportGuides}
             shapeRefs={shapeRefs} canvasH={canvasH}/>)}
           {phs.map(el => <KPlaceholderEl key={el.id} el={el} isSelected={selectedId===el.id}
             onSelect={()=>{if(editId)commitEdit();onSelectId(el.id);}} onOpenPhotos={onOpenPhotos} shapeRefs={shapeRefs}/>)}
           {imgs.map(el => <KImgEl key={el.id} el={el} isSelected={selectedId===el.id}
             onSelect={()=>{if(editId)commitEdit();onSelectId(el.id);}}
             onChange={c=>onChangeEl(el.id,c)} onGestureStart={onGestureStart} onDragActive={setDragActive}
-            shapeRefs={shapeRefs} canvasH={canvasH}/>)}
+            onGuides={reportGuides}
+            shapeRefs={shapeRefs} canvasH={canvasH}
+            photoAdjust={photoAdjustId===el.id}
+            onTogglePhotoAdjust={()=>{
+              if (imgCanPan[el.id] !== true) return;
+              setPhotoAdjustId(cur => cur===el.id ? null : el.id);
+              onSelectId(el.id);
+            }}
+            onExitPhotoAdjust={()=>setPhotoAdjustId(cur => cur===el.id ? null : cur)}
+            onCanPanChange={(can)=>reportImgCanPan(el.id, can)}
+          />)}
           {txts.map(el => <KTxtEl key={el.id} el={el} isEditing={editId===el.id}
             isSelected={selectedId===el.id}
             onSelect={()=>{if(editId&&editId!==el.id)commitEdit();onSelectId(el.id);}}
             onChange={c=>onChangeEl(el.id,c)} onGestureStart={onGestureStart} onDragActive={setDragActive}
-            onStartEdit={()=>startEdit(el)} shapeRefs={shapeRefs} canvasH={canvasH}/>)}
+            onGuides={reportGuides}
+            onStartEdit={()=>startEdit(el)} shapeRefs={shapeRefs} canvasH={canvasH}
+            fontEpoch={fontEpoch}
+          />)}
           {page.pageNumber!==undefined && (
             <KonvaText x={0} y={canvasH-26} width={DESIGN_W} text={String(page.pageNumber)}
               align="center" fontSize={9} fill="#C0B8B0" fontFamily="Georgia, serif" listening={false}/>
           )}
-          <Transformer ref={trRef} rotateEnabled
+          {/* Center alignment guides while dragging (visibility toggled imperatively) */}
+          <Line ref={guideVRef} points={[DESIGN_W/2, 0, DESIGN_W/2, canvasH]} stroke="#C09A55" strokeWidth={1}
+            dash={[6,5]} listening={false} opacity={0.9} visible={false}/>
+          <Line ref={guideHRef} points={[0, canvasH/2, DESIGN_W, canvasH/2]} stroke="#C09A55" strokeWidth={1}
+            dash={[6,5]} listening={false} opacity={0.9} visible={false}/>
+          <Transformer ref={trRef} rotateEnabled resizeEnabled
             rotationSnaps={[0,45,90,135,180,225,270,315]}
-            enabledAnchors={['top-left','top-center','top-right','middle-left','middle-right','bottom-left','bottom-center','bottom-right']}
-            boundBoxFunc={(old:any,nw:any)=>(nw.width<10||nw.height<10?old:nw)}
+            enabledAnchors={
+              (selectedId && elements.find(e => e.id === selectedId)?.type === 'text')
+                // Text: width/height box only — corners scale the typeface and jump the box.
+                ? ['middle-left', 'middle-right', 'top-center', 'bottom-center']
+                : ['top-left','top-center','top-right','middle-left','middle-right','bottom-left','bottom-center','bottom-right']
+            }
+            boundBoxFunc={(old:any,nw:any)=>{
+              const isText = selectedId && elements.find(e => e.id === selectedId)?.type === 'text';
+              const minW = isText ? 40 : 10;
+              const minH = isText ? 24 : 10;
+              return (nw.width < minW || nw.height < minH) ? old : nw;
+            }}
             padding={4}
             borderStroke="#2563EB" borderStrokeWidth={2.5} borderDash={undefined}
             anchorFill="#FFFFFF" anchorStroke="#2563EB" anchorStrokeWidth={2.5}
-            anchorSize={11} anchorCornerRadius={6}
-            rotateAnchorOffset={26} rotationSnapTolerance={6}
+            anchorSize={14} anchorCornerRadius={7}
+            rotateAnchorOffset={28} rotationSnapTolerance={6}
+            ignoreStroke
             anchorStyleFunc={(anchor:any)=>{
-              // A soft drop-shadow around every handle makes them read clearly
-              // against any page background — light paper, dark cover, photo, etc.
+              // Soft drop-shadow so handles read clearly on any page background.
               anchor.shadowColor('rgba(15,23,42,0.35)'); anchor.shadowBlur(4);
               anchor.shadowOffsetY(1); anchor.shadowOpacity(1);
               if (anchor.hasName('rotater')) {
                 anchor.fill('#2563EB'); anchor.stroke('#FFFFFF'); anchor.strokeWidth(2);
-                anchor.width(16); anchor.height(16); anchor.cornerRadius(8); anchor.offsetX(8); anchor.offsetY(8);
+                anchor.width(18); anchor.height(18); anchor.cornerRadius(9); anchor.offsetX(9); anchor.offsetY(9);
               }
             }}/>
         </Layer>
@@ -531,10 +1087,10 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
               position:'absolute', pointerEvents:'all',
               left:editEl.x*scX, top:editEl.y*scY,
               width:editEl.w*scX, minHeight:Math.max(editEl.h*scY,32),
-              fontSize:(editEl.fontSize||20)*scY,
-              fontFamily:editEl.fontFamily||'Georgia, serif',
-              fontStyle:editEl.fontStyle?.includes('italic')?'italic':'normal',
-              fontWeight:editEl.fontStyle?.includes('bold')?'bold':'normal',
+              fontSize:(editEl.fontSize||20)*scX,
+              fontFamily:normalizeFontFamily(editEl.fontFamily),
+              fontStyle:canvasFontStyle(editEl.fontFamily, editEl.fontStyle).includes('italic')?'italic':'normal',
+              fontWeight:canvasFontStyle(editEl.fontFamily, editEl.fontStyle).includes('bold')?'bold':'normal',
               color:editEl.fill||'#1a1a1a',
               textAlign:(editEl.align||'center') as any,
               lineHeight:editEl.lineHeight??1.2,
@@ -560,9 +1116,9 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
             <div style={{display:'flex',alignItems:'center',gap:5}}>
               {/* Font family */}
               <select
-                value={toolbarEl?.fontFamily||'Georgia, serif'}
+                value={normalizeFontFamily(toolbarEl?.fontFamily)}
                 onChange={e=>{onChangeEl(editId,{fontFamily:e.target.value});setTimeout(()=>textareaRef.current?.focus(),20);}}
-                style={{flex:1,minWidth:0,fontSize:11,fontFamily:toolbarEl?.fontFamily||'Georgia, serif',
+                style={{flex:1,minWidth:0,fontSize:11,fontFamily:normalizeFontFamily(toolbarEl?.fontFamily),
                   border:'1px solid #e8e8e8',borderRadius:7,padding:'4px 7px',
                   background:'#fafafa',cursor:'pointer',outline:'none',color:'#1a1a1a'}}
               >
@@ -571,18 +1127,25 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
               <span style={{width:1,height:20,background:'#e8e8e8',flexShrink:0}}/>
               {/* Bold */}
               <button onMouseDown={e=>{e.preventDefault();
-                const fs=[(!isBold?'bold':''),(isItalic?'italic':'')].filter(Boolean).join(' ')||'normal';
+                const fam=normalizeFontFamily(toolbarEl?.fontFamily);
+                const script=/great vibes|dancing script|pacifico/i.test(fam);
+                const nextItalic=script?false:isItalic;
+                const fs=[(!isBold?'bold':''),(nextItalic?'italic':'')].filter(Boolean).join(' ')||'normal';
                 onChangeEl(editId,{fontStyle:fs});}}
                 style={{width:28,height:28,borderRadius:7,border:'none',cursor:'pointer',fontWeight:'bold',
                   fontSize:13,flexShrink:0,transition:'all 0.12s',
                   background:isBold?'#1a1a1a':'#f0f0f0',color:isBold?'#fff':'#555'}}>B</button>
-              {/* Italic */}
+              {/* Italic — disabled for script fonts (no italic cut; Konva falls back) */}
               <button onMouseDown={e=>{e.preventDefault();
+                const fam=normalizeFontFamily(toolbarEl?.fontFamily);
+                if(/great vibes|dancing script|pacifico/i.test(fam)) return;
                 const fs=[(isBold?'bold':''),(!isItalic?'italic':'')].filter(Boolean).join(' ')||'normal';
                 onChangeEl(editId,{fontStyle:fs});}}
-                style={{width:28,height:28,borderRadius:7,border:'none',cursor:'pointer',fontStyle:'italic',
-                  fontSize:14,flexShrink:0,transition:'all 0.12s',
-                  background:isItalic?'#1a1a1a':'#f0f0f0',color:isItalic?'#fff':'#666'}}>I</button>
+                style={{width:28,height:28,borderRadius:7,border:'none',
+                  cursor:/great vibes|dancing script|pacifico/i.test(normalizeFontFamily(toolbarEl?.fontFamily))?'default':'pointer',
+                  fontStyle:'italic', fontSize:14,flexShrink:0,transition:'all 0.12s',
+                  background:isItalic?'#1a1a1a':'#f0f0f0',color:isItalic?'#fff':'#666',
+                  opacity:/great vibes|dancing script|pacifico/i.test(normalizeFontFamily(toolbarEl?.fontFamily))?0.4:1}}>I</button>
               <span style={{width:1,height:20,background:'#e8e8e8',flexShrink:0}}/>
               {/* Alignment — L / C / R */}
               {(['left','center','right'] as const).map(al=>(
@@ -663,40 +1226,134 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
         </div>
       )}
 
-      {/* ── Delete button — visibility toggled via ref during drag (no re-render) ── */}
+      {/* ── Image / text chrome — delete + Move / Adjust-photo modes ── */}
       {isActive && selectedId && !editId && (()=>{
         const sel=elements.find(e=>e.id===selectedId&&(e.type==='image'||e.type==='text'||e.type==='placeholder'));
         if (!sel) return null;
-        // Position at top-right corner of the element (screen coords)
         const bx=Math.min(Math.max((sel.x+sel.w)*scX, 28), pageW-4);
         const by=Math.max(sel.y*scY-14, 4);
+        const isImg = sel.type === 'image' && !!sel.src;
+        const adjusting = photoAdjustId === sel.id;
+        const canPanSel = isImg ? imgCanPan[sel.id] : undefined;
+        // Disable until the bitmap reports canPan (undefined = still loading).
+        const adjustDisabled = !isImg || canPanSel !== true;
+        const barLeft = Math.max(4, Math.min(sel.x * scX, pageW - 200));
+        const barTop = Math.min(pageH - 40, (sel.y + sel.h) * scY + 8);
         return (
-          <div ref={deleteBtnRef} style={{position:'absolute',left:bx-14,top:by-14,zIndex:45,pointerEvents:'all',display:'flex',gap:5}}>
-            {/* Delete */}
-            <button
-              onMouseDown={e=>{e.stopPropagation();e.preventDefault();onDelete?.();}}
-              title="Delete"
-              style={{
-                width:28,height:28,borderRadius:'50%',border:'2px solid rgba(255,255,255,0.9)',
-                background:'rgba(220,38,38,0.88)',color:'white',
-                fontSize:13,lineHeight:1,cursor:'pointer',
-                display:'flex',alignItems:'center',justifyContent:'center',
-                boxShadow:'0 2px 10px rgba(0,0,0,0.32)',
-                transition:'transform 0.1s,background 0.1s',
-              }}
-              onMouseEnter={e=>{(e.currentTarget as HTMLButtonElement).style.background='rgba(185,28,28,0.96)';(e.currentTarget as HTMLButtonElement).style.transform='scale(1.12)';}}
-              onMouseLeave={e=>{(e.currentTarget as HTMLButtonElement).style.background='rgba(220,38,38,0.88)';(e.currentTarget as HTMLButtonElement).style.transform='scale(1)';}}
-            >✕</button>
+          <div ref={deleteBtnRef} style={{position:'absolute',inset:0,zIndex:45,pointerEvents:'none'}}>
+            <div style={{position:'absolute',left:bx-14,top:by-14,pointerEvents:'all',display:'flex',gap:5}}>
+              <button
+                onMouseDown={e=>{e.stopPropagation();e.preventDefault();onDelete?.();}}
+                title={chipLang==='sq'?'Fshi':'Delete'}
+                style={{
+                  width:28,height:28,borderRadius:'50%',border:'2px solid rgba(255,255,255,0.9)',
+                  background:'rgba(220,38,38,0.88)',color:'white',
+                  fontSize:13,lineHeight:1,cursor:'pointer',
+                  display:'flex',alignItems:'center',justifyContent:'center',
+                  boxShadow:'0 2px 10px rgba(0,0,0,0.32)',
+                }}
+              >✕</button>
+            </div>
+            {isImg && (
+              <div
+                style={{
+                  position:'absolute', left: barLeft, top: barTop,
+                  pointerEvents:'all', display:'flex', gap:4, alignItems:'center',
+                  padding:3, borderRadius:999,
+                  background:'rgba(255,255,255,0.96)',
+                  border:'1px solid rgba(0,0,0,0.08)',
+                  boxShadow:'0 4px 16px rgba(0,0,0,0.14)',
+                }}
+                onMouseDown={e=>e.stopPropagation()}
+                onPointerDown={e=>e.stopPropagation()}
+              >
+                <button
+                  type="button"
+                  onClick={()=>setPhotoAdjustId(null)}
+                  title={chipLang==='sq'?'Lëviz kornizën në faqe':'Move the frame on the page'}
+                  style={{
+                    padding:'5px 10px', borderRadius:999, border:'none', cursor:'pointer',
+                    fontSize:11, fontWeight:600,
+                    background: !adjusting ? '#1a1a1a' : 'transparent',
+                    color: !adjusting ? '#fff' : '#555',
+                  }}
+                >
+                  {chipLang==='sq'?'Lëviz':'Move'}
+                </button>
+                <button
+                  type="button"
+                  disabled={adjustDisabled}
+                  onClick={()=>{ if (!adjustDisabled) setPhotoAdjustId(sel.id); }}
+                  title={
+                    adjustDisabled
+                      ? (chipLang==='sq'?'Fotoja mbush kornizën — s’ka çfarë të rregullosh':'Photo fills the frame — nothing to adjust')
+                      : (chipLang==='sq'?'Tërhiq foton brenda kornizës (dyklik / Esc)':'Drag photo inside the frame (double-click / Esc)')
+                  }
+                  style={{
+                    padding:'5px 10px', borderRadius:999, border:'none',
+                    cursor: adjustDisabled ? 'not-allowed' : 'pointer',
+                    fontSize:11, fontWeight:600,
+                    opacity: adjustDisabled ? 0.45 : 1,
+                    background: adjusting ? '#0D9488' : 'transparent',
+                    color: adjusting ? '#fff' : '#555',
+                  }}
+                >
+                  {chipLang==='sq'?'Rregullo foton':'Adjust photo'}
+                </button>
+              </div>
+            )}
           </div>
         );
       })()}
 
-      {innerShadow && <div style={{position:'absolute',inset:0,pointerEvents:'none',background:innerShadow}}/>}
-      <div style={{position:'absolute',inset:0,pointerEvents:'none',
-        background:'linear-gradient(to bottom, rgba(255,255,255,0.06) 0%, transparent 20%, rgba(0,0,0,0.022) 100%)'}}/>
-      <div style={{position:'absolute',inset:0,pointerEvents:'none',
-        backgroundImage:PAPER_TEXTURE,backgroundSize:'256px 256px',
-        opacity:0.055,mixBlendMode:'multiply' as any}}/>
+      {/* Cover: quick entry to edit background (when nothing else is selected) */}
+      {isActive && (page.role === 'front_cover' || page.role === 'back_cover') && (() => {
+        const bg = elements.find(e => e.type === 'background');
+        if (!bg) return null;
+        // Hide whenever anything is selected — the chip sits bottom-left and was
+        // stealing taps meant for text, shapes, or transform handles.
+        if (selectedId) return null;
+        return (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); if (editId) commitEdit(); onSelectId(bg.id); }}
+            onMouseDown={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
+            style={{
+              position: 'absolute',
+              left: 10,
+              bottom: 10,
+              zIndex: 40,
+              pointerEvents: 'all',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '7px 12px',
+              borderRadius: 999,
+              border: '1px solid rgba(0,0,0,0.08)',
+              background: 'rgba(255,255,255,0.94)',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+              fontSize: 11,
+              fontWeight: 600,
+              color: '#333',
+              letterSpacing: '0.02em',
+            }}
+          >
+            <span style={{
+              width: 14, height: 14, borderRadius: 4, flexShrink: 0,
+              background: bg.src
+                ? `url(${bg.src}) center/cover`
+                : bg.bgGradientFrom
+                  ? `linear-gradient(135deg, ${bg.bgGradientFrom}, ${bg.bgGradientTo || '#fff'})`
+                  : (bg.bgColor || '#EEE'),
+              border: '1px solid rgba(0,0,0,0.12)',
+            }} />
+            {chipLang === 'sq' ? 'Sfondi' : 'Background'}
+          </button>
+        );
+      })()}
+
       {isActive && <div style={{position:'absolute',inset:0,pointerEvents:'none',
         outline:'2.5px solid rgba(59,130,246,0.65)',outlineOffset:'-1px'}}/>}
     </div>
@@ -708,9 +1365,6 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
 // ─────────────────────────────────────────────────────────────────────────────
 
 function LockedPageView({pageW,pageH,role,side}: {pageW:number;pageH:number;role:string;side:'left'|'right'}) {
-  const shadow=side==='left'
-    ?'linear-gradient(to left, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0.06) 10%, transparent 28%)'
-    :'linear-gradient(to right, rgba(0,0,0,0.16) 0%, rgba(0,0,0,0.05) 10%, transparent 28%)';
   const label = role==='locked_left' ? 'Inside Cover'
     : role==='locked_right' ? 'Inside Back Cover'
     : role==='back_cover' ? 'Outside Cover' : 'Back Cover';
@@ -766,7 +1420,6 @@ function LockedPageView({pageW,pageH,role,side}: {pageW:number;pageH:number;role
           Not editable
         </p>
       </div>
-      <div style={{position:'absolute', inset:0, pointerEvents:'none', background:shadow}}/>
     </div>
   );
 }
@@ -823,33 +1476,21 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
   if (spread.isSolo) {
     const isBackCover = spread.id === 'back-cover';
     const soloPage = isBackCover ? spread.left! : spread.right!;
-    const soloSpineW = isMobile ? 6 : 13;
-    const spineGrad = isBackCover
-      ? `linear-gradient(to left, #0C0C0C 0%, rgba(22,16,10,0.82) 42%, rgba(22,16,10,0.30) 100%)`
-      : `linear-gradient(to right, #0C0C0C 0%, rgba(22,16,10,0.82) 42%, rgba(22,16,10,0.30) 100%)`;
-
-    const soloCanvas = (
-      <div style={{cursor:'default'}} onClick={()=>onActiveSide(isBackCover ? 'left' : 'right')}>
-        <PageCanvas page={soloPage} elements={spreadContent[soloPage.dbId]??[]}
-          selectedId={selectedId} onSelectId={onSelectId}
-          onChangeEl={(eid,c)=>onChangeEl(soloPage.dbId,eid,c)} onOpenPhotos={onOpenPhotos} onDelete={onDelete}
-          onGestureStart={onGestureStart} onElementDragActive={onElementDragActive} onPageSwipe={onPageSwipe}
-          editRequestId={editRequestId} onEditRequestHandled={onEditRequestHandled}
-          isActive={true} pageW={pageW} pageH={pageH} canvasH={canvasH} shapeRefs={shapeRefs} side="solo" isMobile={isMobile}/>
-      </div>
-    );
 
     return (
       <div className="flex items-center justify-center">
-        <div style={{boxShadow:'0 30px 80px rgba(0,0,0,0.38), 0 10px 24px rgba(0,0,0,0.22), 0 3px 8px rgba(0,0,0,0.14)'}}>
-          <div style={{display:'flex',alignItems:'stretch',outline:`1.5px solid rgba(0,0,0,${isMobile?0.55:0.82})`,outlineOffset:0}}>
-            {/* Outside back cover: editable canvas + spine on the right (book edge). */}
-            {isBackCover ? (
-              <>
-                {soloCanvas}
-                <div style={{width:soloSpineW,height:pageH,flexShrink:0,background:spineGrad}}/>
-              </>
-            ) : soloCanvas}
+        <div style={{
+          boxShadow: '0 12px 40px rgba(40,32,20,0.12), 0 2px 8px rgba(40,32,20,0.06)',
+          outline: '1px solid rgba(0,0,0,0.08)',
+          outlineOffset: 0,
+        }}>
+          <div style={{cursor:'default'}} onClick={()=>onActiveSide(isBackCover ? 'left' : 'right')}>
+            <PageCanvas page={soloPage} elements={spreadContent[soloPage.dbId]??[]}
+              selectedId={selectedId} onSelectId={onSelectId}
+              onChangeEl={(eid,c)=>onChangeEl(soloPage.dbId,eid,c)} onOpenPhotos={onOpenPhotos} onDelete={onDelete}
+              onGestureStart={onGestureStart} onElementDragActive={onElementDragActive} onPageSwipe={onPageSwipe}
+              editRequestId={editRequestId} onEditRequestHandled={onEditRequestHandled}
+              isActive={true} pageW={pageW} pageH={pageH} canvasH={canvasH} shapeRefs={shapeRefs} side="solo" isMobile={isMobile}/>
           </div>
         </div>
       </div>
@@ -870,8 +1511,9 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
       <div className="flex items-center justify-center"
         {...(locked ? {onTouchStart:onDomSwipeStart,onTouchEnd:onDomSwipeEnd,style:{touchAction:'pan-y' as const}} : {})}>
         <div style={{
-          boxShadow:'0 28px 72px rgba(0,0,0,0.34), 0 10px 22px rgba(0,0,0,0.20), 0 3px 6px rgba(0,0,0,0.12)',
-          outline:'1.5px solid rgba(0,0,0,0.72)',outlineOffset:0,
+          boxShadow: '0 12px 40px rgba(40,32,20,0.12), 0 2px 8px rgba(40,32,20,0.06)',
+          outline: '1px solid rgba(0,0,0,0.08)',
+          outlineOffset: 0,
         }}>
           {locked
             ? <LockedPageView pageW={pageW} pageH={pageH} role={page.role} side={activeSide}/>
@@ -891,11 +1533,18 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
 
   return (
     <div className="flex items-center justify-center">
-      <div style={{boxShadow:'0 28px 72px rgba(0,0,0,0.34), 0 10px 22px rgba(0,0,0,0.20), 0 3px 6px rgba(0,0,0,0.12)'}}>
-        <div style={{display:'flex',alignItems:'stretch',outline:'1.5px solid rgba(0,0,0,0.82)',outlineOffset:0}}>
+      <div style={{
+        boxShadow: '0 12px 40px rgba(40,32,20,0.12), 0 2px 8px rgba(40,32,20,0.06)',
+      }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'stretch',
+          outline: '1px solid rgba(0,0,0,0.08)',
+          outlineOffset: 0,
+        }}>
           {renderSide(spread.left,'left')}
           {/* Centre page divider — hairline only */}
-          <div style={{width:effectiveSpineW,flexShrink:0,background:'rgba(0,0,0,0.18)'}}/>
+          <div style={{width:effectiveSpineW,flexShrink:0,background:'#E8E4DC'}}/>
           {renderSide(spread.right,'right')}
         </div>
       </div>
@@ -1018,12 +1667,14 @@ function InlinePhotoPicker({photos,onSelect,onUploadAndPlace,uploading,onClose,l
 // Spread Navigator
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SpreadNav = React.memo(function SpreadNav({spreads,current,onChange,onAddSpread,addingSpread,onReorder,pagesContent,canvasH}: {
+const SpreadNav = React.memo(function SpreadNav({spreads,current,onChange,onAddSpread,addingSpread,onReorder,onDeleteSpread,deletingSpread,pagesContent,canvasH,lang}: {
   spreads:SpreadDef[];current:number;onChange:(i:number)=>void;
   onAddSpread:()=>void;addingSpread:boolean;
   onReorder:(from:number,to:number)=>Promise<void>;
+  onDeleteSpread?:(i:number)=>void;deletingSpread?:boolean;
   pagesContent:Record<number,EditorElement[]>;
   canvasH:number;
+  lang:'sq'|'en';
 }) {
   const scrollRef=useRef<HTMLDivElement>(null);
   const [dragIdx,setDragIdx]=useState<number|null>(null);
@@ -1060,6 +1711,14 @@ const SpreadNav = React.memo(function SpreadNav({spreads,current,onChange,onAddS
 
   // A spread is draggable if it's an inner spread (not solo, not sp1 which has the locked inside-cover)
   const canMove=(i:number)=>!spreads[i].isSolo && i>=2;
+  // Extra spreads the client added can be deleted (both sides must be editable inners)
+  const canDelete=(i:number)=>{
+    const sp=spreads[i];
+    if(!sp||sp.isSolo||i<2) return false;
+    const leftOk=!sp.left||sp.left.role==='inner';
+    const rightOk=!sp.right||sp.right.role==='inner';
+    return leftOk&&rightOk&&(!!sp.left||!!sp.right);
+  };
 
   const clearLongPress=()=>{
     if(longPressTimer.current) clearTimeout(longPressTimer.current);
@@ -1270,6 +1929,25 @@ const SpreadNav = React.memo(function SpreadNav({spreads,current,onChange,onAddS
               transition:'color 0.20s ease',
             }}>{sp.navLabel}</span>
 
+            {canDelete(i) && onDeleteSpread && (
+              <button
+                type="button"
+                title={lang==='sq'?'Fshi këto faqe':'Delete these pages'}
+                disabled={deletingSpread}
+                onClick={(e)=>{ e.stopPropagation(); onDeleteSpread(i); }}
+                style={{
+                  marginTop:2, width:18, height:18, borderRadius:9,
+                  border:'none', padding:0, cursor:deletingSpread?'wait':'pointer',
+                  background:isCurrent?'rgba(220,38,38,0.12)':'rgba(0,0,0,0.06)',
+                  color:isCurrent?'#DC2626':'#A39A8E',
+                  display:'flex', alignItems:'center', justifyContent:'center',
+                  WebkitTapHighlightColor:'transparent',
+                }}
+              >
+                <Trash2 size={10} strokeWidth={2}/>
+              </button>
+            )}
+
             <div style={{
               width:isCurrent?14:0,height:2,borderRadius:1,
               background:'linear-gradient(90deg,#C09A55,#E0BB7A)',
@@ -1334,13 +2012,8 @@ function DesignThumb({design,lang,onApply}: {design:DesignDef;lang:'sq'|'en';onA
     <button onClick={onApply}
       className="flex flex-col items-center gap-1.5 group transition-transform hover:scale-105 active:scale-95 outline-none">
       <div className="relative overflow-hidden rounded-md border border-neutral-200 group-hover:border-neutral-700 shadow-sm transition-all group-hover:shadow-md" style={{width:72,height:96}}>
-        {design.thumbPhoto
-          ? <>
-              <img src={design.thumbPhoto} alt={design.name[lang]} className="absolute inset-0 w-full h-full object-cover"/>
-              <div className="absolute inset-0 bg-black/20"/>
-            </>
-          : <PageThumb elements={design.elements} width={72} height={96}/>
-        }
+        {/* Always render real elements so sidebar fonts/layout match the builder */}
+        <PageThumb elements={design.elements} width={72} height={96}/>
       </div>
       <span className="text-[9px] text-neutral-500 group-hover:text-neutral-800 transition-colors text-center leading-tight w-full truncate px-1">
         {design.name[lang]}
@@ -1350,24 +2023,336 @@ function DesignThumb({design,lang,onApply}: {design:DesignDef;lang:'sq'|'en';onA
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Cover background (front / back outside covers)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const COVER_SWATCHES = [
+  '#FFFFFF', '#FEFDF9', '#F8F6F0', '#ECE7E1', '#E0D8C8',
+  '#BCC9D1', '#FEC5D7', '#A83442', '#2D0A18', '#1A2A1A',
+  '#1C2E1A', '#0D4F6C', '#0C1E3C', '#2A1A08', '#111111', '#080808',
+];
+
+const COVER_GRADIENT_PRESETS: { from: string; to: string; dir: 'tb' | 'lr' | 'diag' }[] = [
+  { from: '#1C1408', to: '#2C1E10', dir: 'diag' },
+  { from: '#0D4F6C', to: '#1A7A9E', dir: 'tb' },
+  { from: '#F5EEFE', to: '#FEF5F8', dir: 'diag' },
+  { from: '#2A1A08', to: '#5C3A18', dir: 'tb' },
+  { from: '#0A1929', to: '#1A3A5C', dir: 'lr' },
+  { from: '#FBF5E8', to: '#E8D5B5', dir: 'tb' },
+  { from: '#2D0A18', to: '#5A1A30', dir: 'tb' },
+  { from: '#1A2A1A', to: '#3A4A3A', dir: 'lr' },
+];
+
+function CoverBackgroundPanel({
+  bg, photos, uploading, lang, compact,
+  onSetColor, onSetGradient, onSetPhoto, onUploadPhoto,
+}: {
+  bg?: EditorElement | null;
+  photos: string[];
+  uploading: boolean;
+  lang: 'sq' | 'en';
+  compact?: boolean;
+  onSetColor: (color: string, opts?: { live?: boolean }) => void;
+  onSetGradient: (from: string, to: string, dir: 'tb' | 'lr' | 'diag', opts?: { live?: boolean }) => void;
+  onSetPhoto: (url: string | null) => void;
+  onUploadPhoto: (file: File) => void;
+}) {
+  const mode = coverBgMode(bg);
+  const [uiMode, setUiMode] = useState<CoverBgMode>(mode);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const from = bg?.bgGradientFrom || bg?.bgColor || '#1A1A1A';
+  const to = bg?.bgGradientTo || '#555555';
+  const dir = bg?.bgGradientDir || 'tb';
+
+  useEffect(() => { setUiMode(mode); }, [mode]);
+
+  const modes: { id: CoverBgMode; label: string; Icon: typeof Palette }[] = [
+    { id: 'color', label: lang === 'sq' ? 'Ngjyrë' : 'Color', Icon: Palette },
+    { id: 'gradient', label: lang === 'sq' ? 'Gradient' : 'Gradient', Icon: Droplets },
+    { id: 'photo', label: lang === 'sq' ? 'Foto' : 'Photo', Icon: ImageIcon },
+  ];
+
+  return (
+    <div className={compact ? 'space-y-3' : 'space-y-3 px-3 pt-3 pb-2 border-b border-neutral-100'}>
+      {!compact && (
+        <div>
+          <p className="text-[9px] uppercase tracking-widest text-neutral-500 font-semibold">
+            {lang === 'sq' ? 'Sfondi i kopertinës' : 'Cover background'}
+          </p>
+          <p className="text-[10px] text-neutral-400 mt-0.5 leading-snug">
+            {lang === 'sq'
+              ? 'Ngjyrë, gradient ose foto juaj — vetëm për këtë kopertinë'
+              : 'Color, gradient, or your photo — this cover only'}
+          </p>
+        </div>
+      )}
+
+      <div className="grid grid-cols-3 gap-1 p-0.5 rounded-xl bg-neutral-100">
+        {modes.map(({ id, label, Icon }) => (
+          <button key={id} type="button" onClick={() => setUiMode(id)}
+            className={`flex items-center justify-center gap-1 py-1.5 rounded-[10px] text-[10px] font-semibold transition-all ${
+              uiMode === id ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'
+            }`}>
+            <Icon size={12} />{label}
+          </button>
+        ))}
+      </div>
+
+      {uiMode === 'color' && (
+        <div className="space-y-2">
+          <div className="grid grid-cols-8 gap-1.5">
+            {COVER_SWATCHES.map(c => {
+              const active = mode === 'color' && !bg?.src && (bg?.bgColor || '').toLowerCase() === c.toLowerCase();
+              return (
+                <button key={c} type="button" onClick={() => onSetColor(c)} title={c}
+                  className={`aspect-square rounded-md border transition-transform hover:scale-110 ${
+                    active ? 'border-neutral-900 ring-1 ring-neutral-900 scale-105' : 'border-neutral-200'
+                  }`}
+                  style={{ background: c }} />
+              );
+            })}
+          </div>
+          <label className="flex items-center gap-2 text-[11px] text-neutral-500">
+            <span className="flex-shrink-0">{lang === 'sq' ? 'Tjetër' : 'Custom'}</span>
+            <input type="color" value={bg?.bgColor || '#FFFFFF'}
+              onInput={e => onSetColor((e.target as HTMLInputElement).value, { live: true })}
+              onChange={e => onSetColor(e.target.value)}
+              className="h-7 w-full cursor-pointer rounded-md border border-neutral-200 bg-white p-0.5" />
+          </label>
+        </div>
+      )}
+
+      {uiMode === 'gradient' && (
+        <div className="space-y-2.5">
+          <div className="grid grid-cols-4 gap-1.5">
+            {COVER_GRADIENT_PRESETS.map((g, i) => {
+              const cssDir = g.dir === 'lr' ? 'to right' : g.dir === 'diag' ? '135deg' : 'to bottom';
+              const active = mode === 'gradient' && bg?.bgGradientFrom === g.from && bg?.bgGradientTo === g.to;
+              return (
+                <button key={i} type="button" onClick={() => onSetGradient(g.from, g.to, g.dir)}
+                  className={`aspect-[3/4] rounded-lg border transition-transform hover:scale-105 ${
+                    active ? 'border-neutral-900 ring-1 ring-neutral-900' : 'border-neutral-200'
+                  }`}
+                  style={{ background: `linear-gradient(${cssDir}, ${g.from}, ${g.to})` }} />
+              );
+            })}
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="flex-1 flex flex-col gap-1 text-[9px] uppercase tracking-wider text-neutral-400">
+              {lang === 'sq' ? 'Nga' : 'From'}
+              <input type="color" value={from}
+                onInput={e => onSetGradient((e.target as HTMLInputElement).value, to, dir, { live: true })}
+                onChange={e => onSetGradient(e.target.value, to, dir)}
+                className="h-8 w-full cursor-pointer rounded-md border border-neutral-200 p-0.5" />
+            </label>
+            <label className="flex-1 flex flex-col gap-1 text-[9px] uppercase tracking-wider text-neutral-400">
+              {lang === 'sq' ? 'Te' : 'To'}
+              <input type="color" value={to}
+                onInput={e => onSetGradient(from, (e.target as HTMLInputElement).value, dir, { live: true })}
+                onChange={e => onSetGradient(from, e.target.value, dir)}
+                className="h-8 w-full cursor-pointer rounded-md border border-neutral-200 p-0.5" />
+            </label>
+          </div>
+          <div className="grid grid-cols-3 gap-1">
+            {([
+              { id: 'tb' as const, label: lang === 'sq' ? 'Lart↓' : 'Vertical' },
+              { id: 'lr' as const, label: lang === 'sq' ? 'Anash' : 'Horizontal' },
+              { id: 'diag' as const, label: lang === 'sq' ? 'Diag.' : 'Diagonal' },
+            ]).map(d => (
+              <button key={d.id} type="button" onClick={() => onSetGradient(from, to, d.id)}
+                className={`py-1.5 rounded-lg text-[10px] font-medium border transition-colors ${
+                  dir === d.id && mode === 'gradient'
+                    ? 'border-neutral-900 bg-neutral-900 text-white'
+                    : 'border-neutral-200 text-neutral-600 hover:border-neutral-400'
+                }`}>
+                {d.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {uiMode === 'photo' && (
+        <div className="space-y-2">
+          <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
+            onChange={e => {
+              const f = e.target.files?.[0];
+              if (f) onUploadPhoto(f);
+              e.target.value = '';
+            }} />
+          <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
+            className="w-full py-2 border-2 border-dashed border-neutral-300 rounded-xl text-[11px] text-neutral-500 hover:border-neutral-600 flex items-center justify-center gap-1.5 transition-colors disabled:opacity-60">
+            {uploading ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
+            {lang === 'sq' ? 'Ngarko sfond' : 'Upload background'}
+          </button>
+          {bg?.src && (
+            <button type="button" onClick={() => onSetPhoto(null)}
+              className="w-full py-1.5 text-[10px] text-neutral-500 hover:text-neutral-800 rounded-lg hover:bg-neutral-50 transition-colors">
+              {lang === 'sq' ? 'Hiq foton e sfondit' : 'Remove background photo'}
+            </button>
+          )}
+          {photos.length > 0 ? (
+            <div className="grid grid-cols-3 gap-1.5 max-h-36 overflow-y-auto">
+              {photos.map((url, i) => {
+                const active = mode === 'photo' && bg?.src === url;
+                return (
+                  <button key={i} type="button" onClick={() => onSetPhoto(url)}
+                    className={`aspect-square rounded-lg overflow-hidden border transition-all ${
+                      active ? 'border-neutral-900 ring-1 ring-neutral-900' : 'border-neutral-200 hover:border-neutral-600'
+                    }`}>
+                    <img src={url} alt="" className="w-full h-full object-cover" />
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-[10px] text-neutral-400 text-center py-2">
+              {lang === 'sq' ? 'Ngarkoni një foto për sfond' : 'Upload a photo for the background'}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const CoverBackgroundDock = React.forwardRef<HTMLElement, {
+  side: 'left' | 'right';
+  bg?: EditorElement | null;
+  photos: string[];
+  uploading: boolean;
+  lang: 'sq' | 'en';
+  onClose: () => void;
+  onSetColor: (color: string, opts?: { live?: boolean }) => void;
+  onSetGradient: (from: string, to: string, dir: 'tb' | 'lr' | 'diag', opts?: { live?: boolean }) => void;
+  onSetPhoto: (url: string | null) => void;
+  onUploadPhoto: (file: File) => void;
+}>(function CoverBackgroundDock({
+  side, bg, photos, uploading, lang, onClose,
+  onSetColor, onSetGradient, onSetPhoto, onUploadPhoto,
+}, ref) {
+  return (
+    <motion.aside
+      ref={ref as any}
+      initial={{ opacity: 0, x: side === 'left' ? -16 : 16 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: side === 'left' ? -16 : 16 }}
+      transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
+      className={`w-[248px] flex-shrink-0 bg-white flex flex-col min-h-0 ${
+        side === 'left' ? 'border-r border-neutral-200' : 'border-l border-neutral-200'
+      }`}
+    >
+      <div className="flex items-center justify-between px-3 py-2.5 border-b border-neutral-100 flex-shrink-0">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold text-neutral-800 truncate">
+            {lang === 'sq' ? 'Sfondi i kopertinës' : 'Cover background'}
+          </p>
+          <p className="text-[10px] text-neutral-400 mt-0.5 truncate">
+            {side === 'left'
+              ? (lang === 'sq' ? 'Faqja majtas' : 'Left page')
+              : (lang === 'sq' ? 'Faqja djathtas' : 'Right page')}
+          </p>
+        </div>
+        <button type="button" onClick={onClose}
+          className="p-1.5 rounded-lg hover:bg-neutral-100 transition-colors flex-shrink-0" aria-label="Close">
+          <X size={15} className="text-neutral-400" />
+        </button>
+      </div>
+      <div className="overflow-y-auto flex-1 min-h-0 p-3">
+        <CoverBackgroundPanel
+          bg={bg}
+          photos={photos}
+          uploading={uploading}
+          lang={lang}
+          compact
+          onSetColor={onSetColor}
+          onSetGradient={onSetGradient}
+          onSetPhoto={onSetPhoto}
+          onUploadPhoto={onUploadPhoto}
+        />
+      </div>
+    </motion.aside>
+  );
+});
+
+function CoverBgMobileSheet({
+  show, onClose, bg, photos, uploading, lang,
+  onSetColor, onSetGradient, onSetPhoto, onUploadPhoto,
+}: {
+  show: boolean;
+  onClose: () => void;
+  bg?: EditorElement | null;
+  photos: string[];
+  uploading: boolean;
+  lang: 'sq' | 'en';
+  onSetColor: (color: string, opts?: { live?: boolean }) => void;
+  onSetGradient: (from: string, to: string, dir: 'tb' | 'lr' | 'diag', opts?: { live?: boolean }) => void;
+  onSetPhoto: (url: string | null) => void;
+  onUploadPhoto: (file: File) => void;
+}) {
+  return (
+    <AnimatePresence>
+      {show && <>
+        <motion.div key="cover-bg-scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          className="fixed inset-0 z-40" style={{ background: 'rgba(0,0,0,0.42)' }} onClick={onClose} />
+        <motion.div key="cover-bg-sheet"
+          initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+          transition={{ type: 'spring', damping: 34, stiffness: 400 }}
+          className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-2xl flex flex-col"
+          style={{ maxHeight: '72vh' }}
+        >
+          <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-100 flex-shrink-0">
+            <span className="text-sm font-semibold text-neutral-900">
+              {lang === 'sq' ? 'Sfondi i kopertinës' : 'Cover background'}
+            </span>
+            <button type="button" onClick={onClose} aria-label="Close">
+              <X size={18} className="text-neutral-400" />
+            </button>
+          </div>
+          <div className="overflow-y-auto flex-1 p-4">
+            <CoverBackgroundPanel
+              bg={bg}
+              photos={photos}
+              uploading={uploading}
+              lang={lang}
+              compact
+              onSetColor={onSetColor}
+              onSetGradient={onSetGradient}
+              onSetPhoto={onSetPhoto}
+              onUploadPhoto={onUploadPhoto}
+            />
+          </div>
+        </motion.div>
+      </>}
+    </AnimatePresence>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Designs Panel
 // ─────────────────────────────────────────────────────────────────────────────
 
-function DesignsPanel({onApply,lang}: {onApply:(d:DesignDef)=>void;lang:'sq'|'en'}) {
-  const categories=useMemo(()=>[...new Set(DESIGNS.map(d=>d.category))],[]);
+function DesignsPanel({onApply, lang, designs}: {
+  onApply: (d: DesignDef) => void;
+  lang: 'sq' | 'en';
+  designs: DesignDef[];
+}) {
+  const categories = useMemo(() => [...new Set(designs.map(d => d.category))], [designs]);
   return (
-    <div className="overflow-y-auto flex-1">
+    <div className="overflow-y-auto flex-1 flex flex-col min-h-0">
       <p className="text-[9px] uppercase tracking-widest text-neutral-400 px-3 pt-2 pb-1">
-        {lang==='sq'?'Kliko — aplikon në të gjitha faqet':'Click — applies to all pages'}
+        {lang === 'sq'
+          ? 'Kliko një stil — ndryshon vetëm pjesët e jashtme'
+          : 'Click a style — changes outer covers only'}
       </p>
-      {categories.map(cat=>(
+      {categories.map(cat => (
         <div key={cat} className="px-3 pb-4">
           <p className="text-[9px] uppercase tracking-widest text-neutral-500 font-semibold mb-2.5 mt-2">
             {(CATEGORY_LABELS[cat]?.[lang]) ?? cat}
           </p>
           <div className="grid grid-cols-3 gap-2">
-            {DESIGNS.filter(d=>d.category===cat).map(d=>(
-              <DesignThumb key={d.id} design={d} lang={lang} onApply={()=>onApply(d)}/>
+            {designs.filter(d => d.category === cat).map(d => (
+              <DesignThumb key={d.id} design={d} lang={lang} onApply={() => onApply(d)} />
             ))}
           </div>
         </div>
@@ -1380,10 +2365,11 @@ function DesignsPanel({onApply,lang}: {onApply:(d:DesignDef)=>void;lang:'sq'|'en
 // Desktop Sidebar
 // ─────────────────────────────────────────────────────────────────────────────
 
-function Sidebar({tab,onTab,photos,onUpload,uploading,onAddPhoto,onAddText,onLayout,onApplyDesign,selectedId,onDelete,lang}: {
+function Sidebar({tab,onTab,photos,onUpload,uploading,onAddPhoto,onAddText,onLayout,onApplyDesign,selectedId,onDelete,lang,designs}: {
   tab:SideTab; onTab:(t:SideTab)=>void; photos:string[]; onUpload:(f:File)=>void; uploading:boolean;
   onAddPhoto:(url:string)=>void; onAddText:(s?:{fontSize?:number;fontStyle?:string;align?:'left'|'center'|'right'})=>void; onLayout:(id:string)=>void;
   onApplyDesign:(d:DesignDef)=>void; selectedId:string|null; onDelete:()=>void; lang:'sq'|'en';
+  designs: DesignDef[];
 }) {
   const fileRef=useRef<HTMLInputElement>(null);
   return (
@@ -1402,7 +2388,7 @@ function Sidebar({tab,onTab,photos,onUpload,uploading,onAddPhoto,onAddText,onLay
         ))}
       </div>
       <div className="flex flex-col flex-1 overflow-hidden min-h-0">
-        {tab==='designs' && <DesignsPanel onApply={onApplyDesign} lang={lang}/>}
+        {tab==='designs' && <DesignsPanel onApply={onApplyDesign} lang={lang} designs={designs}/>}
         {tab==='layouts' && (
           <div className="overflow-y-auto flex-1 p-3">
             <p className="text-[9px] uppercase tracking-widest text-neutral-400 mb-3">
@@ -1491,10 +2477,11 @@ function Sidebar({tab,onTab,photos,onUpload,uploading,onAddPhoto,onAddText,onLay
 // Mobile Bottom Sheet
 // ─────────────────────────────────────────────────────────────────────────────
 
-function MobileSheet({tab,show,onClose,photos,onUpload,uploading,onAddPhoto,onLayout,onAddText,onApplyDesign,lang}: {
+function MobileSheet({tab,show,onClose,photos,onUpload,uploading,onAddPhoto,onLayout,onAddText,onApplyDesign,lang,designs}: {
   tab:SideTab; show:boolean; onClose:()=>void; photos:string[]; onUpload:(f:File)=>void; uploading:boolean;
   onAddPhoto:(url:string)=>void; onLayout:(id:string)=>void; onAddText:(s?:{fontSize?:number;fontStyle?:string;align?:'left'|'center'|'right'})=>void;
   onApplyDesign:(d:DesignDef)=>void; lang:'sq'|'en';
+  designs: DesignDef[];
 }) {
   const fileRef=useRef<HTMLInputElement>(null);
   return (
@@ -1516,13 +2503,18 @@ function MobileSheet({tab,show,onClose,photos,onUpload,uploading,onAddPhoto,onLa
           <div className="overflow-y-auto flex-1 p-4">
             {tab==='designs' && (
               <div className="space-y-4">
-                {[...new Set(DESIGNS.map(d=>d.category))].map(cat=>(
+                <p className="text-[10px] text-neutral-400 leading-snug">
+                  {lang === 'sq'
+                    ? 'Kliko një stil — ndryshon vetëm pjesët e jashtme. Faqet e brendshme mbeten siç janë.'
+                    : 'Click a style — changes outer covers only. Inside pages stay the same.'}
+                </p>
+                {[...new Set(designs.map(d=>d.category))].map(cat=>(
                   <div key={cat}>
                     <p className="text-[9px] uppercase tracking-widest text-neutral-400 font-semibold mb-2">{cat}</p>
                     <div className="flex gap-3 overflow-x-auto pb-1">
-                      {DESIGNS.filter(d=>d.category===cat).map(d=>(
+                      {designs.filter(d=>d.category===cat).map(d=>(
                         <div key={d.id} className="flex-shrink-0">
-                          <DesignThumb design={d} lang={lang} onApply={()=>{onApplyDesign(d);onClose();}}/>
+                          <DesignThumb design={d} lang={lang} onApply={()=>onApplyDesign(d)}/>
                         </div>
                       ))}
                     </div>
@@ -1712,7 +2704,7 @@ function OrderModal({project,onClose,lang}: {project:any;onClose:()=>void;lang:'
 export default function Editor() {
   const [,params]=useRoute('/editor/:id');
   const projectId=Number(params?.id);
-  const {lang}=useLanguage();
+  const {lang,t}=useLanguage();
   const {getToken}=useAuth();
   const queryClient=useQueryClient();
 
@@ -1761,25 +2753,12 @@ export default function Editor() {
   const [pickerOpen,setPickerOpen]=useState(false);
   const [saveStatus,setSaveStatus]=useState<'saved'|'saving'|'unsaved'>('saved');
   const [designToast,setDesignToast]=useState<string|null>(null);
+  const [pendingDesign,setPendingDesign]=useState<DesignDef|null>(null);
 
-  // Load Google Fonts for text editor
-  useEffect(()=>{
-    const id='gfonts-editor';
-    if (document.getElementById(id)) return;
-    const load=()=>{
-      const link=document.createElement('link');
-      link.id=id; link.rel='stylesheet';
-      link.href='https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=Dancing+Script:wght@400;600&family=Great+Vibes&family=Pacifico&family=Raleway:wght@300;400&family=Montserrat:wght@300;400&display=swap';
-      document.head.appendChild(link);
-    };
-    // Defer font loading until the browser is idle — fonts are only needed when
-    // the user starts editing text, so they must not block the initial paint.
-    if ('requestIdleCallback' in window) {
-      (window as any).requestIdleCallback(load, {timeout:3000});
-    } else {
-      setTimeout(load, 1000);
-    }
-  },[]);
+  // Webfonts start in main.tsx; keep a subscribe here so first paint after
+  // navigation still remounts Konva text once faces are ready.
+  useEditorFontsReady();
+  useEffect(() => { void ensureEditorFonts(); }, []);
 
   const shapeRefs=useRef<Record<string,any>>({});
   const canvasRef=useRef<HTMLDivElement>(null);
@@ -1942,6 +2921,36 @@ export default function Editor() {
     return p.dbId;
   },[currentSpread,activeSide]);
 
+  const activePageRole=useMemo((): PageRole | null => {
+    if (!currentSpread) return null;
+    if (currentSpread.isSolo) return (currentSpread.right??currentSpread.left)?.role??null;
+    const p=activeSide==='left'?currentSpread.left:currentSpread.right;
+    if (!p||p.role==='locked_left'||p.role==='locked_right') {
+      const other=activeSide==='left'?currentSpread.right:currentSpread.left;
+      if (other&&other.role!=='locked_left'&&other.role!=='locked_right') return other.role;
+      return null;
+    }
+    return p.role;
+  },[currentSpread,activeSide]);
+
+  const isCoverPage = activePageRole === 'front_cover' || activePageRole === 'back_cover';
+
+  const activeCoverBg = useMemo(() => {
+    if (!isCoverPage || !activePageId) return null;
+    return (pagesContent[activePageId] ?? []).find(e => e.type === 'background') ?? null;
+  }, [isCoverPage, activePageId, pagesContent]);
+
+  const selectedIsBackground = !!(activeCoverBg && selectedId === activeCoverBg.id);
+
+  // Dock beside the page that owns the cover: back/left → left, front/right → right.
+  const coverBgDockSide: 'left' | 'right' =
+    activePageRole === 'back_cover' || activeSide === 'left' ? 'left' : 'right';
+
+  // Don't stack the tools sheet over the cover-background sheet on mobile.
+  useEffect(() => {
+    if (selectedIsBackground) setShowSheet(false);
+  }, [selectedIsBackground]);
+
   // Only pass the 2 pages of the current spread to SpreadView so React.memo
   // can short-circuit re-renders caused by edits on other spreads.
   const spreadContent=useMemo(()=>{
@@ -2100,7 +3109,8 @@ export default function Editor() {
     dirtyPages.current.add(pid);
     // Position/size commits after drag: sync update (node already at final place).
     // Toolbar text tweaks can be deferred.
-    const isGeom='x' in changes||'y' in changes||'w' in changes||'h' in changes||'rotation' in changes;
+    const isGeom='x' in changes||'y' in changes||'w' in changes||'h' in changes||'rotation' in changes
+      ||'cropFocusX' in changes||'cropFocusY' in changes;
     if (isGeom||wasGesture) setPagesContent(next);
     else startTransition(()=>setPagesContent(next));
     // Sync undo/redo button counts deferred from silent drag-start snapshot.
@@ -2115,7 +3125,10 @@ export default function Editor() {
     if (!selectedId||!activePageId) return;
     // Read from the live ref so pagesContent is not in the dep array — otherwise
     // this callback would be recreated on every element edit, breaking memo.
-    updatePage(activePageId,(liveContent.current[activePageId]??[]).filter(e=>e.id!==selectedId));
+    const els = liveContent.current[activePageId]??[];
+    const target = els.find(e => e.id === selectedId);
+    if (!target || target.type === 'background') return;
+    updatePage(activePageId, els.filter(e=>e.id!==selectedId));
     setSelectedId(null);
   },[selectedId,activePageId,updatePage]);
 
@@ -2138,15 +3151,103 @@ export default function Editor() {
     // Read from the live ref to avoid pagesContent in deps (which would cause
     // this callback to be recreated on every element edit, breaking memo).
     const els=liveContent.current[activePageId]??[];
+    // Replace selected image (reset crop focus for the new asset).
+    const selImg=els.find(e=>e.id===selectedId&&e.type==='image'&&!!e.src);
+    if (selImg){
+      updatePage(activePageId,els.map(e=>e.id===selImg.id
+        ?{...e,src:url,cropFocusX:0.5,cropFocusY:0.5}
+        :e));
+      return;
+    }
     const ph=els.find(e=>e.id===selectedId&&e.type==='placeholder')
            ??els.find(e=>e.type==='placeholder');
-    if (ph){updatePage(activePageId,els.map(e=>e.id===ph.id?{...e,type:'image' as const,src:url}:e));setSelectedId(null);return;}
+    if (ph){
+      updatePage(activePageId,els.map(e=>e.id===ph.id
+        ?{...e,type:'image' as const,src:url,cropFocusX:0.5,cropFocusY:0.5}
+        :e));
+      setSelectedId(null);
+      return;
+    }
     const hasImages=els.some(e=>e.type==='image');
     const el:EditorElement=hasImages
-      ?{id:`img-${Date.now()}`,type:'image',src:url,x:50,y:Math.round(60*canvasH/DESIGN_H),w:500,h:Math.round(340*canvasH/DESIGN_H),rotation:0}
-      :{id:`img-${Date.now()}`,type:'image',src:url,x:0,y:0,w:DESIGN_W,h:canvasH,rotation:0};
+      ?{id:`img-${Date.now()}`,type:'image',src:url,x:50,y:Math.round(60*canvasH/DESIGN_H),w:500,h:Math.round(340*canvasH/DESIGN_H),rotation:0,cropFocusX:0.5,cropFocusY:0.5}
+      :{id:`img-${Date.now()}`,type:'image',src:url,x:0,y:0,w:DESIGN_W,h:canvasH,rotation:0,cropFocusX:0.5,cropFocusY:0.5};
     updatePage(activePageId,[...els,el]); setSelectedId(el.id);
   },[activePageId,selectedId,updatePage,canvasH]);
+
+  const applyCoverPatch = useCallback((
+    patch: Parameters<typeof applyCoverBackground>[2],
+    opts?: { live?: boolean },
+  ) => {
+    if (!activePageId) return;
+    if (opts?.live) {
+      beginHistoryGesture();
+    } else {
+      if (gestureHistoryRef.current) {
+        gestureHistoryRef.current = false;
+        setHistoryLen(historyRef.current.length);
+        setRedoLen(redoRef.current.length);
+      } else {
+        pushHistory();
+      }
+    }
+    const els = liveContent.current[activePageId] ?? [];
+    const nextEls = applyCoverBackground(els, canvasH, patch);
+    const next = { ...liveContent.current, [activePageId]: nextEls };
+    liveContent.current = next;
+    dirtyPages.current.add(activePageId);
+    setPagesContent(next);
+    triggerSave();
+  }, [activePageId, canvasH, beginHistoryGesture, pushHistory, triggerSave]);
+
+  const setCoverColor = useCallback((color: string, opts?: { live?: boolean }) => {
+    applyCoverPatch({ mode: 'color', bgColor: color }, opts);
+  }, [applyCoverPatch]);
+
+  const setCoverGradient = useCallback((
+    from: string, to: string, dir: 'tb' | 'lr' | 'diag', opts?: { live?: boolean },
+  ) => {
+    applyCoverPatch({
+      mode: 'gradient', bgGradientFrom: from, bgGradientTo: to, bgGradientDir: dir,
+    }, opts);
+  }, [applyCoverPatch]);
+
+  const setCoverPhoto = useCallback((url: string | null) => {
+    if (!activePageId) return;
+    const els = liveContent.current[activePageId] ?? [];
+    if (url === null) {
+      const bg = els.find(e => e.type === 'background');
+      applyCoverPatch({ mode: 'color', bgColor: bg?.bgColor || '#FFFFFF' });
+      return;
+    }
+    applyCoverPatch({ mode: 'photo', src: url });
+  }, [activePageId, applyCoverPatch]);
+
+  const uploadCoverPhoto = useCallback(async (file: File) => {
+    setUploading(true);
+    try {
+      const compressed = await compressImageFile(file);
+      const token = getToken();
+      const fd = new FormData();
+      fd.append('file', compressed);
+      const r = await fetch('/api/uploads/image', {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd,
+      });
+      if (!r.ok) throw new Error(await r.text());
+      const data = await r.json();
+      if (data.url) {
+        setPhotos(prev => [data.url, ...prev]);
+        setCoverPhoto(data.url);
+      }
+    } catch (e) {
+      console.error('Cover bg upload failed', e);
+      alert(e instanceof ImageTooLargeError ? e.message : (lang === 'sq' ? 'Ngarkimi dështoi.' : 'Upload failed.'));
+    } finally {
+      setUploading(false);
+    }
+  }, [getToken, setCoverPhoto, lang]);
 
   // Upload a file and immediately place it on the active page (used by InlinePhotoPicker)
   const uploadAndPlace=useCallback(async(file:File)=>{
@@ -2243,6 +3344,68 @@ export default function Editor() {
     } catch(e){console.error('Add spread failed',e);}
     finally{setAddingSpread(false);}
   },[project,addingSpread,getToken,projectId,lang,refetchProject]);
+
+  const [deletingSpread,setDeletingSpread]=useState(false);
+  const {data:appSettings}=useGetAppSettings();
+  const designOverrides = ((appSettings as any)?.designOverrides || {}) as DesignOverrides;
+  const hiddenDesignIds: string[] = (appSettings as any)?.hiddenDesignIds || [];
+  const designsCatalog = useMemo(() => {
+    const all = applyDesignOverrides(DESIGNS, designOverrides);
+    if (!hiddenDesignIds.length) return all;
+    return all.filter(d => !hiddenDesignIds.includes(d.id));
+  }, [designOverrides, hiddenDesignIds]);
+  const minInnerPages=Number(bookSize?.minPages)
+    || Number((appSettings as any)?.minPages)
+    || 30;
+
+  const deleteSpread=useCallback(async(spreadIdx:number)=>{
+    if(!project?.pages||deletingSpread) return;
+    const sp=spreads[spreadIdx];
+    if(!sp||sp.isSolo||spreadIdx<2) return;
+    const ids=[sp.left,sp.right].filter((p):p is PageDef=>!!p&&p.role==='inner').map(p=>p.dbId);
+    if(!ids.length) return;
+    const innerCount=project.pages.filter((p:any)=>p.pageType==='inner').length;
+    if(innerCount-ids.length<minInnerPages){
+      window.alert(lang==='sq'
+        ?`Nuk mund të fshini më shumë — minimumi është ${minInnerPages} faqe.`
+        :`Can't delete more — minimum is ${minInnerPages} pages.`);
+      return;
+    }
+    const ok=window.confirm(lang==='sq'
+      ?'Fshi këto faqe ekstra?'
+      :'Delete these extra pages?');
+    if(!ok) return;
+    setDeletingSpread(true);
+    try{
+      const token=getToken();
+      const headers:Record<string,string>={};
+      if(token) headers['Authorization']=`Bearer ${token}`;
+      for(const pageId of ids){
+        const r=await fetch(`/api/projects/${projectId}/pages/${pageId}`,{method:'DELETE',headers});
+        if(!r.ok) throw new Error(`delete page ${pageId} failed`);
+      }
+      // Renumber remaining inners so page numbers stay contiguous
+      const remaining=project.pages
+        .filter((p:any)=>p.pageType==='inner'&&!ids.includes(p.id))
+        .sort((a:any,b:any)=>a.pageNumber-b.pageNumber);
+      await Promise.all(remaining.map((p:any,i:number)=>
+        fetch(`/api/projects/${projectId}/pages/${p.id}`,{
+          method:'PATCH',headers:{...headers,'Content-Type':'application/json'},
+          body:JSON.stringify({pageNumber:i+1}),
+        })
+      ));
+      const result=await refetchProject();
+      const freshPages=(result.data as any)?.pages??[];
+      const freshSpreads=buildSpreads(freshPages,lang);
+      setSpreadIdx(si=>Math.min(si,Math.max(0,freshSpreads.length-1)));
+      setSelectedId(null);
+    }catch(e){
+      console.error('Delete spread failed',e);
+      window.alert(lang==='sq'?'Fshirja e faqeve dështoi.':'Failed to delete pages.');
+    }finally{
+      setDeletingSpread(false);
+    }
+  },[project,spreads,deletingSpread,minInnerPages,getToken,projectId,lang,refetchProject]);
 
   const [editRequestId,setEditRequestId]=useState<string|null>(null);
   const clearEditRequest=useCallback(()=>setEditRequestId(null),[]);
@@ -2371,16 +3534,23 @@ export default function Editor() {
       applyBlankStarter();
       return;
     }
-    const design=DESIGNS.find(d=>d.id===designId);
+    const design=designsCatalog.find(d=>d.id===designId);
     if (design) applyDesign(design);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[Object.keys(pagesContent).length]);
 
   // Stable callback for MobileSheet — avoids an inline arrow in JSX that would
   // defeat React.memo on MobileSheet and recreate it on every render.
-  const applyDesignAndClose=useCallback((d:DesignDef)=>{
-    applyDesign(d); setShowSheet(false);
-  },[applyDesign]);
+  const requestApplyDesign=useCallback((d:DesignDef)=>{
+    setPendingDesign(d);
+  },[]);
+
+  const confirmApplyDesign=useCallback(()=>{
+    if (!pendingDesign) return;
+    applyDesign(pendingDesign);
+    setPendingDesign(null);
+    setShowSheet(false);
+  },[pendingDesign,applyDesign]);
 
   const openPhotos=useCallback(()=>{
     setPickerOpen(true);
@@ -2457,6 +3627,28 @@ export default function Editor() {
           ✓&ensp;{lang==='sq'?`"${designToast}" u aplikua`:`"${designToast}" applied`}
         </div>
       )}
+
+      <AlertDialog open={!!pendingDesign} onOpenChange={(open)=>{ if (!open) setPendingDesign(null); }}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('editor.designConfirm.title')}</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <span className="block">{t('editor.designConfirm.body')}</span>
+              {pendingDesign && (
+                <span className="block text-neutral-700 font-medium">
+                  {pendingDesign.name[lang] ?? pendingDesign.id}
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('editor.designConfirm.cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmApplyDesign}>
+              {t('editor.designConfirm.apply')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       {/* ── Collapsible header wrapper (mobile: 64 px; desktop: 54 px) ── */}
       <div
         className="flex-shrink-0 overflow-hidden"
@@ -2569,8 +3761,9 @@ export default function Editor() {
       <div className="flex flex-1 overflow-hidden min-h-0">
         {!isMobile && (
           <Sidebar tab={tab} onTab={setTab} photos={photos} onUpload={upload} uploading={uploading}
-            onAddPhoto={addPhoto} onAddText={addText} onLayout={applyLayout} onApplyDesign={applyDesign}
-            selectedId={selectedId} onDelete={deleteSelected} lang={lang}/>
+            onAddPhoto={addPhoto} onAddText={addText} onLayout={applyLayout} onApplyDesign={requestApplyDesign}
+            selectedId={selectedIsBackground ? null : selectedId} onDelete={deleteSelected} lang={lang}
+            designs={designsCatalog}/>
         )}
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
 
@@ -2712,28 +3905,65 @@ export default function Editor() {
           )}
 
           {/* Canvas area — page swipe handled on Konva stage (PageCanvas) */}
-          <div ref={canvasRef}
-            className="flex-1 min-h-0 flex items-center justify-center"
-            style={isMobile
-              ? {overflow:'hidden',padding:'12px',touchAction:'pan-y'}
-              : {padding:'32px 40px',overflowY:'auto',display:'flex',alignItems:'center',justifyContent:'center',touchAction:'pan-y'}}>
-            {currentSpread ? (
-              <SpreadView spread={currentSpread} spreadContent={spreadContent}
-                selectedId={selectedId} activeSide={activeSide}
-                onActiveSide={setActiveSide}
-                onSelectId={setSelectedId} onChangeEl={changeEl} onOpenPhotos={openPhotos} onDelete={deleteSelected}
-                onGestureStart={beginHistoryGesture}
-                onElementDragActive={onElementDragActive}
-                onPageSwipe={isMobile ? onPageSwipe : undefined}
-                editRequestId={editRequestId} onEditRequestHandled={clearEditRequest}
-                pageW={pageW} pageH={pageH} canvasH={canvasH} shapeRefs={shapeRefs} isMobile={isMobile}/>
-            ) : <p className="text-neutral-400 text-sm">No pages found</p>}
+          <div className="flex-1 min-h-0 flex overflow-hidden">
+            <AnimatePresence initial={false}>
+              {!isMobile && selectedIsBackground && coverBgDockSide === 'left' && (
+                <CoverBackgroundDock
+                  key="cover-bg-dock-left"
+                  side="left"
+                  bg={activeCoverBg}
+                  photos={photos}
+                  uploading={uploading}
+                  lang={lang}
+                  onClose={() => setSelectedId(null)}
+                  onSetColor={setCoverColor}
+                  onSetGradient={setCoverGradient}
+                  onSetPhoto={setCoverPhoto}
+                  onUploadPhoto={uploadCoverPhoto}
+                />
+              )}
+            </AnimatePresence>
+            <div ref={canvasRef}
+              className="flex-1 min-h-0 flex items-center justify-center min-w-0"
+              style={isMobile
+                ? {overflow:'hidden',padding:'12px',touchAction:'pan-y'}
+                : {padding:'32px 40px',overflowY:'auto',display:'flex',alignItems:'center',justifyContent:'center',touchAction:'pan-y'}}>
+              {currentSpread ? (
+                <SpreadView spread={currentSpread} spreadContent={spreadContent}
+                  selectedId={selectedId} activeSide={activeSide}
+                  onActiveSide={setActiveSide}
+                  onSelectId={setSelectedId} onChangeEl={changeEl} onOpenPhotos={openPhotos} onDelete={deleteSelected}
+                  onGestureStart={beginHistoryGesture}
+                  onElementDragActive={onElementDragActive}
+                  onPageSwipe={isMobile ? onPageSwipe : undefined}
+                  editRequestId={editRequestId} onEditRequestHandled={clearEditRequest}
+                  pageW={pageW} pageH={pageH} canvasH={canvasH} shapeRefs={shapeRefs} isMobile={isMobile}/>
+              ) : <p className="text-neutral-400 text-sm">No pages found</p>}
+            </div>
+            <AnimatePresence initial={false}>
+              {!isMobile && selectedIsBackground && coverBgDockSide === 'right' && (
+                <CoverBackgroundDock
+                  key="cover-bg-dock-right"
+                  side="right"
+                  bg={activeCoverBg}
+                  photos={photos}
+                  uploading={uploading}
+                  lang={lang}
+                  onClose={() => setSelectedId(null)}
+                  onSetColor={setCoverColor}
+                  onSetGradient={setCoverGradient}
+                  onSetPhoto={setCoverPhoto}
+                  onUploadPhoto={uploadCoverPhoto}
+                />
+              )}
+            </AnimatePresence>
           </div>
           <SpreadNav spreads={spreads} current={spreadIdx}
             onChange={onSpreadChange}
             onAddSpread={addSpread} addingSpread={addingSpread}
             onReorder={reorderSpreads}
-            pagesContent={deferredPagesContent} canvasH={canvasH}/>
+            onDeleteSpread={deleteSpread} deletingSpread={deletingSpread}
+            pagesContent={deferredPagesContent} canvasH={canvasH} lang={lang}/>
           {isMobile && (
             <div className="flex items-center border-t border-neutral-200 bg-white py-1 px-1 flex-shrink-0" style={{gap:2}}>
               {([
@@ -2747,8 +3977,8 @@ export default function Editor() {
                   <Icon size={20}/>{label}
                 </button>
               ))}
-              <button onClick={deleteSelected} disabled={!selectedId}
-                className={`flex flex-col items-center gap-0.5 flex-1 py-1.5 rounded-xl text-[10px] transition-colors ${selectedId?'text-red-400 active:bg-red-50':'text-neutral-200 pointer-events-none'}`}>
+              <button onClick={deleteSelected} disabled={!selectedId || selectedIsBackground}
+                className={`flex flex-col items-center gap-0.5 flex-1 py-1.5 rounded-xl text-[10px] transition-colors ${selectedId && !selectedIsBackground?'text-red-400 active:bg-red-50':'text-neutral-200 pointer-events-none'}`}>
                 <Trash2 size={20}/>{lang==='sq'?'Fshi':'Delete'}
               </button>
             </div>
@@ -2759,7 +3989,22 @@ export default function Editor() {
       {isMobile && <MobileSheet tab={tab} show={showSheet} onClose={()=>setShowSheet(false)}
         photos={photos} onUpload={upload} uploading={uploading}
         onAddPhoto={addPhoto} onLayout={applyLayout} onAddText={addText}
-        onApplyDesign={applyDesignAndClose} lang={lang}/>}
+        onApplyDesign={requestApplyDesign} lang={lang} designs={designsCatalog}/>}
+
+      {isMobile && (
+        <CoverBgMobileSheet
+          show={selectedIsBackground}
+          onClose={() => setSelectedId(null)}
+          bg={activeCoverBg}
+          photos={photos}
+          uploading={uploading}
+          lang={lang}
+          onSetColor={setCoverColor}
+          onSetGradient={setCoverGradient}
+          onSetPhoto={setCoverPhoto}
+          onUploadPhoto={uploadCoverPhoto}
+        />
+      )}
 
       {pickerOpen && (
         <InlinePhotoPicker

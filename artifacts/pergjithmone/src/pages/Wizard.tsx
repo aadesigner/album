@@ -8,11 +8,12 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Link } from 'wouter';
 import { DESIGN_METAS, DESIGN_CATEGORY_LABELS, DB_CAT_TO_DESIGN_CAT, type DesignMeta } from '@/lib/designMeta';
-import { DESIGNS, BLANK_STARTER_ID } from '@/lib/designs';
+import { DESIGNS, BLANK_STARTER_ID, applyDesignOverrides, type DesignOverrides } from '@/lib/designs';
 import { ResponsivePageThumb } from '@/components/PageThumb';
 import { SEOMeta } from '@/components/SEOMeta';
 import { useToast } from '@/hooks/use-toast';
 import { getCategoryImage } from '@/lib/categoryImages';
+import { createProjectErrorMessage } from '@/lib/projectErrors';
 
 
 // ── Book size card ───────────────────────────────────────────────────────────
@@ -110,13 +111,17 @@ export function SizeCard({ size, isSelected, onClick, lang, t }: any) {
 }
 
 // ── Design card thumbnail ─────────────────────────────────────────────────────
-function DesignCard({ design, isSelected, lang, onClick }: {
+function DesignCard({ design, isSelected, lang, onClick, overrides }: {
   design: DesignMeta; isSelected: boolean; lang: 'sq' | 'en'; onClick: () => void;
+  overrides?: DesignOverrides | null;
 }) {
   // Render the *real* design elements (same data applyDesign() uses in the
   // Editor), so this preview is pixel-accurate to what the front cover, back
   // cover, and page background will actually look like once applied.
-  const realDesign = useMemo(() => DESIGNS.find(d => d.id === design.id), [design.id]);
+  const realDesign = useMemo(
+    () => applyDesignOverrides(DESIGNS, overrides).find(d => d.id === design.id),
+    [design.id, overrides],
+  );
   return (
     <motion.button
       onClick={onClick}
@@ -132,16 +137,11 @@ function DesignCard({ design, isSelected, lang, onClick }: {
             : 'ring-1 ring-neutral-200 hover:ring-neutral-400 hover:shadow-lg'
         }`}
       >
-        {realDesign?.thumbPhoto
-          ? <div style={{ aspectRatio: '3/4', position: 'relative', overflow: 'hidden' }}>
-              <img src={realDesign.thumbPhoto} alt={design.name[lang]} style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover' }}/>
-              <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.15)' }}/>
+        {realDesign
+          ? <ResponsivePageThumb elements={realDesign.elements} />
+          : <div style={{ aspectRatio: '3/4', ...design.thumb }}>
+              {design.thumbAccents.map((style, i) => <div key={i} style={{ position: 'absolute', ...style }} />)}
             </div>
-          : realDesign
-            ? <ResponsivePageThumb elements={realDesign.elements} />
-            : <div style={{ aspectRatio: '3/4', ...design.thumb }}>
-                {design.thumbAccents.map((style, i) => <div key={i} style={{ position: 'absolute', ...style }} />)}
-              </div>
         }
 
         {/* Selected state overlay */}
@@ -171,6 +171,7 @@ export default function Wizard() {
   const [selectedDesignId, setSelectedDesignId] = useState<string | null>(null);
   const [selectedSize, setSelectedSize] = useState<number | null>(null);
   const [, setLocation] = useLocation();
+  const [preselectDone, setPreselectDone] = useState(false);
 
   const { data: categories, isLoading: loadingCat } = useListCategories();
   const { data: bookSizes, isLoading: loadingSizes } = useListBookSizes();
@@ -178,9 +179,48 @@ export default function Wizard() {
   const createProject = useCreateProject();
   const { toast } = useToast();
 
+  // Home category cards deep-link to cover/style selection via ?category=slug
+  // Showcase albums also pass ?design=id so the cover is pre-highlighted.
+  useEffect(() => {
+    if (preselectDone || loadingCat || !categories?.length) return;
+    const params = new URLSearchParams(window.location.search);
+    const slug = (params.get('category') || '').trim().toLowerCase();
+    const designId = (params.get('design') || '').trim();
+
+    if (designId && DESIGN_METAS.some(d => d.id === designId)) {
+      setSelectedDesignId(designId);
+      const designCat = DESIGN_METAS.find(d => d.id === designId)?.category;
+      if (designCat) {
+        const match = (categories as any[]).find((c: any) =>
+          DB_CAT_TO_DESIGN_CAT[c.nameAl] === designCat
+          || DB_CAT_TO_DESIGN_CAT[c.nameEn] === designCat
+          || DB_CAT_TO_DESIGN_CAT[c.slug] === designCat
+        );
+        if (match?.id != null) setSelectedCategory(match.id);
+      }
+      setStep(2);
+      setPreselectDone(true);
+      return;
+    }
+
+    if (!slug) { setPreselectDone(true); return; }
+    const match = (categories as any[]).find((c: any) =>
+      String(c.slug || '').toLowerCase() === slug
+      || String(c.nameAl || '').toLowerCase() === slug
+      || String(c.nameEn || '').toLowerCase() === slug
+    );
+    if (match?.id != null) {
+      setSelectedCategory(match.id);
+      setSelectedDesignId(null);
+      setStep(2);
+    }
+    setPreselectDone(true);
+  }, [categories, loadingCat, preselectDone]);
+
   const siteSettings = settings as any;
   const bookCreationEnabled = siteSettings?.bookCreationEnabled !== false;
   const hiddenDesignIds: string[] = siteSettings?.hiddenDesignIds || [];
+  const designOverrides = (siteSettings?.designOverrides || {}) as DesignOverrides;
 
   // Map selected DB category → design category → filter designs
   const selectedCatName = useMemo(() => {
@@ -232,7 +272,7 @@ export default function Wizard() {
       .then(proj => setLocation(`/editor/${proj.id}`))
       .catch((e: any) => {
         console.error(e);
-        const msg = e?.data?.error || e?.message;
+        const msg = createProjectErrorMessage(e, lang);
         if (!msg) return; // silent on empty/transient failures after retry
         toast({
           title: lang === 'sq' ? 'Nuk mund të krijohet albumi' : 'Could not create photobook',
@@ -265,7 +305,7 @@ export default function Wizard() {
       setLocation(`/editor/${proj.id}`);
     } catch (e: any) {
       console.error('Failed to create project', e);
-      const msg = e?.data?.error || e?.message;
+      const msg = createProjectErrorMessage(e, lang);
       if (!msg) return;
       toast({
         title: lang === 'sq' ? 'Nuk mund të krijohet albumi' : 'Could not create photobook',
@@ -525,6 +565,7 @@ export default function Wizard() {
                         isSelected={selectedDesignId === design.id}
                         lang={lang as 'sq' | 'en'}
                         onClick={() => handleDesignSelect(design.id)}
+                        overrides={designOverrides}
                       />
                     </motion.div>
                   ))}

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AdminLayout } from '@/components/layout/AdminLayout';
+import { AdminLayout, ADMIN } from '@/components/layout/AdminLayout';
 import { useListAdminOrders, useUpdateAdminOrder } from '@workspace/api-client-react-tsconfig';
 import { format } from 'date-fns';
 import { RefreshCw, Eye, FileX, ExternalLink, X, Download, StickyNote } from 'lucide-react';
@@ -12,39 +12,40 @@ const BASE = (import.meta as any).env?.BASE_URL?.replace(/\/$/, '') || '';
 const STATUSES = ['all', 'pending', 'confirmed', 'printing', 'shipped', 'delivered', 'cancelled'] as const;
 
 const STATUS_STYLE: Record<string, string> = {
-  pending:   'bg-amber-50 text-amber-700 border-amber-200',
-  confirmed: 'bg-blue-50 text-blue-700 border-blue-200',
-  printing:  'bg-violet-50 text-violet-700 border-violet-200',
-  shipped:   'bg-cyan-50 text-cyan-700 border-cyan-200',
-  delivered: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  cancelled: 'bg-red-50 text-red-500 border-red-200',
+  pending:   'bg-amber-50 text-amber-800 border-amber-200',
+  confirmed: 'bg-sky-50 text-sky-800 border-sky-200',
+  printing:  'bg-[#F3E4E6] text-[#A85C66] border-[#E8C9CD]',
+  shipped:   'bg-teal-50 text-teal-800 border-teal-200',
+  delivered: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+  cancelled: 'bg-red-50 text-red-600 border-red-200',
 };
 
-const STATUS_EMOJI: Record<string, string> = {
-  pending: '⏳', confirmed: '✅', printing: '🖨️', shipped: '📦', delivered: '🎉', cancelled: '❌',
-};
+function statusLabel(s: string) {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
 
 // ── PDF Viewer Modal ──────────────────────────────────────────────────────────
 function PdfViewerModal({ url, orderId, onClose }: { url: string; orderId: number; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black/80" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="flex items-center justify-between px-5 py-3 bg-white border-b border-rose-100">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-rose-100 flex items-center justify-center">
-            <Eye size={13} className="text-rose-600" />
+      <div className="flex items-center justify-between px-4 sm:px-5 py-3 bg-white" style={{ borderBottom: `1px solid ${ADMIN.line}` }}>
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0" style={{ background: ADMIN.blushSoft }}>
+            <Eye size={13} style={{ color: ADMIN.blushDeep }} />
           </div>
-          <span className="font-semibold text-sm text-neutral-700">PDF Preview — Order #{orderId}</span>
+          <span className="font-serif font-semibold text-sm truncate" style={{ color: ADMIN.ink }}>PDF — Order #{orderId}</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <a href={url} target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 text-xs font-medium transition-colors">
-            <ExternalLink size={12} /> Open in tab
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-colors"
+            style={{ background: ADMIN.blushSoft, color: ADMIN.blushDeep }}>
+            <ExternalLink size={12} /> Open
           </a>
           <a href={url} download
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 text-xs font-medium transition-colors">
-            <Download size={12} /> Download
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-neutral-100 text-neutral-600 hover:bg-neutral-200 text-xs font-medium transition-colors">
+            <Download size={12} />
           </a>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-rose-50 text-neutral-400 hover:text-rose-500 transition-colors">
+          <button onClick={onClose} className="p-1.5 rounded-xl transition-colors" style={{ color: ADMIN.muted }}>
             <X size={16} />
           </button>
         </div>
@@ -105,7 +106,7 @@ function AdminNoteModal({ orderId, initialNote, onClose, onSaved }: {
           />
           <div className="flex gap-3 pt-1">
             <Button type="button" variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
-            <Button type="submit" disabled={saving} className="flex-1 bg-rose-500 hover:bg-rose-600 text-white">
+            <Button type="submit" disabled={saving} className="flex-1 text-white hover:opacity-90 rounded-2xl" style={{ background: ADMIN.blush }}>
               {saving ? 'Saving…' : 'Save Note'}
             </Button>
           </div>
@@ -158,7 +159,7 @@ export default function AdminOrders() {
       refetchOnMount: 'always',
       refetchOnWindowFocus: true,
     },
-  });
+  } as any);
   const updateOrder = useUpdateAdminOrder();
   const queryClient = useQueryClient();
   const [regenId, setRegenId] = useState<number | null>(null);
@@ -226,60 +227,60 @@ export default function AdminOrders() {
         />
       )}
 
-      <div className="p-5 md:p-8 max-w-screen-xl mx-auto">
-        {/* Header */}
+      <div className="p-4 sm:p-5 md:p-8 max-w-screen-xl mx-auto">
         <div className="mb-6">
-          <p className="text-xs text-rose-400 font-medium uppercase tracking-widest mb-1">🛍️ Order Management</p>
-          <h1 className="text-3xl font-serif font-bold text-neutral-900">Orders</h1>
-          <p className="text-sm text-neutral-400 mt-1">{total} total orders</p>
+          <p className="text-[10px] font-semibold tracking-[0.18em] uppercase mb-1.5" style={{ color: ADMIN.blush }}>
+            Fulfillment
+          </p>
+          <h1 className="text-3xl font-serif font-semibold mb-1" style={{ color: ADMIN.ink }}>Orders</h1>
+          <p className="text-sm" style={{ color: ADMIN.muted }}>{total} total</p>
         </div>
 
-        {/* Status tabs */}
-        <div className="flex items-center gap-2 mb-5 overflow-x-auto pb-1">
+        <div className="flex items-center gap-2 mb-5 overflow-x-auto pb-1 -mx-1 px-1">
           {STATUSES.map(s => (
             <button
               key={s}
               onClick={() => setStatusFilter(s)}
-              className={`px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all border ${
+              className="px-3.5 sm:px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all border"
+              style={
                 statusFilter === s
-                  ? 'bg-rose-500 text-white border-rose-500 shadow-sm shadow-rose-200'
-                  : 'bg-white text-neutral-500 border-rose-100 hover:border-rose-300 hover:text-rose-600'
-              }`}
+                  ? { background: ADMIN.blush, color: '#fff', borderColor: ADMIN.blush }
+                  : { background: ADMIN.card, color: ADMIN.muted, borderColor: ADMIN.line }
+              }
             >
-              {s === 'all' ? '✨ All' : `${STATUS_EMOJI[s]} ${s.charAt(0).toUpperCase() + s.slice(1)}`}
+              {s === 'all' ? 'All' : statusLabel(s)}
             </button>
           ))}
-          <button onClick={() => refetch()} className="ml-auto p-2.5 rounded-xl border border-rose-100 hover:bg-rose-50 text-rose-300 hover:text-rose-500 transition-colors shrink-0">
+          <button onClick={() => refetch()} className="ml-auto p-2.5 rounded-2xl border transition-colors shrink-0"
+            style={{ borderColor: ADMIN.line, color: ADMIN.muted }}>
             <RefreshCw size={14} />
           </button>
         </div>
 
-        {/* Table */}
-        <div className="bg-white rounded-2xl shadow-sm border border-rose-50 overflow-hidden">
+        <div className="rounded-2xl shadow-sm overflow-hidden" style={{ background: ADMIN.card, border: `1px solid ${ADMIN.line}` }}>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-rose-50">
+                <tr style={{ borderBottom: `1px solid ${ADMIN.line}` }}>
                   {['#', 'Customer', 'Album', 'Pages', 'Amount', 'Date', 'PDF', 'Status', 'Note', 'Admin Note'].map(h => (
-                    <th key={h} className="px-4 py-3.5 text-left text-[10px] font-semibold text-neutral-300 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                    <th key={h} className="px-3 sm:px-4 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider whitespace-nowrap" style={{ color: ADMIN.muted }}>{h}</th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-rose-50/70">
+              <tbody>
                 {isLoading ? (
                   Array.from({ length: 8 }).map((_, i) => (
-                    <tr key={i}><td colSpan={10} className="px-4 py-4"><div className="h-4 bg-rose-50 rounded animate-pulse" /></td></tr>
+                    <tr key={i}><td colSpan={10} className="px-4 py-4"><div className="h-4 rounded animate-pulse" style={{ background: ADMIN.blushSoft }} /></td></tr>
                   ))
                 ) : !orders.length ? (
                   <tr>
                     <td colSpan={10} className="px-4 py-16 text-center">
-                      <div className="text-4xl mb-2">🌸</div>
-                      <p className="text-neutral-300 text-sm">No orders yet</p>
+                      <p className="text-sm" style={{ color: ADMIN.muted }}>No orders yet</p>
                     </td>
                   </tr>
                 ) : (
                   orders.map((o: any) => (
-                    <tr key={o.id} className="hover:bg-rose-50/30 transition-colors">
+                    <tr key={o.id} className="transition-colors hover:bg-[#FBF7F5]" style={{ borderTop: `1px solid ${ADMIN.line}` }}>
                       {/* ID */}
                       <td className="px-4 py-3.5 font-mono text-xs text-neutral-400">#{o.id}</td>
 
@@ -314,7 +315,8 @@ export default function AdminOrders() {
                           <div className="flex items-center gap-1.5">
                             <button
                               onClick={() => setPdfModal({ url: authedPdfUrl(o.pdfUrl, getToken()), orderId: o.id })}
-                              className="flex items-center gap-1 px-2.5 py-1.5 bg-violet-50 text-violet-600 rounded-lg text-[10px] font-semibold hover:bg-violet-100 transition-colors"
+                              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[10px] font-semibold transition-opacity hover:opacity-80"
+                              style={{ background: ADMIN.blushSoft, color: ADMIN.blushDeep }}
                               title="View PDF"
                             >
                               <Eye size={10} /> View
@@ -347,7 +349,7 @@ export default function AdminOrders() {
                           className={`px-2.5 py-1.5 rounded-full text-[10px] font-semibold border cursor-pointer focus:outline-none focus:ring-1 focus:ring-rose-300 ${STATUS_STYLE[o.status] || 'bg-neutral-50 text-neutral-500 border-neutral-200'}`}
                         >
                           {STATUSES.slice(1).map(s => (
-                            <option key={s} value={s}>{STATUS_EMOJI[s]} {s.charAt(0).toUpperCase() + s.slice(1)}</option>
+                            <option key={s} value={s}>{statusLabel(s)}</option>
                           ))}
                         </select>
                       </td>

@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { AdminLayout } from '@/components/layout/AdminLayout';
-import { useGetAdminSettings, useUpdateAdminSettings } from '@workspace/api-client-react-tsconfig';
+import { AdminLayout, ADMIN } from '@/components/layout/AdminLayout';
+import {
+  useGetAdminSettings, useUpdateAdminSettings,
+  getGetAdminSettingsQueryKey, getGetAppSettingsQueryKey,
+} from '@workspace/api-client-react-tsconfig';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useForm } from 'react-hook-form';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormDescription } from '@/components/ui/form';
 import { DESIGN_METAS, DESIGN_CATEGORY_LABELS } from '@/lib/designMeta';
-import { Eye, EyeOff, Check, AlertTriangle, BookX, BookHeart, Settings, Wrench, DollarSign, Palette, ShieldAlert } from 'lucide-react';
+import { Eye, EyeOff, Check, AlertTriangle, BookX, BookHeart, Settings, Wrench, DollarSign, Palette, ShieldAlert, FileLock2 } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 
-// ── helpers ──────────────────────────────────────────────────────────────────
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
     <button
@@ -16,12 +19,11 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
       role="switch"
       aria-checked={checked}
       onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
-        checked ? 'bg-neutral-900' : 'bg-neutral-200'
-      }`}
+      className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none"
+      style={{ background: checked ? ADMIN.blush : '#E5DCDC' }}
     >
       <span
-        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg transition-transform duration-200 ${
+        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ${
           checked ? 'translate-x-5' : 'translate-x-0'
         }`}
       />
@@ -32,12 +34,15 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
 function SectionHeader({ icon: Icon, title, desc }: { icon: any; title: string; desc: string }) {
   return (
     <div className="flex items-start gap-3 mb-6">
-      <div className="w-9 h-9 rounded-lg bg-neutral-100 flex items-center justify-center shrink-0">
-        <Icon size={16} className="text-neutral-600" />
+      <div
+        className="w-9 h-9 rounded-2xl flex items-center justify-center shrink-0"
+        style={{ background: ADMIN.blushSoft }}
+      >
+        <Icon size={16} style={{ color: ADMIN.blushDeep }} />
       </div>
-      <div>
-        <h3 className="font-semibold text-base text-neutral-900">{title}</h3>
-        <p className="text-sm text-muted-foreground mt-0.5">{desc}</p>
+      <div className="min-w-0">
+        <h3 className="font-serif font-semibold text-lg leading-tight" style={{ color: ADMIN.ink }}>{title}</h3>
+        <p className="text-sm mt-0.5" style={{ color: ADMIN.muted }}>{desc}</p>
       </div>
     </div>
   );
@@ -46,11 +51,11 @@ function SectionHeader({ icon: Icon, title, desc }: { icon: any; title: string; 
 const CATEGORY_ORDER = ['Wedding','Travel','Baby & Family','Celebration','Modern','Portrait','Nature'];
 
 export default function AdminSettings() {
+  const queryClient = useQueryClient();
   const { data: settings, isLoading } = useGetAdminSettings();
   const updateSettings = useUpdateAdminSettings();
   const s = settings as any;
 
-  // ── Main form (scalar fields) ─────────────────────────────────────────────
   const form = useForm({
     values: {
       whatsappNumber:       s?.whatsappNumber       || '',
@@ -66,9 +71,9 @@ export default function AdminSettings() {
       bookCreationEnabled:  s?.bookCreationEnabled   ?? true,
       bookDisabledNoticeAl: s?.bookDisabledNoticeAl  || '',
       bookDisabledNoticeEn: s?.bookDisabledNoticeEn  || '',
+      requireLoginForPdf:   s?.requireLoginForPdf    ?? false,
       pendingBooksLimitEnabled: s?.pendingBooksLimitEnabled ?? true,
       pendingBooksLimit:        s?.pendingBooksLimit        || 3,
-      // Security & Limits
       rateLimitGeneralWindowMs:    s?.rateLimitGeneralWindowMs    || 900000,
       rateLimitGeneralMax:         s?.rateLimitGeneralMax         || 2000,
       rateLimitAuthWindowMs:       s?.rateLimitAuthWindowMs       || 900000,
@@ -88,10 +93,11 @@ export default function AdminSettings() {
     },
   });
 
-  // ── Design visibility (separate local state) ──────────────────────────────
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
   const [savingDesigns, setSavingDesigns] = useState(false);
   const [designsSaved, setDesignsSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     if (s?.hiddenDesignIds) {
@@ -108,22 +114,32 @@ export default function AdminSettings() {
     setDesignsSaved(false);
   };
 
+  const invalidateSettings = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: getGetAdminSettingsQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: getGetAppSettingsQueryKey() }),
+    ]);
+  };
+
   const saveDesignVisibility = async () => {
     setSavingDesigns(true);
+    setSaveError(null);
     try {
       await updateSettings.mutateAsync({
-        data: { hiddenDesignIds: JSON.stringify(Array.from(hiddenIds)) } as any,
+        data: { hiddenDesignIds: Array.from(hiddenIds) } as any,
       });
+      await invalidateSettings();
       setDesignsSaved(true);
       setTimeout(() => setDesignsSaved(false), 2500);
+    } catch (err: any) {
+      setSaveError(err?.data?.error || err?.message || 'Failed to save design visibility.');
     } finally {
       setSavingDesigns(false);
     }
   };
 
-  // ── Main form submit ───────────────────────────────────────────────────────
-  const [saved, setSaved] = useState(false);
   const onSubmit = async (values: any) => {
+    setSaveError(null);
     try {
       await updateSettings.mutateAsync({ data: {
         ...values,
@@ -132,6 +148,7 @@ export default function AdminSettings() {
         extraSpreadPriceLek:Number(values.extraSpreadPriceLek),
         maintenanceMode:    Boolean(values.maintenanceMode),
         bookCreationEnabled:Boolean(values.bookCreationEnabled),
+        requireLoginForPdf: Boolean(values.requireLoginForPdf),
         pendingBooksLimitEnabled: Boolean(values.pendingBooksLimitEnabled),
         pendingBooksLimit:        Number(values.pendingBooksLimit),
         rateLimitGeneralWindowMs:    Number(values.rateLimitGeneralWindowMs),
@@ -150,14 +167,18 @@ export default function AdminSettings() {
         maxConcurrentPdfGenerations: Number(values.maxConcurrentPdfGenerations),
         maxUploadFileSizeMb:         Number(values.maxUploadFileSizeMb),
         allowedUploadMimeTypes:      String(values.allowedUploadMimeTypes || '')
-          .split(',').map((s: string) => s.trim()).filter(Boolean),
+          .split(',').map((t: string) => t.trim()).filter(Boolean),
+        hiddenDesignIds: Array.from(hiddenIds),
       }});
+      await invalidateSettings();
       setSaved(true);
-      setTimeout(() => setSaved(false), 2500);
-    } catch (e) { console.error(e); }
+      setDesignsSaved(true);
+      setTimeout(() => { setSaved(false); setDesignsSaved(false); }, 2500);
+    } catch (err: any) {
+      setSaveError(err?.data?.error || err?.message || 'Failed to save settings.');
+    }
   };
 
-  // ── Designs grouped by category ───────────────────────────────────────────
   const designsByCategory = CATEGORY_ORDER.map(cat => ({
     cat,
     label: DESIGN_CATEGORY_LABELS[cat]?.en || cat,
@@ -168,22 +189,44 @@ export default function AdminSettings() {
   const bookEnabled    = form.watch('bookCreationEnabled');
   const pendingLimitOn = form.watch('pendingBooksLimitEnabled');
 
+  const cardClass = 'rounded-2xl p-5 sm:p-6 shadow-sm';
+  const cardStyle = { background: ADMIN.card, border: `1px solid ${ADMIN.line}` };
+
   return (
     <AdminLayout>
-      <div className="p-6 md:p-8 max-w-4xl mx-auto">
+      <div className="p-5 md:p-8 max-w-4xl mx-auto pb-28">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold font-serif mb-1">Platform Settings</h1>
-          <p className="text-muted-foreground text-sm">Manage site-wide configuration. Changes take effect immediately.</p>
+          <p className="text-[10px] font-semibold tracking-[0.18em] uppercase mb-1.5" style={{ color: ADMIN.blush }}>
+            Configuration
+          </p>
+          <h1 className="text-3xl font-serif font-semibold mb-1" style={{ color: ADMIN.ink }}>Settings</h1>
+          <p className="text-sm" style={{ color: ADMIN.muted }}>
+            Site-wide controls. Changes apply immediately after save.
+          </p>
         </div>
 
+        {saveError && (
+          <div
+            className="mb-5 flex items-start gap-2.5 rounded-2xl px-4 py-3 text-sm"
+            style={{ background: '#FDF2F2', border: '1px solid #F0C9C9', color: '#8B3A3A' }}
+          >
+            <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="font-medium">{saveError}</p>
+              <button type="button" className="underline text-xs mt-1 opacity-80" onClick={() => setSaveError(null)}>
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
+
         {isLoading ? (
-          <div className="space-y-4">{[1,2,3].map(i=><div key={i} className="h-32 bg-neutral-100 animate-pulse rounded-xl"/>)}</div>
+          <div className="space-y-4">{[1,2,3].map(i=><div key={i} className="h-32 animate-pulse rounded-2xl" style={{ background: ADMIN.blushSoft }}/>)}</div>
         ) : (
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
 
-              {/* ── GENERAL ────────────────────────────────────────────────── */}
-              <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
+              <div className={cardClass} style={cardStyle}>
                 <SectionHeader icon={Settings} title="General" desc="Site name and contact details." />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   <FormField control={form.control} name="siteName" render={({ field }) => (
@@ -203,22 +246,19 @@ export default function AdminSettings() {
                     <FormItem>
                       <FormLabel>Tagline — Albanian (SQ)</FormLabel>
                       <FormControl><Input {...field} /></FormControl>
-                      <FormDescription>Shown under the brand name in the site footer</FormDescription>
                     </FormItem>
                   )} />
                   <FormField control={form.control} name="siteTaglineEn" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Tagline — English (EN)</FormLabel>
                       <FormControl><Input {...field} /></FormControl>
-                      <FormDescription>Shown under the brand name in the site footer</FormDescription>
                     </FormItem>
                   )} />
                 </div>
               </div>
 
-              {/* ── PRICING ────────────────────────────────────────────────── */}
-              <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
-                <SectionHeader icon={DollarSign} title="Pricing Fallbacks" desc="Used only when a book size (see Book Sizes) doesn't define its own price, spread price, or minimum pages. Per-size pricing always wins when set." />
+              <div className={cardClass} style={cardStyle}>
+                <SectionHeader icon={DollarSign} title="Pricing Fallbacks" desc="Used when a book size has no price of its own. Per-size pricing wins when set." />
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-5">
                   <FormField control={form.control} name="basePriceLek" render={({ field }) => (
                     <FormItem>
@@ -240,9 +280,10 @@ export default function AdminSettings() {
                     </FormItem>
                   )} />
                 </div>
-                {/* Live calculator */}
-                <div className="p-4 rounded-lg border border-border bg-muted/40">
-                  <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">💰 Live price preview</p>
+                <div className="p-4 rounded-2xl" style={{ background: ADMIN.bg, border: `1px solid ${ADMIN.line}` }}>
+                  <p className="text-[10px] font-semibold tracking-[0.14em] uppercase mb-2.5" style={{ color: ADMIN.muted }}>
+                    Live price preview
+                  </p>
                   <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
                     {[20,30,40,50,60,80].map(pages => {
                       const base  = Number(form.watch('basePriceLek') || 3100);
@@ -251,10 +292,10 @@ export default function AdminSettings() {
                       const extraSpreads = Math.max(0, Math.ceil((pages - minPg) / 2));
                       const total = base + extraSpreads * extra;
                       return (
-                        <div key={pages} className="text-center p-2 rounded-lg bg-background border border-border">
-                          <p className="text-[10px] text-muted-foreground mb-0.5">{pages}p</p>
-                          <p className="text-xs font-semibold font-mono">{total.toLocaleString()}</p>
-                          <p className="text-[9px] text-muted-foreground">LEK</p>
+                        <div key={pages} className="text-center p-2.5 rounded-xl bg-white" style={{ border: `1px solid ${ADMIN.line}` }}>
+                          <p className="text-[10px] mb-0.5" style={{ color: ADMIN.muted }}>{pages}p</p>
+                          <p className="text-xs font-semibold font-mono" style={{ color: ADMIN.ink }}>{total.toLocaleString()}</p>
+                          <p className="text-[9px]" style={{ color: ADMIN.muted }}>LEK</p>
                         </div>
                       );
                     })}
@@ -262,16 +303,20 @@ export default function AdminSettings() {
                 </div>
               </div>
 
-              {/* ── MAINTENANCE ────────────────────────────────────────────── */}
-              <div className={`bg-card border rounded-xl p-6 shadow-sm transition-colors ${maintenanceOn ? 'border-amber-400 bg-amber-50/40' : 'border-border'}`}>
-                <SectionHeader icon={Wrench} title="Maintenance Mode" desc="When ON, all visitors see a maintenance page. Admins still have full access." />
-
+              <div
+                className={cardClass}
+                style={{
+                  ...cardStyle,
+                  ...(maintenanceOn ? { borderColor: '#E8C48A', background: '#FDF8F0' } : {}),
+                }}
+              >
+                <SectionHeader icon={Wrench} title="Maintenance Mode" desc="When ON, visitors see a maintenance page. Admins keep full access." />
                 <FormField control={form.control} name="maintenanceMode" render={({ field }) => (
                   <FormItem>
-                    <div className="flex items-center justify-between p-4 rounded-lg border border-border bg-background mb-5">
-                      <div>
+                    <div className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-white mb-5" style={{ border: `1px solid ${ADMIN.line}` }}>
+                      <div className="min-w-0">
                         <FormLabel className="text-base cursor-pointer">Maintenance Mode</FormLabel>
-                        <FormDescription>Redirect all non-admin visitors to the maintenance page.</FormDescription>
+                        <FormDescription>Redirect non-admin visitors to the maintenance page.</FormDescription>
                       </div>
                       <FormControl>
                         <Toggle checked={!!field.value} onChange={field.onChange} />
@@ -279,25 +324,20 @@ export default function AdminSettings() {
                     </div>
                   </FormItem>
                 )} />
-
                 {maintenanceOn && (
-                  <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-100 border border-amber-300 mb-5 text-amber-800 text-sm">
+                  <div className="flex items-center gap-2 p-3 rounded-2xl bg-amber-100/80 border border-amber-200 mb-5 text-amber-900 text-sm">
                     <AlertTriangle size={15} className="shrink-0" />
-                    <span>Maintenance mode is <strong>ON</strong>. Visitors are seeing the maintenance page right now.</span>
+                    <span>Maintenance is <strong>ON</strong> — visitors see the maintenance page now.</span>
                   </div>
                 )}
-
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   <FormField control={form.control} name="maintenanceMessageAl" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Message — Albanian (SQ)</FormLabel>
                       <FormControl>
-                        <textarea
-                          {...field}
-                          rows={3}
-                          placeholder="Jemi duke bërë mirëmbajtje. Do të kthehemi së shpejti."
-                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
-                        />
+                        <textarea {...field} rows={3} placeholder="Jemi duke bërë mirëmbajtje…"
+                          className="w-full rounded-xl border bg-white px-3 py-2 text-sm resize-none focus:outline-none"
+                          style={{ borderColor: ADMIN.line }} />
                       </FormControl>
                     </FormItem>
                   )} />
@@ -305,28 +345,29 @@ export default function AdminSettings() {
                     <FormItem>
                       <FormLabel>Message — English (EN)</FormLabel>
                       <FormControl>
-                        <textarea
-                          {...field}
-                          rows={3}
-                          placeholder="We're performing maintenance. We'll be back soon."
-                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
-                        />
+                        <textarea {...field} rows={3} placeholder="We're performing maintenance…"
+                          className="w-full rounded-xl border bg-white px-3 py-2 text-sm resize-none focus:outline-none"
+                          style={{ borderColor: ADMIN.line }} />
                       </FormControl>
                     </FormItem>
                   )} />
                 </div>
               </div>
 
-              {/* ── BOOK CREATION ──────────────────────────────────────────── */}
-              <div className={`bg-card border rounded-xl p-6 shadow-sm transition-colors ${!bookEnabled ? 'border-red-300 bg-red-50/30' : 'border-border'}`}>
+              <div
+                className={cardClass}
+                style={{
+                  ...cardStyle,
+                  ...(!bookEnabled ? { borderColor: '#E8B4B4', background: '#FDF6F6' } : {}),
+                }}
+              >
                 <SectionHeader icon={bookEnabled ? BookHeart : BookX} title="Book Creation" desc="Control whether visitors can create new photobooks." />
-
                 <FormField control={form.control} name="bookCreationEnabled" render={({ field }) => (
                   <FormItem>
-                    <div className="flex items-center justify-between p-4 rounded-lg border border-border bg-background mb-5">
-                      <div>
+                    <div className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-white mb-5" style={{ border: `1px solid ${ADMIN.line}` }}>
+                      <div className="min-w-0">
                         <FormLabel className="text-base cursor-pointer">Book Creation Enabled</FormLabel>
-                        <FormDescription>When OFF, the wizard shows a notice instead of the editor flow.</FormDescription>
+                        <FormDescription>When OFF, the wizard shows a notice instead of the editor.</FormDescription>
                       </div>
                       <FormControl>
                         <Toggle checked={!!field.value} onChange={field.onChange} />
@@ -334,25 +375,34 @@ export default function AdminSettings() {
                     </div>
                   </FormItem>
                 )} />
-
+                <FormField control={form.control} name="requireLoginForPdf" render={({ field }) => (
+                  <FormItem>
+                    <div className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-white mb-5" style={{ border: `1px solid ${ADMIN.line}` }}>
+                      <div className="min-w-0">
+                        <FormLabel className="text-base cursor-pointer flex items-center gap-2">
+                          <FileLock2 size={14} style={{ color: ADMIN.blush }} />
+                          Require login for PDF download
+                        </FormLabel>
+                        <FormDescription>When ON, customers must be signed in to download their album PDF.</FormDescription>
+                      </div>
+                      <FormControl>
+                        <Toggle checked={!!field.value} onChange={field.onChange} />
+                      </FormControl>
+                    </div>
+                  </FormItem>
+                )} />
                 {!bookEnabled && (
-                  <div className="flex items-center gap-2 p-3 rounded-lg bg-red-100 border border-red-300 mb-5 text-red-800 text-sm">
+                  <div className="flex items-center gap-2 p-3 rounded-2xl bg-red-50 border border-red-200 mb-5 text-red-800 text-sm">
                     <BookX size={15} className="shrink-0" />
-                    <span>Book creation is <strong>disabled</strong>. Visitors cannot create new albums.</span>
+                    <span>Book creation is <strong>disabled</strong>.</span>
                   </div>
                 )}
-
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   <FormField control={form.control} name="bookDisabledNoticeAl" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Notice — Albanian (SQ)</FormLabel>
                       <FormControl>
-                        <textarea
-                          {...field}
-                          rows={3}
-                          placeholder="Krijimi i albumeve është përkohësisht i ndalur."
-                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
-                        />
+                        <textarea {...field} rows={3} className="w-full rounded-xl border bg-white px-3 py-2 text-sm resize-none focus:outline-none" style={{ borderColor: ADMIN.line }} />
                       </FormControl>
                     </FormItem>
                   )} />
@@ -360,28 +410,21 @@ export default function AdminSettings() {
                     <FormItem>
                       <FormLabel>Notice — English (EN)</FormLabel>
                       <FormControl>
-                        <textarea
-                          {...field}
-                          rows={3}
-                          placeholder="Book creation is temporarily unavailable."
-                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
-                        />
+                        <textarea {...field} rows={3} className="w-full rounded-xl border bg-white px-3 py-2 text-sm resize-none focus:outline-none" style={{ borderColor: ADMIN.line }} />
                       </FormControl>
                     </FormItem>
                   )} />
                 </div>
               </div>
 
-              {/* ── ABUSE PROTECTION: PENDING BOOKS LIMIT ────────────────────── */}
-              <div className={`bg-card border rounded-xl p-6 shadow-sm transition-colors ${pendingLimitOn ? 'border-border' : 'border-border'}`}>
-                <SectionHeader icon={ShieldAlert} title="Pending Books Limit" desc="Cap how many unordered photobooks a single user can have in progress at once, to prevent abuse." />
-
+              <div className={cardClass} style={cardStyle}>
+                <SectionHeader icon={ShieldAlert} title="Pending Books Limit" desc="Cap unordered photobooks a user can keep in progress." />
                 <FormField control={form.control} name="pendingBooksLimitEnabled" render={({ field }) => (
                   <FormItem>
-                    <div className="flex items-center justify-between p-4 rounded-lg border border-border bg-background mb-5">
-                      <div>
+                    <div className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-white mb-5" style={{ border: `1px solid ${ADMIN.line}` }}>
+                      <div className="min-w-0">
                         <FormLabel className="text-base cursor-pointer">Limit Enabled</FormLabel>
-                        <FormDescription>When ON, a user is blocked from starting a new photobook once they hit the limit below, until they order or finish an existing one.</FormDescription>
+                        <FormDescription>Block new albums once a user hits the pending limit.</FormDescription>
                       </div>
                       <FormControl>
                         <Toggle checked={!!field.value} onChange={field.onChange} />
@@ -389,59 +432,37 @@ export default function AdminSettings() {
                     </div>
                   </FormItem>
                 )} />
-
                 <FormField control={form.control} name="pendingBooksLimit" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Max pending photobooks per user</FormLabel>
                     <FormControl>
-                      <Input
-                        {...field}
-                        type="number"
-                        min={1}
-                        step={1}
-                        disabled={!pendingLimitOn}
-                        className="max-w-[160px]"
-                      />
+                      <Input {...field} type="number" min={1} step={1} disabled={!pendingLimitOn} className="max-w-[160px]" />
                     </FormControl>
-                    <FormDescription>"Pending" = any book with status other than ordered (draft, generating PDF, or ready to order).</FormDescription>
                   </FormItem>
                 )} />
               </div>
 
-              {/* ── SECURITY & LIMITS ─────────────────────────────────────── */}
-              <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
-                <SectionHeader icon={ShieldAlert} title="Security & Limits" desc="Rate limits, login lockout, and abuse caps for customers. Logged-in admins are fully exempt from rate limits and album/order caps. Changes apply within ~15 seconds, no restart needed." />
-
-                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Rate limits (per IP, non-admins)</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
-                  <FormField control={form.control} name="rateLimitGeneralWindowMs" render={({ field }) => (
-                    <FormItem><FormLabel>General window (ms)</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>
-                  )} />
-                  <FormField control={form.control} name="rateLimitGeneralMax" render={({ field }) => (
-                    <FormItem><FormLabel>General max requests</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>
-                  )} />
-                  <FormField control={form.control} name="rateLimitAuthWindowMs" render={({ field }) => (
-                    <FormItem><FormLabel>Auth window (ms)</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>
-                  )} />
-                  <FormField control={form.control} name="rateLimitAuthMax" render={({ field }) => (
-                    <FormItem><FormLabel>Auth max requests</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>
-                  )} />
-                  <FormField control={form.control} name="rateLimitAnalyticsWindowMs" render={({ field }) => (
-                    <FormItem><FormLabel>Analytics window (ms)</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>
-                  )} />
-                  <FormField control={form.control} name="rateLimitAnalyticsMax" render={({ field }) => (
-                    <FormItem><FormLabel>Analytics max requests</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>
-                  )} />
-                  <FormField control={form.control} name="rateLimitUploadsWindowMs" render={({ field }) => (
-                    <FormItem><FormLabel>Uploads window (ms)</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>
-                  )} />
-                  <FormField control={form.control} name="rateLimitUploadsMax" render={({ field }) => (
-                    <FormItem><FormLabel>Uploads max requests</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>
-                  )} />
+              <div className={cardClass} style={cardStyle}>
+                <SectionHeader icon={ShieldAlert} title="Security & Limits" desc="Rate limits, lockout, and abuse caps. Admins are exempt." />
+                <p className="text-[10px] font-semibold tracking-[0.14em] uppercase mb-3" style={{ color: ADMIN.muted }}>Rate limits (per IP)</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                  {([
+                    ['rateLimitGeneralWindowMs', 'General window (ms)'],
+                    ['rateLimitGeneralMax', 'General max requests'],
+                    ['rateLimitAuthWindowMs', 'Auth window (ms)'],
+                    ['rateLimitAuthMax', 'Auth max requests'],
+                    ['rateLimitAnalyticsWindowMs', 'Analytics window (ms)'],
+                    ['rateLimitAnalyticsMax', 'Analytics max'],
+                    ['rateLimitUploadsWindowMs', 'Uploads window (ms)'],
+                    ['rateLimitUploadsMax', 'Uploads max'],
+                  ] as const).map(([name, label]) => (
+                    <FormField key={name} control={form.control} name={name} render={({ field }) => (
+                      <FormItem><FormLabel>{label}</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>
+                    )} />
+                  ))}
                 </div>
-
-                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Login lockout (per account)</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-6">
+                <p className="text-[10px] font-semibold tracking-[0.14em] uppercase mb-3" style={{ color: ADMIN.muted }}>Login lockout</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
                   <FormField control={form.control} name="loginLockoutThreshold" render={({ field }) => (
                     <FormItem><FormLabel>Failed attempts before lockout</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>
                   )} />
@@ -449,150 +470,118 @@ export default function AdminSettings() {
                     <FormItem><FormLabel>Lockout duration (minutes)</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>
                   )} />
                 </div>
-
-                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Abuse caps</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
-                  <FormField control={form.control} name="maxAlbumsPerUser" render={({ field }) => (
-                    <FormItem><FormLabel>Max albums / user</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>
-                  )} />
-                  <FormField control={form.control} name="maxPhotosPerAlbum" render={({ field }) => (
-                    <FormItem><FormLabel>Max photos / album</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>
-                  )} />
-                  <FormField control={form.control} name="maxOrdersPerDay" render={({ field }) => (
-                    <FormItem><FormLabel>Max orders / day / user</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>
-                  )} />
-                  <FormField control={form.control} name="maxConcurrentPdfGenerations" render={({ field }) => (
-                    <FormItem><FormLabel>Max concurrent PDF renders</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>
-                  )} />
+                <p className="text-[10px] font-semibold tracking-[0.14em] uppercase mb-3" style={{ color: ADMIN.muted }}>Abuse caps</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                  {([
+                    ['maxAlbumsPerUser', 'Max albums / user'],
+                    ['maxPhotosPerAlbum', 'Max photos / album'],
+                    ['maxOrdersPerDay', 'Max orders / day'],
+                    ['maxConcurrentPdfGenerations', 'Max concurrent PDFs'],
+                  ] as const).map(([name, label]) => (
+                    <FormField key={name} control={form.control} name={name} render={({ field }) => (
+                      <FormItem><FormLabel>{label}</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>
+                    )} />
+                  ))}
                 </div>
-
-                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Uploads</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <p className="text-[10px] font-semibold tracking-[0.14em] uppercase mb-3" style={{ color: ADMIN.muted }}>Uploads</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField control={form.control} name="maxUploadFileSizeMb" render={({ field }) => (
                     <FormItem><FormLabel>Max upload size (MB)</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>
                   )} />
                   <FormField control={form.control} name="allowedUploadMimeTypes" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Allowed image types</FormLabel>
-                      <FormControl><Input {...field} placeholder="image/jpeg, image/png, image/webp, image/gif" /></FormControl>
-                      <FormDescription>Comma-separated MIME types. Files are verified by real content, not just their name.</FormDescription>
+                      <FormControl><Input {...field} placeholder="image/jpeg, image/png, image/webp" /></FormControl>
                     </FormItem>
                   )} />
                 </div>
               </div>
 
-              {/* ── SAVE MAIN SETTINGS ─────────────────────────────────────── */}
-              <div className="flex items-center gap-3">
-                <Button type="submit" disabled={updateSettings.isPending}>
-                  {updateSettings.isPending ? 'Saving...' : 'Save Settings'}
-                </Button>
-                {saved && (
-                  <span className="flex items-center gap-1.5 text-sm text-green-700 font-medium">
-                    <Check size={14} /> Saved
-                  </span>
-                )}
+              <div
+                className="fixed bottom-0 left-0 right-0 lg:left-[15.5rem] z-20 px-4 py-3 backdrop-blur-md"
+                style={{ background: 'rgba(251,247,245,0.94)', borderTop: `1px solid ${ADMIN.line}` }}
+              >
+                <div className="max-w-4xl mx-auto flex items-center gap-3">
+                  <Button
+                    type="submit"
+                    disabled={updateSettings.isPending}
+                    className="rounded-2xl px-6 text-white hover:opacity-90"
+                    style={{ background: ADMIN.blush }}
+                  >
+                    {updateSettings.isPending ? 'Saving…' : 'Save settings'}
+                  </Button>
+                  {saved && (
+                    <span className="flex items-center gap-1.5 text-sm font-medium" style={{ color: '#3D7A5A' }}>
+                      <Check size={14} /> Saved
+                    </span>
+                  )}
+                </div>
               </div>
-
             </form>
           </Form>
         )}
 
-        {/* ── DESIGN VISIBILITY ──────────────────────────────────────────── */}
-        <div className="mt-6 bg-card border border-border rounded-xl p-6 shadow-sm">
+        <div className={`${cardClass} mt-5`} style={cardStyle}>
           <SectionHeader
             icon={Palette}
             title="Design Visibility"
-            desc={`Show or hide individual designs in the wizard. ${hiddenIds.size > 0 ? `${hiddenIds.size} hidden.` : 'All visible.'}`}
+            desc={`${hiddenIds.size > 0 ? `${hiddenIds.size} hidden.` : 'All visible.'} Also included when you tap Save settings.`}
           />
-
-          {isLoading ? (
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
-              {Array.from({length:10}).map((_,i)=><div key={i} className="h-24 bg-neutral-100 animate-pulse rounded-lg"/>)}
-            </div>
-          ) : (
+          {!isLoading && (
             <div className="space-y-6">
               {designsByCategory.map(({ cat, label, designs }) => (
-                <div key={cat}>
-                  <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">{label}</p>
-                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2.5">
-                    {designs.map(d => {
-                      const hidden = hiddenIds.has(d.id);
-                      return (
-                        <button
-                          key={d.id}
-                          type="button"
-                          onClick={() => toggleDesign(d.id)}
-                          className={`group relative rounded-xl overflow-hidden border-2 transition-all duration-150 focus:outline-none ${
-                            hidden
-                              ? 'border-neutral-200 opacity-45 grayscale'
-                              : 'border-transparent hover:border-neutral-300'
-                          }`}
-                          title={hidden ? `Show "${d.name.en}"` : `Hide "${d.name.en}"`}
-                          style={{ aspectRatio: '3/4' }}
-                        >
-                          {/* Thumbnail */}
-                          {d.thumbPhoto ? (
-                            <img
-                              src={d.thumbPhoto}
-                              alt={d.name.en}
-                              loading="lazy"
-                              decoding="async"
-                              className="absolute inset-0 w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="absolute inset-0" style={d.thumb} />
-                          )}
-                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
-
-                          {/* Eye toggle chip */}
-                          <div className={`absolute top-1.5 right-1.5 w-5 h-5 rounded-full flex items-center justify-center transition-all ${
-                            hidden ? 'bg-neutral-700/80' : 'bg-black/40 opacity-0 group-hover:opacity-100'
-                          }`}>
-                            {hidden
-                              ? <EyeOff size={9} className="text-white" />
-                              : <Eye size={9} className="text-white" />
-                            }
-                          </div>
-
-                          {/* Name */}
-                          <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent pt-4 pb-1.5 px-1.5">
-                            <p className="text-white text-[8px] font-medium leading-tight truncate">{d.name.en}</p>
-                          </div>
-                        </button>
-                      );
-                    })}
+                designs.length === 0 ? null : (
+                  <div key={cat}>
+                    <p className="text-[10px] font-semibold tracking-[0.14em] uppercase mb-3" style={{ color: ADMIN.muted }}>{label}</p>
+                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2.5">
+                      {designs.map(d => {
+                        const hidden = hiddenIds.has(d.id);
+                        return (
+                          <button
+                            key={d.id}
+                            type="button"
+                            onClick={() => toggleDesign(d.id)}
+                            className={`group relative rounded-2xl overflow-hidden border-2 transition-all ${hidden ? 'opacity-45 grayscale' : ''}`}
+                            style={{ aspectRatio: '3/4', borderColor: hidden ? ADMIN.line : 'transparent' }}
+                            title={hidden ? `Show "${d.name.en}"` : `Hide "${d.name.en}"`}
+                          >
+                            {d.thumbPhoto
+                              ? <img src={d.thumbPhoto} alt={d.name.en} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
+                              : <div className="absolute inset-0" style={d.thumb} />}
+                            <div className={`absolute top-1.5 right-1.5 w-5 h-5 rounded-full flex items-center justify-center ${
+                              hidden ? 'bg-neutral-700/80' : 'bg-black/40 opacity-0 group-hover:opacity-100'
+                            }`}>
+                              {hidden ? <EyeOff size={9} className="text-white" /> : <Eye size={9} className="text-white" />}
+                            </div>
+                            <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent pt-4 pb-1.5 px-1.5">
+                              <p className="text-white text-[8px] font-medium truncate">{d.name.en}</p>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
+                )
               ))}
             </div>
           )}
-
-          <div className="flex items-center gap-3 mt-5 pt-5 border-t border-border">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={saveDesignVisibility}
-              disabled={savingDesigns}
-            >
-              {savingDesigns ? 'Saving...' : 'Save Design Visibility'}
+          <div className="flex flex-wrap items-center gap-3 mt-5 pt-5" style={{ borderTop: `1px solid ${ADMIN.line}` }}>
+            <Button type="button" variant="outline" onClick={saveDesignVisibility} disabled={savingDesigns} className="rounded-2xl">
+              {savingDesigns ? 'Saving…' : 'Save visibility only'}
             </Button>
             {designsSaved && (
-              <span className="flex items-center gap-1.5 text-sm text-green-700 font-medium">
+              <span className="flex items-center gap-1.5 text-sm font-medium" style={{ color: '#3D7A5A' }}>
                 <Check size={14} /> Saved
               </span>
             )}
             {hiddenIds.size > 0 && (
-              <button
-                type="button"
-                onClick={() => { setHiddenIds(new Set()); setDesignsSaved(false); }}
-                className="text-xs text-muted-foreground hover:text-neutral-700 underline underline-offset-2"
-              >
+              <button type="button" onClick={() => { setHiddenIds(new Set()); setDesignsSaved(false); }}
+                className="text-xs underline underline-offset-2" style={{ color: ADMIN.muted }}>
                 Show all
               </button>
             )}
           </div>
         </div>
-
       </div>
     </AdminLayout>
   );

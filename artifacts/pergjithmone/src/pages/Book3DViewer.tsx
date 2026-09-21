@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import { X, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { ensureEditorFonts } from '@/lib/editorFonts';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface EditorElement {
@@ -10,7 +11,8 @@ interface EditorElement {
   bgGradientDir?: 'tb'|'lr'|'diag';
   fill?: string; shapeKind?: 'rect'|'circle'; opacity?: number;
   strokeColor?: string; strokeWidth?: number; cornerRadius?: number;
-  src?: string; text?: string; fontSize?: number; fontFamily?: string;
+  src?: string; cropFocusX?: number; cropFocusY?: number;
+  text?: string; fontSize?: number; fontFamily?: string;
   fontStyle?: string; align?: 'left'|'center'|'right'; fontWeight?: string;
 }
 interface PageDef { dbId: number; role: string; pageNumber?: number }
@@ -78,6 +80,13 @@ const PageMiniRender = memo(function PageMiniRender({ elements, w, h, paperColor
 
   return (
     <div style={{ position: 'absolute', inset: 0, background: getBg(), overflow: 'hidden', userSelect: 'none', contain: 'strict' }}>
+      {bg?.src && (
+        <img src={bg.src} alt="" draggable={false} decoding="async"
+          style={{
+            position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover',
+            objectPosition: `${(bg.cropFocusX ?? 0.5) * 100}% ${(bg.cropFocusY ?? 0.5) * 100}%`,
+          }} />
+      )}
       {shapes.map((el, i) => (
         <div key={i} style={{
           position: 'absolute',
@@ -105,6 +114,7 @@ const PageMiniRender = memo(function PageMiniRender({ elements, w, h, paperColor
           left: el.x * scX, top: el.y * scY,
           width: el.w * scX, height: el.h * scY,
           objectFit: 'cover',
+          objectPosition: `${(el.cropFocusX ?? 0.5) * 100}% ${(el.cropFocusY ?? 0.5) * 100}%`,
           transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
           transformOrigin: 'center',
         }} />
@@ -138,13 +148,7 @@ const PageMiniRender = memo(function PageMiniRender({ elements, w, h, paperColor
 // ─── Pages-edge face (plain white) ───────────────────────────────────────────
 const PagesEdgeFace = memo(function PagesEdgeFace({ W, H, D, pageCount }: { W: number; H: number; D: number; pageCount: number }) {
   return (
-    <div style={{ position: 'absolute', inset: 0, background: '#FAFAF8', overflow: 'hidden' }}>
-      <div style={{
-        position: 'absolute', inset: 0,
-        background: 'linear-gradient(to right, rgba(0,0,0,0.14) 0%, rgba(0,0,0,0.02) 35%, rgba(0,0,0,0.02) 60%, rgba(0,0,0,0.10) 100%)',
-      }} />
-      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.08) 0%, transparent 12%, transparent 88%, rgba(0,0,0,0.10) 100%)' }} />
-    </div>
+    <div style={{ position: 'absolute', inset: 0, background: '#FAFAF8', overflow: 'hidden' }} />
   );
 });
 
@@ -156,11 +160,6 @@ const SpineFace = memo(function SpineFace({ title, D, H, bgColor }: { title: str
       background: bgColor,
       overflow: 'hidden',
     }}>
-      {/* Edge shading only — no texture */}
-      <div style={{
-        position: 'absolute', inset: 0,
-        background: 'linear-gradient(to right, rgba(0,0,0,0.38) 0%, rgba(0,0,0,0.06) 30%, rgba(0,0,0,0.04) 70%, rgba(0,0,0,0.28) 100%)',
-      }} />
       {/* Brand text */}
       <div style={{
         position: 'absolute', inset: 0,
@@ -250,51 +249,19 @@ function SpreadBrowser({
 
   const renderSoloPage = (page: PageDef, showSpineLeft: boolean) => {
     const els = pagesContent[page.dbId] ?? [];
-    const spineGrad = showSpineLeft
-      ? 'linear-gradient(to right, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.18) 28%, transparent 55%)'
-      : 'linear-gradient(to left, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.18) 28%, transparent 55%)';
     const borderRad = showSpineLeft ? '0 4px 4px 0' : '4px 0 0 4px';
-    const spineEl = (
-      <div style={{
-        width: 10, flexShrink: 0, alignSelf: 'stretch',
-        background: showSpineLeft
-          ? 'linear-gradient(to right, #0f0a06 0%, #2a1409 45%, #1a0c07 100%)'
-          : 'linear-gradient(to left, #0f0a06 0%, #2a1409 45%, #1a0c07 100%)',
-        boxShadow: showSpineLeft
-          ? 'inset -2px 0 6px rgba(0,0,0,0.4)'
-          : 'inset 2px 0 6px rgba(0,0,0,0.4)',
-      }} />
-    );
-    const pageEl = (
-      <div style={{
-        width: pgW, height: pgH, position: 'relative', flexShrink: 0,
-        borderRadius: borderRad, overflow: 'hidden',
-        boxShadow: showSpineLeft
-          ? '6px 0 30px rgba(0,0,0,0.50), 0 8px 32px rgba(0,0,0,0.40)'
-          : '-6px 0 30px rgba(0,0,0,0.50), 0 8px 32px rgba(0,0,0,0.40)',
-      }}>
-        <PageMiniRender elements={els} w={pgW} h={pgH} canvasH={canvasH} />
-        {/* Gloss */}
-        <div style={{
-          position: 'absolute', inset: 0, pointerEvents: 'none',
-          background: `linear-gradient(125deg, rgba(255,255,255,0.08) 0%, transparent 40%, rgba(0,0,0,0.05) 100%)`,
-        }} />
-        {/* Spine shadow on page */}
-        <div style={{
-          position: 'absolute', inset: 0, pointerEvents: 'none', background: spineGrad,
-        }} />
-      </div>
-    );
     return (
       <div style={{
         display: 'flex', alignItems: 'stretch',
-        boxShadow: '0 20px 50px rgba(0,0,0,0.45)',
         perspective: 1400, transformStyle: 'preserve-3d',
       }}>
-        <div style={{ transform: `rotateY(${showSpineLeft ? 10 : -10}deg)`, transformOrigin: showSpineLeft ? 'left center' : 'right center', display: 'flex' }}>
-          {showSpineLeft ? spineEl : null}
-          {pageEl}
-          {!showSpineLeft ? spineEl : null}
+        <div style={{
+          transform: `rotateY(${showSpineLeft ? 10 : -10}deg)`,
+          transformOrigin: showSpineLeft ? 'left center' : 'right center',
+          width: pgW, height: pgH, position: 'relative', flexShrink: 0,
+          borderRadius: borderRad, overflow: 'hidden',
+        }}>
+          <PageMiniRender elements={els} w={pgW} h={pgH} canvasH={canvasH} />
         </div>
       </div>
     );
@@ -308,14 +275,12 @@ function SpreadBrowser({
     return (
       <div style={{
         display: 'flex', alignItems: 'stretch',
-        boxShadow: '0 20px 50px rgba(0,0,0,0.45)',
         perspective: 1400, transformStyle: 'preserve-3d',
       }}>
-        {/* Left page — tilted back slightly like an open book, hinged at the spine */}
+        {/* Left page — tilted back slightly like an open book, hinged at the center */}
         <div style={{
           width: pgW, height: pgH, position: 'relative', flexShrink: 0,
           borderRadius: '4px 0 0 4px', overflow: 'hidden',
-          outline: '1px solid rgba(255,255,255,0.06)',
           transform: 'rotateY(12deg)',
           transformOrigin: 'right center',
         }}>
@@ -339,21 +304,11 @@ function SpreadBrowser({
           ) : (
             <div style={{ position: 'absolute', inset: 0, background: '#F2EDE5' }} />
           )}
-          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
-            background: 'linear-gradient(to left, rgba(0,0,0,0.34) 0%, rgba(0,0,0,0.10) 18%, transparent 38%)' }} />
         </div>
-        {/* Spine strip */}
-        <div style={{
-          width: 6, flexShrink: 0,
-          background: 'linear-gradient(to right, #1a0e06 0%, #2e1709 40%, #1a0e06 100%)',
-          boxShadow: 'inset -1px 0 4px rgba(0,0,0,0.5), inset 1px 0 4px rgba(0,0,0,0.5), 0 0 10px rgba(0,0,0,0.4)',
-          zIndex: 1,
-        }} />
         {/* Right page — mirrored tilt so the spread reads as one open book */}
         <div style={{
           width: pgW, height: pgH, position: 'relative', flexShrink: 0,
           borderRadius: '0 4px 4px 0', overflow: 'hidden',
-          outline: '1px solid rgba(255,255,255,0.06)',
           transform: 'rotateY(-12deg)',
           transformOrigin: 'left center',
         }}>
@@ -377,8 +332,6 @@ function SpreadBrowser({
           ) : (
             <div style={{ position: 'absolute', inset: 0, background: '#F2EDE5' }} />
           )}
-          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
-            background: 'linear-gradient(to right, rgba(0,0,0,0.34) 0%, rgba(0,0,0,0.10) 18%, transparent 38%)' }} />
         </div>
       </div>
     );
@@ -487,6 +440,8 @@ export function Book3DViewer({
   const [hint, setHint] = useState(true);
   const [browseMode, setBrowseMode] = useState(false);
 
+  useEffect(() => { void ensureEditorFonts(); }, []);
+
   const rotYRef = useRef(-28);
   const rotXRef = useRef(14);
   const isDragging = useRef(false);
@@ -506,7 +461,8 @@ export function Book3DViewer({
   // Book dimensions — scale to screen
   const W = 270;
   const H = Math.round(W * (canvasH / DESIGN_W)); // ≈ 360 for 3:4 books
-  const D = Math.max(8, Math.min(28, Math.round((project.pageCount || 20) * 0.45)));
+  // Keep the block thin — real albums are slim; old formula looked like a brick.
+  const D = Math.max(3, Math.min(10, Math.round((project.pageCount || 20) * 0.16)));
 
   // Auto-rotation — only while spinning; stops the rAF loop when idle/browsing
   useEffect(() => {
@@ -799,23 +755,12 @@ export function Book3DViewer({
                 overflow: 'hidden',
                 backfaceVisibility: 'hidden',
                 WebkitBackfaceVisibility: 'hidden',
-                boxShadow: '0 0 0 1px rgba(0,0,0,0.7)',
                 contain: 'strict',
               }}>
                 {coverEls.length > 0
                   ? <PageMiniRender elements={coverEls} w={W} h={H} canvasH={canvasH} />
                   : <div style={{ position: 'absolute', inset: 0, background: '#2a1f15' }} />
                 }
-                {/* Gloss highlight */}
-                <div style={{
-                  position: 'absolute', inset: 0, pointerEvents: 'none',
-                  background: 'linear-gradient(118deg, rgba(255,255,255,0.13) 0%, rgba(255,255,255,0.04) 30%, transparent 55%, rgba(0,0,0,0.06) 100%)',
-                }} />
-                {/* Spine-side shadow */}
-                <div style={{
-                  position: 'absolute', top: 0, left: 0, bottom: 0, width: 22, pointerEvents: 'none',
-                  background: 'linear-gradient(to right, rgba(0,0,0,0.42), rgba(0,0,0,0.10) 60%, transparent)',
-                }} />
               </div>
 
               {/* ── BACK COVER ── rotateY(180deg) then translateZ(D) in local space = z=-D in world */}
@@ -826,18 +771,12 @@ export function Book3DViewer({
                 overflow: 'hidden',
                 backfaceVisibility: 'hidden',
                 WebkitBackfaceVisibility: 'hidden',
-                boxShadow: '0 0 0 1px rgba(0,0,0,0.5)',
                 contain: 'strict',
               }}>
                 {backEls.length > 0
                   ? <PageMiniRender elements={backEls} w={W} h={H} canvasH={canvasH} />
-                  : <div style={{ position: 'absolute', inset: 0, background: spineColor,
-                      backgroundImage: 'linear-gradient(160deg, rgba(255,255,255,0.04) 0%, transparent 50%, rgba(0,0,0,0.18) 100%)' }} />
+                  : <div style={{ position: 'absolute', inset: 0, background: spineColor }} />
                 }
-                <div style={{
-                  position: 'absolute', inset: 0, pointerEvents: 'none',
-                  background: 'linear-gradient(to left, rgba(255,255,255,0.07) 0%, transparent 35%, rgba(0,0,0,0.10) 100%)',
-                }} />
               </div>
 
               {/* ── SPINE (left face) ── pivot at left edge, rotateY(90deg) → face extends z=[0,−D] at x=0 */}
@@ -870,12 +809,7 @@ export function Book3DViewer({
                 transform: 'rotateX(-90deg)',
                 overflow: 'hidden',
               }}>
-                <div style={{ position: 'absolute', inset: 0, background: '#F8F6F2' }}>
-                  <div style={{ position: 'absolute', inset: 0,
-                    background: 'linear-gradient(to bottom, rgba(255,255,255,0.18) 0%, rgba(0,0,0,0.08) 100%)' }} />
-                  <div style={{ position: 'absolute', inset: 0,
-                    background: 'linear-gradient(to right, rgba(0,0,0,0.18) 0%, rgba(255,255,255,0.04) 45%, rgba(0,0,0,0.14) 100%)' }} />
-                </div>
+                <div style={{ position: 'absolute', inset: 0, background: '#F8F6F2' }} />
               </div>
 
               {/* ── BOTTOM EDGE ── */}
@@ -886,12 +820,7 @@ export function Book3DViewer({
                 transform: 'rotateX(-90deg)',
                 overflow: 'hidden',
               }}>
-                <div style={{ position: 'absolute', inset: 0, background: '#F0EEE8' }}>
-                  <div style={{ position: 'absolute', inset: 0,
-                    background: 'linear-gradient(to bottom, rgba(0,0,0,0.12) 0%, rgba(255,255,255,0.04) 100%)' }} />
-                  <div style={{ position: 'absolute', inset: 0,
-                    background: 'linear-gradient(to right, rgba(0,0,0,0.16) 0%, rgba(255,255,255,0.04) 45%, rgba(0,0,0,0.12) 100%)' }} />
-                </div>
+                <div style={{ position: 'absolute', inset: 0, background: '#F0EEE8' }} />
               </div>
 
             </div>{/* /book wrapper */}

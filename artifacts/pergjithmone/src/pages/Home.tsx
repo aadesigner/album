@@ -344,8 +344,8 @@ const SHOWCASE_BOOKS = [
     key: 'celebration',
     label: { sq: 'Festash', en: 'Celebrations' },
     sub: { sq: 'dhurata perfekte', en: 'the perfect gift' },
-    designId: 'champagne',
-    spine: '#2C1E10',
+    designId: 'rome',
+    spine: '#5C4030',
     img: CAT_IMG_BY_SLUG.festash,
   },
 ];
@@ -511,10 +511,11 @@ function ShowcaseBook({
   );
 
   // On mobile, skip navigation if the finger was scrolling the carousel.
+  const krijoHref = `/krijo?category=${encodeURIComponent(book.key)}&design=${encodeURIComponent(book.designId)}`;
   if (mobile) {
     return (
       <a
-        href="/krijo"
+        href={krijoHref}
         onClick={(e) => {
           if (dragRef.current.moved) e.preventDefault();
         }}
@@ -525,7 +526,7 @@ function ShowcaseBook({
     );
   }
 
-  return <Link href="/krijo">{cover}</Link>;
+  return <Link href={krijoHref}>{cover}</Link>;
 }
 
 function Book3DShowcase({ lang }: { lang: 'sq' | 'en' }) {
@@ -853,7 +854,7 @@ function CategoryCard({
   const handleMouseLeave = () => { x.set(0); y.set(0); };
 
   return (
-    <Link href="/krijo">
+    <Link href={`/krijo?category=${encodeURIComponent(cat.key)}`}>
       <div
         ref={ref}
         onMouseMove={handleMouseMove}

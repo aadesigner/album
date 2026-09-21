@@ -24,9 +24,39 @@ function calcPrice(
   minPages: number,
   extraSpreadPriceLek: number,
 ): number {
+  // pageCount = editable inner pages only (covers/linings are not counted)
   const extraSpreads = Math.max(0, Math.ceil((pageCount - minPages) / 2));
   return basePriceLek + extraSpreads * extraSpreadPriceLek;
 }
+
+async function countInnerPages(projectId: number): Promise<number> {
+  const [{ value }] = await db
+    .select({ value: count() })
+    .from(projectPagesTable)
+    .where(
+      and(
+        eq(projectPagesTable.projectId, projectId),
+        eq(projectPagesTable.pageType, "inner"),
+      ),
+    );
+  return Number(value) || 0;
+}
+
+async function syncInnerPageCount(projectId: number): Promise<number> {
+  const innerCount = await countInnerPages(projectId);
+  await db
+    .update(projectsTable)
+    .set({ pageCount: innerCount })
+    .where(eq(projectsTable.id, projectId));
+  return innerCount;
+}
+
+const COVER_PAGE_TYPES = new Set([
+  "front_cover",
+  "back_cover",
+  "inside_cover",
+  "inside_back_cover",
+]);
 
 // ── Settings cache ────────────────────────────────────────────────────────────
 // appSettings is rarely written; cache it in-process for 5 minutes to avoid
@@ -95,9 +125,43 @@ router.get("/projects", requireAuth, async (req, res): Promise<void> => {
     );
   const coverByProject = new Map(frontCovers.map((c) => [c.projectId, c.contentJson]));
 
+  // Heal pageCount to editable (inner) pages only — covers + 2 linings used to
+  // inflate the number shown in "Projektet e mia" / 3D viewer.
+  const innerCounts = await db
+    .select({
+      projectId: projectPagesTable.projectId,
+      value: count(),
+    })
+    .from(projectPagesTable)
+    .where(
+      and(
+        eq(projectPagesTable.pageType, "inner"),
+        inArray(projectPagesTable.projectId, projects.map((p) => p.id)),
+      ),
+    )
+    .groupBy(projectPagesTable.projectId);
+  const innerByProject = new Map(innerCounts.map((r) => [r.projectId, Number(r.value) || 0]));
+
+  // Persist healed counts asynchronously so subsequent reads stay correct
+  const heals = projects.filter((p) => {
+    const inner = innerByProject.get(p.id);
+    return inner !== undefined && inner !== p.pageCount;
+  });
+  if (heals.length > 0) {
+    void Promise.all(
+      heals.map((p) =>
+        db
+          .update(projectsTable)
+          .set({ pageCount: innerByProject.get(p.id)! })
+          .where(eq(projectsTable.id, p.id)),
+      ),
+    ).catch(() => undefined);
+  }
+
   res.json(
     projects.map((p) => ({
       ...p,
+      pageCount: innerByProject.get(p.id) ?? p.pageCount,
       frontCoverJson: coverByProject.get(p.id) ?? null,
     })),
   );
@@ -162,10 +226,18 @@ router.post("/projects", requireAuth, async (req, res): Promise<void> => {
       (p) => p.status !== "ordered" && !orderedByOrderRow.has(p.id),
     ).length;
     if (pendingCount >= settings.pendingBooksLimit) {
+      const limit = settings.pendingBooksLimit;
+      const lang = String(req.query?.lang || req.headers['accept-language'] || '')
+        .toLowerCase()
+        .startsWith('sq')
+        ? 'sq'
+        : 'en';
       res.status(403).json({
-        error: `You've reached the limit of ${settings.pendingBooksLimit} pending photobooks. Finish or order an existing one before starting a new one.`,
+        error: lang === 'sq'
+          ? `Ke arritur limitin e ${limit} fotolibra në pritje. Përfundo ose porosite një ekzistues përpara se të fillosh një të ri.`
+          : `You've reached the limit of ${limit} pending photobooks. Finish or order an existing one before starting a new one.`,
         code: "PENDING_BOOKS_LIMIT_REACHED",
-        limit: settings.pendingBooksLimit,
+        limit,
       });
       return;
     }
@@ -191,7 +263,7 @@ router.post("/projects", requireAuth, async (req, res): Promise<void> => {
         bookSizeId,
         title,
         templateId: templateId || null,
-        pageCount: minPages + 2, // front + back cover
+        pageCount: minPages, // editable inner pages only (excludes 4 cover/lining pages)
         totalPriceLek,
       })
       .returning();
@@ -260,7 +332,12 @@ router.get(
       return;
     }
 
-    res.json({ ...project, pages });
+    const innerCount = pages.filter((p) => p.pageType === "inner").length;
+    if (innerCount !== project.pageCount) {
+      void syncInnerPageCount(projectId);
+    }
+
+    res.json({ ...project, pageCount: innerCount, pages });
   },
 );
 
@@ -405,15 +482,8 @@ router.post(
       })
       .returning();
 
-    // Update page count
-    const pages = await db
-      .select({ id: projectPagesTable.id })
-      .from(projectPagesTable)
-      .where(eq(projectPagesTable.projectId, projectId));
-    await db
-      .update(projectsTable)
-      .set({ pageCount: pages.length })
-      .where(eq(projectsTable.id, projectId));
+    // Update page count — editable inners only
+    await syncInnerPageCount(projectId);
 
     res.status(201).json(page);
   },
@@ -519,6 +589,30 @@ router.delete(
       return;
     }
 
+    const [existing] = await db
+      .select({
+        id: projectPagesTable.id,
+        pageType: projectPagesTable.pageType,
+      })
+      .from(projectPagesTable)
+      .where(
+        and(
+          eq(projectPagesTable.id, pageId),
+          eq(projectPagesTable.projectId, projectId),
+        ),
+      )
+      .limit(1);
+
+    if (!existing) {
+      res.status(404).json({ error: "Page not found" });
+      return;
+    }
+
+    if (COVER_PAGE_TYPES.has(existing.pageType)) {
+      res.status(400).json({ error: "Cannot delete cover or lining pages" });
+      return;
+    }
+
     const [deleted] = await db
       .delete(projectPagesTable)
       .where(
@@ -533,6 +627,8 @@ router.delete(
       res.status(404).json({ error: "Page not found" });
       return;
     }
+
+    await syncInnerPageCount(projectId);
 
     res.json({ success: true });
   },

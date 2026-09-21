@@ -13,3 +13,7 @@
 .cursor
 artifacts/mockup-sandbox
 artifacts/pergjithmone/e2e
+.tmp-client-feedback
+**/*.test.ts
+**/*.test.mjs
+**/vitest.config.*

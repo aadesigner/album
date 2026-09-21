@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AdminLayout } from '@/components/layout/AdminLayout';
+import { AdminLayout, ADMIN } from '@/components/layout/AdminLayout';
 import {
   useListAdminTemplates, useListAdminCategories,
   useCreateAdminTemplate, useUpdateAdminTemplate, useDeleteAdminTemplate,
@@ -105,8 +105,8 @@ function TemplateFormModal({ template, onClose }: { template: Template | null; o
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center gap-2 mb-5">
-          <div className="w-8 h-8 rounded-xl bg-rose-100 flex items-center justify-center">
-            {isEdit ? <Edit2 size={16} className="text-rose-600" /> : <Plus size={16} className="text-rose-600" />}
+          <div className="w-8 h-8 rounded-2xl flex items-center justify-center" style={{ background: ADMIN.blushSoft }}>
+            {isEdit ? <Edit2 size={16} style={{ color: ADMIN.blushDeep }} /> : <Plus size={16} style={{ color: ADMIN.blushDeep }} />}
           </div>
           <h3 className="font-serif text-lg font-semibold">{isEdit ? 'Edit Template' : 'New Template'}</h3>
         </div>
@@ -148,7 +148,7 @@ function TemplateFormModal({ template, onClose }: { template: Template | null; o
           <ImageUploadInput value={form.backCoverImageUrl} onChange={url => setForm(f => ({ ...f, backCoverImageUrl: url }))} label="Back Cover Image (optional)" />
           <div>
             <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Theme Colors (comma-separated hex)</label>
-            <Input value={form.themeColors} onChange={e => setForm(f => ({ ...f, themeColors: e.target.value }))} placeholder="#f43f5e, #e879f9" />
+            <Input value={form.themeColors} onChange={e => setForm(f => ({ ...f, themeColors: e.target.value }))} placeholder="#C97B84, #F3E4E6" />
           </div>
           <div>
             <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Fonts (comma-separated)</label>
@@ -161,7 +161,7 @@ function TemplateFormModal({ template, onClose }: { template: Template | null; o
           {error && <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
           <div className="flex gap-3 pt-1">
             <Button type="button" variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
-            <Button type="submit" disabled={loading} className="flex-1 bg-rose-500 hover:bg-rose-600 text-white">
+            <Button type="submit" disabled={loading} className="flex-1 text-white hover:opacity-90 rounded-2xl" style={{ background: ADMIN.blush }}>
               {loading ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Template'}
             </Button>
           </div>
@@ -231,33 +231,35 @@ export default function AdminTemplates() {
         />
       )}
 
-      <div className="p-8 max-w-7xl mx-auto">
-        <div className="mb-8 flex justify-between items-center">
+      <div className="p-4 sm:p-5 md:p-8 max-w-screen-xl mx-auto">
+        <div className="mb-8 flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4">
           <div>
-            <h1 className="text-3xl font-bold font-serif mb-2">Templates</h1>
-            <p className="text-muted-foreground">Manage predefined album designs.</p>
+            <p className="text-[10px] font-semibold tracking-[0.18em] uppercase mb-1.5" style={{ color: ADMIN.blush }}>Catalog</p>
+            <h1 className="text-3xl font-serif font-semibold mb-1" style={{ color: ADMIN.ink }}>Templates</h1>
+            <p className="text-sm" style={{ color: ADMIN.muted }}>Predefined album designs.</p>
           </div>
-          <Button className="gap-2" onClick={() => setFormTarget({ open: true, template: null })}>
+          <Button className="gap-2 rounded-2xl text-white hover:opacity-90 shrink-0" style={{ background: ADMIN.blush }}
+            onClick={() => setFormTarget({ open: true, template: null })}>
             <Plus size={16} /> New Template
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
           {isLoading ? (
-            [1,2,3,4].map(i => <div key={i} className="aspect-[4/5] bg-muted animate-pulse rounded-2xl" />)
+            [1,2,3,4].map(i => <div key={i} className="aspect-[4/5] animate-pulse rounded-2xl" style={{ background: ADMIN.blushSoft }} />)
           ) : templates?.length === 0 ? (
-            <div className="col-span-full py-12 text-center text-muted-foreground">No templates found.</div>
+            <div className="col-span-full py-12 text-center text-sm" style={{ color: ADMIN.muted }}>No templates found.</div>
           ) : (
             templates?.map(template => (
-              <div key={template.id} className="bg-card border border-border rounded-2xl overflow-hidden group">
+              <div key={template.id} className="rounded-2xl overflow-hidden group shadow-sm" style={{ background: ADMIN.card, border: `1px solid ${ADMIN.line}` }}>
                 <div className="aspect-[4/5] relative">
                   <img src={template.coverImageUrl} alt={template.nameAl} loading="lazy" decoding="async" className="w-full h-full object-cover" />
                   <div className="absolute top-2 right-2">
-                     <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${template.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                     <span className={`px-2 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider ${template.isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-neutral-100 text-neutral-500'}`}>
                         {template.isActive ? 'Active' : 'Hidden'}
                      </span>
                   </div>
-                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-2 transition-opacity">
+                  <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-2 transition-opacity">
                     <Button variant="secondary" size="icon" className="h-10 w-10 rounded-full" onClick={() => setFormTarget({ open: true, template })}>
                       <Edit2 size={16} />
                     </Button>
@@ -266,9 +268,9 @@ export default function AdminTemplates() {
                     </Button>
                   </div>
                 </div>
-                <div className="p-4 border-t border-border">
-                  <h3 className="font-serif font-medium text-lg truncate">{template.nameAl}</h3>
-                  <p className="text-xs text-muted-foreground mt-1">Subcategory ID: {template.subcategoryId}</p>
+                <div className="p-4" style={{ borderTop: `1px solid ${ADMIN.line}` }}>
+                  <h3 className="font-serif font-medium text-lg truncate" style={{ color: ADMIN.ink }}>{template.nameAl}</h3>
+                  <p className="text-xs mt-1" style={{ color: ADMIN.muted }}>Subcategory ID: {template.subcategoryId}</p>
                 </div>
               </div>
             ))

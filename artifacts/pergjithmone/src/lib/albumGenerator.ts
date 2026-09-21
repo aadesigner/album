@@ -1,7 +1,9 @@
 // ── AI Photobook generator ──────────────────────────────────────────────────
-// Client-side algorithmic layout + style randomization. Each run reshuffles
-// photos, picks a fresh category design for covers, and builds varied inner
-// pages so two generations never look the same.
+// Client-side layout planner (not an LLM). Builds coherent albums by:
+// - preferring clean photo layouts (no strips / casual piles / filmstrips)
+// - budgeting photos so each image appears once
+// - photo-forward covers with category tones (not mismatched stock city art)
+// - leaving caption zones blank for the user to fill
 
 import {
   LAYOUTS,
@@ -10,6 +12,7 @@ import {
   getCanvasHeight,
   scaleElementsToCanvas,
   elementsWithCoverWallpaper,
+  wallpaperSrc as resolveWallpaperUrl,
   type DE,
   type DesignDef,
   type LayoutDef,
@@ -17,9 +20,6 @@ import {
 } from './designs';
 
 function rand(): number {
-  // Prefer crypto when available so successive runs diverge even when called
-  // in the same millisecond (Math.random alone is fine, but this helps tests
-  // and rapid retries feel less "stuck").
   if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
     const buf = new Uint32Array(1);
     crypto.getRandomValues(buf);
@@ -53,15 +53,82 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
+/** Expand thin category pools so AI covers aren't stuck on 1–2 templates. */
+const AI_CATEGORY_EXPAND: Record<string, string[]> = {
+  Wedding: ['Wedding'],
+  Travel: ['Travel'],
+  'Baby & Family': ['Baby & Family'],
+  Celebration: ['Travel', 'Wedding'],
+  Modern: ['Travel'],
+  Portrait: ['Wedding', 'Travel'],
+  Nature: ['Travel'],
+  Locations: ['Travel'],
+};
+
+/** Layouts that look good with object-fit cover photos (no harsh crop strips). */
+const AI_LAYOUT_ALLOW = new Set([
+  'full', 'bordered-single', 'portrait-center',
+  'photo-cap', 'cap-top',
+  'two-h', 'two-v', 'two-h-6040', 'two-h-4060', 'two-v-7030', 'two-v-3070',
+  'land-2port', 'port-2land', 'hero-l', 'hero-r', 'tall-l-2r',
+  'grid4', 'grid4-topheavy', 'hero-3r', 'hero-3l', 'top-3below',
+  'gallery-5',
+  'mag', 'text-2photos',
+]);
+
+/** Soft category bias — favors breathing room over dense grids. */
+const CATEGORY_LAYOUT_BIAS: Record<string, Record<string, number>> = {
+  Wedding: {
+    '1 Photo': 1.8, 'Photo + Text': 1.4, '2 Photos': 1.35, '3 Photos': 0.85,
+    '4 Photos': 0.45, '5-6 Photos': 0.15, Magazine: 0.7,
+  },
+  Travel: {
+    '1 Photo': 1.2, 'Photo + Text': 0.9, '2 Photos': 1.45, '3 Photos': 1.35,
+    '4 Photos': 1.0, '5-6 Photos': 0.35, Magazine: 1.1,
+  },
+  'Baby & Family': {
+    '1 Photo': 1.7, 'Photo + Text': 1.3, '2 Photos': 1.4, '3 Photos': 0.95,
+    '4 Photos': 0.5, '5-6 Photos': 0.15, Magazine: 0.6,
+  },
+  Celebration: {
+    '1 Photo': 1.15, 'Photo + Text': 1.0, '2 Photos': 1.35, '3 Photos': 1.25,
+    '4 Photos': 0.9, '5-6 Photos': 0.3, Magazine: 0.9,
+  },
+  Modern: {
+    '1 Photo': 1.35, 'Photo + Text': 0.85, '2 Photos': 1.3, '3 Photos': 1.2,
+    '4 Photos': 0.85, '5-6 Photos': 0.25, Magazine: 1.4,
+  },
+  Portrait: {
+    '1 Photo': 2.2, 'Photo + Text': 1.5, '2 Photos': 1.3, '3 Photos': 0.6,
+    '4 Photos': 0.25, '5-6 Photos': 0.05, Magazine: 0.5,
+  },
+  Nature: {
+    '1 Photo': 1.6, 'Photo + Text': 1.1, '2 Photos': 1.35, '3 Photos': 1.1,
+    '4 Photos': 0.7, '5-6 Photos': 0.2, Magazine: 0.8,
+  },
+  Locations: {
+    '1 Photo': 1.3, 'Photo + Text': 1.0, '2 Photos': 1.4, '3 Photos': 1.3,
+    '4 Photos': 0.95, '5-6 Photos': 0.25, Magazine: 1.0,
+  },
+};
+
+const CATEGORY_TONES: Record<string, { bg: string; fill: string; muted: string; accent?: string }> = {
+  Wedding: { bg: '#F4EFE8', fill: '#1A1A1A', muted: '#8A7A6A', accent: '#C8B8A8' },
+  Travel: { bg: '#1C2B3A', fill: '#FFFFFF', muted: '#A8C4D8', accent: '#3A5A70' },
+  'Baby & Family': { bg: '#E8EEF2', fill: '#3A5568', muted: '#6A8496', accent: '#BCC9D1' },
+  Celebration: { bg: '#1A120C', fill: '#F5E6C8', muted: '#C8A878', accent: '#3A2A18' },
+  Modern: { bg: '#111111', fill: '#FFFFFF', muted: '#888888', accent: '#2A2A2A' },
+  Portrait: { bg: '#F4F0EA', fill: '#2A2A2A', muted: '#8A8078', accent: '#D8D0C8' },
+  Nature: { bg: '#E8F0E8', fill: '#1A3020', muted: '#5A7A60', accent: '#C8D8C8' },
+  Locations: { bg: '#F7F2EA', fill: '#1A1A1A', muted: '#7A6A5A', accent: '#E0D4C4' },
+};
+
 function designsForCategory(categoryKey: string): DesignDef[] {
-  const filtered = categoryKey
-    ? DESIGNS.filter((d) => d.category === categoryKey)
-    : DESIGNS;
-  // Fall back to Modern + Celebration so unknown categories still get a
-  // coherent look instead of a chaotic mix of every template.
+  const keys = AI_CATEGORY_EXPAND[categoryKey] ?? (categoryKey ? [categoryKey] : ['Travel', 'Wedding']);
+  const filtered = DESIGNS.filter((d) => keys.includes(d.category));
   if (filtered.length) return filtered;
-  const soft = DESIGNS.filter((d) => d.category === 'Modern' || d.category === 'Celebration');
-  return soft.length ? soft : DESIGNS;
+  const travel = DESIGNS.filter((d) => d.category === 'Travel');
+  return travel.length ? travel : DESIGNS;
 }
 
 let idCounter = 0;
@@ -78,119 +145,108 @@ function photoSlotCount(layout: LayoutDef): number {
   return layout.zones.filter((z) => z.type === 'photo').length;
 }
 
-/** Soft preferences per occasion — still random, but biased toward nice pages. */
-const CATEGORY_LAYOUT_BIAS: Record<string, Record<string, number>> = {
-  Wedding: {
-    '1 Photo': 1.4,
-    'Photo + Text': 1.6,
-    '2 Photos': 1.3,
-    '3 Photos': 0.9,
-    '4 Photos': 0.6,
-    '5-6 Photos': 0.25,
-    Magazine: 0.8,
-    Casual: 0.35,
-    Text: 0.4,
-  },
-  Travel: {
-    '1 Photo': 1.1,
-    'Photo + Text': 1.0,
-    '2 Photos': 1.4,
-    '3 Photos': 1.5,
-    '4 Photos': 1.2,
-    '5-6 Photos': 0.8,
-    Magazine: 1.3,
-    Casual: 0.9,
-    Text: 0.25,
-  },
-  'Baby & Family': {
-    '1 Photo': 1.5,
-    'Photo + Text': 1.4,
-    '2 Photos': 1.3,
-    '3 Photos': 1.0,
-    '4 Photos': 0.7,
-    '5-6 Photos': 0.35,
-    Magazine: 0.7,
-    Casual: 1.1,
-    Text: 0.45,
-  },
-  Celebration: {
-    '1 Photo': 1.0,
-    'Photo + Text': 1.1,
-    '2 Photos': 1.2,
-    '3 Photos': 1.3,
-    '4 Photos': 1.1,
-    '5-6 Photos': 0.9,
-    Magazine: 1.0,
-    Casual: 1.2,
-    Text: 0.3,
-  },
-  Modern: {
-    '1 Photo': 1.2,
-    'Photo + Text': 0.9,
-    '2 Photos': 1.2,
-    '3 Photos': 1.3,
-    '4 Photos': 1.1,
-    '5-6 Photos': 0.7,
-    Magazine: 1.5,
-    Casual: 0.6,
-    Text: 0.35,
-  },
-  Portrait: {
-    '1 Photo': 1.8,
-    'Photo + Text': 1.5,
-    '2 Photos': 1.4,
-    '3 Photos': 0.8,
-    '4 Photos': 0.5,
-    '5-6 Photos': 0.2,
-    Magazine: 0.7,
-    Casual: 0.4,
-    Text: 0.5,
-  },
-  Nature: {
-    '1 Photo': 1.5,
-    'Photo + Text': 1.2,
-    '2 Photos': 1.3,
-    '3 Photos': 1.1,
-    '4 Photos': 0.8,
-    '5-6 Photos': 0.4,
-    Magazine: 0.9,
-    Casual: 0.7,
-    Text: 0.3,
-  },
-};
-
 function layoutWeight(
   layout: LayoutDef,
   categoryKey: string,
   remainingPhotos: number,
   recentIds: string[],
+  preferSingle: boolean,
 ): number {
   const slots = photoSlotCount(layout);
-  // Never pick layouts that need more photos than we can reasonably fill
-  // (allow mild reuse only when the album is nearly done).
-  if (slots > remainingPhotos && remainingPhotos > 0 && slots > 4) return 0.05;
-  if (slots === 0) return 0.15; // rare quote-only pages
+  if (slots === 0) return 0;
+  // Hard rule: never pick a layout that needs more photos than we have left.
+  if (slots > remainingPhotos) return 0;
 
   const bias = CATEGORY_LAYOUT_BIAS[categoryKey]?.[layout.category] ?? 1;
-  // Prefer 1–3 photo pages most of the time for breathing room.
-  const sizeBias =
-    slots === 1 ? 1.25 :
-    slots === 2 ? 1.35 :
-    slots === 3 ? 1.2 :
-    slots === 4 ? 0.85 :
-    0.55;
+  let sizeBias =
+    slots === 1 ? 1.45 :
+    slots === 2 ? 1.4 :
+    slots === 3 ? 1.05 :
+    slots === 4 ? 0.7 :
+    0.35;
 
-  // Strongly avoid repeating the same layout two pages in a row.
-  const recentPenalty = recentIds.includes(layout.id) ? 0.08 : 1;
+  if (preferSingle && slots === 1) sizeBias *= 2.2;
+  if (preferSingle && slots > 2) sizeBias *= 0.35;
 
-  // Prefer layouts that consume remaining photos evenly toward the end.
+  // Near the end, prefer layouts that consume remaining photos cleanly.
   const leftover = remainingPhotos - slots;
   const leftoverBias =
-    leftover < 0 ? 0.35 :
-    leftover <= 2 ? 1.15 :
+    leftover === 0 ? 1.6 :
+    leftover === 1 ? 1.25 :
+    leftover <= 3 ? 1.1 :
     1;
 
-  return Math.max(0.01, bias * sizeBias * recentPenalty * leftoverBias);
+  const recentPenalty = recentIds.includes(layout.id) ? 0.05 : 1;
+  // Avoid same category twice in a row (e.g. three grids).
+  const lastId = recentIds[recentIds.length - 1];
+  const lastLayout = lastId ? LAYOUTS.find((l) => l.id === lastId) : null;
+  const catPenalty =
+    lastLayout && lastLayout.category === layout.category && slots > 1 ? 0.45 : 1;
+
+  return Math.max(0, bias * sizeBias * leftoverBias * recentPenalty * catPenalty);
+}
+
+/**
+ * Plan how many photo slots each inner page should aim for so the album
+ * uses each photo once and lands near `innerPageCount` pages of content.
+ */
+function planSlotTargets(photoCount: number, pageCount: number): number[] {
+  if (pageCount <= 0) return [];
+  if (photoCount <= 0) return Array(pageCount).fill(0);
+
+  const targets: number[] = [];
+  let left = photoCount;
+
+  for (let p = 0; p < pageCount; p++) {
+    const pagesLeft = pageCount - p;
+    if (left <= 0) {
+      targets.push(0);
+      continue;
+    }
+    // Ideal average for remaining pages, clamped to sensible page sizes.
+    const ideal = left / pagesLeft;
+    let slots: number;
+    if (p === 0 || p === pageCount - 1) {
+      // Open and close on a hero / single when possible.
+      slots = left >= 1 ? 1 : 0;
+    } else if (ideal <= 1.15) {
+      slots = 1;
+    } else if (ideal <= 2.15) {
+      slots = rand() < 0.55 ? 2 : (rand() < 0.65 ? 1 : 3);
+    } else if (ideal <= 3.2) {
+      slots = rand() < 0.45 ? 3 : (rand() < 0.55 ? 2 : 4);
+    } else {
+      slots = rand() < 0.5 ? 4 : 3;
+    }
+    slots = Math.min(slots, left, 5);
+    // Don't leave stranded leftovers that can't fill a page later.
+    const after = left - slots;
+    const pagesAfter = pagesLeft - 1;
+    if (pagesAfter > 0 && after > 0 && after / pagesAfter > 5) {
+      slots = Math.min(5, left - pagesAfter); // leave at least 1 per remaining page
+    }
+    if (pagesAfter > 0 && after < pagesAfter) {
+      slots = Math.max(1, left - pagesAfter);
+    }
+    slots = Math.max(0, Math.min(slots, left));
+    targets.push(slots);
+    left -= slots;
+  }
+
+  // Dump any rounding leftovers onto middle pages (still no wrap).
+  let i = 1;
+  while (left > 0 && targets.length > 2) {
+    const idx = Math.min(i, targets.length - 2);
+    const add = Math.min(2, left, 5 - targets[idx]);
+    if (add > 0) {
+      targets[idx] += add;
+      left -= add;
+    }
+    i++;
+    if (i > targets.length * 3) break;
+  }
+
+  return targets;
 }
 
 function fillPlaceholders(elements: DE[], nextPhoto: () => string | undefined): DE[] {
@@ -201,70 +257,212 @@ function fillPlaceholders(elements: DE[], nextPhoto: () => string | undefined): 
   });
 }
 
+/** Replace demo cover copy (names, cities, years) with category-generic labels. */
+function personalizeCoverText(elements: DE[], categoryKey: string, lang: 'sq' | 'en'): DE[] {
+  const year = String(new Date().getFullYear());
+  const copy: Record<string, { primary: string; secondary: string }> = {
+    Wedding: {
+      primary: lang === 'sq' ? 'Dasma jonë' : 'Our Wedding',
+      secondary: year,
+    },
+    Travel: {
+      primary: lang === 'sq' ? 'Udhëtimi ynë' : 'Our Journey',
+      secondary: lang === 'sq' ? 'Kujtime' : 'Memories',
+    },
+    'Baby & Family': {
+      primary: lang === 'sq' ? 'Familja jonë' : 'Our Family',
+      secondary: year,
+    },
+    Celebration: {
+      primary: lang === 'sq' ? 'Festë' : 'Celebrate',
+      secondary: year,
+    },
+    Modern: {
+      primary: lang === 'sq' ? 'Albumi ynë' : 'Our Album',
+      secondary: year,
+    },
+    Portrait: {
+      primary: lang === 'sq' ? 'Portrete' : 'Portraits',
+      secondary: year,
+    },
+    Nature: {
+      primary: lang === 'sq' ? 'Natyra' : 'In Nature',
+      secondary: year,
+    },
+    Locations: {
+      primary: lang === 'sq' ? 'Vendet tona' : 'Places We Love',
+      secondary: year,
+    },
+  };
+  const labels = copy[categoryKey] ?? copy.Modern;
+  const texts = elements.filter((e) => e.type === 'text');
+  if (!texts.length) return elements;
+
+  // Sort by font size — largest becomes title, next subtitle; hide the rest.
+  const ranked = [...texts].sort((a, b) => (b.fontSize || 0) - (a.fontSize || 0));
+  const titleId = ranked[0];
+  const subId = ranked[1];
+
+  return elements.map((el) => {
+    if (el.type !== 'text') return el;
+    if (el === titleId) return { ...el, text: labels.primary };
+    if (el === subId) return { ...el, text: labels.secondary };
+    // Drop extra demo lines (dates, "CLASS OF…", couple names, etc.)
+    return { ...el, text: '' };
+  });
+}
+
 function prepareCover(
   design: DesignDef,
   canvasH: number,
   nextPhoto: () => string | undefined,
+  categoryKey: string,
+  lang: 'sq' | 'en',
 ): DE[] {
   const hasCoverArt = design.elements.some((e) => e.type === 'image' && !!e.src);
-  const source =
-    !hasCoverArt && design.thumbPhoto
-      ? elementsWithCoverWallpaper(design.elements, design.thumbPhoto)
-      : design.elements;
+  const userWallpaper = nextPhoto();
+  let source = design.elements;
+
+  if (userWallpaper) {
+    source = elementsWithCoverWallpaper(
+      source.map((el) =>
+        el.type === 'background' ? { ...el, src: undefined } : el,
+      ),
+      userWallpaper,
+    );
+    // Wallpaper already covers the page — drop photo frames that show the same URL.
+    source = source.filter((el) => {
+      if (el.type === 'placeholder') return false;
+      if (el.type === 'image' && el.src === userWallpaper) return false;
+      return true;
+    });
+  } else if (!hasCoverArt && design.thumbPhoto) {
+    source = elementsWithCoverWallpaper(design.elements, design.thumbPhoto);
+    const baked = resolveWallpaperUrl(design.thumbPhoto);
+    source = source.filter((el) => {
+      if (el.type === 'image' && el.src === baked) return false;
+      return true;
+    });
+  }
+
   const projected = scaleElementsToCanvas(source, canvasH);
-  return fillPlaceholders(projected, nextPhoto);
+  const filled = fillPlaceholders(projected, nextPhoto);
+  return personalizeCoverText(filled, categoryKey, lang);
 }
 
-/** Photo-forward back cover when the category only has one design (or for variety). */
-function buildPhotoBackCover(
+/** Clean photo-forward cover — used often so AI albums feel personal, not stock. */
+function buildPhotoCover(
   canvasH: number,
   photoUrl: string | undefined,
   categoryKey: string,
   lang: 'sq' | 'en',
+  variant: 'front' | 'back',
 ): DE[] {
-  const accents: Record<string, { bg: string; fill: string; muted: string }> = {
-    Wedding: { bg: '#ECE7E1', fill: '#1A1A1A', muted: '#8A7A6A' },
-    Travel: { bg: '#1C2B3A', fill: '#FFFFFF', muted: '#A8C4D8' },
-    'Baby & Family': { bg: '#BCC9D1', fill: '#3A5568', muted: '#6A8496' },
-    Celebration: { bg: '#1A120C', fill: '#F5E6C8', muted: '#C8A878' },
-    Modern: { bg: '#111111', fill: '#FFFFFF', muted: '#888888' },
-    Portrait: { bg: '#F4F0EA', fill: '#2A2A2A', muted: '#8A8078' },
-    Nature: { bg: '#E8F0E8', fill: '#1A3020', muted: '#5A7A60' },
-  };
-  const tone = accents[categoryKey] ?? { bg: '#F7F5F2', fill: '#222', muted: '#888' };
-  const label =
+  const tone = CATEGORY_TONES[categoryKey] ?? CATEGORY_TONES.Modern;
+  const year = String(new Date().getFullYear());
+  const frontTitle =
+    lang === 'sq'
+      ? (categoryKey === 'Wedding' ? 'Dasma jonë' :
+         categoryKey === 'Travel' || categoryKey === 'Locations' ? 'Udhëtimi ynë' :
+         categoryKey === 'Baby & Family' ? 'Familja jonë' :
+         categoryKey === 'Portrait' ? 'Portrete' :
+         categoryKey === 'Nature' ? 'Natyra' :
+         categoryKey === 'Celebration' ? 'Festë' :
+         'Albumi ynë')
+      : (categoryKey === 'Wedding' ? 'Our Wedding' :
+         categoryKey === 'Travel' || categoryKey === 'Locations' ? 'Our Journey' :
+         categoryKey === 'Baby & Family' ? 'Our Family' :
+         categoryKey === 'Portrait' ? 'Portraits' :
+         categoryKey === 'Nature' ? 'In Nature' :
+         categoryKey === 'Celebration' ? 'Celebrate' :
+         'Our Album');
+  const backTitle =
     lang === 'sq'
       ? (categoryKey === 'Wedding' ? 'Me dashuri' :
-         categoryKey === 'Travel' ? 'Kujtime udhëtimi' :
-         categoryKey === 'Baby & Family' ? 'Familja jonë' :
+         categoryKey === 'Travel' || categoryKey === 'Locations' ? 'Kujtime udhëtimi' :
+         categoryKey === 'Baby & Family' ? 'Me dashuri' :
          'Faleminderit')
       : (categoryKey === 'Wedding' ? 'With love' :
-         categoryKey === 'Travel' ? 'Travel memories' :
-         categoryKey === 'Baby & Family' ? 'Our family' :
+         categoryKey === 'Travel' || categoryKey === 'Locations' ? 'Travel memories' :
+         categoryKey === 'Baby & Family' ? 'With love' :
          'Thank you');
 
+  const title = variant === 'front' ? frontTitle : backTitle;
   const els: DE[] = [
     { type: 'background', x: 0, y: 0, w: DESIGN_W, h: canvasH, rotation: 0, bgColor: tone.bg },
   ];
+
   if (photoUrl) {
+    if (variant === 'front') {
+      // Full-bleed photo with soft bottom band for title
+      els.push({
+        type: 'image',
+        src: photoUrl,
+        x: 0, y: 0, w: DESIGN_W, h: canvasH,
+        rotation: 0,
+      });
+      els.push({
+        type: 'shape',
+        shapeKind: 'rect',
+        x: 0, y: canvasH * 0.62, w: DESIGN_W, h: canvasH * 0.38,
+        rotation: 0,
+        fill: tone.bg,
+        opacity: 0.92,
+      });
+      els.push({
+        type: 'text',
+        text: title,
+        x: 40, y: canvasH * 0.72, w: DESIGN_W - 80, h: 56,
+        rotation: 0,
+        fontSize: 36,
+        fill: tone.fill,
+        align: 'center',
+        fontFamily: "Georgia, 'Times New Roman', serif",
+        fontStyle: 'italic',
+      });
+      els.push({
+        type: 'text',
+        text: year,
+        x: 40, y: canvasH * 0.82, w: DESIGN_W - 80, h: 32,
+        rotation: 0,
+        fontSize: 14,
+        fill: tone.muted,
+        align: 'center',
+        fontFamily: "Arial, 'Helvetica Neue', sans-serif",
+        letterSpacing: 3,
+      });
+    } else {
+      els.push({
+        type: 'image',
+        src: photoUrl,
+        x: 36, y: 36, w: DESIGN_W - 72, h: canvasH - 160,
+        rotation: 0,
+      });
+      els.push({
+        type: 'text',
+        text: title,
+        x: 40, y: canvasH - 100, w: DESIGN_W - 80, h: 48,
+        rotation: 0,
+        fontSize: 22,
+        fill: tone.fill,
+        align: 'center',
+        fontFamily: "Georgia, 'Times New Roman', serif",
+        fontStyle: 'italic',
+      });
+    }
+  } else {
     els.push({
-      type: 'image',
-      src: photoUrl,
-      x: 36, y: 36, w: DESIGN_W - 72, h: canvasH - 160,
+      type: 'text',
+      text: title,
+      x: 40, y: canvasH * 0.42, w: DESIGN_W - 80, h: 56,
       rotation: 0,
+      fontSize: 36,
+      fill: tone.fill,
+      align: 'center',
+      fontFamily: "Georgia, 'Times New Roman', serif",
+      fontStyle: 'italic',
     });
   }
-  els.push({
-    type: 'text',
-    text: label,
-    x: 40, y: canvasH - 100, w: DESIGN_W - 80, h: 48,
-    rotation: 0,
-    fontSize: 22,
-    fill: tone.fill,
-    align: 'center',
-    fontFamily: "Georgia, 'Times New Roman', serif",
-    fontStyle: 'italic',
-  });
   return els;
 }
 
@@ -279,11 +477,8 @@ export interface GeneratedAlbum {
 }
 
 /**
- * Generate a full randomized album from a category and a set of photo URLs.
- * - Front/back covers always come from the user's category designs (random
- *   each run; back may use a photo-forward fallback when the pool is tiny).
- * - Inner pages stay white paper with varied photo layouts — never the cover
- *   color — matching Editor.applyDesign semantics.
+ * Generate a full album from a category and photo URLs.
+ * Each photo is used at most once across covers + inners.
  */
 export function generateAlbum(
   categoryKey: string,
@@ -293,71 +488,102 @@ export function generateAlbum(
   bookSize?: { widthCm?: number; heightCm?: number },
 ): GeneratedAlbum {
   idCounter = 0;
-  const pool = shuffle(designsForCategory(categoryKey));
+  const cat = categoryKey || 'Modern';
+  const pool = shuffle(designsForCategory(cat));
   const canvasH = getCanvasHeight(bookSize?.widthCm, bookSize?.heightCm);
 
   const photoPool = shuffle(photoUrls.filter(Boolean));
   let photoIdx = 0;
   const nextPhoto = (): string | undefined => {
-    if (!photoPool.length) return undefined;
-    const url = photoPool[photoIdx % photoPool.length];
-    photoIdx++;
-    return url;
+    if (photoIdx >= photoPool.length) return undefined;
+    return photoPool[photoIdx++];
   };
 
-  // ── Covers (category-aware, always random) ───────────────────────────────
-  const frontDesign = pick(pool);
-  let backDesign = pool.length > 1
-    ? pick(pool.filter((d) => d.id !== frontDesign.id))
-    : frontDesign;
+  // ── Covers ───────────────────────────────────────────────────────────────
+  // Prefer clean photo covers (~70%); otherwise a personalized category design.
+  const usePhotoFront = !pool.length || rand() < 0.72;
+  const usePhotoBack = rand() < 0.65;
 
-  // ~40% of the time on multi-design categories, use a photo back instead —
-  // keeps generations feeling distinct even with small pools.
-  const preferPhotoBack = pool.length <= 1 || rand() < 0.4;
+  let frontDesignId = 'photo-front';
+  let backDesignId = 'photo-back';
 
-  const frontCover = withIds(
-    prepareCover(frontDesign, canvasH, nextPhoto),
-    'cover-front',
-  );
+  let frontCover: EditorElement[];
+  if (usePhotoFront) {
+    const url = nextPhoto();
+    frontCover = withIds(buildPhotoCover(canvasH, url, cat, lang, 'front'), 'cover-front');
+  } else {
+    const frontDesign = pick(pool);
+    frontDesignId = frontDesign.id;
+    frontCover = withIds(
+      prepareCover(frontDesign, canvasH, nextPhoto, cat, lang),
+      'cover-front',
+    );
+  }
 
-  const backCover = withIds(
-    preferPhotoBack
-      ? buildPhotoBackCover(canvasH, nextPhoto() ?? photoPool[0], categoryKey || 'Modern', lang)
-      : prepareCover(backDesign, canvasH, nextPhoto),
-    'cover-back',
-  );
-
-  if (preferPhotoBack) backDesign = { ...frontDesign, id: 'photo-back' };
+  let backCover: EditorElement[];
+  if (usePhotoBack || pool.length <= 1) {
+    const url = nextPhoto();
+    backCover = withIds(buildPhotoCover(canvasH, url, cat, lang, 'back'), 'cover-back');
+    backDesignId = 'photo-back';
+  } else {
+    const frontId = frontDesignId;
+    const backDesign = pick(pool.filter((d) => d.id !== frontId)) || pool[0];
+    backDesignId = backDesign.id;
+    backCover = withIds(
+      prepareCover(backDesign, canvasH, nextPhoto, cat, lang),
+      'cover-back',
+    );
+  }
 
   const whiteBg: DE = {
     type: 'background',
-    x: 0,
-    y: 0,
-    w: DESIGN_W,
-    h: canvasH,
-    rotation: 0,
+    x: 0, y: 0, w: DESIGN_W, h: canvasH, rotation: 0,
     bgColor: '#FFFFFF',
   };
   const insideCover = withIds([whiteBg], 'inside-cover');
 
   // ── Inner pages ──────────────────────────────────────────────────────────
-  const captionText = lang === 'sq' ? 'Shto tekstin tënd...' : 'Your text here...';
-  const usableLayouts = LAYOUTS.filter((l) => photoSlotCount(l) > 0 || l.id === 'quote');
+  const remainingPhotos = Math.max(0, photoPool.length - photoIdx);
+  const usableLayouts = LAYOUTS.filter(
+    (l) => AI_LAYOUT_ALLOW.has(l.id) && photoSlotCount(l) > 0,
+  );
+  const slotTargets = planSlotTargets(remainingPhotos, innerPageCount);
   const recentLayoutIds: string[] = [];
-  let remaining = Math.max(photoPool.length, innerPageCount); // soft budget
 
   const innerPages: EditorElement[][] = [];
   for (let p = 0; p < innerPageCount; p++) {
-    const layout = pickWeighted(usableLayouts, (l) =>
-      layoutWeight(l, categoryKey || 'Modern', Math.max(1, remaining), recentLayoutIds),
-    );
+    const remaining = Math.max(0, photoPool.length - photoIdx);
+    const want = Math.min(slotTargets[p] ?? 1, remaining);
+
+    let layout: LayoutDef | null = null;
+    if (want > 0 && usableLayouts.length) {
+      const candidates = usableLayouts.filter((l) => photoSlotCount(l) <= want);
+      const poolForPick = candidates.length
+        ? candidates
+        : usableLayouts.filter((l) => photoSlotCount(l) === 1);
+      if (poolForPick.length) {
+        layout = pickWeighted(poolForPick, (l) =>
+          layoutWeight(l, cat, remaining, recentLayoutIds, want === 1 || p === 0 || p === innerPageCount - 1),
+        );
+      }
+    }
+
+    // Fallback: single full-bleed if we still have a photo.
+    if (!layout && remaining > 0) {
+      layout = LAYOUTS.find((l) => l.id === 'full') || usableLayouts[0];
+    }
+
+    if (!layout || remaining <= 0) {
+      // Empty white page rather than fake placeholder text / reused photos.
+      innerPages.push(withIds([whiteBg], `inner-${p}`));
+      continue;
+    }
+
     recentLayoutIds.push(layout.id);
-    if (recentLayoutIds.length > 3) recentLayoutIds.shift();
+    if (recentLayoutIds.length > 4) recentLayoutIds.shift();
 
-    const slots = photoSlotCount(layout);
-    remaining = Math.max(0, remaining - slots);
-
-    const zoneEls: DE[] = layout.zones.map((z) => {
+    const zoneEls: DE[] = [];
+    for (const z of layout.zones) {
       const base = {
         x: z.x * DESIGN_W,
         y: z.y * canvasH,
@@ -367,22 +593,22 @@ export function generateAlbum(
       };
       if (z.type === 'photo') {
         const url = nextPhoto();
-        return url
-          ? { ...base, type: 'image' as const, src: url }
-          : { ...base, type: 'placeholder' as const };
+        if (!url) continue; // skip empty slots — never reuse
+        zoneEls.push({ ...base, type: 'image' as const, src: url });
+      } else {
+        // Blank caption — user fills in editor (no "Your text here...")
+        zoneEls.push({
+          ...base,
+          type: 'text' as const,
+          text: '',
+          fontSize: Math.round(Math.min(base.w, base.h) * 0.12) || 16,
+          fill: '#6A6A6A',
+          align: 'center' as const,
+          fontFamily: 'Georgia, serif',
+        });
       }
-      return {
-        ...base,
-        type: 'text' as const,
-        text: captionText,
-        fontSize: 18,
-        fill: '#333333',
-        align: 'center' as const,
-        fontFamily: 'Georgia, serif',
-      };
-    });
+    }
 
-    // White paper only — never inherit cover palette on inners.
     innerPages.push(withIds([whiteBg, ...zoneEls], `inner-${p}`));
   }
 
@@ -392,9 +618,17 @@ export function generateAlbum(
     backCover,
     innerPages,
     meta: {
-      frontDesignId: frontDesign.id,
-      backDesignId: backDesign.id,
-      categoryKey: categoryKey || 'Modern',
+      frontDesignId,
+      backDesignId,
+      categoryKey: cat,
     },
   };
+}
+
+/** Suggested inner page count so multi-slot layouts rarely need empty pages. */
+export function suggestInnerPageCount(photoCount: number, minPages = 4): number {
+  if (photoCount <= 0) return minPages;
+  // ~1.6–2.0 photos per page on average → cleaner single/duo layouts.
+  const ideal = Math.ceil(photoCount / 1.75);
+  return Math.max(minPages, ideal);
 }

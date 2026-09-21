@@ -94,7 +94,7 @@ describe("elementsWithCoverWallpaper", () => {
     expect(elementsWithCoverWallpaper(els)).toBe(els);
   });
 
-  it("bakes wallpaper into background + placeholders", () => {
+  it("bakes wallpaper into background only — never duplicates into placeholders", () => {
     const thumb = "https://images.unsplash.com/photo-x?w=400&q=85&fit=crop";
     const els = [
       { type: "background" as const, x: 0, y: 0, w: DESIGN_W, h: DESIGN_H, rotation: 0, bgColor: "#111", bgGradientFrom: "#000", bgGradientTo: "#fff" },
@@ -105,8 +105,8 @@ describe("elementsWithCoverWallpaper", () => {
     expect(out[0].type).toBe("background");
     expect(out[0].src).toBe(wallpaperSrc(thumb));
     expect(out[0].bgGradientFrom).toBeUndefined();
-    expect(out[1].type).toBe("image");
-    expect(out[1].src).toBe(wallpaperSrc(thumb));
+    expect(out[1].type).toBe("placeholder");
+    expect(out[1].src).toBeUndefined();
     expect(out[2].type).toBe("text");
   });
 });

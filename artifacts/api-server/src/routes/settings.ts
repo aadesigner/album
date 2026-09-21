@@ -39,6 +39,8 @@ router.get("/settings", async (_req, res): Promise<void> => {
 
   let hiddenDesignIds: string[] = [];
   try { hiddenDesignIds = JSON.parse(map["hidden_design_ids"] || "[]"); } catch { hiddenDesignIds = []; }
+  let designOverrides: Record<string, unknown> = {};
+  try { designOverrides = JSON.parse(map["design_overrides"] || "{}"); } catch { designOverrides = {}; }
 
   res.json({
     whatsappNumber: map["whatsapp_number"] || "+355688755833",
@@ -55,6 +57,7 @@ router.get("/settings", async (_req, res): Promise<void> => {
     bookDisabledNoticeAl: map["book_disabled_notice_al"] || "Krijimi i albumeve është përkohësisht i ndalur.",
     bookDisabledNoticeEn: map["book_disabled_notice_en"] || "Book creation is temporarily unavailable.",
     hiddenDesignIds,
+    designOverrides,
     requireLoginForPdf: map["require_login_for_pdf"] === "true",
     pendingBooksLimitEnabled: map["pending_books_limit_enabled"] !== "false",
     pendingBooksLimit: parseInt(map["pending_books_limit"] || "3", 10),

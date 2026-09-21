@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AdminLayout } from '@/components/layout/AdminLayout';
+import { AdminLayout, ADMIN } from '@/components/layout/AdminLayout';
 import {
   useListAdminCategories, useCreateAdminCategory, useUpdateAdminCategory, useDeleteAdminCategory,
   useListSubcategories, useCreateAdminSubcategory, useUpdateAdminSubcategory, useDeleteAdminSubcategory,
@@ -121,8 +121,8 @@ function CategoryFormModal({ category, onClose }: { category: Category | null; o
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center gap-2 mb-5">
-          <div className="w-8 h-8 rounded-xl bg-rose-100 flex items-center justify-center">
-            {isEdit ? <Edit2 size={16} className="text-rose-600" /> : <Plus size={16} className="text-rose-600" />}
+          <div className="w-8 h-8 rounded-2xl flex items-center justify-center" style={{ background: ADMIN.blushSoft }}>
+            {isEdit ? <Edit2 size={16} style={{ color: ADMIN.blushDeep }} /> : <Plus size={16} style={{ color: ADMIN.blushDeep }} />}
           </div>
           <h3 className="font-serif text-lg font-semibold">{isEdit ? 'Edit Category' : 'New Category'}</h3>
         </div>
@@ -161,7 +161,7 @@ function CategoryFormModal({ category, onClose }: { category: Category | null; o
           {error && <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
           <div className="flex gap-3 pt-1">
             <Button type="button" variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
-            <Button type="submit" disabled={loading} className="flex-1 bg-rose-500 hover:bg-rose-600 text-white">
+            <Button type="submit" disabled={loading} className="flex-1 text-white hover:opacity-90 rounded-2xl" style={{ background: ADMIN.blush }}>
               {loading ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Category'}
             </Button>
           </div>
@@ -225,8 +225,8 @@ function SubcategoryFormModal({ categoryId, subcategory, onClose }: {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center gap-2 mb-5">
-          <div className="w-8 h-8 rounded-xl bg-rose-100 flex items-center justify-center">
-            {isEdit ? <Edit2 size={16} className="text-rose-600" /> : <Plus size={16} className="text-rose-600" />}
+          <div className="w-8 h-8 rounded-2xl flex items-center justify-center" style={{ background: ADMIN.blushSoft }}>
+            {isEdit ? <Edit2 size={16} style={{ color: ADMIN.blushDeep }} /> : <Plus size={16} style={{ color: ADMIN.blushDeep }} />}
           </div>
           <h3 className="font-serif text-lg font-semibold">{isEdit ? 'Edit Subcategory' : 'New Subcategory'}</h3>
         </div>
@@ -259,7 +259,7 @@ function SubcategoryFormModal({ categoryId, subcategory, onClose }: {
           {error && <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
           <div className="flex gap-3 pt-1">
             <Button type="button" variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
-            <Button type="submit" disabled={loading} className="flex-1 bg-rose-500 hover:bg-rose-600 text-white">
+            <Button type="submit" disabled={loading} className="flex-1 text-white hover:opacity-90 rounded-2xl" style={{ background: ADMIN.blush }}>
               {loading ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Subcategory'}
             </Button>
           </div>
@@ -406,60 +406,64 @@ export default function AdminCategories() {
         />
       )}
 
-      <div className="p-8 max-w-7xl mx-auto">
-        <div className="mb-8 flex justify-between items-center">
+      <div className="p-4 sm:p-5 md:p-8 max-w-screen-xl mx-auto">
+        <div className="mb-8 flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4">
           <div>
-            <h1 className="text-3xl font-bold font-serif mb-2">Categories</h1>
-            <p className="text-muted-foreground">Manage book categories, subcategories, and visibility.</p>
+            <p className="text-[10px] font-semibold tracking-[0.18em] uppercase mb-1.5" style={{ color: ADMIN.blush }}>Catalog</p>
+            <h1 className="text-3xl font-serif font-semibold mb-1" style={{ color: ADMIN.ink }}>Categories</h1>
+            <p className="text-sm" style={{ color: ADMIN.muted }}>Book categories, subcategories, and visibility.</p>
           </div>
-          <Button className="gap-2" onClick={() => setFormTarget({ open: true, cat: null })}>
+          <Button className="gap-2 rounded-2xl text-white hover:opacity-90 shrink-0" style={{ background: ADMIN.blush }}
+            onClick={() => setFormTarget({ open: true, cat: null })}>
             <Plus size={16} /> New Category
           </Button>
         </div>
 
-        <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
+        <div className="rounded-2xl shadow-sm overflow-hidden" style={{ background: ADMIN.card, border: `1px solid ${ADMIN.line}` }}>
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
-              <thead className="bg-muted/50 text-muted-foreground text-xs uppercase border-b border-border">
-                <tr>
-                  <th className="px-6 py-4 font-medium w-8"></th>
-                  <th className="px-6 py-4 font-medium">Icon</th>
-                  <th className="px-6 py-4 font-medium">Name (AL)</th>
-                  <th className="px-6 py-4 font-medium">Name (EN)</th>
-                  <th className="px-6 py-4 font-medium">Status</th>
-                  <th className="px-6 py-4 font-medium">Order</th>
-                  <th className="px-6 py-4 font-medium text-right">Actions</th>
+              <thead style={{ background: ADMIN.bg }}>
+                <tr style={{ borderBottom: `1px solid ${ADMIN.line}` }}>
+                  <th className="px-4 sm:px-6 py-3.5 font-medium w-8 text-[10px] uppercase tracking-wider" style={{ color: ADMIN.muted }}></th>
+                  <th className="px-4 sm:px-6 py-3.5 font-medium text-[10px] uppercase tracking-wider" style={{ color: ADMIN.muted }}>Icon</th>
+                  <th className="px-4 sm:px-6 py-3.5 font-medium text-[10px] uppercase tracking-wider" style={{ color: ADMIN.muted }}>Name (AL)</th>
+                  <th className="px-4 sm:px-6 py-3.5 font-medium text-[10px] uppercase tracking-wider" style={{ color: ADMIN.muted }}>Name (EN)</th>
+                  <th className="px-4 sm:px-6 py-3.5 font-medium text-[10px] uppercase tracking-wider" style={{ color: ADMIN.muted }}>Status</th>
+                  <th className="px-4 sm:px-6 py-3.5 font-medium text-[10px] uppercase tracking-wider" style={{ color: ADMIN.muted }}>Order</th>
+                  <th className="px-4 sm:px-6 py-3.5 font-medium text-[10px] uppercase tracking-wider text-right" style={{ color: ADMIN.muted }}>Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
+              <tbody>
                 {isLoading ? (
-                  <tr><td colSpan={7} className="px-6 py-8 text-center text-muted-foreground">Loading categories...</td></tr>
+                  <tr><td colSpan={7} className="px-6 py-8 text-center text-sm" style={{ color: ADMIN.muted }}>Loading…</td></tr>
                 ) : categories?.length === 0 ? (
-                  <tr><td colSpan={7} className="px-6 py-8 text-center text-muted-foreground">No categories found.</td></tr>
+                  <tr><td colSpan={7} className="px-6 py-8 text-center text-sm" style={{ color: ADMIN.muted }}>No categories found.</td></tr>
                 ) : (
                   categories?.map(cat => (
                     <React.Fragment key={cat.id}>
-                      <tr className="hover:bg-muted/30 transition-colors">
-                        <td className="px-6 py-4">
+                      <tr className="transition-colors hover:bg-[#FBF7F5]" style={{ borderTop: `1px solid ${ADMIN.line}` }}>
+                        <td className="px-4 sm:px-6 py-4">
                           <button
                             onClick={() => setExpanded(expanded === cat.id ? null : cat.id)}
-                            className="text-muted-foreground hover:text-foreground"
+                            className="transition-colors"
+                            style={{ color: ADMIN.muted }}
                             title="Toggle subcategories"
                           >
                             {expanded === cat.id ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                           </button>
                         </td>
-                        <td className="px-6 py-4 text-2xl">{cat.iconEmoji}</td>
-                        <td className="px-6 py-4 font-medium">{cat.nameAl}</td>
-                        <td className="px-6 py-4 text-muted-foreground">{cat.nameEn}</td>
-                        <td className="px-6 py-4">
+                        <td className="px-4 sm:px-6 py-4 text-2xl">{cat.iconEmoji}</td>
+                        <td className="px-4 sm:px-6 py-4 font-medium" style={{ color: ADMIN.ink }}>{cat.nameAl}</td>
+                        <td className="px-4 sm:px-6 py-4" style={{ color: ADMIN.muted }}>{cat.nameEn}</td>
+                        <td className="px-4 sm:px-6 py-4">
                           <ActiveToggle catId={cat.id} isActive={cat.isActive} />
                         </td>
-                        <td className="px-6 py-4 text-muted-foreground">{cat.sortOrder}</td>
-                        <td className="px-6 py-4 text-right">
+                        <td className="px-4 sm:px-6 py-4" style={{ color: ADMIN.muted }}>{cat.sortOrder}</td>
+                        <td className="px-4 sm:px-6 py-4 text-right">
                           <div className="flex justify-end gap-2">
                             <Button
-                              variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                              variant="ghost" size="icon" className="h-8 w-8"
+                              style={{ color: ADMIN.muted }}
                               onClick={() => setFormTarget({ open: true, cat })}
                               title="Edit category"
                             >
@@ -489,7 +493,7 @@ export default function AdminCategories() {
             </table>
           </div>
         </div>
-        <p className="mt-4 text-xs text-muted-foreground flex items-center gap-1.5">
+        <p className="mt-4 text-xs flex items-center gap-1.5" style={{ color: ADMIN.muted }}>
           <FolderTree size={12} /> Expand a category to manage its subcategories — templates link to a subcategory.
         </p>
       </div>

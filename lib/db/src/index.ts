@@ -12,16 +12,15 @@ if (!process.env.DATABASE_URL) {
 
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  // Bound the pool so a burst of concurrent requests (e.g. many people
-  // registering/uploading at once) can't open unlimited connections and
-  // exhaust the database's connection limit.
-  max: 20,
-  // Recycle idle connections instead of holding them open forever — avoids
-  // accumulating stale connections that Postgres or a proxy may silently drop.
-  idleTimeoutMillis: 30_000,
-  // Fail fast with a clear error instead of hanging indefinitely when the
-  // pool is saturated and the database is slow to respond.
+  // Small pool: photobook traffic is bursty but low concurrency. Each idle
+  // PG connection holds memory on BOTH the API and Postgres (Railway bills
+  // that). Also keeps outbound traffic quiet so Railway Serverless can sleep.
+  max: Number(process.env.DB_POOL_MAX || 5),
+  // Drop idle clients quickly — Railway Serverless needs ~10min with no
+  // outbound packets; sticky pool sockets prevent sleep.
+  idleTimeoutMillis: Number(process.env.DB_POOL_IDLE_MS || 10_000),
   connectionTimeoutMillis: 10_000,
+  allowExitOnIdle: true,
 });
 
 // pg's Pool is an EventEmitter. A client can emit a background 'error' event

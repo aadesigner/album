@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { AdminLayout } from '@/components/layout/AdminLayout';
+import { AdminLayout, ADMIN } from '@/components/layout/AdminLayout';
 import { useGetAdminStats, useListAdminOrders, useUpdateAdminOrder } from '@workspace/api-client-react-tsconfig';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -11,25 +11,25 @@ import { Link } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 
 const STATUS_COLORS: Record<string, string> = {
-  pending: 'bg-amber-100 text-amber-700',
-  confirmed: 'bg-blue-100 text-blue-700',
-  printing: 'bg-violet-100 text-violet-700',
-  shipped: 'bg-cyan-100 text-cyan-700',
-  delivered: 'bg-emerald-100 text-emerald-700',
-  cancelled: 'bg-red-100 text-red-700',
+  pending: 'bg-amber-50 text-amber-800',
+  confirmed: 'bg-sky-50 text-sky-800',
+  printing: 'bg-[#F3E4E6] text-[#A85C66]',
+  shipped: 'bg-teal-50 text-teal-800',
+  delivered: 'bg-emerald-50 text-emerald-800',
+  cancelled: 'bg-red-50 text-red-700',
 };
 
-function StatCard({ label, value, icon, gradient, sub }: { label: string; value: string | number; icon: React.ReactNode; gradient: string; sub?: string }) {
+function StatCard({ label, value, icon, accent, sub }: { label: string; value: string | number; icon: React.ReactNode; accent: string; sub?: string }) {
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-white overflow-hidden">
-      <div className={`h-1.5 ${gradient}`} />
-      <div className="p-5">
+    <div className="rounded-2xl shadow-sm overflow-hidden" style={{ background: ADMIN.card, border: `1px solid ${ADMIN.line}` }}>
+      <div className="h-1" style={{ background: accent }} />
+      <div className="p-4 sm:p-5">
         <div className="flex items-center justify-between mb-3">
-          <p className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">{label}</p>
-          <div className="opacity-40">{icon}</div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: ADMIN.muted }}>{label}</p>
+          <div style={{ color: accent, opacity: 0.7 }}>{icon}</div>
         </div>
-        <p className="text-2xl font-bold text-neutral-800">{value}</p>
-        {sub && <p className="text-xs text-neutral-400 mt-1">{sub}</p>}
+        <p className="text-2xl font-serif font-semibold" style={{ color: ADMIN.ink }}>{value}</p>
+        {sub && <p className="text-xs mt-1" style={{ color: ADMIN.muted }}>{sub}</p>}
       </div>
     </div>
   );
@@ -66,7 +66,7 @@ function PendingPrintingWidget() {
   const { getToken } = useAuth();
   const { data, isLoading, refetch } = useListAdminOrders(
     { page: 1, limit: 50, status: 'pending' },
-    { query: { staleTime: 0, refetchOnMount: 'always', refetchInterval: 30_000 } },
+    { query: { staleTime: 0, refetchOnMount: 'always', refetchInterval: 30_000 } } as any,
   );
   const updateOrder = useUpdateAdminOrder();
   const [shippingId, setShippingId] = React.useState<number | null>(null);
@@ -89,19 +89,19 @@ function PendingPrintingWidget() {
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-amber-100 overflow-hidden mb-7">
-      <div className="flex items-center justify-between px-5 py-4 border-b border-amber-50 bg-amber-50/40">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center">
-            <Printer size={15} className="text-amber-600" />
+    <div className="rounded-2xl shadow-sm overflow-hidden mb-7" style={{ background: ADMIN.card, border: `1px solid ${ADMIN.line}` }}>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 sm:px-5 py-4" style={{ borderBottom: `1px solid ${ADMIN.line}`, background: ADMIN.blushSoft }}>
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-9 h-9 rounded-2xl flex items-center justify-center shrink-0" style={{ background: '#FFF' }}>
+            <Printer size={15} style={{ color: ADMIN.blushDeep }} />
           </div>
-          <div>
-            <h2 className="font-semibold text-neutral-800">Pending for Printing</h2>
-            <p className="text-xs text-neutral-400">New orders sent via WhatsApp, waiting to be printed & shipped</p>
+          <div className="min-w-0">
+            <h2 className="font-serif font-semibold" style={{ color: ADMIN.ink }}>Pending for printing</h2>
+            <p className="text-xs truncate" style={{ color: ADMIN.muted }}>WhatsApp orders waiting to print & ship</p>
           </div>
         </div>
-        <Link href="/heyadmin/porosi" className="text-xs text-rose-500 hover:text-rose-700 font-medium whitespace-nowrap">
-          View all orders →
+        <Link href="/heyadmin/porosi" className="text-xs font-medium whitespace-nowrap self-start sm:self-auto" style={{ color: ADMIN.blushDeep }}>
+          View all →
         </Link>
       </div>
       <div className="overflow-x-auto">
@@ -112,7 +112,7 @@ function PendingPrintingWidget() {
                 <tr key={i}><td className="px-5 py-4"><div className="h-4 bg-amber-50 rounded animate-pulse" /></td></tr>
               ))
             ) : !orders.length ? (
-              <tr><td className="px-5 py-8 text-center text-neutral-300 text-sm">Nothing pending — all caught up 🎉</td></tr>
+              <tr><td className="px-5 py-8 text-center text-sm" style={{ color: ADMIN.muted }}>Nothing pending — all caught up</td></tr>
             ) : (
               orders.map((o: any) => (
                 <tr key={o.id} className="hover:bg-amber-50/30 transition-colors">
@@ -128,7 +128,7 @@ function PendingPrintingWidget() {
                   <td className="px-5 py-3 font-semibold text-neutral-700 text-xs whitespace-nowrap">{Number(o.priceLek).toLocaleString()} L</td>
                   <td className="px-5 py-3">
                     {o.pdfUrl ? (
-                      <a href={pdfHref(o.pdfUrl)} target="_blank" rel="noopener noreferrer" className="text-[10px] text-violet-600 font-semibold hover:underline">View PDF</a>
+                      <a href={pdfHref(o.pdfUrl)} target="_blank" rel="noopener noreferrer" className="text-[10px] font-semibold hover:underline" style={{ color: ADMIN.blushDeep }}>View PDF</a>
                     ) : (
                       <span className="text-[10px] text-neutral-300 italic">No PDF</span>
                     )}
@@ -137,7 +137,8 @@ function PendingPrintingWidget() {
                     <button
                       onClick={() => handleShip(o.id)}
                       disabled={shippingId === o.id}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-semibold bg-cyan-50 text-cyan-700 border border-cyan-200 hover:bg-cyan-100 transition-colors disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-semibold border transition-colors disabled:opacity-50 hover:opacity-90"
+                      style={{ background: ADMIN.blushSoft, color: ADMIN.blushDeep, borderColor: '#E8C9CD' }}
                     >
                       <Truck size={11} /> {shippingId === o.id ? 'Marking…' : 'Mark Shipped'}
                     </button>
@@ -169,28 +170,30 @@ export default function AdminDashboard() {
 
         {/* Header */}
         <div className="mb-7">
-          <p className="text-xs text-rose-400 font-medium uppercase tracking-widest mb-1">✨ Admin Dashboard</p>
-          <h1 className="text-3xl font-serif font-bold text-neutral-900 mb-1">
-            Hello, Admin
+          <p className="text-[10px] font-semibold tracking-[0.18em] uppercase mb-1.5" style={{ color: ADMIN.blush }}>
+            Overview
+          </p>
+          <h1 className="text-3xl font-serif font-semibold mb-1" style={{ color: ADMIN.ink }}>
+            Hello
           </h1>
-          <p className="text-sm text-neutral-400">{today}</p>
+          <p className="text-sm" style={{ color: ADMIN.muted }}>{today}</p>
         </div>
 
         {/* Stat Cards */}
         {isLoading ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-7">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 mb-7">
             {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="h-28 bg-white rounded-2xl animate-pulse border border-rose-50" />
+              <div key={i} className="h-28 rounded-2xl animate-pulse" style={{ background: ADMIN.blushSoft }} />
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-7">
-            <StatCard label="Visitors Today" value={s?.visitorsToday ?? 0} icon={<Eye size={18} />} gradient="bg-gradient-to-r from-rose-400 to-pink-500" />
-            <StatCard label="Visitors Week" value={s?.visitorsWeek ?? 0} icon={<Eye size={18} />} gradient="bg-gradient-to-r from-violet-400 to-purple-500" />
-            <StatCard label="Users Total" value={s?.totalUsers ?? 0} icon={<Users size={18} />} gradient="bg-gradient-to-r from-sky-400 to-blue-500" sub={`+${s?.usersToday ?? 0} today`} />
-            <StatCard label="Orders / Month" value={s?.ordersThisMonth ?? 0} icon={<ShoppingBag size={18} />} gradient="bg-gradient-to-r from-emerald-400 to-teal-500" />
-            <StatCard label="Revenue" value={`${Number(s?.revenueMonth ?? 0).toLocaleString()} L`} icon={<CreditCard size={18} />} gradient="bg-gradient-to-r from-amber-400 to-orange-500" sub="this month" />
-            <StatCard label="WA Clicks" value={s?.wpClicksTotal ?? 0} icon={<MessageCircle size={18} />} gradient="bg-gradient-to-r from-green-400 to-emerald-500" sub="all time" />
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 mb-7">
+            <StatCard label="Visitors Today" value={s?.visitorsToday ?? 0} icon={<Eye size={18} />} accent={ADMIN.blush} />
+            <StatCard label="Visitors Week" value={s?.visitorsWeek ?? 0} icon={<Eye size={18} />} accent="#D4A5A5" />
+            <StatCard label="Users Total" value={s?.totalUsers ?? 0} icon={<Users size={18} />} accent="#8FA8A3" sub={`+${s?.usersToday ?? 0} today`} />
+            <StatCard label="Orders / Month" value={s?.ordersThisMonth ?? 0} icon={<ShoppingBag size={18} />} accent="#C4A574" />
+            <StatCard label="Revenue" value={`${Number(s?.revenueMonth ?? 0).toLocaleString()} L`} icon={<CreditCard size={18} />} accent="#B8956C" sub="this month" />
+            <StatCard label="WA Clicks" value={s?.wpClicksTotal ?? 0} icon={<MessageCircle size={18} />} accent="#7BAF8E" sub="all time" />
           </div>
         )}
 
@@ -200,57 +203,57 @@ export default function AdminDashboard() {
         {/* Charts row */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-7">
           {/* Visitor area chart */}
-          <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-white p-5">
+          <div className="lg:col-span-2 rounded-2xl shadow-sm p-4 sm:p-5" style={{ background: ADMIN.card, border: `1px solid ${ADMIN.line}` }}>
             <div className="flex items-center justify-between mb-5">
               <div>
-                <h2 className="font-semibold text-neutral-800">Visitor Trend</h2>
-                <p className="text-xs text-neutral-400">Unique visitors + WhatsApp clicks, last 30 days</p>
+                <h2 className="font-serif font-semibold" style={{ color: ADMIN.ink }}>Visitor trend</h2>
+                <p className="text-xs" style={{ color: ADMIN.muted }}>Visitors + WhatsApp clicks · 30 days</p>
               </div>
-              <TrendingUp size={16} className="text-rose-300" />
+              <TrendingUp size={16} style={{ color: ADMIN.blush }} />
             </div>
             <ResponsiveContainer width="100%" height={210}>
               <AreaChart data={chartData} margin={{ top: 0, right: 0, left: -30, bottom: 0 }}>
                 <defs>
                   <linearGradient id="gVisitors" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.18} />
-                    <stop offset="95%" stopColor="#f43f5e" stopOpacity={0} />
+                    <stop offset="5%" stopColor={ADMIN.blush} stopOpacity={0.22} />
+                    <stop offset="95%" stopColor={ADMIN.blush} stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="gWp" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.18} />
-                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+                    <stop offset="5%" stopColor="#7BAF8E" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#7BAF8E" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#fce7f3" vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize: 9, fill: '#d1d5db' }} axisLine={false} tickLine={false} interval={4} />
-                <YAxis tick={{ fontSize: 9, fill: '#d1d5db' }} axisLine={false} tickLine={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke={ADMIN.line} vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 9, fill: '#c4b8ba' }} axisLine={false} tickLine={false} interval={4} />
+                <YAxis tick={{ fontSize: 9, fill: '#c4b8ba' }} axisLine={false} tickLine={false} />
                 <Tooltip
-                  contentStyle={{ background: '#fff', border: '1px solid #fce7f3', borderRadius: 12, fontSize: 12 }}
-                  labelStyle={{ color: '#9ca3af', marginBottom: 4 }}
+                  contentStyle={{ background: '#fff', border: `1px solid ${ADMIN.line}`, borderRadius: 12, fontSize: 12 }}
+                  labelStyle={{ color: ADMIN.muted, marginBottom: 4 }}
                 />
-                <Area type="monotone" dataKey="visitors" name="Visitors" stroke="#f43f5e" strokeWidth={2} fill="url(#gVisitors)" dot={false} />
-                <Area type="monotone" dataKey="wp_clicks" name="WA Clicks" stroke="#22c55e" strokeWidth={2} fill="url(#gWp)" dot={false} />
+                <Area type="monotone" dataKey="visitors" name="Visitors" stroke={ADMIN.blush} strokeWidth={2} fill="url(#gVisitors)" dot={false} />
+                <Area type="monotone" dataKey="wp_clicks" name="WA Clicks" stroke="#7BAF8E" strokeWidth={2} fill="url(#gWp)" dot={false} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
 
           {/* Registrations bar */}
-          <div className="bg-white rounded-2xl shadow-sm border border-white p-5">
+          <div className="rounded-2xl shadow-sm p-4 sm:p-5" style={{ background: ADMIN.card, border: `1px solid ${ADMIN.line}` }}>
             <div className="flex items-center justify-between mb-5">
               <div>
-                <h2 className="font-semibold text-neutral-800">Registrations</h2>
-                <p className="text-xs text-neutral-400">New users, last 30 days</p>
+                <h2 className="font-serif font-semibold" style={{ color: ADMIN.ink }}>Registrations</h2>
+                <p className="text-xs" style={{ color: ADMIN.muted }}>New members · 30 days</p>
               </div>
-              <UserPlus size={16} className="text-violet-300" />
+              <UserPlus size={16} style={{ color: ADMIN.blush }} />
             </div>
             <ResponsiveContainer width="100%" height={210}>
               <BarChart data={chartData} margin={{ top: 0, right: 0, left: -30, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f3e8ff" vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize: 9, fill: '#d1d5db' }} axisLine={false} tickLine={false} interval={6} />
-                <YAxis tick={{ fontSize: 9, fill: '#d1d5db' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke={ADMIN.line} vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 9, fill: '#c4b8ba' }} axisLine={false} tickLine={false} interval={6} />
+                <YAxis tick={{ fontSize: 9, fill: '#c4b8ba' }} axisLine={false} tickLine={false} allowDecimals={false} />
                 <Tooltip
-                  contentStyle={{ background: '#fff', border: '1px solid #f3e8ff', borderRadius: 12, fontSize: 12 }}
+                  contentStyle={{ background: '#fff', border: `1px solid ${ADMIN.line}`, borderRadius: 12, fontSize: 12 }}
                 />
-                <Bar dataKey="registrations" name="New users" fill="#a78bfa" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="registrations" name="New users" fill={ADMIN.blush} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -259,10 +262,10 @@ export default function AdminDashboard() {
         {/* Bottom row: Recent orders + Recent users */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           {/* Recent orders */}
-          <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-white overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-rose-50">
-              <h2 className="font-semibold text-neutral-800">Recent Orders</h2>
-              <Link href="/heyadmin/porosi" className="text-xs text-rose-500 hover:text-rose-700 font-medium">
+          <div className="lg:col-span-2 rounded-2xl shadow-sm overflow-hidden" style={{ background: ADMIN.card, border: `1px solid ${ADMIN.line}` }}>
+            <div className="flex items-center justify-between px-4 sm:px-5 py-4" style={{ borderBottom: `1px solid ${ADMIN.line}` }}>
+              <h2 className="font-serif font-semibold" style={{ color: ADMIN.ink }}>Recent orders</h2>
+              <Link href="/heyadmin/porosi" className="text-xs font-medium" style={{ color: ADMIN.blushDeep }}>
                 View all →
               </Link>
             </div>
@@ -283,7 +286,7 @@ export default function AdminDashboard() {
                       <tr key={i}><td colSpan={5} className="px-5 py-3"><div className="h-4 bg-rose-50 rounded animate-pulse" /></td></tr>
                     ))
                   ) : !s?.recentOrders?.length ? (
-                    <tr><td colSpan={5} className="px-5 py-10 text-center text-neutral-300 text-sm">No orders yet 🌸</td></tr>
+                    <tr><td colSpan={5} className="px-5 py-10 text-center text-sm" style={{ color: ADMIN.muted }}>No orders yet</td></tr>
                   ) : (
                     s.recentOrders.map((o: any) => (
                       <tr key={o.id} className="hover:bg-rose-50/40 transition-colors">
@@ -308,10 +311,10 @@ export default function AdminDashboard() {
           </div>
 
           {/* Recent users */}
-          <div className="bg-white rounded-2xl shadow-sm border border-white overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-rose-50">
-              <h2 className="font-semibold text-neutral-800">New Members</h2>
-              <Link href="/heyadmin/perdorues" className="text-xs text-rose-500 hover:text-rose-700 font-medium">
+          <div className="rounded-2xl shadow-sm overflow-hidden" style={{ background: ADMIN.card, border: `1px solid ${ADMIN.line}` }}>
+            <div className="flex items-center justify-between px-4 sm:px-5 py-4" style={{ borderBottom: `1px solid ${ADMIN.line}` }}>
+              <h2 className="font-serif font-semibold" style={{ color: ADMIN.ink }}>New members</h2>
+              <Link href="/heyadmin/perdorues" className="text-xs font-medium" style={{ color: ADMIN.blushDeep }}>
                 View all →
               </Link>
             </div>
@@ -327,15 +330,15 @@ export default function AdminDashboard() {
                   </div>
                 ))
               ) : !s?.recentUsers?.length ? (
-                <div className="px-5 py-10 text-center text-neutral-300 text-sm">No users yet 🌸</div>
+                <div className="px-5 py-10 text-center text-sm" style={{ color: ADMIN.muted }}>No members yet</div>
               ) : (
                 s.recentUsers.map((u: any) => {
                   const contact = u.phone || u.email || '—';
                   const initials = (u.name || contact || '?').split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2);
                   return (
-                    <div key={u.id} className="flex items-center gap-3 px-5 py-3 hover:bg-rose-50/40 transition-colors">
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
-                        style={{ background: 'linear-gradient(135deg, #f43f5e 0%, #e879f9 100%)' }}>
+                    <div key={u.id} className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-[#FBF7F5]">
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-semibold shrink-0"
+                        style={{ background: ADMIN.blushSoft, color: ADMIN.blushDeep }}>
                         {initials}
                       </div>
                       <div className="min-w-0">
@@ -349,15 +352,15 @@ export default function AdminDashboard() {
             </div>
             {/* Summary */}
             {!isLoading && (
-              <div className="px-5 py-3 bg-rose-50/40 border-t border-rose-50 grid grid-cols-3 gap-2 text-center">
+              <div className="px-5 py-3 grid grid-cols-3 gap-2 text-center" style={{ background: ADMIN.blushSoft, borderTop: `1px solid ${ADMIN.line}` }}>
                 {[
                   { label: 'Total', value: s?.totalUsers ?? 0 },
                   { label: 'This week', value: s?.usersWeek ?? 0 },
                   { label: 'Today', value: s?.usersToday ?? 0 },
                 ].map(({ label, value }) => (
                   <div key={label}>
-                    <p className="text-xs font-bold text-neutral-700">{value}</p>
-                    <p className="text-[9px] text-neutral-400 uppercase tracking-wide">{label}</p>
+                    <p className="text-xs font-semibold" style={{ color: ADMIN.ink }}>{value}</p>
+                    <p className="text-[9px] uppercase tracking-wide" style={{ color: ADMIN.muted }}>{label}</p>
                   </div>
                 ))}
               </div>

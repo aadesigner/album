@@ -1,5 +1,31 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { DESIGN_W, DESIGN_H, PAPER_COLOR, type EditorElement } from '@/lib/designs';
+import { useEditorFontsReady, ensureEditorFonts } from '@/lib/editorFonts';
+
+function thumbFontFamily(ff?: string): string {
+  const raw = (ff || 'Georgia, serif').trim();
+  const lower = raw.toLowerCase();
+  if (lower.includes('great vibes')) return "'Great Vibes', cursive";
+  if (lower.includes('londrina')) return "'Londrina Solid', cursive";
+  if (lower.includes('dancing')) return "'Dancing Script', cursive";
+  if (lower.includes('pacifico')) return "'Pacifico', cursive";
+  if (lower.includes('playfair')) return "'Playfair Display', serif";
+  if (lower.includes('cormorant')) return "'Cormorant Garamond', serif";
+  if (lower.includes('raleway')) return "'Raleway', sans-serif";
+  if (lower.includes('montserrat')) return "'Montserrat', sans-serif";
+  return raw;
+}
+
+function thumbFontStyle(ff?: string, fs?: string): { fontStyle: string; fontWeight: number | string } {
+  const family = thumbFontFamily(ff).toLowerCase();
+  const isScript = /great vibes|dancing script|pacifico|londrina/.test(family);
+  const bold = !!fs?.includes('bold');
+  if (isScript) return { fontStyle: 'normal', fontWeight: bold ? 700 : 400 };
+  return {
+    fontStyle: fs?.includes('italic') ? 'italic' : 'normal',
+    fontWeight: bold ? 700 : 400,
+  };
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Scaled page thumbnail — renders actual page elements at thumb size.
@@ -12,6 +38,11 @@ import { DESIGN_W, DESIGN_H, PAPER_COLOR, type EditorElement } from '@/lib/desig
 export const PageThumb = React.memo(function PageThumb({
   elements, width, height, canvasH = DESIGN_H,
 }: { elements: EditorElement[] | Omit<EditorElement, 'id'>[]; width: number; height: number; canvasH?: number }) {
+  // Re-render when webfonts finish so Great Vibes / Londrina swap in (CSS alone
+  // can leave the first paint on a fallback until something else updates).
+  const fontsReady = useEditorFontsReady();
+  useEffect(() => { void ensureEditorFonts(); }, []);
+
   const scale = width / DESIGN_W;
   // Sort so backgrounds are behind images, which are behind text/shapes
   const sorted = [...elements].sort((a, b) => {
@@ -19,7 +50,10 @@ export const PageThumb = React.memo(function PageThumb({
     return (z[a.type] ?? 2) - (z[b.type] ?? 2);
   });
   return (
-    <div style={{ width, height, overflow: 'hidden', position: 'relative', flexShrink: 0, background: PAPER_COLOR }}>
+    <div
+      data-fonts-ready={fontsReady ? '1' : '0'}
+      style={{ width, height, overflow: 'hidden', position: 'relative', flexShrink: 0, background: PAPER_COLOR }}
+    >
       <div style={{
         width: DESIGN_W, height: canvasH,
         transform: `scale(${scale})`,
@@ -32,7 +66,9 @@ export const PageThumb = React.memo(function PageThumb({
             if (el.src) {
               return <img key={key} src={el.src} alt="" loading="lazy" style={{
                 position: 'absolute', inset: 0, width: '100%', height: '100%',
-                objectFit: 'cover', display: 'block', pointerEvents: 'none',
+                objectFit: 'cover',
+                objectPosition: `${(el.cropFocusX ?? 0.5) * 100}% ${(el.cropFocusY ?? 0.5) * 100}%`,
+                display: 'block', pointerEvents: 'none',
               }}/>;
             }
             let bg = el.bgColor || PAPER_COLOR;
@@ -45,7 +81,9 @@ export const PageThumb = React.memo(function PageThumb({
           if (el.type === 'image' && el.src) {
             return <img key={key} src={el.src} alt="" loading="lazy" style={{
               position: 'absolute', left: el.x, top: el.y, width: el.w, height: el.h,
-              objectFit: 'cover', display: 'block', pointerEvents: 'none',
+              objectFit: 'cover',
+              objectPosition: `${(el.cropFocusX ?? 0.5) * 100}% ${(el.cropFocusY ?? 0.5) * 100}%`,
+              display: 'block', pointerEvents: 'none',
             }}/>;
           }
           if (el.type === 'placeholder') {
@@ -55,11 +93,29 @@ export const PageThumb = React.memo(function PageThumb({
             }}/>;
           }
           if (el.type === 'text') {
-            return <div key={key} style={{
-              position: 'absolute', left: el.x, top: el.y, width: el.w, height: Math.max(el.h, 8),
-              background: el.fill ? `${el.fill}66` : 'rgba(0,0,0,0.12)',
-              borderRadius: 1,
-            }}/>;
+            const face = thumbFontStyle(el.fontFamily, el.fontStyle);
+            return (
+              <div key={key} style={{
+                position: 'absolute', left: el.x, top: el.y, width: el.w,
+                height: Math.max(el.h, 8), overflow: 'hidden',
+                fontSize: el.fontSize || 18,
+                fontFamily: thumbFontFamily(el.fontFamily),
+                fontStyle: face.fontStyle,
+                fontWeight: face.fontWeight,
+                color: el.fill || '#1a1a1a',
+                textAlign: (el.align || 'center') as React.CSSProperties['textAlign'],
+                lineHeight: el.lineHeight ?? 1.2,
+                letterSpacing: el.letterSpacing ?? 0,
+                whiteSpace: 'pre-wrap',
+                padding: 6,
+                boxSizing: 'border-box',
+                opacity: el.opacity ?? 1,
+                transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
+                transformOrigin: 'top left',
+              }}>
+                {el.text}
+              </div>
+            );
           }
           if (el.type === 'shape') {
             return <div key={key} style={{

@@ -1,6 +1,6 @@
 # Railway → pergjithmone → Settings:
-#   Root Directory     = /
-#   Config-as-code     = /artifacts/pergjithmone/railway.toml
+#   Root Directory = /
+#   Config-as-code  = /artifacts/pergjithmone/railway.toml
 #
 # Variables (required):
 #   PORT            — leave Railway default (do not force 8080 if Railway sets another)
@@ -8,6 +8,10 @@
 #   API_URL=https://YOUR-API-SERVER.up.railway.app
 #     or private: http://${{api-server.RAILWAY_PRIVATE_DOMAIN}}:8080
 #     (no trailing slash — Create Album hangs without this)
+#
+# COST:
+#   Enable Serverless (Settings → Deploy). Cap memory at ~128–256 MB.
+#   This image is now static-only (no node_modules) — idle RSS should stay tiny.
 
 [build]
 builder = "DOCKERFILE"
@@ -25,3 +29,4 @@ watchPatterns = [
 
 [deploy]
 restartPolicyType = "ON_FAILURE"
+numReplicas = 1

@@ -40,6 +40,8 @@ export interface PdfElement {
   strokeDash?: number[]; cornerRadius?: number; shapeKind?: string;
   // image
   src?: string;
+  cropFocusX?: number;
+  cropFocusY?: number;
   // text
   text?: string; fontSize?: number; fontFamily?: string; fontStyle?: string;
   align?: 'left'|'center'|'right'; lineHeight?: number; letterSpacing?: number;
@@ -140,14 +142,18 @@ async function renderPage(elements: PdfElement[], canvasH: number): Promise<stri
     if (el.type === 'background') {
       const wallpaper = el.src ? imgCache.get(el.src) : undefined;
       if (wallpaper) {
-        // object-fit: cover the full page
+        // object-fit: cover the full page (honours crop focus)
         const sx = DESIGN_W / wallpaper.naturalWidth;
         const sy = canvasH / wallpaper.naturalHeight;
         const s = Math.max(sx, sy);
         const cw = DESIGN_W / s;
         const ch = canvasH / s;
-        const cx = (wallpaper.naturalWidth - cw) / 2;
-        const cy = (wallpaper.naturalHeight - ch) / 2;
+        const maxX = Math.max(0, wallpaper.naturalWidth - cw);
+        const maxY = Math.max(0, wallpaper.naturalHeight - ch);
+        const fx = Math.min(1, Math.max(0, el.cropFocusX ?? 0.5));
+        const fy = Math.min(1, Math.max(0, el.cropFocusY ?? 0.5));
+        const cx = maxX * fx;
+        const cy = maxY * fy;
         ctx.drawImage(wallpaper, cx, cy, cw, ch, 0, 0, DESIGN_W, canvasH);
       } else if (el.bgGradientFrom) {
         const ex = el.bgGradientDir === 'lr'   ? DESIGN_W :
@@ -195,14 +201,18 @@ async function renderPage(elements: PdfElement[], canvasH: number): Promise<stri
     else if (el.type === 'image' && el.src) {
       const img = imgCache.get(el.src);
       if (img) {
-        // object-fit: cover crop
+        // object-fit: cover crop (honours saved crop focus)
         const sx = el.w / img.naturalWidth;
         const sy = el.h / img.naturalHeight;
         const s  = Math.max(sx, sy);
         const cw = el.w / s;
         const ch = el.h / s;
-        const cx = (img.naturalWidth  - cw) / 2;
-        const cy = (img.naturalHeight - ch) / 2;
+        const maxX = Math.max(0, img.naturalWidth - cw);
+        const maxY = Math.max(0, img.naturalHeight - ch);
+        const fx = Math.min(1, Math.max(0, el.cropFocusX ?? 0.5));
+        const fy = Math.min(1, Math.max(0, el.cropFocusY ?? 0.5));
+        const cx = maxX * fx;
+        const cy = maxY * fy;
 
         ctx.save();
         ctx.beginPath();
@@ -279,6 +289,10 @@ export async function generatePDF(
   onProgress?: (current: number, total: number) => void,
   bookSize?: { widthCm?: number; heightCm?: number },
 ): Promise<void> {
+  // Wait for Great Vibes / Londrina / etc. so canvas text matches the editor.
+  const { ensureEditorFonts } = await import('./editorFonts');
+  await ensureEditorFonts();
+
   // Include all pages except the locked inside cover
   const ordered = [...pages].sort((a, b) => (a.pageNumber ?? 0) - (b.pageNumber ?? 0));
   const toRender = ordered.filter(p => p.role !== 'locked_left' && p.role !== 'locked_right');

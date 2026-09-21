@@ -1,6 +1,13 @@
 # Railway → api-server → Settings:
 #   Root Directory     = /
 #   Config-as-code     = /artifacts/api-server/railway.toml
+#
+# COST (memory is ~99% of the bill):
+#   1. Settings → Deploy → enable "Serverless" (sleep after ~10min idle).
+#      Safe for low traffic; first request after sleep may be ~2–5s slower.
+#   2. Settings → set Memory limit to 512 MB (API) so one spike can't rack up GB-minutes.
+#   3. Postgres: use the smallest plan; avoid a second unused DB/env.
+#   4. Do NOT keep staging + prod both always-on unless needed.
 
 [build]
 builder = "DOCKERFILE"
@@ -16,3 +23,5 @@ watchPatterns = [
 
 [deploy]
 restartPolicyType = "ON_FAILURE"
+# One replica — extra replicas multiply memory minutely cost.
+numReplicas = 1

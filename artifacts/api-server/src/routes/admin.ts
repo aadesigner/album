@@ -406,7 +406,18 @@ router.patch(
     if (phone !== undefined) updates.phone = nextPhone;
     if (role !== undefined) updates.role = role;
     if (emailVerified !== undefined) updates.emailVerified = emailVerified;
-    if (isBanned !== undefined) updates.isBanned = Boolean(isBanned);
+    if (isBanned !== undefined) {
+      const nextBanned = Boolean(isBanned);
+      if (nextBanned && userId === req.user!.id) {
+        res.status(400).json({ error: "You cannot ban your own account" });
+        return;
+      }
+      updates.isBanned = nextBanned;
+      // Kick them out: revoke refresh session so they can't mint a new access token.
+      if (nextBanned) {
+        updates.refreshToken = null;
+      }
+    }
     if (adminNote !== undefined) (updates as any).adminNote = adminNote || null;
 
     // Admin-set password: hash with bcrypt (12) and kill all existing sessions.
@@ -857,6 +868,8 @@ router.get(
     for (const row of rows) map[row.key] = row.value;
     let hiddenDesignIds: string[] = [];
     try { hiddenDesignIds = JSON.parse(map["hidden_design_ids"] || "[]"); } catch { hiddenDesignIds = []; }
+    let designOverrides: Record<string, unknown> = {};
+    try { designOverrides = JSON.parse(map["design_overrides"] || "{}"); } catch { designOverrides = {}; }
 
     res.json({
       whatsappNumber: map["whatsapp_number"] || "+355688755833",
@@ -873,6 +886,7 @@ router.get(
       bookDisabledNoticeAl: map["book_disabled_notice_al"] || "Krijimi i albumeve është përkohësisht i ndalur.",
       bookDisabledNoticeEn: map["book_disabled_notice_en"] || "Book creation is temporarily unavailable.",
       hiddenDesignIds,
+      designOverrides,
       requireLoginForPdf: map["require_login_for_pdf"] === "true",
       pendingBooksLimitEnabled: map["pending_books_limit_enabled"] !== "false",
       pendingBooksLimit: parseInt(map["pending_books_limit"] || "3", 10),
@@ -901,6 +915,7 @@ router.patch(
       bookDisabledNoticeAl: "book_disabled_notice_al",
       bookDisabledNoticeEn: "book_disabled_notice_en",
       hiddenDesignIds: "hidden_design_ids",
+      designOverrides: "design_overrides",
       requireLoginForPdf: "require_login_for_pdf",
       pendingBooksLimitEnabled: "pending_books_limit_enabled",
       pendingBooksLimit: "pending_books_limit",
@@ -910,7 +925,10 @@ router.patch(
     for (const [jsKey, dbKey] of Object.entries(keyMap)) {
       if (req.body[jsKey] !== undefined) {
         const raw = req.body[jsKey];
-        const value = Array.isArray(raw) ? raw.join(",") : String(raw);
+        let value: string;
+        if (typeof raw === "string") value = raw;
+        else if (Array.isArray(raw) || (raw && typeof raw === "object")) value = JSON.stringify(raw);
+        else value = String(raw);
         await db
           .insert(appSettingsTable)
           .values({ key: dbKey, value })
@@ -924,6 +942,8 @@ router.patch(
     for (const row of rows2) map2[row.key] = row.value;
     let hiddenDesignIds2: string[] = [];
     try { hiddenDesignIds2 = JSON.parse(map2["hidden_design_ids"] || "[]"); } catch { hiddenDesignIds2 = []; }
+    let designOverrides2: Record<string, unknown> = {};
+    try { designOverrides2 = JSON.parse(map2["design_overrides"] || "{}"); } catch { designOverrides2 = {}; }
 
     res.json({
       whatsappNumber: map2["whatsapp_number"] || "+355688755833",
@@ -940,6 +960,7 @@ router.patch(
       bookDisabledNoticeAl: map2["book_disabled_notice_al"] || "Krijimi i albumeve është përkohësisht i ndalur.",
       bookDisabledNoticeEn: map2["book_disabled_notice_en"] || "Book creation is temporarily unavailable.",
       hiddenDesignIds: hiddenDesignIds2,
+      designOverrides: designOverrides2,
       requireLoginForPdf: map2["require_login_for_pdf"] === "true",
       pendingBooksLimitEnabled: map2["pending_books_limit_enabled"] !== "false",
       pendingBooksLimit: parseInt(map2["pending_books_limit"] || "3", 10),

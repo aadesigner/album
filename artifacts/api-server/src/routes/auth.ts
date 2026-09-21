@@ -253,6 +253,16 @@ router.post("/auth/refresh", async (req, res): Promise<void> => {
       return;
     }
 
+    if (user.isBanned) {
+      await db
+        .update(usersTable)
+        .set({ refreshToken: null })
+        .where(eq(usersTable.id, user.id));
+      clearRefreshTokenCookie(res);
+      res.status(403).json({ error: "Your account has been suspended. Please contact support." });
+      return;
+    }
+
     const newPayload = { userId: user.id, email: user.email, role: user.role };
     const accessToken = generateAccessToken(newPayload);
     const newRefreshToken = generateRefreshToken(newPayload);

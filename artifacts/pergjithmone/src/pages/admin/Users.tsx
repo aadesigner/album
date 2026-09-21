@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { AdminLayout } from '@/components/layout/AdminLayout';
+import { AdminLayout, ADMIN } from '@/components/layout/AdminLayout';
 import {
   useListAdminUsers, useUpdateAdminUser, useDeleteAdminUser,
   useListAdminOrders, useUpdateAdminOrder,
   getListAdminUsersQueryKey,
 } from '@workspace/api-client-react-tsconfig';
 import { format } from 'date-fns';
-import { Search, UserPlus, Trash2, ShieldBan, ShieldCheck, RefreshCw, Images, Eye, ExternalLink, Download, X, Pencil, KeyRound } from 'lucide-react';
+import { Search, UserPlus, Trash2, ShieldBan, ShieldCheck, RefreshCw, Images, Eye, ExternalLink, Download, X, Pencil, KeyRound, ShoppingBag, FolderOpen } from 'lucide-react';
 import { PhoneInput } from '@/components/ui/PhoneInput';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -69,8 +69,8 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
         <div className="flex items-center gap-2 mb-5">
-          <div className="w-8 h-8 rounded-xl bg-rose-100 flex items-center justify-center">
-            <UserPlus size={16} className="text-rose-600" />
+          <div className="w-8 h-8 rounded-2xl flex items-center justify-center" style={{ background: ADMIN.blushSoft }}>
+            <UserPlus size={16} style={{ color: ADMIN.blushDeep }} />
           </div>
           <h3 className="font-serif text-lg font-semibold">Create User</h3>
         </div>
@@ -109,7 +109,7 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
           {error && <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
           <div className="flex gap-3 pt-1">
             <Button type="button" variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
-            <Button type="submit" disabled={loading} className="flex-1 bg-rose-500 hover:bg-rose-600 text-white">
+            <Button type="submit" disabled={loading} className="flex-1 text-white hover:opacity-90 rounded-2xl" style={{ background: ADMIN.blush }}>
               {loading ? 'Creating…' : 'Create User'}
             </Button>
           </div>
@@ -187,8 +187,8 @@ function EditUserModal({ targetUser, onClose, onSaved }: {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center gap-2 mb-5">
-          <div className="w-8 h-8 rounded-xl bg-rose-100 flex items-center justify-center">
-            <Pencil size={16} className="text-rose-600" />
+          <div className="w-8 h-8 rounded-2xl flex items-center justify-center" style={{ background: ADMIN.blushSoft }}>
+            <Pencil size={16} style={{ color: ADMIN.blushDeep }} />
           </div>
           <h3 className="font-serif text-lg font-semibold">Edit User</h3>
         </div>
@@ -256,7 +256,7 @@ function EditUserModal({ targetUser, onClose, onSaved }: {
           {error && <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
           <div className="flex gap-3 pt-1">
             <Button type="button" variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
-            <Button type="submit" disabled={loading} className="flex-1 bg-rose-500 hover:bg-rose-600 text-white">
+            <Button type="submit" disabled={loading} className="flex-1 text-white hover:opacity-90 rounded-2xl" style={{ background: ADMIN.blush }}>
               {loading ? 'Saving…' : 'Save Changes'}
             </Button>
           </div>
@@ -269,16 +269,12 @@ function EditUserModal({ targetUser, onClose, onSaved }: {
 const STATUSES = ['pending', 'confirmed', 'printing', 'shipped', 'delivered', 'cancelled'] as const;
 
 const STATUS_STYLE: Record<string, string> = {
-  pending:   'bg-amber-50 text-amber-700 border-amber-200',
-  confirmed: 'bg-blue-50 text-blue-700 border-blue-200',
-  printing:  'bg-violet-50 text-violet-700 border-violet-200',
-  shipped:   'bg-cyan-50 text-cyan-700 border-cyan-200',
-  delivered: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  cancelled: 'bg-red-50 text-red-500 border-red-200',
-};
-
-const STATUS_EMOJI: Record<string, string> = {
-  pending: '⏳', confirmed: '✅', printing: '🖨️', shipped: '📦', delivered: '🎉', cancelled: '❌',
+  pending:   'bg-amber-50 text-amber-800 border-amber-200',
+  confirmed: 'bg-sky-50 text-sky-800 border-sky-200',
+  printing:  'bg-[#F3E4E6] text-[#A85C66] border-[#E8C9CD]',
+  shipped:   'bg-teal-50 text-teal-800 border-teal-200',
+  delivered: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+  cancelled: 'bg-red-50 text-red-600 border-red-200',
 };
 
 // ── User albums/orders modal ────────────────────────────────────────────────
@@ -299,8 +295,8 @@ function UserAlbumsModal({ userId, userName, onClose }: { userId: number; userNa
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-rose-50 shrink-0">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-rose-100 flex items-center justify-center">
-              <Images size={15} className="text-rose-600" />
+            <div className="w-8 h-8 rounded-2xl flex items-center justify-center" style={{ background: ADMIN.blushSoft }}>
+              <Images size={15} style={{ color: ADMIN.blushDeep }} />
             </div>
             <div>
               <h3 className="font-serif text-lg font-semibold leading-tight">{userName}'s Albums</h3>
@@ -319,8 +315,7 @@ function UserAlbumsModal({ userId, userName, onClose }: { userId: number; userNa
             </div>
           ) : !orders.length ? (
             <div className="py-16 text-center">
-              <div className="text-4xl mb-2">🌸</div>
-              <p className="text-neutral-300 text-sm">No albums ordered yet</p>
+              <p className="text-sm" style={{ color: ADMIN.muted }}>No albums ordered yet</p>
             </div>
           ) : (
             <table className="w-full text-sm">
@@ -344,7 +339,8 @@ function UserAlbumsModal({ userId, userName, onClose }: { userId: number; userNa
                         <div className="flex items-center gap-1.5">
                           <button
                             onClick={() => setPdfUrl(o.pdfUrl)}
-                            className="flex items-center gap-1 px-2.5 py-1.5 bg-violet-50 text-violet-600 rounded-lg text-[10px] font-semibold hover:bg-violet-100 transition-colors"
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[10px] font-semibold transition-opacity hover:opacity-80"
+                            style={{ background: ADMIN.blushSoft, color: ADMIN.blushDeep }}
                             title="View PDF"
                           >
                             <Eye size={10} /> View
@@ -368,7 +364,7 @@ function UserAlbumsModal({ userId, userName, onClose }: { userId: number; userNa
                         className={`px-2.5 py-1.5 rounded-full text-[10px] font-semibold border cursor-pointer focus:outline-none focus:ring-1 focus:ring-rose-300 ${STATUS_STYLE[o.status] || 'bg-neutral-50 text-neutral-500 border-neutral-200'}`}
                       >
                         {STATUSES.map(s => (
-                          <option key={s} value={s}>{STATUS_EMOJI[s]} {s.charAt(0).toUpperCase() + s.slice(1)}</option>
+                          <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
                         ))}
                       </select>
                     </td>
@@ -428,16 +424,103 @@ function DeleteConfirm({ userName, onConfirm, onCancel, loading }: { userName: s
   );
 }
 
+// ── Ban / unban confirm — ban requires typing BAN so it isn't one-click ───────
+function BanConfirm({
+  userName,
+  currentlyBanned,
+  onConfirm,
+  onCancel,
+  loading,
+  error,
+}: {
+  userName: string;
+  currentlyBanned: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+  loading: boolean;
+  error?: string | null;
+}) {
+  const [typed, setTyped] = useState('');
+  const banPhrase = 'BAN';
+  const canBan = typed.trim().toUpperCase() === banPhrase;
+
+  if (currentlyBanned) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={e => e.target === e.currentTarget && onCancel()}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center" role="dialog" aria-modal="true" aria-labelledby="unban-title">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+            <ShieldCheck size={22} />
+          </div>
+          <h3 id="unban-title" className="font-serif text-lg font-semibold mb-2">Restore access?</h3>
+          <p className="text-sm text-neutral-500 mb-5">
+            <strong>{userName}</strong> will be able to sign in and use the app again.
+          </p>
+          {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={onCancel} disabled={loading} className="flex-1">Cancel</Button>
+            <Button onClick={onConfirm} disabled={loading} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white">
+              {loading ? 'Restoring…' : 'Unban user'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={e => e.target === e.currentTarget && onCancel()}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6" role="dialog" aria-modal="true" aria-labelledby="ban-title">
+        <div className="text-center">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-600">
+            <ShieldBan size={22} />
+          </div>
+          <h3 id="ban-title" className="font-serif text-lg font-semibold mb-2">Ban this user?</h3>
+          <p className="text-sm text-neutral-500 mb-4">
+            <strong>{userName}</strong> will be signed out immediately and blocked from logging in until you unban them.
+          </p>
+        </div>
+        <label className="block text-left text-xs font-medium text-neutral-600 mb-1.5">
+          Type <span className="font-mono font-bold text-red-600">{banPhrase}</span> to confirm
+        </label>
+        <Input
+          value={typed}
+          onChange={e => setTyped(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && canBan && !loading) onConfirm(); }}
+          placeholder={banPhrase}
+          autoFocus
+          autoComplete="off"
+          spellCheck={false}
+          className="mb-3 font-mono tracking-widest uppercase border-red-100 focus:border-red-300 focus:ring-red-200"
+        />
+        {error && <p className="mb-4 text-sm text-red-600 text-left">{error}</p>}
+        <div className="flex gap-3">
+          <Button variant="outline" onClick={onCancel} disabled={loading} className="flex-1">Cancel</Button>
+          <Button
+            onClick={onConfirm}
+            disabled={!canBan || loading}
+            className="flex-1 bg-red-600 hover:bg-red-700 text-white disabled:opacity-40"
+          >
+            {loading ? 'Banning…' : 'Ban user'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminUsers() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [banTarget, setBanTarget] = useState<{ id: number; name: string; isBanned: boolean } | null>(null);
   const [banningId, setBanningId] = useState<number | null>(null);
+  const [banError, setBanError] = useState<string | null>(null);
   const [albumsTarget, setAlbumsTarget] = useState<{ id: number; name: string } | null>(null);
   const [editTarget, setEditTarget] = useState<{ id: number; name: string | null; email: string; phone: string | null; adminNote?: string | null } | null>(null);
 
+  const { user: me } = useAuth();
   const queryClient = useQueryClient();
   const { data: usersData, isLoading, refetch } = useListAdminUsers({ page: 1, limit: 50, search: debouncedSearch || undefined });
   const updateUser = useUpdateAdminUser();
@@ -448,12 +531,27 @@ export default function AdminUsers() {
     return () => clearTimeout(t);
   }, [search]);
 
-  const handleBan = async (userId: number, currentBanned: boolean) => {
-    setBanningId(userId);
+  const handleBanConfirm = async () => {
+    if (!banTarget) return;
+    setBanningId(banTarget.id);
+    setBanError(null);
     try {
-      await updateUser.mutateAsync({ userId, data: { isBanned: !currentBanned } as any });
-      refetch();
-    } finally { setBanningId(null); }
+      await updateUser.mutateAsync({
+        userId: banTarget.id,
+        data: { isBanned: !banTarget.isBanned },
+      });
+      await queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey() });
+      setBanTarget(null);
+      await refetch();
+    } catch (err: any) {
+      const msg =
+        err?.data?.error ||
+        err?.message ||
+        (banTarget.isBanned ? 'Failed to unban user.' : 'Failed to ban user.');
+      setBanError(typeof msg === 'string' ? msg : 'Request failed.');
+    } finally {
+      setBanningId(null);
+    }
   };
 
   const handleDelete = async () => {
@@ -491,61 +589,72 @@ export default function AdminUsers() {
           loading={deletingId === deleteTarget.id}
         />
       )}
+      {banTarget && (
+        <BanConfirm
+          userName={banTarget.name}
+          currentlyBanned={banTarget.isBanned}
+          onConfirm={handleBanConfirm}
+          onCancel={() => { setBanTarget(null); setBanError(null); }}
+          loading={banningId === banTarget.id}
+          error={banError}
+        />
+      )}
 
-      <div className="p-5 md:p-8 max-w-screen-xl mx-auto">
-        {/* Header */}
+      <div className="p-4 sm:p-5 md:p-8 max-w-screen-xl mx-auto">
         <div className="mb-6">
-          <p className="text-xs text-rose-400 font-medium uppercase tracking-widest mb-1">👥 User Management</p>
-          <h1 className="text-3xl font-serif font-bold text-neutral-900">Members</h1>
-          <p className="text-sm text-neutral-400 mt-1">{total} registered users</p>
+          <p className="text-[10px] font-semibold tracking-[0.18em] uppercase mb-1.5" style={{ color: ADMIN.blush }}>
+            Community
+          </p>
+          <h1 className="text-3xl font-serif font-semibold mb-1" style={{ color: ADMIN.ink }}>Members</h1>
+          <p className="text-sm" style={{ color: ADMIN.muted }}>{total} registered</p>
         </div>
 
-        {/* Toolbar */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-5">
           <div className="relative flex-1 max-w-sm">
-            <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-rose-300" />
+            <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: ADMIN.blush }} />
             <Input
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search by name or phone…"
-              className="pl-9 border-rose-100 focus:border-rose-300 focus:ring-rose-200 rounded-xl"
+              className="pl-9 rounded-2xl"
+              style={{ borderColor: ADMIN.line }}
             />
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => refetch()} className="p-2.5 rounded-xl border border-rose-100 hover:bg-rose-50 text-rose-300 hover:text-rose-500 transition-colors">
+            <button onClick={() => refetch()} className="p-2.5 rounded-2xl border transition-colors"
+              style={{ borderColor: ADMIN.line, color: ADMIN.muted }}>
               <RefreshCw size={14} />
             </button>
-            <Button onClick={() => setShowCreate(true)} className="bg-rose-500 hover:bg-rose-600 text-white rounded-xl gap-2 shadow-sm shadow-rose-200">
+            <Button onClick={() => setShowCreate(true)} className="rounded-2xl gap-2 text-white hover:opacity-90"
+              style={{ background: ADMIN.blush }}>
               <UserPlus size={14} /> New User
             </Button>
           </div>
         </div>
 
-        {/* Table */}
-        <div className="bg-white rounded-2xl shadow-sm border border-rose-50 overflow-hidden">
+        <div className="rounded-2xl shadow-sm overflow-hidden" style={{ background: ADMIN.card, border: `1px solid ${ADMIN.line}` }}>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-rose-50">
+                <tr style={{ borderBottom: `1px solid ${ADMIN.line}` }}>
                   {['User', 'Joined', 'Last Login', 'Activity', 'Role', 'Status', 'Actions'].map(h => (
-                    <th key={h} className="px-5 py-3.5 text-left text-[10px] font-semibold text-neutral-300 uppercase tracking-wider">{h}</th>
+                    <th key={h} className="px-4 sm:px-5 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider" style={{ color: ADMIN.muted }}>{h}</th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-rose-50/70">
+              <tbody>
                 {isLoading ? (
                   Array.from({ length: 8 }).map((_, i) => (
                     <tr key={i}>
                       <td colSpan={7} className="px-5 py-4">
-                        <div className="h-4 bg-rose-50 rounded animate-pulse" />
+                        <div className="h-4 rounded animate-pulse" style={{ background: ADMIN.blushSoft }} />
                       </td>
                     </tr>
                   ))
                 ) : !users.length ? (
                   <tr>
                     <td colSpan={7} className="px-5 py-14 text-center">
-                      <div className="text-4xl mb-2">🌸</div>
-                      <p className="text-neutral-300 text-sm">No users found</p>
+                      <p className="text-sm" style={{ color: ADMIN.muted }}>No users found</p>
                     </td>
                   </tr>
                 ) : (
@@ -553,12 +662,12 @@ export default function AdminUsers() {
                     const contact = displayContact(u);
                     const initials = (u.name || contact || '?').split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2);
                     return (
-                      <tr key={u.id} className={`hover:bg-rose-50/30 transition-colors ${u.isBanned ? 'opacity-60' : ''}`}>
+                      <tr key={u.id} className={`transition-colors hover:bg-[#FBF7F5] ${u.isBanned ? 'opacity-60' : ''}`} style={{ borderTop: `1px solid ${ADMIN.line}` }}>
                         {/* User */}
-                        <td className="px-5 py-3.5">
+                        <td className="px-4 sm:px-5 py-3.5">
                           <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
-                              style={{ background: u.isBanned ? '#d1d5db' : 'linear-gradient(135deg, #f43f5e 0%, #e879f9 100%)' }}>
+                            <div className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-semibold shrink-0"
+                              style={{ background: u.isBanned ? '#E5E0E0' : ADMIN.blushSoft, color: u.isBanned ? '#9CA3AF' : ADMIN.blushDeep }}>
                               {initials}
                             </div>
                             <div className="min-w-0">
@@ -587,9 +696,13 @@ export default function AdminUsers() {
 
                         {/* Activity */}
                         <td className="px-5 py-3.5">
-                          <div className="flex items-center gap-3 text-xs text-neutral-400">
-                            <span title="Orders">🛍️ {u.orderCount ?? 0}</span>
-                            <span title="Projects">📷 {u.projectCount ?? 0}</span>
+                          <div className="flex items-center gap-3 text-xs" style={{ color: ADMIN.muted }}>
+                            <span className="inline-flex items-center gap-1" title="Orders">
+                              <ShoppingBag size={11} /> {u.orderCount ?? 0}
+                            </span>
+                            <span className="inline-flex items-center gap-1" title="Projects">
+                              <FolderOpen size={11} /> {u.projectCount ?? 0}
+                            </span>
                           </div>
                         </td>
 
@@ -598,25 +711,41 @@ export default function AdminUsers() {
                           <select
                             value={u.role}
                             onChange={e => handleRoleChange(u.id, e.target.value)}
-                            className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border-0 cursor-pointer focus:outline-none focus:ring-1 focus:ring-rose-300 ${
-                              u.role === 'admin' ? 'bg-violet-100 text-violet-700' : 'bg-neutral-100 text-neutral-500'
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border-0 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#C97B84] ${
+                              u.role === 'admin' ? 'bg-[#F3E4E6] text-[#A85C66]' : 'bg-neutral-100 text-neutral-500'
                             }`}
                           >
-                            <option value="user">👤 User</option>
-                            <option value="admin">👑 Admin</option>
+                            <option value="user">User</option>
+                            <option value="admin">Admin</option>
                           </select>
                         </td>
 
                         {/* Status */}
                         <td className="px-5 py-3.5">
                           <button
-                            onClick={() => handleBan(u.id, u.isBanned)}
-                            disabled={banningId === u.id}
-                            title={u.isBanned ? 'Click to unban' : 'Click to ban'}
+                            onClick={() => {
+                              if (me?.id === u.id && !u.isBanned) return;
+                              setBanError(null);
+                              setBanTarget({
+                                id: u.id,
+                                name: u.name || contact || `User #${u.id}`,
+                                isBanned: !!u.isBanned,
+                              });
+                            }}
+                            disabled={banningId === u.id || (me?.id === u.id && !u.isBanned)}
+                            title={
+                              me?.id === u.id && !u.isBanned
+                                ? 'You cannot ban your own account'
+                                : u.isBanned
+                                  ? 'Click to unban'
+                                  : 'Click to ban'
+                            }
                             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-semibold transition-all border ${
                               u.isBanned
                                 ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100'
-                                : 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200'
+                                : me?.id === u.id
+                                  ? 'bg-emerald-50 text-emerald-600 border-emerald-200 opacity-60 cursor-not-allowed'
+                                  : 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200'
                             }`}
                           >
                             {banningId === u.id ? '…' : u.isBanned ? (
@@ -632,14 +761,16 @@ export default function AdminUsers() {
                           <div className="flex items-center gap-1">
                             <button
                               onClick={() => setAlbumsTarget({ id: u.id, name: u.name || contact })}
-                              className="p-2 rounded-xl text-neutral-300 hover:bg-violet-50 hover:text-violet-500 transition-colors"
+                              className="p-2 rounded-xl transition-colors hover:bg-[#F3E4E6]"
+                              style={{ color: ADMIN.muted }}
                               title="View albums & orders"
                             >
                               <Images size={14} />
                             </button>
                             <button
                               onClick={() => setEditTarget({ id: u.id, name: u.name, email: u.email, phone: u.phone ?? null, adminNote: u.adminNote })}
-                              className={`p-2 rounded-xl transition-colors relative ${u.adminNote ? 'text-amber-500 hover:bg-amber-50' : 'text-neutral-300 hover:bg-blue-50 hover:text-blue-500'}`}
+                              className={`p-2 rounded-xl transition-colors relative ${u.adminNote ? 'text-amber-500 hover:bg-amber-50' : 'hover:bg-[#F3E4E6]'}`}
+                              style={u.adminNote ? undefined : { color: ADMIN.muted }}
                               title={u.adminNote ? 'Edit user (has admin note)' : 'Edit user'}
                             >
                               <Pencil size={14} />

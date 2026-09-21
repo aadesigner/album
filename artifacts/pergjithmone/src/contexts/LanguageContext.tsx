@@ -89,6 +89,20 @@ const translations: Translations = {
   'editor.generatePdf': { sq: 'Gjenero PDF', en: 'Generate PDF' },
   'editor.download': { sq: 'Shkarko PDF', en: 'Download PDF' },
   'editor.order': { sq: 'Porosit', en: 'Order' },
+  'editor.designs.hint': {
+    sq: 'Kliko një stil — ndryshon vetëm pjesët e jashtme',
+    en: 'Click a style — changes outer covers only',
+  },
+  'editor.designConfirm.title': {
+    sq: 'Ndrysho stilin e albumit?',
+    en: 'Change album style?',
+  },
+  'editor.designConfirm.body': {
+    sq: 'Duke pranuar këtë dizajn do të ndryshohet stili i pjesëve të jashtme (kopertina përpara dhe mbrapa). Faqet e brendshme mbeten siç janë.',
+    en: 'Accepting this design will change the outer album style (front and back covers). Inside pages will stay the same.',
+  },
+  'editor.designConfirm.apply': { sq: 'Apliko stilin', en: 'Apply style' },
+  'editor.designConfirm.cancel': { sq: 'Anulo', en: 'Cancel' },
 };
 
 interface LanguageContextType {

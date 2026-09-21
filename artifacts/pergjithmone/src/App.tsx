@@ -66,6 +66,7 @@ const AdminLayouts    = lazyRetry(() => import('@/pages/admin/Layouts'));
 const AdminBookSizes  = lazyRetry(() => import('@/pages/admin/BookSizes'));
 const AdminSettings   = lazyRetry(() => import('@/pages/admin/Settings'));
 const AdminSecurity   = lazyRetry(() => import('@/pages/admin/Security'));
+const AdminDesignStudio = lazyRetry(() => import('@/pages/admin/DesignStudio'));
 
 // ── Page loader ───────────────────────────────────────────────────────────
 // Shown by Suspense while a heavy page chunk (editor, AI album, admin, etc.)
@@ -247,6 +248,9 @@ function Router() {
           </Route>
           <Route path="/heyadmin/template">
             <ProtectedRoute requireAdmin><AdminTemplates /></ProtectedRoute>
+          </Route>
+          <Route path="/heyadmin/dizajne">
+            <ProtectedRoute requireAdmin><AdminDesignStudio /></ProtectedRoute>
           </Route>
           <Route path="/heyadmin/layout">
             <ProtectedRoute requireAdmin><AdminLayouts /></ProtectedRoute>

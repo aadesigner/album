@@ -15,8 +15,9 @@ import { useLocation } from 'wouter';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { DB_CAT_TO_DESIGN_CAT } from '@/lib/designMeta';
-import { generateAlbum } from '@/lib/albumGenerator';
+import { generateAlbum, suggestInnerPageCount } from '@/lib/albumGenerator';
 import { compressImageFile } from '@/lib/imageCompression';
+import { pendingBooksLimitMessage } from '@/lib/projectErrors';
 import { SizeCard } from './Wizard';
 import { getCategoryImage } from '@/lib/categoryImages';
 
@@ -217,9 +218,11 @@ export default function AlbumAI() {
       }
 
       setGenStageIndex(0); // project
-      const desiredInner = Math.max(4, Math.round(photoUrls.length / 2));
       const chosenSize = ((bookSizes as any[]) || []).find(s => s.id === sizeId);
       if (!chosenSize) throw new Error('No book sizes available');
+      // ~1.75 photos/page so the planner can use clean 1–2 photo layouts
+      // without wrapping the same image across pages.
+      const desiredInner = suggestInnerPageCount(photoUrls.length, 4);
       const finalInner = Math.max(desiredInner, chosenSize.minPages);
 
       const project = await createProject.mutateAsync({
@@ -315,7 +318,7 @@ export default function AlbumAI() {
       const isLimitError = e?.data?.code === 'PENDING_BOOKS_LIMIT_REACHED';
       const isNoPhotos = e?.message === 'NO_PHOTOS';
       setGenError(isLimitError
-        ? e.data.error
+        ? pendingBooksLimitMessage(lang, Number(e?.data?.limit) || 3)
         : isNoPhotos
         ? (lang === 'sq'
           ? 'Ngarko të paktën disa foto përpara se të krijosh albumin.'

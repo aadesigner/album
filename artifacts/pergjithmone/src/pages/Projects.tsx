@@ -176,7 +176,7 @@ export default function Projects() {
                 {canDelete(project.status) && (
                   <button
                     onClick={e => { e.stopPropagation(); setConfirmId(project.id); }}
-                    className="absolute top-3 left-3 z-10 p-1.5 rounded-full bg-white/80 hover:bg-red-50 text-neutral-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all shadow-sm"
+                    className="absolute top-3 left-3 z-10 p-1.5 rounded-full bg-white/90 hover:bg-red-50 text-neutral-500 hover:text-red-500 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all shadow-sm"
                     title={lang === 'sq' ? 'Fshi projektin' : 'Delete project'}
                   >
                     <Trash2 size={14} />
@@ -244,7 +244,7 @@ export default function Projects() {
                         </h3>
                         <button
                           onClick={e => startRename(project.id, project.title, e)}
-                          className="flex-shrink-0 p-1 rounded-md text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 opacity-0 group-hover:opacity-100 transition-all"
+                          className="flex-shrink-0 p-1 rounded-md text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all"
                           title={lang === 'sq' ? 'Riemërto albumin' : 'Rename album'}
                         >
                           <Pencil size={13} />

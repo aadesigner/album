@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AdminLayout } from '@/components/layout/AdminLayout';
+import { AdminLayout, ADMIN } from '@/components/layout/AdminLayout';
 import {
   useListAdminBookSizes, useCreateAdminBookSize, useUpdateAdminBookSize, useDeleteAdminBookSize,
   getListAdminBookSizesQueryKey, getListBookSizesQueryKey,
@@ -96,8 +96,8 @@ function BookSizeFormModal({ size, onClose }: { size: BookSize | null; onClose: 
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center gap-2 mb-5">
-          <div className="w-8 h-8 rounded-xl bg-rose-100 flex items-center justify-center">
-            {isEdit ? <Edit2 size={16} className="text-rose-600" /> : <Plus size={16} className="text-rose-600" />}
+          <div className="w-8 h-8 rounded-2xl flex items-center justify-center" style={{ background: ADMIN.blushSoft }}>
+            {isEdit ? <Edit2 size={16} style={{ color: ADMIN.blushDeep }} /> : <Plus size={16} style={{ color: ADMIN.blushDeep }} />}
           </div>
           <h3 className="font-serif text-lg font-semibold">{isEdit ? 'Edit Book Size' : 'New Book Size'}</h3>
         </div>
@@ -138,7 +138,7 @@ function BookSizeFormModal({ size, onClose }: { size: BookSize | null; onClose: 
           {error && <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
           <div className="flex gap-3 pt-1">
             <Button type="button" variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
-            <Button type="submit" disabled={loading} className="flex-1 bg-rose-500 hover:bg-rose-600 text-white">
+            <Button type="submit" disabled={loading} className="flex-1 text-white hover:opacity-90 rounded-2xl" style={{ background: ADMIN.blush }}>
               {loading ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Size'}
             </Button>
           </div>
@@ -208,55 +208,53 @@ export default function AdminBookSizes() {
         />
       )}
 
-      <div className="p-8 max-w-7xl mx-auto">
-        <div className="mb-8 flex justify-between items-center">
+      <div className="p-4 sm:p-5 md:p-8 max-w-screen-xl mx-auto">
+        <div className="mb-8 flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4">
           <div>
-            <h1 className="text-3xl font-bold font-serif mb-2">Book Sizes</h1>
-            <p className="text-muted-foreground">Manage the photobook sizes, dimensions, and pricing customers can pick in the wizard.</p>
+            <p className="text-[10px] font-semibold tracking-[0.18em] uppercase mb-1.5" style={{ color: ADMIN.blush }}>Pricing</p>
+            <h1 className="text-3xl font-serif font-semibold mb-1" style={{ color: ADMIN.ink }}>Book sizes</h1>
+            <p className="text-sm" style={{ color: ADMIN.muted }}>Dimensions and pricing customers pick in the wizard.</p>
           </div>
-          <Button className="gap-2" onClick={() => setFormTarget({ open: true, size: null })}>
+          <Button className="gap-2 rounded-2xl text-white hover:opacity-90 shrink-0" style={{ background: ADMIN.blush }}
+            onClick={() => setFormTarget({ open: true, size: null })}>
             <Plus size={16} /> New Size
           </Button>
         </div>
 
-        <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
+        <div className="rounded-2xl shadow-sm overflow-hidden" style={{ background: ADMIN.card, border: `1px solid ${ADMIN.line}` }}>
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
-              <thead className="bg-muted/50 text-muted-foreground text-xs uppercase border-b border-border">
-                <tr>
-                  <th className="px-6 py-4 font-medium">Label</th>
-                  <th className="px-6 py-4 font-medium">Dimensions</th>
-                  <th className="px-6 py-4 font-medium">Base Price</th>
-                  <th className="px-6 py-4 font-medium">Extra Spread</th>
-                  <th className="px-6 py-4 font-medium">Min Pages</th>
-                  <th className="px-6 py-4 font-medium">Status</th>
-                  <th className="px-6 py-4 font-medium text-right">Actions</th>
+              <thead style={{ background: ADMIN.bg }}>
+                <tr style={{ borderBottom: `1px solid ${ADMIN.line}` }}>
+                  {['Label', 'Dimensions', 'Base Price', 'Extra Spread', 'Min Pages', 'Status', 'Actions'].map((h, i) => (
+                    <th key={h} className={`px-4 sm:px-6 py-3.5 font-medium text-[10px] uppercase tracking-wider ${i === 6 ? 'text-right' : ''}`} style={{ color: ADMIN.muted }}>{h}</th>
+                  ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
+              <tbody>
                 {isLoading ? (
-                  <tr><td colSpan={7} className="px-6 py-8 text-center text-muted-foreground">Loading book sizes...</td></tr>
+                  <tr><td colSpan={7} className="px-6 py-8 text-center text-sm" style={{ color: ADMIN.muted }}>Loading…</td></tr>
                 ) : sizes?.length === 0 ? (
-                  <tr><td colSpan={7} className="px-6 py-8 text-center text-muted-foreground">No book sizes found.</td></tr>
+                  <tr><td colSpan={7} className="px-6 py-8 text-center text-sm" style={{ color: ADMIN.muted }}>No book sizes found.</td></tr>
                 ) : (
                   sizes?.map((size: BookSize) => (
-                    <tr key={size.id} className="hover:bg-muted/30 transition-colors">
-                      <td className="px-6 py-4 font-medium flex items-center gap-2">
-                        <SquareSquare size={16} className="text-muted-foreground shrink-0" />
+                    <tr key={size.id} className="transition-colors hover:bg-[#FBF7F5]" style={{ borderTop: `1px solid ${ADMIN.line}` }}>
+                      <td className="px-4 sm:px-6 py-4 font-medium flex items-center gap-2" style={{ color: ADMIN.ink }}>
+                        <SquareSquare size={16} className="shrink-0" style={{ color: ADMIN.blush }} />
                         {size.label}
                       </td>
-                      <td className="px-6 py-4 text-muted-foreground font-mono text-xs">{size.widthCm} × {size.heightCm} cm</td>
-                      <td className="px-6 py-4 font-mono">{size.priceBase.toLocaleString()} LEK</td>
-                      <td className="px-6 py-4 font-mono text-muted-foreground">{size.pricePerExtraSpread.toLocaleString()} LEK</td>
-                      <td className="px-6 py-4">{size.minPages}</td>
-                      <td className="px-6 py-4">
-                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${size.isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-neutral-100 text-neutral-500'}`}>
+                      <td className="px-4 sm:px-6 py-4 font-mono text-xs" style={{ color: ADMIN.muted }}>{size.widthCm} × {size.heightCm} cm</td>
+                      <td className="px-4 sm:px-6 py-4 font-mono">{size.priceBase.toLocaleString()} LEK</td>
+                      <td className="px-4 sm:px-6 py-4 font-mono" style={{ color: ADMIN.muted }}>{size.pricePerExtraSpread.toLocaleString()} LEK</td>
+                      <td className="px-4 sm:px-6 py-4">{size.minPages}</td>
+                      <td className="px-4 sm:px-6 py-4">
+                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider ${size.isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-neutral-100 text-neutral-500'}`}>
                           {size.isActive ? 'Active' : 'Hidden'}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-right">
+                      <td className="px-4 sm:px-6 py-4 text-right">
                         <div className="flex justify-end gap-2">
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => setFormTarget({ open: true, size })}>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" style={{ color: ADMIN.muted }} onClick={() => setFormTarget({ open: true, size })}>
                             <Edit2 size={14} />
                           </Button>
                           <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setDeleteTarget(size)}>

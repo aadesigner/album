@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { ensureEditorFonts } from '@/lib/editorFonts';
 import { MarketingLayout } from '@/components/layout/MarketingLayout';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { SEOMeta } from '@/components/SEOMeta';
@@ -616,6 +617,7 @@ const STATS = [
 
 export default function Examples() {
   const { lang } = useLanguage();
+  useEffect(() => { void ensureEditorFonts(); }, []);
 
   return (
     <MarketingLayout>
