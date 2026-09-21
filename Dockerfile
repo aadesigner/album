@@ -36,6 +36,7 @@ ENV CI=true \
     PNPM_HOME="/pnpm" \
     PATH="/pnpm:$PATH" \
     # Cap V8 heap so RSS can't balloon on idle / PDF spikes.
+    # Stay under a ~512MB Railway memory limit with room for native/buffers.
     NODE_OPTIONS="--max-old-space-size=384"
 
 RUN corepack enable && corepack prepare pnpm@11.8.0 --activate

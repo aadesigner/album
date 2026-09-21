@@ -14,6 +14,7 @@
 artifacts/mockup-sandbox
 artifacts/pergjithmone/e2e
 .tmp-client-feedback
+.tmp-layout-crops
 **/*.test.ts
 **/*.test.mjs
 **/vitest.config.*

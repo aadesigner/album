@@ -29,7 +29,9 @@ WORKDIR /app
 
 ENV NODE_ENV=production \
     BASE_PATH=/ \
-    NODE_OPTIONS="--max-old-space-size=96"
+    # Keep headroom above Railway's typical 128–256MB service limit.
+    # 96 was too tight once Cloudflare/proxy + peak RSS are counted and can OOM-kill → CF 502.
+    NODE_OPTIONS="--max-old-space-size=192"
 
 # Only the static build + tiny server — typically <50MB RSS idle.
 COPY --from=build /app/artifacts/pergjithmone/dist ./dist
