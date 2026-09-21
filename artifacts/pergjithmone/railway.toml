@@ -24,8 +24,9 @@ watchPatterns = [
 ]
 
 [deploy]
-# Absolute path so boot works even if WORKDIR/start-command overrides fight.
-startCommand = "node /app/artifacts/pergjithmone/server.mjs"
+# Works for both image layouts (slim: /app/server.mjs — full: artifacts path).
+# Dashboard Start Command is overridden by this file when Config-as-code is set.
+startCommand = "sh -c 'if [ -f /app/server.mjs ] && [ -d /app/dist/public ]; then exec node /app/server.mjs; else exec node /app/artifacts/pergjithmone/server.mjs; fi'"
 healthcheckPath = "/healthz"
 healthcheckTimeout = 60
 restartPolicyType = "ON_FAILURE"
