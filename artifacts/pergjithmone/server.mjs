@@ -94,18 +94,23 @@ async function proxyApi(req, res, pathname, search) {
   for (const [key, value] of Object.entries(req.headers)) {
     if (value == null) continue;
     const lower = key.toLowerCase();
+    // Drop hop-by-hop + encoding: node fetch decompresses gzip for us, so we
+    // must not ask for / forward content-encoding or the browser gets corrupt bodies.
     if (
       lower === "host" ||
       lower === "connection" ||
       lower === "content-length" ||
       lower === "transfer-encoding" ||
-      lower === "keep-alive"
+      lower === "keep-alive" ||
+      lower === "accept-encoding"
     ) {
       continue;
     }
     headers[key] = Array.isArray(value) ? value.join(",") : value;
   }
   headers.host = new URL(apiUrl).host;
+  // Prefer plain responses from upstream when possible.
+  headers["accept-encoding"] = "identity";
 
   const method = req.method || "GET";
   const body =
@@ -119,15 +124,36 @@ async function proxyApi(req, res, pathname, search) {
       redirect: "manual",
     });
 
+    // node fetch already decompresses; never forward content-encoding / length.
     const outHeaders = {};
+    const setCookies = [];
     upstream.headers.forEach((value, key) => {
       const lower = key.toLowerCase();
-      if (lower === "transfer-encoding" || lower === "connection") return;
+      if (
+        lower === "transfer-encoding" ||
+        lower === "connection" ||
+        lower === "content-encoding" ||
+        lower === "content-length" ||
+        lower === "set-cookie"
+      ) {
+        return;
+      }
       outHeaders[key] = value;
     });
+    if (typeof upstream.headers.getSetCookie === "function") {
+      setCookies.push(...upstream.headers.getSetCookie());
+    } else {
+      const single = upstream.headers.get("set-cookie");
+      if (single) setCookies.push(single);
+    }
 
     const buf = Buffer.from(await upstream.arrayBuffer());
     outHeaders["content-length"] = String(buf.byteLength);
+    if (setCookies.length === 1) {
+      outHeaders["set-cookie"] = setCookies[0];
+    } else if (setCookies.length > 1) {
+      outHeaders["set-cookie"] = setCookies;
+    }
     res.writeHead(upstream.status, outHeaders);
     res.end(buf);
   } catch (err) {
