@@ -4,8 +4,7 @@
 #   Dockerfile path     = Dockerfile.web
 #   Railway Config File = /artifacts/pergjithmone/railway.toml
 #
-# Do NOT point this service at /artifacts/api-server/railway.toml
-# or at Dockerfile.api — that image has no frontend server.mjs.
+# Do NOT use Dockerfile / Dockerfile.api here — those are the API image.
 #
 # Variables:
 #   API_URL=https://workspaceapi-server-production-3940e.up.railway.app

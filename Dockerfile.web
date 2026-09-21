@@ -1,7 +1,7 @@
 # Railway pergjithmone (frontend):
 #   Root Directory     = /
 #   Builder            = Dockerfile
-#   Dockerfile path    = Dockerfile.web   (or Dockerfile — same file)
+#   Dockerfile path    = Dockerfile.web   (NOT Dockerfile — that is the API)
 #   Config file        = /artifacts/pergjithmone/railway.toml
 #   Custom Start Command = sh /app/start.sh
 #

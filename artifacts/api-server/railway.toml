@@ -1,31 +1,31 @@
 # Railway → api-server → Settings:
 #   Root Directory     = /
 #   Config-as-code     = /artifacts/api-server/railway.toml
-#   Dockerfile path    = Dockerfile.api
+#   Dockerfile path    = Dockerfile
+#   (Dockerfile.api is an identical alias)
+#
+# Do NOT set Dockerfile.web on this service — that is the frontend image.
 #
 # COST (memory is ~99% of the bill):
 #   1. Settings → Deploy → enable "Serverless" (sleep after ~10min idle).
-#      Safe for low traffic; first request after sleep may be ~2–5s slower.
-#   2. Settings → set Memory limit to 512 MB (API) so one spike can't rack up GB-minutes.
-#   3. Postgres: use the smallest plan; avoid a second unused DB/env.
-#   4. Do NOT keep staging + prod both always-on unless needed.
+#   2. Settings → set Memory limit to 512 MB (API).
+#   3. Postgres: use the smallest plan.
 
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "Dockerfile.api"
+dockerfilePath = "Dockerfile"
 watchPatterns = [
   "/artifacts/api-server/**",
   "/lib/**",
   "/package.json",
   "/pnpm-lock.yaml",
   "/pnpm-workspace.yaml",
+  "/Dockerfile",
   "/Dockerfile.api",
 ]
 
 [deploy]
-# Never use pnpm at runtime — runner may not have it on PATH if Start Command is overridden.
-# Absolute path so cwd / Root Directory mistakes cannot break boot.
-startCommand = "node /app/artifacts/api-server/dist/index.mjs"
+# Discovery start: boots API if present; explains if the frontend image was deployed by mistake.
+startCommand = "sh /app/artifacts/api-server/start.sh"
 restartPolicyType = "ON_FAILURE"
-# One replica — extra replicas multiply memory minutely cost.
 numReplicas = 1
