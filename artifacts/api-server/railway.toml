@@ -23,6 +23,9 @@ watchPatterns = [
 ]
 
 [deploy]
+# Never use pnpm at runtime — runner may not have it on PATH if Start Command is overridden.
+# Absolute path so cwd / Root Directory mistakes cannot break boot.
+startCommand = "node /app/artifacts/api-server/dist/index.mjs"
 restartPolicyType = "ON_FAILURE"
 # One replica — extra replicas multiply memory minutely cost.
 numReplicas = 1

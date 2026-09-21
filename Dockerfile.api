@@ -47,4 +47,5 @@ COPY --from=build /app /app
 RUN chmod +x /app/artifacts/api-server/start.sh
 WORKDIR /app/artifacts/api-server
 EXPOSE 8080
-CMD ["./start.sh"]
+# Prefer node directly — Railway Custom Start sometimes overrides CMD with `pnpm …`.
+CMD ["node", "/app/artifacts/api-server/dist/index.mjs"]
