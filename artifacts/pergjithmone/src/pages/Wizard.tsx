@@ -223,11 +223,16 @@ export default function Wizard() {
   const designOverrides = (siteSettings?.designOverrides || {}) as DesignOverrides;
 
   // Map selected DB category → design category → filter designs
-  const selectedCatName = useMemo(() => {
-    if (selectedCategory === 'blank' || selectedCategory === null) return '';
-    return (categories as any[])?.find((c: any) => c.id === selectedCategory)?.nameAl || '';
+  const selectedCat = useMemo(() => {
+    if (selectedCategory === 'blank' || selectedCategory === null) return null;
+    return (categories as any[])?.find((c: any) => c.id === selectedCategory) || null;
   }, [selectedCategory, categories]);
-  const designCategoryKey = DB_CAT_TO_DESIGN_CAT[selectedCatName] || '';
+  const selectedCatName = selectedCat?.nameAl || '';
+  const designCategoryKey =
+    DB_CAT_TO_DESIGN_CAT[selectedCatName]
+    || DB_CAT_TO_DESIGN_CAT[selectedCat?.nameEn || '']
+    || DB_CAT_TO_DESIGN_CAT[selectedCat?.slug || '']
+    || '';
   const shownDesigns = useMemo(() => {
     const base = designCategoryKey
       ? DESIGN_METAS.filter(d => d.category === designCategoryKey)

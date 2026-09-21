@@ -395,48 +395,92 @@ export function blankBackCoverElements(lang: 'sq' | 'en' = 'sq'): DE[] {
 // 20 Premade Designs — carefully crafted
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Photo city cover: solid paper color + framed city photo + editable name/year.
- *  Wallpaper is never the same asset as the framed photo (avoids double-image). */
+/** Editorial city cover — solid brand color + framed photo + bold type
+ *  (same spirit as Paris/Barcelona landmark covers, without needing a PNG icon). */
 function CITY(
   id: string,
   name: { sq: string; en: string },
   label: string,
   thumbPhoto: string,
-  fallback: string,
-  opts?: { year?: string; labelSize?: number; fill?: string; yearFill?: string },
+  paper: string,
+  opts?: {
+    year?: string;
+    labelSize?: number;
+    fill?: string;
+    yearFill?: string;
+    accent?: string;
+    layout?: 'postcard' | 'split' | 'banner';
+  },
 ): DesignDef {
   const year = opts?.year ?? String(new Date().getFullYear());
   const labelSize = opts?.labelSize ?? 72;
   const fill = opts?.fill ?? '#FFFFFF';
-  const yearFill = opts?.yearFill ?? 'rgba(255,255,255,0.92)';
+  const yearFill = opts?.yearFill ?? opts?.accent ?? fill;
+  const accent = opts?.accent ?? 'rgba(255,255,255,0.35)';
+  const layout = opts?.layout ?? 'postcard';
+
+  if (layout === 'split') {
+    return {
+      id, name, category: 'Travel', thumbPhoto,
+      thumb: { background: paper },
+      thumbAccents: [],
+      elements: [
+        BG(paper),
+        TX(label, 24, 48, DESIGN_W - 48, 100, {
+          fontSize: labelSize, fill, align: 'center',
+          fontFamily: "'Londrina Solid', cursive", letterSpacing: 5,
+        }),
+        TX(year, 180, 150, 240, 40, {
+          fontSize: 26, fill: yearFill, align: 'center',
+          fontFamily: "'Londrina Solid', cursive", letterSpacing: 3,
+        }),
+        SH('rect', 28, 210, DESIGN_W - 56, 4, accent, { opacity: 1, strokeWidth: 0 }),
+        IMG(thumbPhoto, 28, 230, DESIGN_W - 56, DESIGN_H - 258),
+      ],
+    };
+  }
+
+  if (layout === 'banner') {
+    return {
+      id, name, category: 'Travel', thumbPhoto,
+      thumb: { background: paper },
+      thumbAccents: [],
+      elements: [
+        BG(paper),
+        IMG(thumbPhoto, 0, 160, DESIGN_W, DESIGN_H - 160),
+        SH('rect', 0, 0, DESIGN_W, 168, paper, { opacity: 1, strokeWidth: 0 }),
+        TX(label, 20, 36, DESIGN_W - 40, 90, {
+          fontSize: labelSize, fill, align: 'center',
+          fontFamily: "'Londrina Solid', cursive", letterSpacing: 5,
+        }),
+        TX(year, 200, 118, 200, 36, {
+          fontSize: 22, fill: yearFill, align: 'center',
+          fontFamily: "'Londrina Solid', cursive", letterSpacing: 4,
+        }),
+      ],
+    };
+  }
+
+  // postcard (default) — color field, floating photo card, title/year
   return {
-    id,
-    name,
-    category: 'Travel',
-    thumbPhoto,
-    thumb: { background: fallback },
+    id, name, category: 'Travel', thumbPhoto,
+    thumb: { background: paper },
     thumbAccents: [],
     elements: [
-      // Color backdrop only — the city photograph lives in the image frame below.
-      BG(fallback),
-      IMG(thumbPhoto, 0, 0, DESIGN_W, DESIGN_H),
-      // Soft scrim so white title stays readable on any photo
-      SH('rect', 0, 0, DESIGN_W, 200, '#000000', { opacity: 0.35, strokeWidth: 0 }),
-      SH('rect', 0, DESIGN_H - 120, DESIGN_W, 120, '#000000', { opacity: 0.3, strokeWidth: 0 }),
-      TX(label, 24, 40, DESIGN_W - 48, 110, {
-        fontSize: labelSize,
-        fill,
-        align: 'center',
-        fontFamily: "'Londrina Solid', cursive",
-        letterSpacing: 6,
+      BG(paper),
+      TX(label, 20, 36, DESIGN_W - 40, 100, {
+        fontSize: labelSize, fill, align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 6,
       }),
-      TX(year, 180, 720, 240, 48, {
-        fontSize: 28,
-        fill: yearFill,
-        align: 'center',
-        fontFamily: "'Londrina Solid', cursive",
-        letterSpacing: 3,
+      SH('circle', 48, 150, 18, 18, accent, { opacity: 0.9, strokeWidth: 0 }),
+      SH('circle', DESIGN_W - 66, 160, 12, 12, fill, { opacity: 0.35, strokeWidth: 0 }),
+      IMG(thumbPhoto, 40, 180, DESIGN_W - 80, 460),
+      SH('rect', 40, 180, DESIGN_W - 80, 460, '#000000', { opacity: 0.08, strokeWidth: 0 }),
+      TX(year, 180, 680, 240, 52, {
+        fontSize: 30, fill: yearFill, align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 4,
       }),
+      SH('rect', 220, 740, 160, 3, accent, { opacity: 1, strokeWidth: 0 }),
     ],
   };
 }
@@ -544,23 +588,162 @@ export const DESIGNS: DesignDef[] = [
     ],
   },
 
-  CITY('rome',        { sq: 'Romë', en: 'Rome' },           'ROME',        '/designs/rome-cover-thumb.jpg',        '#5C4030', { labelSize: 88 }),
-  CITY('london',      { sq: 'Londër', en: 'London' },       'LONDON',      '/designs/london-cover-thumb.jpg',      '#1A2A3A', { labelSize: 78 }),
-  CITY('venice',      { sq: 'Venecia', en: 'Venice' },      'VENICE',      '/designs/venice-cover-thumb.jpg',      '#1A3A4A', { labelSize: 82 }),
-  CITY('newyork',     { sq: 'New York', en: 'New York' },   'NEW YORK',    '/designs/newyork-cover-thumb.jpg',     '#0D1B2A', { labelSize: 64 }),
-  CITY('istanbul',    { sq: 'Stamboll', en: 'Istanbul' },   'ISTANBUL',    '/designs/istanbul-cover-thumb.jpg',    '#3A2010', { labelSize: 68 }),
-  CITY('tokyo',       { sq: 'Tokio', en: 'Tokyo' },         'TOKYO',       '/designs/tokyo-cover-thumb.jpg',       '#1A1020', { labelSize: 88 }),
-  CITY('amsterdam',   { sq: 'Amsterdam', en: 'Amsterdam' }, 'AMSTERDAM',   '/designs/amsterdam-cover-thumb.jpg',   '#1A3040', { labelSize: 58 }),
-  CITY('athens',      { sq: 'Athinë', en: 'Athens' },       'ATHENS',      '/designs/athens-cover-thumb.jpg',      '#4A3A28', { labelSize: 82 }),
-  CITY('prague',      { sq: 'Pragë', en: 'Prague' },        'PRAGUE',      '/designs/prague-cover-thumb.jpg',      '#2A1A18', { labelSize: 82 }),
-  CITY('vienna',      { sq: 'Vjenë', en: 'Vienna' },        'VIENNA',      '/designs/vienna-cover-thumb.jpg',      '#2A2030', { labelSize: 82 }),
-  CITY('tirana',      { sq: 'Tiranë', en: 'Tirana' },       'TIRANA',      '/designs/tirana-cover-thumb.jpg',      '#1A3048', { labelSize: 82 }),
-  CITY('dubrovnik',   { sq: 'Dubrovnik', en: 'Dubrovnik' }, 'DUBROVNIK',   '/designs/dubrovnik-cover-thumb.jpg',   '#0A3048', { labelSize: 58 }),
-  CITY('santorini',   { sq: 'Santorini', en: 'Santorini' }, 'SANTORINI',   '/designs/santorini-cover-thumb.jpg',   '#1A4A6A', { labelSize: 64 }),
-  CITY('amalfi',      { sq: 'Amalfi', en: 'Amalfi' },       'AMALFI',      '/designs/amalfi-cover-thumb.jpg',      '#1A4060', { labelSize: 82 }),
-  CITY('berlin',      { sq: 'Berlin', en: 'Berlin' },       'BERLIN',      '/designs/berlin-cover-thumb.jpg',      '#1A1A1A', { labelSize: 82 }),
-  CITY('lisbon',      { sq: 'Lisbonë', en: 'Lisbon' },      'LISBON',      '/designs/lisbon-cover-thumb.jpg',      '#4A2818', { labelSize: 82 }),
-  CITY('florence',    { sq: 'Firence', en: 'Florence' },    'FLORENCE',    '/designs/florence-cover-thumb.jpg',    '#3A2818', { labelSize: 68 }),
+  CITY('rome',        { sq: 'Romë', en: 'Rome' },           'ROME',        '/designs/rome-cover-thumb.jpg',        '#C45C26', { labelSize: 88, accent: '#FFE0C2', layout: 'postcard' }),
+  CITY('london',      { sq: 'Londër', en: 'London' },       'LONDON',      '/designs/london-cover-thumb.jpg',      '#1B2A4A', { labelSize: 78, accent: '#7EB6FF', layout: 'banner' }),
+  CITY('venice',      { sq: 'Venecia', en: 'Venice' },      'VENICE',      '/designs/venice-cover-thumb.jpg',      '#0E5C6B', { labelSize: 82, accent: '#B8F0FF', layout: 'split' }),
+  CITY('newyork',     { sq: 'New York', en: 'New York' },   'NEW YORK',    '/designs/newyork-cover-thumb.jpg',     '#111111', { labelSize: 58, fill: '#F5C518', yearFill: '#FFFFFF', accent: '#F5C518', layout: 'banner' }),
+  CITY('istanbul',    { sq: 'Stamboll', en: 'Istanbul' },   'ISTANBUL',    '/designs/istanbul-cover-thumb.jpg',    '#6B2D1A', { labelSize: 64, accent: '#F0C987', layout: 'postcard' }),
+  CITY('tokyo',       { sq: 'Tokio', en: 'Tokyo' },         'TOKYO',       '/designs/tokyo-cover-thumb.jpg',       '#1A0A18', { labelSize: 88, fill: '#FF4D6D', yearFill: '#FFFFFF', accent: '#FF4D6D', layout: 'split' }),
+  CITY('amsterdam',   { sq: 'Amsterdam', en: 'Amsterdam' }, 'AMSTERDAM',   '/designs/amsterdam-cover-thumb.jpg',   '#F4A261', { labelSize: 52, fill: '#1A2A3A', yearFill: '#1A2A3A', accent: '#1A2A3A', layout: 'postcard' }),
+  CITY('athens',      { sq: 'Athinë', en: 'Athens' },       'ATHENS',      '/designs/athens-cover-thumb.jpg',      '#E8D5A3', { labelSize: 82, fill: '#3A2A18', yearFill: '#3A2A18', accent: '#3A2A18', layout: 'split' }),
+  CITY('prague',      { sq: 'Pragë', en: 'Prague' },        'PRAGUE',      '/designs/prague-cover-thumb.jpg',      '#4A1C2A', { labelSize: 82, accent: '#E8B4C0', layout: 'postcard' }),
+  CITY('vienna',      { sq: 'Vjenë', en: 'Vienna' },        'VIENNA',      '/designs/vienna-cover-thumb.jpg',      '#2A2038', { labelSize: 82, accent: '#D4AF37', layout: 'banner' }),
+  CITY('tirana',      { sq: 'Tiranë', en: 'Tirana' },       'TIRANA',      '/designs/tirana-cover-thumb.jpg',      '#E63946', { labelSize: 82, accent: '#FFFFFF', layout: 'postcard' }),
+  CITY('dubrovnik',   { sq: 'Dubrovnik', en: 'Dubrovnik' }, 'DUBROVNIK',   '/designs/dubrovnik-cover-thumb.jpg',   '#0077B6', { labelSize: 52, accent: '#90E0EF', layout: 'split' }),
+  CITY('santorini',   { sq: 'Santorini', en: 'Santorini' }, 'SANTORINI',   '/designs/santorini-cover-thumb.jpg',   '#48CAE4', { labelSize: 58, fill: '#023E8A', yearFill: '#023E8A', accent: '#023E8A', layout: 'postcard' }),
+  CITY('amalfi',      { sq: 'Amalfi', en: 'Amalfi' },       'AMALFI',      '/designs/amalfi-cover-thumb.jpg',      '#2A9D8F', { labelSize: 82, accent: '#E9C46A', layout: 'banner' }),
+  CITY('berlin',      { sq: 'Berlin', en: 'Berlin' },       'BERLIN',      '/designs/berlin-cover-thumb.jpg',      '#0D0D0D', { labelSize: 82, fill: '#E0E0E0', yearFill: '#FF3B30', accent: '#FF3B30', layout: 'split' }),
+  CITY('lisbon',      { sq: 'Lisbonë', en: 'Lisbon' },      'LISBON',      '/designs/lisbon-cover-thumb.jpg',      '#E76F51', { labelSize: 82, accent: '#FFE8D6', layout: 'postcard' }),
+  CITY('florence',    { sq: 'Firence', en: 'Florence' },    'FLORENCE',    '/designs/florence-cover-thumb.jpg',    '#BC6C25', { labelSize: 68, accent: '#FFE6C7', layout: 'banner' }),
+
+  // ── CELEBRATION ───────────────────────────────────────────────────────────
+  {
+    id: 'birthday-bloom',
+    name: { sq: 'Ditëlindje', en: 'Birthday' },
+    category: 'Celebration',
+    thumb: { background: '#FF6B8A' },
+    thumbAccents: [],
+    elements: [
+      BG('#FF6B8A', { from: '#FF6B8A', to: '#FF8E53', dir: 'diag' }),
+      SH('circle', 40, 80, 70, 70, '#FFE08A', { opacity: 0.95, strokeWidth: 0 }),
+      SH('circle', 480, 140, 40, 40, '#FFFFFF', { opacity: 0.55, strokeWidth: 0 }),
+      SH('circle', 90, 620, 55, 55, '#7C5CFF', { opacity: 0.85, strokeWidth: 0 }),
+      SH('circle', 460, 560, 28, 28, '#FFE08A', { opacity: 0.9, strokeWidth: 0 }),
+      SH('circle', 300, 700, 22, 22, '#FFFFFF', { opacity: 0.4, strokeWidth: 0 }),
+      TX('HAPPY', 40, 240, DESIGN_W - 80, 70, {
+        fontSize: 48, fill: '#FFFFFF', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 10,
+      }),
+      TX('BIRTHDAY', 24, 310, DESIGN_W - 48, 100, {
+        fontSize: 72, fill: '#1A1A1A', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 4,
+      }),
+      SH('circle', 270, 450, 50, 50, '#FFFFFF', { opacity: 0.35, strokeWidth: 0 }),
+      SH('circle', 285, 465, 20, 20, '#7C5CFF', { opacity: 1, strokeWidth: 0 }),
+      TX(String(new Date().getFullYear()), 180, 680, 240, 48, {
+        fontSize: 28, fill: '#FFFFFF', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 4,
+      }),
+    ],
+  },
+  {
+    id: 'party-nights',
+    name: { sq: 'Festë', en: 'Party Night' },
+    category: 'Celebration',
+    thumb: { background: '#1A0A2E' },
+    thumbAccents: [],
+    elements: [
+      BG('#1A0A2E', { from: '#1A0A2E', to: '#4C1D95', dir: 'tb' }),
+      SH('circle', -20, -20, 160, 160, '#7C3AED', { opacity: 0.35, strokeWidth: 0 }),
+      SH('circle', 420, 600, 200, 200, '#EC4899', { opacity: 0.25, strokeWidth: 0 }),
+      TX("LET'S", 40, 220, DESIGN_W - 80, 60, {
+        fontSize: 36, fill: '#E9D5FF', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 12,
+      }),
+      TX('PARTY', 20, 290, DESIGN_W - 40, 120, {
+        fontSize: 96, fill: '#F0ABFC', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 6,
+      }),
+      SH('rect', 180, 430, 240, 4, '#F0ABFC', { opacity: 0.8, strokeWidth: 0 }),
+      TX('ALL NIGHT', 100, 460, DESIGN_W - 200, 40, {
+        fontSize: 18, fill: '#C4B5FD', align: 'center',
+        fontFamily: "Arial, 'Helvetica Neue', sans-serif", letterSpacing: 6,
+      }),
+      TX(String(new Date().getFullYear()), 180, 700, 240, 48, {
+        fontSize: 26, fill: '#FFFFFF', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 4,
+      }),
+    ],
+  },
+  {
+    id: 'cheers-gold',
+    name: { sq: 'Gëzuar', en: 'Cheers' },
+    category: 'Celebration',
+    thumb: { background: '#1A120C' },
+    thumbAccents: [],
+    elements: [
+      BG('#1A120C'),
+      SH('rect', 48, 48, DESIGN_W - 96, DESIGN_H - 96, '#000000', {
+        opacity: 0, strokeWidth: 2, strokeColor: '#C9A227',
+      }),
+      TX('CHEERS', 24, 300, DESIGN_W - 48, 110, {
+        fontSize: 78, fill: '#C9A227', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 8,
+      }),
+      SH('rect', 160, 430, 280, 2, '#C9A227', { opacity: 1, strokeWidth: 0 }),
+      TX('to us', 100, 460, DESIGN_W - 200, 48, {
+        fontSize: 28, fill: '#F5E6C8', align: 'center',
+        fontFamily: "Georgia, 'Times New Roman', serif", fontStyle: 'italic',
+      }),
+      TX(String(new Date().getFullYear()), 180, 680, 240, 48, {
+        fontSize: 24, fill: '#C9A227', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 4,
+      }),
+    ],
+  },
+  {
+    id: 'friends-forever',
+    name: { sq: 'Miqësi', en: 'Friends' },
+    category: 'Celebration',
+    thumb: { background: '#0E4D5C' },
+    thumbAccents: [],
+    elements: [
+      BG('#0E4D5C', { from: '#0E4D5C', to: '#14919B', dir: 'diag' }),
+      TX('FRIENDS', 20, 260, DESIGN_W - 40, 100, {
+        fontSize: 68, fill: '#FFFFFF', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 4,
+      }),
+      TX('forever', 100, 370, DESIGN_W - 200, 50, {
+        fontSize: 32, fill: '#A8E6E1', align: 'center',
+        fontFamily: "Georgia, 'Times New Roman', serif", fontStyle: 'italic',
+      }),
+      SH('circle', 270, 460, 60, 60, '#FFFFFF', { opacity: 0.15, strokeWidth: 0 }),
+      SH('circle', 250, 480, 40, 40, '#FF6B6B', { opacity: 0.9, strokeWidth: 0 }),
+      TX(String(new Date().getFullYear()), 180, 680, 240, 48, {
+        fontSize: 26, fill: '#FFFFFF', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 4,
+      }),
+    ],
+  },
+  {
+    id: 'celebrate-confetti',
+    name: { sq: 'Festojmë', en: 'Celebrate' },
+    category: 'Celebration',
+    thumb: { background: '#FF8A3D' },
+    thumbAccents: [],
+    elements: [
+      BG('#FF8A3D'),
+      SH('circle', 30, 60, 24, 24, '#FFF', { opacity: 0.85, strokeWidth: 0 }),
+      SH('circle', 520, 100, 16, 16, '#FFE08A', { opacity: 1, strokeWidth: 0 }),
+      SH('circle', 80, 200, 12, 12, '#FF4D6D', { opacity: 1, strokeWidth: 0 }),
+      SH('circle', 480, 240, 20, 20, '#7C5CFF', { opacity: 0.85, strokeWidth: 0 }),
+      SH('circle', 60, 520, 18, 18, '#FFE08A', { opacity: 1, strokeWidth: 0 }),
+      SH('circle', 500, 560, 14, 14, '#FFF', { opacity: 0.7, strokeWidth: 0 }),
+      SH('circle', 200, 700, 10, 10, '#FF4D6D', { opacity: 1, strokeWidth: 0 }),
+      TX('YAY!', 40, 280, DESIGN_W - 80, 140, {
+        fontSize: 120, fill: '#1A1A1A', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 4,
+      }),
+      TX('we celebrate', 80, 440, DESIGN_W - 160, 40, {
+        fontSize: 20, fill: '#FFFFFF', align: 'center',
+        fontFamily: "Arial, 'Helvetica Neue', sans-serif", letterSpacing: 4,
+      }),
+      TX(String(new Date().getFullYear()), 180, 660, 240, 48, {
+        fontSize: 28, fill: '#1A1A1A', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 4,
+      }),
+    ],
+  },
 
   // ── BABY & FAMILY ─────────────────────────────────────────────────────────
   {

@@ -26,20 +26,21 @@ export const DESIGN_CATEGORY_LABELS: Record<string, { sq: string; en: string }> 
   'Locations':     { sq: 'Vendndodhje',    en: 'Locations'     },
 };
 
-// Maps DB category name (Albanian) → DESIGNS category key
+// Maps DB category name (Albanian / English / slug) → DESIGNS category key
 export const DB_CAT_TO_DESIGN_CAT: Record<string, string> = {
-  'Dasmë':   'Wedding', 'Dasëm': 'Wedding', 'Wedding': 'Wedding', 'Dasma': 'Wedding',
-  'Udhëtime':'Travel',  'Udhëtim':'Travel', 'Travel': 'Travel',
+  'Dasmë':   'Wedding', 'Dasëm': 'Wedding', 'Wedding': 'Wedding', 'Dasma': 'Wedding', 'dasme': 'Wedding',
+  'Udhëtime':'Travel',  'Udhëtim':'Travel', 'Travel': 'Travel', 'udhetime': 'Travel',
   'Familje': 'Baby & Family', 'Fëmijë':'Baby & Family', 'Bebe':'Baby & Family',
-  'Fëmijëri':'Baby & Family', 'Family': 'Baby & Family', 'Baby': 'Baby & Family',
-  // Celebrations / nature / portrait / modern fall back to Travel city covers
-  // (real places) rather than empty fake geometric styles.
-  'Ditëlindje':'Travel','Festash':'Travel','Festë':'Travel',
-  'Festim':'Travel', 'Birthday': 'Travel', 'Celebrations': 'Travel', 'Celebration': 'Travel',
+  'Fëmijëri':'Baby & Family', 'Family': 'Baby & Family', 'Baby': 'Baby & Family', 'familje': 'Baby & Family',
+  // Birthday / parties / friendship → Celebration (NOT travel city covers)
+  'Ditëlindje':'Celebration', 'ditelindje': 'Celebration',
+  'Festash':'Celebration', 'Festë':'Celebration', 'Festim':'Celebration', 'festash': 'Celebration',
+  'Birthday': 'Celebration', 'Celebrations': 'Celebration', 'Celebration': 'Celebration',
+  'Miqësi': 'Celebration', 'miqesi': 'Celebration', 'Friendship': 'Celebration',
   'Natyrë':  'Travel',  'Peizazh':'Travel', 'Nature': 'Travel',
   'Çifte':   'Wedding','Dashurinë':'Wedding', 'Portrait': 'Wedding', 'Couples': 'Wedding',
-  'Miqësi':  'Travel',  'Sport':'Travel','Arkitekturë':'Travel','Graduim':'Travel',
-  'Friendship': 'Travel', 'Modern': 'Travel',
+  'Sport':'Travel','Arkitekturë':'Travel','Graduim':'Celebration',
+  'Modern': 'Travel',
   'Vendndodhje': 'Travel', 'Locations': 'Travel',
 };
 
@@ -111,6 +112,35 @@ export const DESIGN_METAS: DesignMeta[] = [
     thumb: { background: '#4A2818' }, thumbPhoto: '/designs/lisbon-cover-thumb.jpg', thumbLabel: 'LISBON', thumbAccents: cityAccent },
   { id: 'florence', name: { sq: 'Firence', en: 'Florence' }, category: 'Travel',
     thumb: { background: '#3A2818' }, thumbPhoto: '/designs/florence-cover-thumb.jpg', thumbLabel: 'FLORENCE', thumbAccents: cityAccent },
+
+  // ── CELEBRATION — birthday / parties / friendship ─────────────────────────
+  { id: 'birthday-bloom', name: { sq: 'Ditëlindje', en: 'Birthday' }, category: 'Celebration',
+    thumb: { background: '#FF6B8A' }, thumbLabel: 'BIRTHDAY',
+    thumbAccents: [
+      { position: 'absolute', top: '18%', left: '12%', width: 18, height: 18, borderRadius: '50%', background: '#FFE08A' },
+      { position: 'absolute', top: '28%', right: '16%', width: 12, height: 12, borderRadius: '50%', background: '#FFF' },
+      { position: 'absolute', bottom: '22%', left: '22%', width: 14, height: 14, borderRadius: '50%', background: '#7C5CFF' },
+    ] },
+  { id: 'party-nights', name: { sq: 'Festë', en: 'Party Night' }, category: 'Celebration',
+    thumb: { background: '#1A0A2E' }, thumbLabel: 'PARTY',
+    thumbAccents: [
+      { position: 'absolute', bottom: 0, left: 0, right: 0, height: '40%', background: 'linear-gradient(to top,#7C3AED55,transparent)' },
+    ] },
+  { id: 'cheers-gold', name: { sq: 'Gëzuar', en: 'Cheers' }, category: 'Celebration',
+    thumb: { background: '#1A120C' }, thumbLabel: 'CHEERS',
+    thumbAccents: [
+      { position: 'absolute', top: '35%', left: '10%', right: '10%', height: 2, background: '#C9A227' },
+    ] },
+  { id: 'friends-forever', name: { sq: 'Miqësi', en: 'Friends' }, category: 'Celebration',
+    thumb: { background: '#0E4D5C' }, thumbLabel: 'FRIENDS',
+    thumbAccents: cityAccent },
+  { id: 'celebrate-confetti', name: { sq: 'Festojmë', en: 'Celebrate' }, category: 'Celebration',
+    thumb: { background: '#FF8A3D' }, thumbLabel: 'YAY',
+    thumbAccents: [
+      { position: 'absolute', top: '20%', left: '20%', width: 10, height: 10, borderRadius: '50%', background: '#FFF' },
+      { position: 'absolute', top: '40%', right: '18%', width: 16, height: 16, borderRadius: '50%', background: '#FFE08A' },
+      { position: 'absolute', bottom: '30%', left: '30%', width: 8, height: 8, borderRadius: '50%', background: '#FF4D6D' },
+    ] },
 
   // ── BABY & FAMILY ────────────────────────────────────────────────────────
   { id: 'baby-ador', name: { sq: 'ADOR', en: 'ADOR' }, category: 'Baby & Family',

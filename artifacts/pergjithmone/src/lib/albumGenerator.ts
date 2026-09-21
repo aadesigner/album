@@ -58,10 +58,10 @@ const AI_CATEGORY_EXPAND: Record<string, string[]> = {
   Wedding: ['Wedding'],
   Travel: ['Travel'],
   'Baby & Family': ['Baby & Family'],
-  Celebration: ['Travel', 'Wedding'],
-  Modern: ['Travel'],
-  Portrait: ['Wedding', 'Travel'],
-  Nature: ['Travel'],
+  Celebration: ['Celebration', 'Wedding'],
+  Modern: ['Modern', 'Travel'],
+  Portrait: ['Wedding'],
+  Nature: ['Nature', 'Travel'],
   Locations: ['Travel'],
 };
 
