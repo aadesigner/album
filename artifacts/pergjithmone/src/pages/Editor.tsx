@@ -2827,10 +2827,14 @@ export default function Editor() {
   const [,params]=useRoute('/editor/:id');
   const projectId=Number(params?.id);
   const {lang,t}=useLanguage();
-  const {getToken}=useAuth();
+  const {getToken,isLoading:authLoading,isAuthenticated}=useAuth();
   const queryClient=useQueryClient();
 
-  const {data:project,isLoading,isError,refetch:refetchProject}=useGetProject(projectId,{query:{queryKey:getGetProjectQueryKey(projectId),enabled:!!projectId&&!isNaN(projectId)}});
+  // Wait for the access-token refresh (or login) before fetching — otherwise the
+  // first /projects/:id call goes out without a Bearer header, 401s, and the
+  // editor sticks on a dead error state until a full page reload.
+  const projectQueryEnabled=!!projectId&&!isNaN(projectId)&&!authLoading&&isAuthenticated;
+  const {data:project,isLoading,isError,refetch:refetchProject}=useGetProject(projectId,{query:{queryKey:getGetProjectQueryKey(projectId),enabled:projectQueryEnabled}});
   const {data:bookSizes}=useListBookSizes();
   const {data:dbLayouts}=useListLayouts();
   const editorLayouts=useMemo(()=>mergeEditorLayouts(dbLayouts as any),[dbLayouts]);
@@ -3740,7 +3744,7 @@ export default function Editor() {
     }
   },[project,pagesContent,bookSize,isOrdered]);
 
-  if (isLoading) return (
+  if (authLoading || isLoading || (projectQueryEnabled && !project && !isError)) return (
     <div className="flex flex-col" style={{height:'100dvh',overflow:'hidden',background:'#F4F1EC'}}>
       {/* Header skeleton */}
       <div className="flex items-center justify-between px-3 md:px-5 bg-white border-b border-neutral-200 flex-shrink-0" style={{height:64}}>
@@ -3768,7 +3772,7 @@ export default function Editor() {
       <style>{`@keyframes skelPulse{0%,100%{opacity:1}50%{opacity:0.6}}`}</style>
     </div>
   );
-  if (isError||!project) return (
+  if (!isAuthenticated || isError||!project) return (
     <div className="h-screen flex items-center justify-center" style={{background:'#F4F1EC'}}>
       <div className="text-center">
         <p className="text-neutral-500 mb-4">{lang==='sq'?'Albumi nuk u gjet.':'Project not found.'}</p>

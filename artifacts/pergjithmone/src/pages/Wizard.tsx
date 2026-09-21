@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useListCategories, useListBookSizes, useCreateProject, useGetAppSettings } from '@workspace/api-client-react-tsconfig';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -176,13 +176,15 @@ function DesignCard({ design, isSelected, lang, onClick }: {
 // ── Main Wizard ──────────────────────────────────────────────────────────────
 export default function Wizard() {
   const { t, lang } = useLanguage();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, getToken, isLoading: authLoading } = useAuth();
   const [step, setStep] = useState(1);
   const [selectedCategory, setSelectedCategory] = useState<number | null | 'blank'>('blank');
   const [selectedDesignId, setSelectedDesignId] = useState<string | null>(null);
   const [selectedSize, setSelectedSize] = useState<number | null>(null);
   const [, setLocation] = useLocation();
   const [preselectDone, setPreselectDone] = useState(false);
+  const [resuming, setResuming] = useState(false);
+  const resumeStartedRef = useRef(false);
 
   const { data: categories, isLoading: loadingCat } = useListCategories();
   const { data: bookSizes, isLoading: loadingSizes } = useListBookSizes();
@@ -302,9 +304,13 @@ export default function Wizard() {
   };
 
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (authLoading || !isAuthenticated || resumeStartedRef.current) return;
+    // Wait until the bearer token is actually in memory — isAuthenticated can
+    // flip true from a cached user a tick before login writes the access token.
+    if (!getToken()) return;
     const savedSize = sessionStorage.getItem('wizard_size');
     if (!savedSize) return;
+    resumeStartedRef.current = true;
     const sizeId = Number(savedSize);
     const savedDesign = sessionStorage.getItem('wizard_design');
     sessionStorage.removeItem('wizard_size');
@@ -314,11 +320,15 @@ export default function Wizard() {
     sessionStorage.setItem('wizard_initial_design', savedDesign || BLANK_STARTER_ID);
     const payload = { bookSizeId: sizeId, title: lang === 'sq' ? 'Albumi Im' : 'My Album' };
     const tryCreate = () => createProject.mutateAsync({ data: payload });
+    setResuming(true);
     tryCreate()
       .catch(() => new Promise((r) => setTimeout(r, 500)).then(tryCreate))
-      .then(proj => setLocation(`/editor/${proj.id}`))
+      .then(proj => {
+        if (proj?.id != null) setLocation(`/editor/${proj.id}`);
+      })
       .catch((e: any) => {
         console.error(e);
+        resumeStartedRef.current = false;
         const msg = createProjectErrorMessage(e, lang);
         if (!msg) return; // silent on empty/transient failures after retry
         toast({
@@ -326,8 +336,9 @@ export default function Wizard() {
           description: msg,
           variant: 'destructive',
         });
-      });
-  }, [isAuthenticated]); // eslint-disable-line react-hooks/exhaustive-deps
+      })
+      .finally(() => setResuming(false));
+  }, [isAuthenticated, authLoading, getToken]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleCreate = async () => {
     if (!selectedSize) return;
@@ -390,10 +401,28 @@ export default function Wizard() {
         }}
         path="/krijo"
       />
-      <div style={{ background: '#f7f5f2' }} className="flex flex-col min-h-[calc(100dvh-62px)] md:min-h-[calc(100dvh-74px)]">
+      {resuming && (
+        <div
+          className="fixed inset-0 z-[80] flex flex-col items-center justify-center gap-3"
+          style={{ background: '#f7f5f2' }}
+          aria-busy
+          aria-live="polite"
+        >
+          <p
+            className="font-serif leading-none tracking-tight"
+            style={{ fontSize: 'clamp(28px, 4vw, 44px)', fontStyle: 'italic', fontWeight: 300, color: '#1a1a1a', margin: 0 }}
+          >
+            Përgjithmonë
+          </p>
+          <p className="text-sm text-neutral-500">
+            {lang === 'sq' ? 'Duke hapur editorin…' : 'Opening the editor…'}
+          </p>
+        </div>
+      )}
+      <div style={{ background: '#f7f5f2' }} className="flex flex-col min-h-[calc(100dvh-42px)] md:min-h-[calc(100dvh-64px)]">
 
         {/* ── Progress header ── */}
-        <div className="sticky top-[62px] md:top-[74px] z-10 bg-white/90 backdrop-blur-md border-b border-neutral-100">
+        <div className="sticky top-[42px] md:top-[64px] z-10 bg-white/90 backdrop-blur-md border-b border-neutral-100">
           <div className="max-w-5xl mx-auto px-4 md:px-8 py-3 flex items-center gap-0">
             {progressSteps.map((p, i) => {
               const isActive = step === p.activeWhen;

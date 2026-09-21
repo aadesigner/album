@@ -405,7 +405,7 @@ export default function AlbumAI() {
         path="/album-ai"
       />
 
-      <div style={{ background: '#f7f5f2' }} className="min-h-[calc(100dvh-62px)] md:min-h-[calc(100dvh-74px)]">
+      <div style={{ background: '#f7f5f2' }} className="min-h-[calc(100dvh-42px)] md:min-h-[calc(100dvh-64px)]">
 
         {/* ── Hero ── */}
         <div className="relative max-w-4xl mx-auto px-4 md:px-8 pt-12 md:pt-16 pb-6 text-center overflow-hidden">

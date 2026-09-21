@@ -216,7 +216,12 @@ export default function AdminOrders() {
 
   const handleStatusChange = async (orderId: number, status: string) => {
     await updateOrder.mutateAsync({ orderId, data: { status: status as any } });
-    refetch();
+    await Promise.all([
+      refetch(),
+      // Dashboard uses ['admin-stats', range] — not the OpenAPI key.
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'] }),
+      queryClient.invalidateQueries({ queryKey: getGetAdminStatsQueryKey() }),
+    ]);
   };
 
   const handleDeletePdf = async () => {
@@ -257,6 +262,7 @@ export default function AdminOrders() {
       toast({ title: 'Order deleted' });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: getListAdminOrdersQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: ['admin-stats'] }),
         queryClient.invalidateQueries({ queryKey: getGetAdminStatsQueryKey() }),
       ]);
       refetch();

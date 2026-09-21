@@ -3,7 +3,7 @@ import { AdminLayout, ADMIN } from '@/components/layout/AdminLayout';
 import {
   useListAdminUsers, useUpdateAdminUser, useDeleteAdminUser,
   useListAdminOrders, useUpdateAdminOrder,
-  getListAdminUsersQueryKey,
+  getListAdminUsersQueryKey, getGetAdminStatsQueryKey,
 } from '@workspace/api-client-react-tsconfig';
 import { format } from 'date-fns';
 import { Search, UserPlus, Trash2, ShieldBan, ShieldCheck, RefreshCw, Images, Eye, ExternalLink, Download, X, Pencil, KeyRound, ShoppingBag, FolderOpen } from 'lucide-react';
@@ -342,6 +342,7 @@ const STATUS_STYLE: Record<string, string> = {
 // ── User albums/orders modal ────────────────────────────────────────────────
 function UserAlbumsModal({ userId, userName, onClose }: { userId: number; userName: string; onClose: () => void }) {
   const { getToken } = useAuth();
+  const queryClient = useQueryClient();
   const { data, isLoading, refetch } = useListAdminOrders({ page: 1, limit: 100, userId } as any);
   const updateOrder = useUpdateAdminOrder();
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
@@ -350,7 +351,11 @@ function UserAlbumsModal({ userId, userName, onClose }: { userId: number; userNa
 
   const handleStatusChange = async (orderId: number, status: string) => {
     await updateOrder.mutateAsync({ orderId, data: { status: status as any } });
-    refetch();
+    await Promise.all([
+      refetch(),
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'] }),
+      queryClient.invalidateQueries({ queryKey: getGetAdminStatsQueryKey() }),
+    ]);
   };
 
   const openPdf = (raw: string) => {

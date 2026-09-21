@@ -59,8 +59,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Token ready = initial refresh attempt finished (success or fail)
   const [tokenReady, setTokenReady] = useState(false);
 
-  // Cached user from localStorage for instant display while the query loads
-  const cachedUser = useMemo(readCachedUser, []);
+  // Session user — localStorage for instant paint, then /auth/me (or login
+  // response) keeps it in sync. Must be state, not a mount-only memo: after
+  // login we write the user immediately so isAuthenticated is true before
+  // navigate, otherwise /krijo → editor can mount in a blank half-auth gap.
+  const [sessionUser, setSessionUser] = useState<User | null>(readCachedUser);
 
   // Register the token getter so all API calls carry the bearer token
   useMemo(() => {
@@ -132,20 +135,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     },
   });
 
-  // Seamless user value:
-  //   • before token ready  → show cached localStorage user (no flash)
-  //   • token ready + fetching → still show cached user (no flash)
-  //   • token ready + settled  → show real API user (or null if not logged in)
-  const user: User | null =
-    !tokenReady || queryLoading
-      ? cachedUser
-      : (fetchedUser ?? null);
-
-  // Keep localStorage in sync with the real fetched user
+  // Keep session + localStorage in sync once /auth/me settles. While a refetch
+  // is in flight we keep the current sessionUser so login → navigate never
+  // briefly looks logged-out (that used to blank the builder).
   useEffect(() => {
     if (!tokenReady || queryLoading) return;
+    setSessionUser(fetchedUser ?? null);
     writeCachedUser(fetchedUser ?? null);
   }, [fetchedUser, tokenReady, queryLoading]);
+
+  const user: User | null = sessionUser;
 
   const loginMutation = useLogin();
   const registerMutation = useRegister();
@@ -161,13 +160,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return next && next.startsWith('/') ? next : '/krijo';
   }, []);
 
+  /** Apply token + user from login/register before navigating away. */
+  const applyAuthSession = useCallback((accessToken: string, nextUser: User) => {
+    accessTokenRef.current = accessToken;
+    setSessionUser(nextUser);
+    writeCachedUser(nextUser);
+    queryClient.setQueryData(getGetMeQueryKey(), nextUser);
+  }, [queryClient]);
+
   const handleLogin = useCallback(async (data: LoginInput) => {
     try {
       const response = await loginMutation.mutateAsync({ data });
-      if (response?.accessToken) {
+      if (response?.accessToken && response?.user) {
+        applyAuthSession(response.accessToken, response.user as User);
+      } else if (response?.accessToken) {
         accessTokenRef.current = response.accessToken;
       }
-      await queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+      // Background reconcile — do not block navigation on /me.
+      void queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
       setLocation(getNextPath());
     } catch (error: any) {
       toast({
@@ -177,15 +187,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       throw error;
     }
-  }, [loginMutation, queryClient, setLocation, toast, getNextPath]);
+  }, [loginMutation, queryClient, setLocation, toast, getNextPath, applyAuthSession]);
 
   const handleRegister = useCallback(async (data: RegisterInput) => {
     try {
       const response = await registerMutation.mutateAsync({ data });
-      if (response?.accessToken) {
+      if (response?.accessToken && response?.user) {
+        applyAuthSession(response.accessToken, response.user as User);
+      } else if (response?.accessToken) {
         accessTokenRef.current = response.accessToken;
       }
-      await queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+      void queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
       setLocation(getNextPath());
       toast({
         title: 'Mirë se vini!',
@@ -199,7 +211,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       throw error;
     }
-  }, [registerMutation, queryClient, setLocation, toast, getNextPath]);
+  }, [registerMutation, queryClient, setLocation, toast, getNextPath, applyAuthSession]);
 
   const handleLogout = useCallback(async () => {
     try {
@@ -208,6 +220,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Ignore logout errors — clear local state regardless
     } finally {
       accessTokenRef.current = null;
+      setSessionUser(null);
       writeCachedUser(null);
       queryClient.setQueryData(getGetMeQueryKey(), null);
       setLocation('/hyr');

@@ -59,10 +59,34 @@ export class ErrorBoundary extends React.Component<Props, State> {
 
   render() {
     if (this.state.error) {
-      // Optional custom fallback only if explicitly provided; default is invisible
-      // recovery (one blank frame) so users never see "something went wrong".
+      // Optional custom fallback only if explicitly provided; otherwise a
+      // brief branded frame (not null) so a remount race never looks blank.
       if (this.props.fallback) return this.props.fallback;
-      return null;
+      return (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: '100dvh',
+            background: '#f7f5f2',
+          }}
+          aria-busy
+        >
+          <p
+            className="font-serif"
+            style={{
+              fontSize: 28,
+              fontStyle: 'italic',
+              fontWeight: 300,
+              color: '#1a1a1a',
+              margin: 0,
+            }}
+          >
+            Përgjithmonë
+          </p>
+        </div>
+      );
     }
     return (
       <React.Fragment key={this.state.resetKey}>

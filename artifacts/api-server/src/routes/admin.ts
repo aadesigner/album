@@ -180,7 +180,7 @@ router.get("/admin/stats", requireAdmin, async (req, res): Promise<void> => {
         db.select({ count: count() }).from(usersTable).where(notHiddenUser),
         db.select({ count: count() }).from(ordersTable)
           .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
-          .where(notHiddenUser),
+          .where(and(notHiddenUser, activeOrder)),
         db.select({ count: count() }).from(projectsTable)
           .innerJoin(usersTable, eq(projectsTable.userId, usersTable.id))
           .where(notHiddenUser),
@@ -189,7 +189,7 @@ router.get("/admin/stats", requireAdmin, async (req, res): Promise<void> => {
           .where(and(notHiddenUser, eq(ordersTable.status, "pending"))),
         db.select({ count: count() }).from(ordersTable)
           .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
-          .where(and(notHiddenUser, inCreatedRange)),
+          .where(and(notHiddenUser, activeOrder, inCreatedRange)),
         db.select({ total: sql<number>`coalesce(sum(${orderAmountSql}), 0)` })
           .from(ordersTable)
           .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
