@@ -629,6 +629,9 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
     return match?.label || 'Dashboard';
   }, [location]);
 
+  const hideThemeSwitcher =
+    location === '/heyadmin/dizajne' || location.startsWith('/heyadmin/dizajne/');
+
   if (isLoading) {
     return (
       <div className="min-h-[100dvh] flex items-center justify-center" style={{ background: ADMIN.bg }}>
@@ -725,20 +728,22 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
 
         <main className="flex-1 lg:ml-[16rem] min-h-[100dvh] flex flex-col min-w-0 relative">
           {/* Desktop: sticky theme control, top-right — floats so pages keep full width */}
-          <div
-            className="hidden lg:block fixed z-40"
-            style={{
-              top: '1rem',
-              right: '1.25rem',
-            }}
-          >
-            <ThemeSwitcher
-              theme={theme}
-              paletteId={paletteId}
-              onSelect={setPaletteId}
-              placement="dropdown"
-            />
-          </div>
+          {!hideThemeSwitcher && (
+            <div
+              className="hidden lg:block fixed z-40"
+              style={{
+                top: '1rem',
+                right: '1.25rem',
+              }}
+            >
+              <ThemeSwitcher
+                theme={theme}
+                paletteId={paletteId}
+                onSelect={setPaletteId}
+                placement="dropdown"
+              />
+            </div>
+          )}
 
           {/* Mobile top bar */}
           <header
@@ -778,12 +783,14 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
                 </div>
               </div>
 
-              <ThemeSwitcher
-                theme={theme}
-                paletteId={paletteId}
-                onSelect={setPaletteId}
-                placement="dropdown"
-              />
+              {!hideThemeSwitcher && (
+                <ThemeSwitcher
+                  theme={theme}
+                  paletteId={paletteId}
+                  onSelect={setPaletteId}
+                  placement="dropdown"
+                />
+              )}
 
               <MenuToggle
                 open={sidebarOpen}
