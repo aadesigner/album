@@ -1,15 +1,8 @@
-# Railway → api-server → Settings:
-#   Root Directory     = /
-#   Config-as-code     = /artifacts/api-server/railway.toml
-#   Dockerfile path    = Dockerfile
-#   (Dockerfile.api is an identical alias)
-#
-# Do NOT set Dockerfile.web on this service — that is the frontend image.
-#
-# COST (memory is ~99% of the bill):
-#   1. Settings → Deploy → enable "Serverless" (sleep after ~10min idle).
-#   2. Settings → set Memory limit to 512 MB (API).
-#   3. Postgres: use the smallest plan.
+# Railway → api-server
+#   Root Directory      = /
+#   Dockerfile path     = Dockerfile
+#   Config-as-code      = /artifacts/api-server/railway.toml
+#   Custom Start        = START_APP=api sh /app/boot.sh
 
 [build]
 builder = "DOCKERFILE"
@@ -21,11 +14,9 @@ watchPatterns = [
   "/pnpm-lock.yaml",
   "/pnpm-workspace.yaml",
   "/Dockerfile",
-  "/Dockerfile.api",
 ]
 
 [deploy]
-# Discovery start: boots API if present; explains if the frontend image was deployed by mistake.
-startCommand = "sh /app/artifacts/api-server/start.sh"
+startCommand = "START_APP=api sh /app/boot.sh"
 restartPolicyType = "ON_FAILURE"
 numReplicas = 1

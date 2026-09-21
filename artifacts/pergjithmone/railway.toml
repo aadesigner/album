@@ -1,17 +1,15 @@
-# Railway → pergjithmone service Settings (MUST match):
+# Railway → pergjithmone (frontend)
 #   Root Directory      = /
-#   Builder             = Dockerfile
-#   Dockerfile path     = Dockerfile.web
-#   Railway Config File = /artifacts/pergjithmone/railway.toml
-#
-# Do NOT use Dockerfile / Dockerfile.api here — those are the API image.
+#   Dockerfile path     = Dockerfile
+#   Config-as-code      = /artifacts/pergjithmone/railway.toml
+#   Custom Start        = START_APP=web sh /app/boot.sh
 #
 # Variables:
 #   API_URL=https://workspaceapi-server-production-3940e.up.railway.app
 
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "Dockerfile.web"
+dockerfilePath = "Dockerfile"
 watchPatterns = [
   "/artifacts/pergjithmone/**",
   "/lib/**",
@@ -19,15 +17,11 @@ watchPatterns = [
   "/package.json",
   "/pnpm-lock.yaml",
   "/pnpm-workspace.yaml",
-  "/Dockerfile.web",
   "/Dockerfile",
-  "/artifacts/pergjithmone/server.mjs",
-  "/artifacts/pergjithmone/start.sh",
 ]
 
 [deploy]
-# Inline finder so even an OLD image prints its layout instead of a bare MODULE_NOT_FOUND.
-startCommand = "sh -c 'echo [boot] cwd=$(pwd); ls -la /app; ls -la /app/artifacts 2>/dev/null || true; ls -la /app/artifacts/pergjithmone 2>/dev/null || true; ls -la /app/artifacts/api-server 2>/dev/null || true; for f in /app/start.sh /app/server.mjs /app/artifacts/pergjithmone/server.mjs ./server.mjs; do if [ -f \"$f\" ]; then case \"$f\" in *.sh) echo [boot] exec sh $f; exec sh \"$f\";; *) echo [boot] exec node $f; exec node \"$f\";; esac; fi; done; echo [boot] FATAL no server.mjs — wrong Dockerfile for this service; exit 1'"
+startCommand = "START_APP=web sh /app/boot.sh"
 healthcheckPath = "/healthz"
 healthcheckTimeout = 60
 restartPolicyType = "ON_FAILURE"
