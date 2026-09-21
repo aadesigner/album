@@ -28,24 +28,25 @@ export interface SecuritySettings {
 }
 
 export const SECURITY_SETTINGS_DEFAULTS: SecuritySettings = {
-  // SPA + editor autosave + admin panel easily exceed a low general cap,
-  // especially when several people share one egress IP (office / CGNAT).
-  // Admins are exempt entirely (see dynamicRateLimit); these apply to users.
+  // SPA + editor autosave + shared egress IPs (office / CGNAT / mobile NAT)
+  // burn through low caps quickly — keep these generous so real users aren't
+  // blocked, while still bounding obvious abuse. Admins are fully exempt.
   rateLimitGeneralWindowMs: 15 * 60 * 1000,
-  rateLimitGeneralMax: 2000,
+  rateLimitGeneralMax: 8000,
   rateLimitAuthWindowMs: 15 * 60 * 1000,
-  rateLimitAuthMax: 60,
+  rateLimitAuthMax: 120,
   rateLimitAnalyticsWindowMs: 60 * 1000,
-  rateLimitAnalyticsMax: 120,
+  rateLimitAnalyticsMax: 400,
   rateLimitUploadsWindowMs: 60 * 1000,
-  rateLimitUploadsMax: 60,
-  loginLockoutThreshold: 5,
-  loginLockoutMinutes: 15,
-  maxAlbumsPerUser: 20,
-  maxPhotosPerAlbum: 300,
-  maxOrdersPerDay: 5,
-  maxConcurrentPdfGenerations: 3,
-  maxUploadFileSizeMb: 20,
+  rateLimitUploadsMax: 180,
+  // Allow a few typos / forgotten passwords before locking; short lockout.
+  loginLockoutThreshold: 10,
+  loginLockoutMinutes: 5,
+  maxAlbumsPerUser: 50,
+  maxPhotosPerAlbum: 500,
+  maxOrdersPerDay: 15,
+  maxConcurrentPdfGenerations: 6,
+  maxUploadFileSizeMb: 25,
   allowedUploadMimeTypes: ["image/jpeg", "image/png", "image/webp", "image/gif"],
 };
 

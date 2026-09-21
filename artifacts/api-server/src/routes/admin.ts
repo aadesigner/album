@@ -929,7 +929,7 @@ router.get(
       customDesigns,
       requireLoginForPdf: map["require_login_for_pdf"] === "true",
       pendingBooksLimitEnabled: map["pending_books_limit_enabled"] !== "false",
-      pendingBooksLimit: parseInt(map["pending_books_limit"] || "3", 10),
+      pendingBooksLimit: parseInt(map["pending_books_limit"] || "10", 10),
       ...readSecuritySettings(map),
     });
   },
@@ -1039,7 +1039,7 @@ router.patch(
       customDesigns: customDesigns2,
       requireLoginForPdf: map2["require_login_for_pdf"] === "true",
       pendingBooksLimitEnabled: map2["pending_books_limit_enabled"] !== "false",
-      pendingBooksLimit: parseInt(map2["pending_books_limit"] || "3", 10),
+      pendingBooksLimit: parseInt(map2["pending_books_limit"] || "10", 10),
       ...readSecuritySettings(map2),
     });
 

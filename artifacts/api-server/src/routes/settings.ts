@@ -63,7 +63,7 @@ router.get("/settings", async (_req, res): Promise<void> => {
     customDesigns,
     requireLoginForPdf: map["require_login_for_pdf"] === "true",
     pendingBooksLimitEnabled: map["pending_books_limit_enabled"] !== "false",
-    pendingBooksLimit: parseInt(map["pending_books_limit"] || "3", 10),
+    pendingBooksLimit: parseInt(map["pending_books_limit"] || "10", 10),
   });
 });
 

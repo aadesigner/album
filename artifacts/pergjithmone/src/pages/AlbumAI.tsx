@@ -314,7 +314,7 @@ export default function AlbumAI() {
       const isLimitError = e?.data?.code === 'PENDING_BOOKS_LIMIT_REACHED';
       const isNoPhotos = e?.message === 'NO_PHOTOS';
       setGenError(isLimitError
-        ? pendingBooksLimitMessage(lang, Number(e?.data?.limit) || 3)
+        ? pendingBooksLimitMessage(lang, Number(e?.data?.limit) || 10)
         : isNoPhotos
         ? (lang === 'sq'
           ? 'Ngarko të paktën disa foto përpara se të krijosh albumin.'

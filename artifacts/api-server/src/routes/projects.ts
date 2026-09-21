@@ -84,7 +84,7 @@ async function getSettings(): Promise<PricingSettings> {
     extraSpreadPriceLek: parseInt(map["extra_spread_price_lek"] || "200", 10),
     whatsappNumber: map["whatsapp_number"] || "+355688755833",
     pendingBooksLimitEnabled: map["pending_books_limit_enabled"] !== "false",
-    pendingBooksLimit: parseInt(map["pending_books_limit"] || "3", 10),
+    pendingBooksLimit: parseInt(map["pending_books_limit"] || "10", 10),
   } satisfies PricingSettings;
   _settingsCache = { data, expiresAt: Date.now() + SETTINGS_TTL_MS };
   return data;
