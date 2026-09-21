@@ -1,11 +1,12 @@
-# Single image for BOTH Railway services (api-server + pergjithmone).
-# Both services MUST use:
-#   Root Directory  = /
-#   Dockerfile path = Dockerfile
+# Single image for BOTH Railway services.
+# Root Directory = / | Dockerfile path = Dockerfile
 #
-# Start commands (first token must be an executable — no VAR=value prefix):
-#   frontend → sh /app/boot-web.sh
-#   api      → sh /app/boot-api.sh
+# Preferred start commands:
+#   frontend → /app/boot-web.sh
+#   api      → /app/boot-api.sh
+#
+# Also installs /usr/local/bin/start_app=web and start_app=api so a
+# stuck Railway "START_APP=web …" Custom Start Command still boots.
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
 
@@ -59,21 +60,24 @@ RUN cp /app/artifacts/pergjithmone/server.mjs /app/server.mjs \
 '#!/bin/sh' \
 'set -eu' \
 'echo "[web] starting node /app/server.mjs"' \
-'if [ ! -f /app/server.mjs ]; then echo "[web] FATAL: /app/server.mjs missing"; ls -la /app; exit 1; fi' \
 'exec node /app/server.mjs' \
 > /app/boot-web.sh \
  && printf '%s\n' \
 '#!/bin/sh' \
 'set -eu' \
 'echo "[api] starting node /app/artifacts/api-server/dist/index.mjs"' \
-'echo "[api] DATABASE_URL set: $([ -n "${DATABASE_URL:-}" ] && echo yes || echo NO)"' \
-'if [ ! -f /app/artifacts/api-server/dist/index.mjs ]; then echo "[api] FATAL: dist/index.mjs missing"; ls -la /app /app/artifacts 2>/dev/null; exit 1; fi' \
 'exec node /app/artifacts/api-server/dist/index.mjs' \
 > /app/boot-api.sh \
  && chmod +x /app/boot-web.sh /app/boot-api.sh \
+ && cp /app/boot-web.sh /usr/local/bin/start_app=web \
+ && cp /app/boot-api.sh /usr/local/bin/start_app=api \
+ && cp /app/boot-web.sh '/usr/local/bin/START_APP=web' \
+ && cp /app/boot-api.sh '/usr/local/bin/START_APP=api' \
+ && chmod +x /usr/local/bin/start_app=web /usr/local/bin/start_app=api \
+              '/usr/local/bin/START_APP=web' '/usr/local/bin/START_APP=api' \
  && test -f /app/server.mjs \
  && test -f /app/artifacts/api-server/dist/index.mjs \
  && test -f /app/dist/public/index.html
 
 EXPOSE 8080
-CMD ["sh", "/app/boot-web.sh"]
+CMD ["/app/boot-web.sh"]

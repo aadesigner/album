@@ -1,27 +1,14 @@
 # Railway → pergjithmone (frontend)
-#   Root Directory      = /
-#   Dockerfile path     = Dockerfile
-#   Config-as-code      = /artifacts/pergjithmone/railway.toml
-#   Custom Start        = sh /app/boot-web.sh
-#
-# Variables:
-#   API_URL=https://workspaceapi-server-production-3940e.up.railway.app
+#   Dockerfile path = Dockerfile
+#   Custom Start    = /app/boot-web.sh
+#   (clear any old START_APP=… start command in the dashboard)
 
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
-watchPatterns = [
-  "/artifacts/pergjithmone/**",
-  "/lib/**",
-  "/attached_assets/**",
-  "/package.json",
-  "/pnpm-lock.yaml",
-  "/pnpm-workspace.yaml",
-  "/Dockerfile",
-]
 
 [deploy]
-startCommand = "sh /app/boot-web.sh"
+startCommand = "/app/boot-web.sh"
 healthcheckPath = "/healthz"
 healthcheckTimeout = 60
 restartPolicyType = "ON_FAILURE"

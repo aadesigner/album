@@ -1,22 +1,13 @@
 # Railway → api-server
-#   Root Directory      = /
-#   Dockerfile path     = Dockerfile
-#   Config-as-code      = /artifacts/api-server/railway.toml
-#   Custom Start        = sh /app/boot-api.sh
+#   Dockerfile path = Dockerfile
+#   Custom Start    = /app/boot-api.sh
+#   (clear any old START_APP=… or pnpm start command in the dashboard)
 
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
-watchPatterns = [
-  "/artifacts/api-server/**",
-  "/lib/**",
-  "/package.json",
-  "/pnpm-lock.yaml",
-  "/pnpm-workspace.yaml",
-  "/Dockerfile",
-]
 
 [deploy]
-startCommand = "sh /app/boot-api.sh"
+startCommand = "/app/boot-api.sh"
 restartPolicyType = "ON_FAILURE"
 numReplicas = 1
