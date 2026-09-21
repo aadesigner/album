@@ -352,11 +352,16 @@
 }
 @keyframes bookFloat {
   0%, 100% { transform: translateY(0); }
-  50%      { transform: translateY(-10px); }
+  50%      { transform: translateY(-12px); }
 }
+/* Idle orbit around a left-facing pose so the spine stays visible */
 @keyframes bookIdleYaw {
-  0%, 100% { transform: rotateY(-6deg) rotateX(4deg); }
-  50%      { transform: rotateY(10deg) rotateX(-3deg); }
+  0%, 100% { transform: rotateY(-34deg) rotateX(9deg); }
+  50%      { transform: rotateY(-22deg) rotateX(5deg); }
+}
+@keyframes bookIdleYawStarter {
+  0%, 100% { transform: rotateY(-20deg) rotateX(6deg); }
+  50%      { transform: rotateY(-12deg) rotateX(3deg); }
 }
 
 .hero-orb-a {
@@ -376,7 +381,12 @@
   will-change: transform;
 }
 .book-idle-yaw {
-  animation: bookIdleYaw 7s ease-in-out infinite;
+  animation: bookIdleYaw 8s ease-in-out infinite;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+.book-idle-yaw-starter {
+  animation: bookIdleYawStarter 8s ease-in-out infinite;
   transform-style: preserve-3d;
   will-change: transform;
 }
@@ -386,7 +396,8 @@
   .hero-orb-b,
   .hero-sheen,
   .book-float,
-  .book-idle-yaw {
+  .book-idle-yaw,
+  .book-idle-yaw-starter {
     animation: none !important;
   }
 }

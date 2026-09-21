@@ -14,6 +14,7 @@ import {
   applyDesignOverrides,
   blankCoverElements,
   DESIGNS,
+  TRAVEL_LAYOUT_REV,
 } from "./designs";
 
 // ── getCanvasHeight ────────────────────────────────────────────────────────────
@@ -170,14 +171,22 @@ describe("front/back design helpers", () => {
     expect(designBackElements(patched)[1].text).toBe("OV-B");
   });
 
-  it("keeps city photo layouts on built-in travel covers", () => {
-    const rome = DESIGNS.find((d) => d.id === "rome");
-    expect(rome).toBeTruthy();
-    expect(rome!.thumbPhoto).toBe("/designs/rome-cover-thumb.jpg");
-    expect(designFrontElements(rome!).some((e) => e.type === "image" && e.src?.includes("rome-cover-thumb"))).toBe(true);
+  it("ignores stale travel overrides without matching layoutRev", () => {
+    const rome = DESIGNS.find((d) => d.id === "rome")!;
+    expect(rome.layoutRev).toBe(TRAVEL_LAYOUT_REV);
+    const stale = [
+      { type: "background" as const, x: 0, y: 0, w: DESIGN_W, h: DESIGN_H, rotation: 0, bgColor: "#111" },
+      { type: "text" as const, x: 0, y: 0, w: 100, h: 40, rotation: 0, text: "ROME" },
+    ];
+    const [patched] = applyDesignOverrides(
+      [rome],
+      { rome: { frontElements: stale, backElements: stale } },
+    );
+    expect(designFrontElements(patched)).toEqual(rome.elements);
+    expect(designFrontElements(patched).some((e) => e.type === "image")).toBe(true);
   });
 
-  it("applies admin overrides that include city photos", () => {
+  it("applies travel overrides that carry the current layoutRev", () => {
     const rome = DESIGNS.find((d) => d.id === "rome")!;
     const withPhoto = [
       { type: "background" as const, x: 0, y: 0, w: DESIGN_W, h: DESIGN_H, rotation: 0, bgColor: "#000" },
@@ -186,9 +195,10 @@ describe("front/back design helpers", () => {
     ];
     const [patched] = applyDesignOverrides(
       [rome],
-      { rome: { frontElements: withPhoto, backElements: withPhoto } },
+      { rome: { frontElements: withPhoto, backElements: withPhoto, layoutRev: TRAVEL_LAYOUT_REV } },
     );
     expect(designFrontElements(patched).some((e) => e.src?.includes("cover-thumb"))).toBe(true);
+    expect(designFrontElements(patched)[2].text).toBe("ROME");
   });
 
   it("rejects malformed custom designs", () => {

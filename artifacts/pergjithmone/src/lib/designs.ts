@@ -176,7 +176,15 @@ export interface DesignDef {
   backElements?: DE[];
   /** Admin-created design (persisted in app settings). */
   isCustom?: boolean;
+  /**
+   * Bump when the builtin layout changes. Stale `design_overrides` without a
+   * matching rev are ignored so the guide/editor show the current catalog.
+   */
+  layoutRev?: number;
 }
+
+/** Shared rev for Travel builtins (Paris/Barcelona + city photo covers). */
+export const TRAVEL_LAYOUT_REV = 5;
 export interface LayoutZone { x:number; y:number; w:number; h:number; type:string; rotation?:number }
 export interface LayoutDef { id:string; category:string; label:{sq:string;en:string}; zones:LayoutZone[] }
 
@@ -431,6 +439,7 @@ function CITY(
   if (layout === 'split') {
     return {
       id, name, category: 'Travel', thumbPhoto,
+      layoutRev: TRAVEL_LAYOUT_REV,
       thumb: { background: paper },
       thumbAccents: [],
       elements: [
@@ -452,6 +461,7 @@ function CITY(
   if (layout === 'banner') {
     return {
       id, name, category: 'Travel', thumbPhoto,
+      layoutRev: TRAVEL_LAYOUT_REV,
       thumb: { background: paper },
       thumbAccents: [],
       elements: [
@@ -473,6 +483,7 @@ function CITY(
   // postcard (default) — color field, floating photo card, title/year
   return {
     id, name, category: 'Travel', thumbPhoto,
+    layoutRev: TRAVEL_LAYOUT_REV,
     thumb: { background: paper },
     thumbAccents: [],
     elements: [
@@ -560,41 +571,43 @@ export const DESIGNS: DesignDef[] = [
     id: 'paris-pink',
     name: { sq: 'Paris', en: 'Paris' },
     category: 'Travel',
+    layoutRev: TRAVEL_LAYOUT_REV,
     thumbPhoto: '/designs/paris-cover-thumb.jpg',
     thumb: { background: '#FEC5D7' },
     thumbAccents: [],
     elements: [
       BG('#FEC5D7'),
-      TX('PARIS', 16, 22, DESIGN_W - 32, 110, {
-        fontSize: 108, fill: '#FFFFFF', align: 'center',
-        fontFamily: "'Londrina Solid', cursive", letterSpacing: 14,
+      TX('PARIS', 16, 24, DESIGN_W - 32, 100, {
+        fontSize: 100, fill: '#FFFFFF', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 12,
       }),
-      TX('2022', 400, 132, 170, 48, {
-        fontSize: 36, fill: '#F06BAF', align: 'left',
+      TX('2022', 410, 128, 160, 44, {
+        fontSize: 34, fill: '#F06BAF', align: 'left',
         fontFamily: "'Londrina Solid', cursive", letterSpacing: 4,
       }),
-      SH('rect', 250, 128, 36, 3, '#FFFFFF', { opacity: 0.55, strokeWidth: 0 }),
-      IMG('/designs/eiffel-tower.png', 55, 95, 490, 720),
+      SH('rect', 248, 124, 40, 3, '#FFFFFF', { opacity: 0.55, strokeWidth: 0 }),
+      IMG('/designs/eiffel-tower.png', 70, 105, 460, 680),
     ],
   },
   {
     id: 'barcelona-red',
     name: { sq: 'Barcelona', en: 'Barcelona' },
     category: 'Travel',
+    layoutRev: TRAVEL_LAYOUT_REV,
     thumbPhoto: '/designs/barcelona-cover-thumb.jpg',
     thumb: { background: '#A83442' },
     thumbAccents: [],
     elements: [
       BG('#A83442'),
-      TX('BARCELONA', 8, 34, DESIGN_W - 16, 96, {
-        fontSize: 68, fill: '#FCB426', align: 'center',
-        fontFamily: "'Londrina Solid', cursive", letterSpacing: 7,
-      }),
-      SH('rect', 220, 128, 160, 3, '#FCB426', { opacity: 0.7, strokeWidth: 0 }),
-      IMG('/designs/sagrada-familia.png', 35, 130, 530, 600),
-      TX('2026', 170, 732, 260, 48, {
-        fontSize: 38, fill: '#FCB426', align: 'center',
+      TX('BARCELONA', 8, 36, DESIGN_W - 16, 90, {
+        fontSize: 64, fill: '#FCB426', align: 'center',
         fontFamily: "'Londrina Solid', cursive", letterSpacing: 6,
+      }),
+      SH('rect', 220, 126, 160, 3, '#FCB426', { opacity: 0.7, strokeWidth: 0 }),
+      IMG('/designs/sagrada-familia.png', 50, 140, 500, 560),
+      TX('2026', 170, 728, 260, 48, {
+        fontSize: 36, fill: '#FCB426', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 5,
       }),
     ],
   },
@@ -792,6 +805,8 @@ export function designBackElements(d: DesignDef): DE[] {
 export type DesignSideOverride = {
   frontElements?: DE[];
   backElements?: DE[];
+  /** Must match DesignDef.layoutRev or the override is treated as stale. */
+  layoutRev?: number;
 };
 
 export type DesignOverrides = Record<string, DE[] | DesignSideOverride>;
@@ -828,7 +843,14 @@ export function normalizeOverride(raw: unknown): DesignSideOverride | null {
   return {
     frontElements: front?.length ? front : back,
     backElements: back?.length ? back : front,
+    layoutRev: typeof o.layoutRev === 'number' ? o.layoutRev : undefined,
   };
+}
+
+function overrideLayoutRev(raw: unknown): number | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const rev = (raw as Record<string, unknown>).layoutRev;
+  return typeof rev === 'number' && Number.isFinite(rev) ? rev : undefined;
 }
 
 /** Merge persisted admin overrides onto a design list. */
@@ -838,8 +860,15 @@ export function applyDesignOverrides(
 ): DesignDef[] {
   if (!overrides || typeof overrides !== 'object') return designs;
   return designs.map((d) => {
-    const norm = normalizeOverride(overrides[d.id]);
+    const raw = overrides[d.id];
+    const norm = normalizeOverride(raw);
     if (!norm) return d;
+
+    // Drop stale Design Studio saves that still pin old typography-only /
+    // pre-photo Travel covers (or older Paris/Barcelona sizes).
+    if (d.layoutRev != null && overrideLayoutRev(raw) !== d.layoutRev) {
+      return d;
+    }
 
     return {
       ...d,

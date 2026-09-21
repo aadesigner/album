@@ -669,7 +669,11 @@ export default function AdminDesignStudio() {
       } else {
         const next: DesignOverrides = {
           ...savedOverrides,
-          [design.id]: { frontElements, backElements },
+          [design.id]: {
+            frontElements,
+            backElements,
+            ...(design.layoutRev != null ? { layoutRev: design.layoutRev } : {}),
+          },
         };
         await updateSettings.mutateAsync({
           data: { designOverrides: next } as any,
