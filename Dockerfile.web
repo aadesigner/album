@@ -38,4 +38,5 @@ COPY --from=build /app/artifacts/pergjithmone/dist ./dist
 COPY --from=build /app/artifacts/pergjithmone/server.mjs ./server.mjs
 
 EXPOSE 8080
+# Do not use pnpm here — runner has no workspace (see railway.toml startCommand).
 CMD ["node", "server.mjs"]

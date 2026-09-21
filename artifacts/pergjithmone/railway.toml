@@ -28,5 +28,7 @@ watchPatterns = [
 ]
 
 [deploy]
+# Slim image has no pnpm workspace — must not use `pnpm --filter …`
+startCommand = "node server.mjs"
 restartPolicyType = "ON_FAILURE"
 numReplicas = 1
