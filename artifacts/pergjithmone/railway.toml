@@ -5,13 +5,9 @@
 # Variables (required):
 #   PORT            — leave Railway default (do not force 8080 if Railway sets another)
 #   BASE_PATH=/
-#   API_URL=https://YOUR-API-SERVER.up.railway.app
+#   API_URL=https://workspaceapi-server-production-3940e.up.railway.app
 #     or private: http://${{api-server.RAILWAY_PRIVATE_DOMAIN}}:8080
 #     (no trailing slash — Create Album hangs without this)
-#
-# COST:
-#   Enable Serverless (Settings → Deploy). Cap memory at ~128–256 MB.
-#   This image is now static-only (no node_modules) — idle RSS should stay tiny.
 
 [build]
 builder = "DOCKERFILE"
@@ -28,7 +24,9 @@ watchPatterns = [
 ]
 
 [deploy]
-# Slim image has no pnpm workspace — must not use `pnpm --filter …`
-startCommand = "node server.mjs"
+# Absolute path so boot works even if WORKDIR/start-command overrides fight.
+startCommand = "node /app/artifacts/pergjithmone/server.mjs"
+healthcheckPath = "/healthz"
+healthcheckTimeout = 60
 restartPolicyType = "ON_FAILURE"
 numReplicas = 1
