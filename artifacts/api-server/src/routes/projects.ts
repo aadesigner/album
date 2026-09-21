@@ -852,17 +852,13 @@ router.get(
         status: projectsTable.status,
         pdfUrl: projectsTable.pdfUrl,
         shareToken: projectsTable.shareToken,
+        userId: projectsTable.userId,
       })
       .from(projectsTable)
-      .where(
-        and(
-          eq(projectsTable.id, projectId),
-          eq(projectsTable.userId, req.user!.id),
-        ),
-      )
+      .where(eq(projectsTable.id, projectId))
       .limit(1);
 
-    if (!project) {
+    if (!project || (project.userId !== req.user!.id && req.user!.role !== "admin")) {
       res.status(404).json({ error: "Project not found" });
       return;
     }

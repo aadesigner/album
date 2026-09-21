@@ -2662,7 +2662,9 @@ function MobileSheet({tab,show,onClose,photos,onUpload,uploading,onAddPhoto,onLa
 // Order Modal
 // ─────────────────────────────────────────────────────────────────────────────
 
-function OrderModal({project,onClose,lang}: {project:any;onClose:()=>void;lang:'sq'|'en'}) {
+function OrderModal({project,onClose,lang,flushSave}: {
+  project:any; onClose:()=>void; lang:'sq'|'en'; flushSave?:()=>Promise<void>;
+}) {
   const createOrder=useCreateOrder();
   const queryClient=useQueryClient();
   const {getToken}=useAuth();
@@ -2677,6 +2679,10 @@ function OrderModal({project,onClose,lang}: {project:any;onClose:()=>void;lang:'
     // don't swallow WhatsApp after the async create-order round-trip.
     const waTab=window.open('about:blank','_blank');
     try{
+      // Persist the latest canvas BEFORE the order PDF kicks off — otherwise
+      // the print file can be built from stale/empty contentJson.
+      if (flushSave) await flushSave();
+
       const o=await createOrder.mutateAsync({data:{projectId:project.id}});
       const id=(o as any)?.id;
       if (!id) throw new Error('Order created but no id returned');
@@ -3087,12 +3093,16 @@ export default function Editor() {
     const cur=liveContent.current;
     const pagesPayload=toSave.map(pid=>({id:pid,contentJson:JSON.stringify(cur[pid]||[])}));
     try {
-      await fetch(`/api/projects/${projectId}/auto-save`,{
+      const r=await fetch(`/api/projects/${projectId}/auto-save`,{
         method:'POST',
         headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},
         body:JSON.stringify({pagesJson:JSON.stringify(pagesPayload)}),
         keepalive:true,
       });
+      if (!r.ok) {
+        const body=await r.json().catch(()=>({}));
+        throw new Error((body as any)?.error || `Save failed (${r.status})`);
+      }
       setSaveStatus('saved');
     } catch(e){
       console.error('auto-save failed',e);
@@ -4113,7 +4123,7 @@ export default function Editor() {
       )}
 
       <AnimatePresence>
-        {showOrder && <OrderModal key="ord" project={project} onClose={()=>setShowOrder(false)} lang={lang}/>}
+        {showOrder && <OrderModal key="ord" project={project} onClose={()=>setShowOrder(false)} lang={lang} flushSave={flushSave}/>}
       </AnimatePresence>
 
       {/* PDF generation progress overlay */}

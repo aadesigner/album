@@ -15,6 +15,15 @@ import { useAuth } from '@/contexts/AuthContext';
 
 const BASE = (import.meta as any).env?.BASE_URL?.replace(/\/$/, '') || '';
 
+/** pdfUrl is auth-gated — append access token so iframe/<a> work. */
+function authedPdfUrl(pdfUrl: string, token: string | null): string {
+  if (!pdfUrl) return pdfUrl;
+  const withBase = pdfUrl.startsWith('http') ? pdfUrl : `${BASE}${pdfUrl.startsWith('/') ? '' : '/'}${pdfUrl}`;
+  if (!token) return withBase;
+  const join = withBase.includes('?') ? '&' : '?';
+  return `${withBase}${join}token=${encodeURIComponent(token)}`;
+}
+
 /** Internal placeholder emails for phone-only accounts — never show as a real email. */
 function isSyntheticPhoneEmail(email: string | null | undefined): boolean {
   return !!email && /@ph\.local$/i.test(email);
@@ -279,6 +288,7 @@ const STATUS_STYLE: Record<string, string> = {
 
 // ── User albums/orders modal ────────────────────────────────────────────────
 function UserAlbumsModal({ userId, userName, onClose }: { userId: number; userName: string; onClose: () => void }) {
+  const { getToken } = useAuth();
   const { data, isLoading, refetch } = useListAdminOrders({ page: 1, limit: 100, userId } as any);
   const updateOrder = useUpdateAdminOrder();
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
@@ -288,6 +298,10 @@ function UserAlbumsModal({ userId, userName, onClose }: { userId: number; userNa
   const handleStatusChange = async (orderId: number, status: string) => {
     await updateOrder.mutateAsync({ orderId, data: { status: status as any } });
     refetch();
+  };
+
+  const openPdf = (raw: string) => {
+    setPdfUrl(authedPdfUrl(raw, getToken()));
   };
 
   return (
@@ -338,7 +352,7 @@ function UserAlbumsModal({ userId, userName, onClose }: { userId: number; userNa
                       {o.pdfUrl ? (
                         <div className="flex items-center gap-1.5">
                           <button
-                            onClick={() => setPdfUrl(o.pdfUrl)}
+                            onClick={() => openPdf(o.pdfUrl)}
                             className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[10px] font-semibold transition-opacity hover:opacity-80"
                             style={{ background: ADMIN.blushSoft, color: ADMIN.blushDeep }}
                             title="View PDF"
@@ -346,7 +360,7 @@ function UserAlbumsModal({ userId, userName, onClose }: { userId: number; userNa
                             <Eye size={10} /> View
                           </button>
                           <a
-                            href={o.pdfUrl} download
+                            href={authedPdfUrl(o.pdfUrl, getToken())} download
                             className="p-1.5 rounded-lg text-neutral-300 hover:bg-rose-50 hover:text-rose-500 transition-colors"
                             title="Download PDF"
                           >

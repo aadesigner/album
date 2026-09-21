@@ -8,8 +8,10 @@ import { getSecuritySettings } from "../lib/securitySettings";
 
 const router: IRouter = Router();
 
-// Ensure uploads directory exists
-export const uploadsDir = path.join(process.cwd(), "uploads");
+// Prefer DATA_DIR (Railway volume) so uploads survive redeploys — must match
+// where generateProjectPdf looks when resolving /api/uploads/files/* for print.
+const dataRoot = process.env.DATA_DIR || process.cwd();
+export const uploadsDir = path.join(dataRoot, "uploads");
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
@@ -59,7 +61,7 @@ const SHARP_FORMAT_TO_MIME: Record<string, string> = {
 // sharp enough to print later; nothing in this app needs the original
 // multi-megabyte phone-camera file. Capping the longest edge and
 // re-encoding keeps disk usage (and later, PDF render time) sane.
-const MAX_DIMENSION = 2600; // px, longest edge — comfortably print-quality
+const MAX_DIMENSION = 3200; // px, longest edge — enough for 21×28 cm @ 300 DPI
 const JPEG_QUALITY = 85;
 const PNG_QUALITY = 82;
 
@@ -178,7 +180,15 @@ router.get("/uploads/files/:filename", (req, res): void => {
     res.status(400).json({ error: "Invalid filename" });
     return;
   }
-  const filePath = path.join(uploadsDir, raw);
+  const candidates = [
+    path.join(uploadsDir, raw),
+    path.join(process.cwd(), "uploads", raw),
+  ];
+  const filePath = candidates.find((p) => fs.existsSync(p));
+  if (!filePath) {
+    res.status(404).json({ error: "File not found" });
+    return;
+  }
   // Filenames are content-addressed (timestamp + random suffix) and never
   // reused for different content, so it's safe to cache these aggressively.
   res.setHeader("Cache-Control", "public, max-age=31536000, immutable");

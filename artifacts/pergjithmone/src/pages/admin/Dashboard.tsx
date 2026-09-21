@@ -87,9 +87,12 @@ function PendingPrintingWidget() {
 
   const pdfHref = (pdfUrl: string) => {
     const token = getToken();
-    if (!token || !pdfUrl) return pdfUrl;
-    const join = pdfUrl.includes('?') ? '&' : '?';
-    return `${pdfUrl}${join}token=${encodeURIComponent(token)}`;
+    if (!pdfUrl) return pdfUrl;
+    const base = (import.meta as any).env?.BASE_URL?.replace(/\/$/, '') || '';
+    const withBase = pdfUrl.startsWith('http') ? pdfUrl : `${base}${pdfUrl.startsWith('/') ? '' : '/'}${pdfUrl}`;
+    if (!token) return withBase;
+    const join = withBase.includes('?') ? '&' : '?';
+    return `${withBase}${join}token=${encodeURIComponent(token)}`;
   };
 
   return (

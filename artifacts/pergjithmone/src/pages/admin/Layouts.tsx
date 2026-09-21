@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Plus, Edit2, Trash2, Image as ImageIcon, Type } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
-import { LAYOUTS, type LayoutZone } from '@/lib/designs';
+import { LAYOUTS, LAYOUT_CATEGORY_LABELS, type LayoutZone } from '@/lib/designs';
 
 type Layout = {
   id: number; slug: string; nameAl: string; nameEn: string;
@@ -43,8 +43,21 @@ function parseCells(json: string): Cell[] {
   }
 }
 
-function cellsToJson(cells: Cell[]): string {
-  return JSON.stringify({ cells }, null, 2);
+function parseCategory(json: string): string | null {
+  try {
+    const parsed = JSON.parse(json);
+    return typeof parsed?.category === 'string' ? parsed.category : null;
+  } catch {
+    return null;
+  }
+}
+
+function cellsToJson(cells: Cell[], category?: string | null): string {
+  return JSON.stringify(
+    category ? { category, cells } : { cells },
+    null,
+    2,
+  );
 }
 
 async function invalidateLayoutQueries(queryClient: ReturnType<typeof useQueryClient>) {
@@ -247,7 +260,7 @@ function LayoutFormModal({ layout, onClose }: { layout: Layout | null; onClose: 
         nameAl: form.nameAl.trim(),
         nameEn: form.nameEn.trim(),
         previewIcon: form.previewIcon || undefined,
-        gridDefinitionJson: cellsToJson(cells),
+        gridDefinitionJson: cellsToJson(cells, layout ? parseCategory(layout.gridDefinitionJson) : null),
         isActive: form.isActive,
       };
       if (isEdit) {
@@ -352,6 +365,7 @@ function DeleteConfirm({ name, onConfirm, onCancel, loading }: { name: string; o
 
 export default function AdminLayouts() {
   const { data: layouts, isLoading } = useListAdminLayouts();
+  const createLayout = useCreateAdminLayout();
   const deleteLayout = useDeleteAdminLayout();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -359,6 +373,7 @@ export default function AdminLayouts() {
   const [formTarget, setFormTarget] = useState<{ open: boolean; layout: Layout | null }>({ open: false, layout: null });
   const [deleteTarget, setDeleteTarget] = useState<Layout | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -374,6 +389,71 @@ export default function AdminLayouts() {
       setDeleting(false);
     }
   };
+
+  const importBuiltins = async () => {
+    setImporting(true);
+    try {
+      const have = new Set((layouts || []).map(l => l.slug));
+      const missing = LAYOUTS.filter(l => !have.has(l.id));
+      if (missing.length === 0) {
+        toast({ title: 'All built-in layouts already imported' });
+        return;
+      }
+      let ok = 0;
+      for (const l of missing) {
+        try {
+          await createLayout.mutateAsync({
+            data: {
+              slug: l.id,
+              nameAl: l.label.sq,
+              nameEn: l.label.en,
+              previewIcon: '▦',
+              gridDefinitionJson: JSON.stringify({ category: l.category, cells: l.zones }),
+              isActive: true,
+            },
+          });
+          ok += 1;
+        } catch {
+          // skip slug conflicts
+        }
+      }
+      await invalidateLayoutQueries(queryClient);
+      toast({ title: `Imported ${ok} layout${ok === 1 ? '' : 's'}` });
+    } catch (e: any) {
+      toast({ title: 'Import failed', description: e?.message, variant: 'destructive' });
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const grouped = useMemo(() => {
+    const list = layouts || [];
+    const map = new Map<string, Layout[]>();
+    for (const layout of list) {
+      const cat = parseCategory(layout.gridDefinitionJson)
+        || LAYOUTS.find(l => l.id === layout.slug)?.category
+        || 'Custom';
+      if (!map.has(cat)) map.set(cat, []);
+      map.get(cat)!.push(layout);
+    }
+    // Prefer known category order from LAYOUTS
+    const order = [...new Set([
+      ...LAYOUTS.map(l => l.category),
+      ...map.keys(),
+    ])];
+    return order
+      .filter(cat => map.has(cat))
+      .map(cat => ({
+        category: cat,
+        label: LAYOUT_CATEGORY_LABELS[cat]?.en || cat,
+        items: map.get(cat)!,
+      }));
+  }, [layouts]);
+
+  const missingBuiltinCount = useMemo(() => {
+    const have = new Set((layouts || []).map(l => l.slug));
+    return LAYOUTS.filter(l => !have.has(l.id)).length;
+  }, [layouts]);
 
   return (
     <AdminLayout>
@@ -392,62 +472,105 @@ export default function AdminLayouts() {
       <div className="p-4 sm:p-5 md:p-8 max-w-screen-xl mx-auto">
         <div className="mb-8 flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4">
           <div>
-            <p className="text-[10px] font-semibold tracking-[0.18em] uppercase mb-1.5" style={{ color: ADMIN.blush }}>Editor</p>
+            <p className="text-[10px] font-semibold tracking-[0.18em] uppercase mb-1.5" style={{ color: ADMIN.blush }}>Catalog</p>
             <h1 className="text-3xl font-serif font-semibold mb-1" style={{ color: ADMIN.ink }}>Layouts</h1>
-            <p className="text-sm" style={{ color: ADMIN.muted }}>Photo grid layouts available in the editor.</p>
+            <p className="text-sm" style={{ color: ADMIN.muted }}>
+              Photo grid layouts customers pick in the album editor. Click a card to edit zones.
+            </p>
           </div>
-          <Button className="gap-2 rounded-2xl text-white hover:opacity-90 shrink-0" style={{ background: ADMIN.blush }}
-            onClick={() => setFormTarget({ open: true, layout: null })}>
-            <Plus size={16} /> New Layout
-          </Button>
+          <div className="flex flex-wrap gap-2 shrink-0">
+            {missingBuiltinCount > 0 && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={importing}
+                className="gap-2 rounded-2xl"
+                onClick={importBuiltins}
+              >
+                {importing ? 'Importing…' : `Import ${missingBuiltinCount} built-in`}
+              </Button>
+            )}
+            <Button className="gap-2 rounded-2xl text-white hover:opacity-90" style={{ background: ADMIN.blush }}
+              onClick={() => setFormTarget({ open: true, layout: null })}>
+              <Plus size={16} /> New Layout
+            </Button>
+          </div>
         </div>
 
         {isLoading ? (
           <p className="text-sm py-12 text-center" style={{ color: ADMIN.muted }}>Loading…</p>
         ) : !layouts?.length ? (
           <div className="rounded-2xl p-10 text-center" style={{ background: ADMIN.card, border: `1px solid ${ADMIN.line}` }}>
-            <p className="text-sm mb-4" style={{ color: ADMIN.muted }}>No layouts yet. Create one or start from a built-in preset.</p>
-            <Button className="rounded-2xl text-white" style={{ background: ADMIN.blush }}
-              onClick={() => setFormTarget({ open: true, layout: null })}>
-              <Plus size={16} className="mr-1.5" /> New Layout
-            </Button>
+            <p className="text-sm mb-2" style={{ color: ADMIN.ink }}>No layouts in the catalog yet</p>
+            <p className="text-sm mb-6 max-w-md mx-auto" style={{ color: ADMIN.muted }}>
+              Import the built-in editor grids (full bleed, 2 columns, magazine…) or create your own.
+            </p>
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button
+                type="button"
+                className="rounded-2xl text-white"
+                style={{ background: ADMIN.blush }}
+                disabled={importing}
+                onClick={importBuiltins}
+              >
+                {importing ? 'Importing…' : `Import ${LAYOUTS.length} built-in layouts`}
+              </Button>
+              <Button type="button" variant="outline" className="rounded-2xl"
+                onClick={() => setFormTarget({ open: true, layout: null })}>
+                <Plus size={16} className="mr-1.5" /> New Layout
+              </Button>
+            </div>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
-            {layouts.map(layout => {
-              const cells = parseCells(layout.gridDefinitionJson);
-              return (
-                <div
-                  key={layout.id}
-                  className="rounded-2xl p-3 flex flex-col gap-2 transition-shadow hover:shadow-md"
-                  style={{ background: ADMIN.card, border: `1px solid ${ADMIN.line}`, opacity: layout.isActive ? 1 : 0.55 }}
-                >
-                  <LayoutPreview cells={cells} size={96} />
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold truncate" style={{ color: ADMIN.ink }}>{layout.nameEn}</p>
-                    <p className="text-[11px] truncate" style={{ color: ADMIN.muted }}>{layout.nameAl}</p>
-                    <p className="text-[10px] font-mono truncate mt-0.5" style={{ color: ADMIN.muted }}>{layout.slug}</p>
-                  </div>
-                  <div className="flex items-center justify-between gap-1 mt-auto">
-                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-semibold uppercase tracking-wider ${
-                      layout.isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-neutral-100 text-neutral-500'
-                    }`}>
-                      {layout.isActive ? 'Active' : 'Hidden'}
-                    </span>
-                    <div className="flex gap-0.5">
-                      <Button variant="ghost" size="icon" className="h-8 w-8" style={{ color: ADMIN.muted }}
-                        onClick={() => setFormTarget({ open: true, layout })}>
-                        <Edit2 size={14} />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10"
-                        onClick={() => setDeleteTarget(layout)}>
-                        <Trash2 size={14} />
-                      </Button>
-                    </div>
+          <div className="space-y-8">
+            {grouped.map(group => (
+              <section key={group.category}>
+                <div className="flex items-end justify-between gap-3 mb-3">
+                  <div>
+                    <h2 className="text-lg font-serif font-semibold" style={{ color: ADMIN.ink }}>{group.label}</h2>
+                    <p className="text-[11px]" style={{ color: ADMIN.muted }}>{group.items.length} layout{group.items.length === 1 ? '' : 's'}</p>
                   </div>
                 </div>
-              );
-            })}
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
+                  {group.items.map(layout => {
+                    const cells = parseCells(layout.gridDefinitionJson);
+                    return (
+                      <button
+                        key={layout.id}
+                        type="button"
+                        onClick={() => setFormTarget({ open: true, layout })}
+                        className="rounded-2xl p-3 flex flex-col gap-2 text-left transition-shadow hover:shadow-md"
+                        style={{ background: ADMIN.card, border: `1px solid ${ADMIN.line}`, opacity: layout.isActive ? 1 : 0.55 }}
+                      >
+                        <LayoutPreview cells={cells} size={96} />
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold truncate" style={{ color: ADMIN.ink }}>{layout.nameEn}</p>
+                          <p className="text-[11px] truncate" style={{ color: ADMIN.muted }}>{layout.nameAl}</p>
+                          <p className="text-[10px] font-mono truncate mt-0.5" style={{ color: ADMIN.muted }}>{layout.slug}</p>
+                        </div>
+                        <div className="flex items-center justify-between gap-1 mt-auto" onClick={e => e.stopPropagation()}>
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-semibold uppercase tracking-wider ${
+                            layout.isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-neutral-100 text-neutral-500'
+                          }`}>
+                            {layout.isActive ? 'Active' : 'Hidden'}
+                          </span>
+                          <div className="flex gap-0.5">
+                            <Button variant="ghost" size="icon" className="h-8 w-8" style={{ color: ADMIN.muted }}
+                              onClick={() => setFormTarget({ open: true, layout })}>
+                              <Edit2 size={14} />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                              onClick={() => setDeleteTarget(layout)}>
+                              <Trash2 size={14} />
+                            </Button>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
           </div>
         )}
       </div>

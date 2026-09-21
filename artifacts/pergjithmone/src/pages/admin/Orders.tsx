@@ -61,9 +61,15 @@ function PdfViewerModal({ url, orderId, onClose }: { url: string; orderId: numbe
 /** pdfUrl is an auth-gated API path — append access token so iframe/<a> work. */
 function authedPdfUrl(pdfUrl: string, token: string | null): string {
   if (!pdfUrl) return pdfUrl;
-  if (!token) return pdfUrl;
-  const join = pdfUrl.includes('?') ? '&' : '?';
-  return `${pdfUrl}${join}token=${encodeURIComponent(token)}`;
+  const withBase = pdfUrl.startsWith('http') ? pdfUrl : `${BASE}${pdfUrl.startsWith('/') ? '' : '/'}${pdfUrl}`;
+  if (!token) return withBase;
+  const join = withBase.includes('?') ? '&' : '?';
+  return `${withBase}${join}token=${encodeURIComponent(token)}`;
+}
+
+function withCacheBust(url: string): string {
+  const join = url.includes('?') ? '&' : '?';
+  return `${url}${join}t=${Date.now()}`;
 }
 
 // ── Admin note modal ──────────────────────────────────────────────────────────
@@ -203,6 +209,7 @@ export default function AdminOrders() {
   const updateOrder = useUpdateAdminOrder();
   const queryClient = useQueryClient();
   const [regenId, setRegenId] = useState<number | null>(null);
+  const [viewPrepId, setViewPrepId] = useState<number | null>(null);
 
   const orders = (ordersData as any)?.data || [];
   const total = (ordersData as any)?.total || 0;
@@ -258,7 +265,80 @@ export default function AdminOrders() {
     }
   };
 
-  const handleRegenPdf = async (orderId: number) => {
+  /** Poll until print PDF is ready, then open the viewer. */
+  const waitForPdfAndOpen = async (orderId: number, projectId: number) => {
+    const token = getToken();
+    for (let i = 0; i < 90; i++) {
+      await new Promise((r) => setTimeout(r, 1000));
+      try {
+        const stRes = await fetch(`${BASE}/api/projects/${projectId}/pdf-status`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          credentials: 'include',
+        });
+        if (!stRes.ok) continue;
+        const body = await stRes.json() as { status?: string; pdfUrl?: string | null };
+        if (body.status === 'ready' && body.pdfUrl) {
+          setPdfModal({
+            url: withCacheBust(authedPdfUrl(body.pdfUrl, token)),
+            orderId,
+          });
+          refetch();
+          return true;
+        }
+      } catch {
+        // keep polling
+      }
+    }
+    return false;
+  };
+
+  /** Regenerate from current album pages, then open at print size. */
+  const handleViewFreshPdf = async (order: { id: number; projectId: number; pdfUrl?: string | null }) => {
+    setViewPrepId(order.id);
+    try {
+      const token = getToken();
+      const res = await fetch(`${BASE}/api/admin/orders/${order.id}/regenerate-pdf`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        // Fall back to whatever file already exists if regenerate is capped.
+        if (order.pdfUrl) {
+          setPdfModal({
+            url: withCacheBust(authedPdfUrl(order.pdfUrl, token)),
+            orderId: order.id,
+          });
+          toast({
+            title: 'Opening existing PDF',
+            description: (body as any)?.error || 'Could not queue a fresh render',
+          });
+          return;
+        }
+        toast({
+          title: 'PDF unavailable',
+          description: (body as any)?.error || 'Failed to queue PDF',
+          variant: 'destructive',
+        });
+        return;
+      }
+      toast({ title: 'Rendering print PDF…', description: 'Opening when ready (300 DPI, book size).' });
+      const ok = await waitForPdfAndOpen(order.id, order.projectId);
+      if (!ok) {
+        toast({
+          title: 'Still generating',
+          description: 'Refresh the list in a moment and try View again.',
+          variant: 'destructive',
+        });
+        refetch();
+      }
+    } finally {
+      setViewPrepId(null);
+    }
+  };
+
+  const handleRegenPdf = async (orderId: number, projectId?: number) => {
     setRegenId(orderId);
     try {
       const token = getToken();
@@ -269,12 +349,24 @@ export default function AdminOrders() {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        alert((body as any)?.error || 'Failed to queue PDF');
+        toast({
+          title: 'Failed to queue PDF',
+          description: (body as any)?.error || 'Try again shortly',
+          variant: 'destructive',
+        });
         return;
       }
-      // Poll briefly — generation is async.
-      setTimeout(() => refetch(), 2500);
-      setTimeout(() => refetch(), 8000);
+      if (projectId) {
+        toast({ title: 'Rendering print PDF…' });
+        const ok = await waitForPdfAndOpen(orderId, projectId);
+        if (!ok) {
+          toast({ title: 'Still generating', description: 'Check back in a moment.' });
+          refetch();
+        }
+      } else {
+        setTimeout(() => refetch(), 2500);
+        setTimeout(() => refetch(), 8000);
+      }
     } finally { setRegenId(null); }
   };
 
@@ -395,12 +487,13 @@ export default function AdminOrders() {
                         {o.pdfUrl ? (
                           <div className="flex items-center gap-1.5">
                             <button
-                              onClick={() => setPdfModal({ url: authedPdfUrl(o.pdfUrl, getToken()), orderId: o.id })}
-                              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[10px] font-semibold transition-opacity hover:opacity-80"
+                              onClick={() => handleViewFreshPdf(o)}
+                              disabled={viewPrepId === o.id || regenId === o.id}
+                              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[10px] font-semibold transition-opacity hover:opacity-80 disabled:opacity-50"
                               style={{ background: ADMIN.blushSoft, color: ADMIN.blushDeep }}
-                              title="View PDF"
+                              title="Re-render at print size from the current album, then view"
                             >
-                              <Eye size={10} /> View
+                              <Eye size={10} /> {viewPrepId === o.id ? 'Rendering…' : 'View'}
                             </button>
                             <button
                               onClick={() => setDeletePdf({ orderId: o.id })}
@@ -412,12 +505,12 @@ export default function AdminOrders() {
                           </div>
                         ) : (
                           <button
-                            onClick={() => handleRegenPdf(o.id)}
-                            disabled={regenId === o.id}
+                            onClick={() => handleRegenPdf(o.id, o.projectId)}
+                            disabled={regenId === o.id || viewPrepId === o.id}
                             className="px-2.5 py-1.5 rounded-lg text-[10px] font-semibold bg-amber-50 text-amber-700 hover:bg-amber-100 disabled:opacity-50"
                             title="Queue print PDF generation"
                           >
-                            {regenId === o.id ? 'Queuing…' : 'Generate PDF'}
+                            {regenId === o.id ? 'Rendering…' : 'Generate PDF'}
                           </button>
                         )}
                       </td>

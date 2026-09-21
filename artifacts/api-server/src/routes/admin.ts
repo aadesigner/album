@@ -588,9 +588,10 @@ router.delete(
     if (isNaN(orderId)) { res.status(400).json({ error: "Invalid order ID" }); return; }
     const [order] = await db.select({ projectId: ordersTable.projectId }).from(ordersTable).where(eq(ordersTable.id, orderId));
     if (!order) { res.status(404).json({ error: "Order not found" }); return; }
-    // Only clear the file URL — never demote status to draft. These projects
-    // are tied to an order and must stay "ordered" for delete protection and
-    // pending-book accounting.
+    // Clear URL + delete the file so the next View/Generate can't serve a
+    // stale print PDF. Never demote status to draft — ordered projects must
+    // stay ordered for delete protection and pending-book accounting.
+    deleteProjectPdfFile(order.projectId);
     await db
       .update(projectsTable)
       .set({ pdfUrl: null })

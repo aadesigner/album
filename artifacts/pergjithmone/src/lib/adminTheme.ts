@@ -1,4 +1,4 @@
-/** Admin UI color palettes — persisted in localStorage, applied live. */
+/** Admin UI color + typography palettes — persisted in localStorage, applied live. */
 
 export type AdminTokens = {
   bg: string;
@@ -18,6 +18,10 @@ export type AdminTokens = {
   line: string;
   success: string;
   warn: string;
+  /** Display headings (maps to --admin-font-serif) */
+  fontSerif: string;
+  /** UI / body (maps to --admin-font-sans) */
+  fontSans: string;
   /** Back-compat aliases used across admin pages */
   blush: string;
   blushSoft: string;
@@ -25,26 +29,34 @@ export type AdminTokens = {
 };
 
 export type AdminPaletteId =
-  | 'peony'
-  | 'roseate'
+  | 'standard'
+  | 'blush'
   | 'lilac'
   | 'petal'
-  | 'champagne'
+  | 'cream'
   | 'porcelain'
   | 'sakura'
-  | 'mist'
-  | 'coral'
-  | 'midnight';
+  | 'powder';
 
 export type AdminPalette = {
   id: AdminPaletteId;
   name: string;
-  /** Short swatch colors for the picker UI */
+  /** One-line vibe for the picker */
+  tagline: string;
+  /** Short swatch colors for the picker UI [bg, accent, soft] */
   swatches: [string, string, string];
   tokens: AdminTokens;
 };
 
-function withAliases(t: Omit<AdminTokens, 'blush' | 'blushSoft' | 'blushDeep'>): AdminTokens {
+const SERIF_PLAYFAIR = "'Playfair Display', Georgia, serif";
+const SERIF_CORMORANT = "'Cormorant Garamond', Georgia, serif";
+const SANS_INTER = "'Inter', system-ui, sans-serif";
+const SANS_RALWAY = "'Raleway', system-ui, sans-serif";
+const SANS_MONTSERRAT = "'Montserrat', system-ui, sans-serif";
+
+function withAliases(
+  t: Omit<AdminTokens, 'blush' | 'blushSoft' | 'blushDeep'>,
+): AdminTokens {
   return {
     ...t,
     blush: t.accent,
@@ -55,78 +67,88 @@ function withAliases(t: Omit<AdminTokens, 'blush' | 'blushSoft' | 'blushDeep'>):
 
 export const ADMIN_PALETTES: AdminPalette[] = [
   {
-    id: 'peony',
-    name: 'Peony',
-    swatches: ['#FFF5F7', '#E85A7A', '#FFE4EC'],
+    id: 'standard',
+    name: 'Standard',
+    tagline: 'Soft peony · house look',
+    swatches: ['#FFF6F8', '#E86B84', '#FFE8EE'],
     tokens: withAliases({
-      bg: '#FFF7F9',
-      sidebar: '#FFF0F4',
-      sidebarHover: '#FFE0E8',
-      sidebarActive: '#FFD0DC',
-      sidebarText: '#9A5A6E',
-      sidebarTextActive: '#5C2438',
-      sidebarLine: '#F5D0DA',
-      accent: '#E85A7A',
-      accentSoft: '#FFE4EC',
-      accentDeep: '#C43D5C',
-      ink: '#3D1F2A',
+      bg: '#FFF8FA',
+      sidebar: '#FFF1F5',
+      sidebarHover: '#FFE4EC',
+      sidebarActive: '#FFD6E2',
+      sidebarText: '#9A6474',
+      sidebarTextActive: '#4A2234',
+      sidebarLine: '#F3D4DE',
+      accent: '#E86B84',
+      accentSoft: '#FFE8EE',
+      accentDeep: '#C44D66',
+      ink: '#3A1F2C',
       muted: '#8B6572',
       card: '#FFFFFF',
-      line: '#F3D6DE',
+      line: '#F0D8E0',
       success: '#0F766E',
       warn: '#B45309',
+      fontSerif: SERIF_PLAYFAIR,
+      fontSans: SANS_INTER,
     }),
   },
   {
-    id: 'roseate',
-    name: 'Roseate',
-    swatches: ['#FBF4F1', '#C97B84', '#F3E4E0'],
+    id: 'blush',
+    name: 'Blush',
+    tagline: 'Dusty rose · warm',
+    swatches: ['#FBF5F2', '#C97B88', '#F5E6E4'],
     tokens: withAliases({
-      bg: '#FBF6F3',
-      sidebar: '#F8EEEA',
-      sidebarHover: '#F0DDD6',
-      sidebarActive: '#E8CFC6',
-      sidebarText: '#8F6B66',
-      sidebarTextActive: '#4A2E2A',
-      sidebarLine: '#E8D5CE',
-      accent: '#C97B84',
-      accentSoft: '#F5E4E6',
-      accentDeep: '#A85A64',
+      bg: '#FBF7F5',
+      sidebar: '#F8EFEC',
+      sidebarHover: '#F0DFDA',
+      sidebarActive: '#E8D2CC',
+      sidebarText: '#8F6B68',
+      sidebarTextActive: '#4A2E2C',
+      sidebarLine: '#E8D5D0',
+      accent: '#C97B88',
+      accentSoft: '#F5E6E4',
+      accentDeep: '#A85A68',
       ink: '#3F2A28',
       muted: '#8A6E6A',
       card: '#FFFFFF',
       line: '#EADDD8',
       success: '#0F766E',
       warn: '#B45309',
+      fontSerif: SERIF_CORMORANT,
+      fontSans: SANS_RALWAY,
     }),
   },
   {
     id: 'lilac',
     name: 'Lilac',
-    swatches: ['#F7F4FB', '#9B7EBD', '#EDE6F7'],
+    tagline: 'Soft violet · dreamy',
+    swatches: ['#F7F4FB', '#A78BBE', '#EDE6F7'],
     tokens: withAliases({
-      bg: '#F8F5FC',
+      bg: '#F9F6FC',
       sidebar: '#F3EEF9',
-      sidebarHover: '#E8DFF3',
-      sidebarActive: '#DDD0EC',
+      sidebarHover: '#E9E0F4',
+      sidebarActive: '#DDD2EC',
       sidebarText: '#7A6A94',
       sidebarTextActive: '#3D2F55',
       sidebarLine: '#DDD0EC',
-      accent: '#9B7EBD',
+      accent: '#A78BBE',
       accentSoft: '#EDE6F7',
-      accentDeep: '#7A5FA0',
+      accentDeep: '#8569A8',
       ink: '#2F2545',
       muted: '#716688',
       card: '#FFFFFF',
       line: '#E4DCEF',
       success: '#0F766E',
       warn: '#B45309',
+      fontSerif: SERIF_PLAYFAIR,
+      fontSans: SANS_INTER,
     }),
   },
   {
     id: 'petal',
     name: 'Petal',
-    swatches: ['#FFF8FB', '#F472B6', '#FCE7F3'],
+    tagline: 'Candy pink · playful',
+    swatches: ['#FFF8FB', '#EC6AA8', '#FCE7F3'],
     tokens: withAliases({
       bg: '#FFF9FC',
       sidebar: '#FFF1F7',
@@ -135,7 +157,7 @@ export const ADMIN_PALETTES: AdminPalette[] = [
       sidebarText: '#A85888',
       sidebarTextActive: '#6B2148',
       sidebarLine: '#F5D0E4',
-      accent: '#EC4899',
+      accent: '#EC6AA8',
       accentSoft: '#FCE7F3',
       accentDeep: '#DB2777',
       ink: '#4A1D36',
@@ -144,12 +166,15 @@ export const ADMIN_PALETTES: AdminPalette[] = [
       line: '#F5D6E6',
       success: '#0F766E',
       warn: '#B45309',
+      fontSerif: SERIF_CORMORANT,
+      fontSans: SANS_MONTSERRAT,
     }),
   },
   {
-    id: 'champagne',
-    name: 'Champagne',
-    swatches: ['#FBF7F0', '#C4A574', '#F3EBD8'],
+    id: 'cream',
+    name: 'Cream',
+    tagline: 'Champagne · soft gold',
+    swatches: ['#FBF7F0', '#C9A87C', '#F3EBD8'],
     tokens: withAliases({
       bg: '#FBF8F2',
       sidebar: '#F7F1E6',
@@ -158,21 +183,24 @@ export const ADMIN_PALETTES: AdminPalette[] = [
       sidebarText: '#8A7A5E',
       sidebarTextActive: '#3F3424',
       sidebarLine: '#E5D7BE',
-      accent: '#C4A574',
+      accent: '#C9A87C',
       accentSoft: '#F3EBD8',
-      accentDeep: '#A68654',
+      accentDeep: '#A88858',
       ink: '#3A3124',
       muted: '#7A6E58',
       card: '#FFFFFF',
       line: '#E8DFD0',
       success: '#0F766E',
       warn: '#B45309',
+      fontSerif: SERIF_CORMORANT,
+      fontSans: SANS_RALWAY,
     }),
   },
   {
     id: 'porcelain',
     name: 'Porcelain',
-    swatches: ['#FFFFFF', '#E8A0B0', '#F4F1EF'],
+    tagline: 'Clean white · whisper pink',
+    swatches: ['#FAF8F7', '#E8A0B0', '#FCEEF1'],
     tokens: withAliases({
       bg: '#F7F5F3',
       sidebar: '#FFFFFF',
@@ -190,12 +218,15 @@ export const ADMIN_PALETTES: AdminPalette[] = [
       line: '#E8E2DF',
       success: '#0F766E',
       warn: '#B45309',
+      fontSerif: SERIF_PLAYFAIR,
+      fontSans: SANS_INTER,
     }),
   },
   {
     id: 'sakura',
     name: 'Sakura',
-    swatches: ['#FFF5F3', '#F0908A', '#FFE8E4'],
+    tagline: 'Cherry soft · fresh',
+    swatches: ['#FFF6F4', '#E88B86', '#FFE8E4'],
     tokens: withAliases({
       bg: '#FFF8F6',
       sidebar: '#FFF2EF',
@@ -204,7 +235,7 @@ export const ADMIN_PALETTES: AdminPalette[] = [
       sidebarText: '#A86B66',
       sidebarTextActive: '#5C2E2A',
       sidebarLine: '#F5D5CE',
-      accent: '#F0908A',
+      accent: '#E88B86',
       accentSoft: '#FFE8E4',
       accentDeep: '#D46E68',
       ink: '#3D2422',
@@ -213,12 +244,15 @@ export const ADMIN_PALETTES: AdminPalette[] = [
       line: '#F0DCD8',
       success: '#0F766E',
       warn: '#B45309',
+      fontSerif: SERIF_CORMORANT,
+      fontSans: SANS_RALWAY,
     }),
   },
   {
-    id: 'mist',
-    name: 'Mist',
-    swatches: ['#F4F7FA', '#7BA3C4', '#E4EEF5'],
+    id: 'powder',
+    name: 'Powder',
+    tagline: 'Sky soft · cool calm',
+    swatches: ['#F5F8FB', '#8BAFCA', '#E4EEF5'],
     tokens: withAliases({
       bg: '#F5F8FB',
       sidebar: '#EEF3F8',
@@ -227,7 +261,7 @@ export const ADMIN_PALETTES: AdminPalette[] = [
       sidebarText: '#6A8094',
       sidebarTextActive: '#2A3A4A',
       sidebarLine: '#D0DEEA',
-      accent: '#7BA3C4',
+      accent: '#8BAFCA',
       accentSoft: '#E4EEF5',
       accentDeep: '#5A849E',
       ink: '#243040',
@@ -236,59 +270,25 @@ export const ADMIN_PALETTES: AdminPalette[] = [
       line: '#D8E2EA',
       success: '#0F766E',
       warn: '#B45309',
-    }),
-  },
-  {
-    id: 'coral',
-    name: 'Coral open',
-    swatches: ['#FFF6F4', '#E85A6B', '#FFE6E2'],
-    tokens: withAliases({
-      bg: '#FFF8F6',
-      sidebar: '#FFF1EE',
-      sidebarHover: '#FFE2DC',
-      sidebarActive: '#FFD2C8',
-      sidebarText: '#A85A58',
-      sidebarTextActive: '#5C2428',
-      sidebarLine: '#F5D0C8',
-      accent: '#E85A6B',
-      accentSoft: '#FCE8EB',
-      accentDeep: '#C43D4E',
-      ink: '#3A1E22',
-      muted: '#8B5E62',
-      card: '#FFFFFF',
-      line: '#F0D8D4',
-      success: '#0F766E',
-      warn: '#B45309',
-    }),
-  },
-  {
-    id: 'midnight',
-    name: 'Midnight',
-    swatches: ['#12141A', '#E85A7A', '#EEF0F4'],
-    tokens: withAliases({
-      bg: '#EEF0F4',
-      sidebar: '#12141A',
-      sidebarHover: '#1C1F28',
-      sidebarActive: '#262B36',
-      sidebarText: '#9AA3B2',
-      sidebarTextActive: '#FFFFFF',
-      sidebarLine: 'rgba(255,255,255,0.08)',
-      accent: '#E85A7A',
-      accentSoft: '#FCE8EB',
-      accentDeep: '#C43D5C',
-      ink: '#12141A',
-      muted: '#5A6370',
-      card: '#FFFFFF',
-      line: '#DDE1E8',
-      success: '#0F766E',
-      warn: '#B45309',
+      fontSerif: SERIF_PLAYFAIR,
+      fontSans: SANS_INTER,
     }),
   },
 ];
 
-/** Bumped so older dark-only palette ids fall back cleanly. */
-export const ADMIN_PALETTE_STORAGE_KEY = 'perg_admin_palette_v2';
-export const DEFAULT_ADMIN_PALETTE_ID: AdminPaletteId = 'peony';
+/** Bumped when palette ids / shape change (v2 → v3: Standard + typography). */
+export const ADMIN_PALETTE_STORAGE_KEY = 'perg_admin_palette_v3';
+export const DEFAULT_ADMIN_PALETTE_ID: AdminPaletteId = 'standard';
+
+/** Map legacy stored ids onto the new set. */
+const LEGACY_PALETTE_MAP: Record<string, AdminPaletteId> = {
+  peony: 'standard',
+  roseate: 'blush',
+  champagne: 'cream',
+  mist: 'powder',
+  coral: 'sakura',
+  midnight: 'porcelain',
+};
 
 export function getAdminPalette(id: string | null | undefined): AdminPalette {
   return ADMIN_PALETTES.find((p) => p.id === id) || ADMIN_PALETTES[0];
@@ -298,6 +298,15 @@ export function readStoredAdminPaletteId(): AdminPaletteId {
   try {
     const raw = localStorage.getItem(ADMIN_PALETTE_STORAGE_KEY);
     if (raw && ADMIN_PALETTES.some((p) => p.id === raw)) return raw as AdminPaletteId;
+    // Migrate from v2 key if present
+    const legacy = localStorage.getItem('perg_admin_palette_v2');
+    if (legacy) {
+      const mapped = LEGACY_PALETTE_MAP[legacy] || (ADMIN_PALETTES.some((p) => p.id === legacy) ? legacy as AdminPaletteId : null);
+      if (mapped) {
+        localStorage.setItem(ADMIN_PALETTE_STORAGE_KEY, mapped);
+        return mapped;
+      }
+    }
   } catch {
     // private mode / SSR
   }
@@ -317,4 +326,11 @@ export function applyAdminTokens(target: AdminTokens, tokens: AdminTokens): void
   (Object.keys(tokens) as (keyof AdminTokens)[]).forEach((k) => {
     target[k] = tokens[k];
   });
+}
+
+/** Push typography CSS vars onto the admin shell element. */
+export function applyAdminTypography(el: HTMLElement | null, tokens: AdminTokens): void {
+  if (!el) return;
+  el.style.setProperty('--admin-font-serif', tokens.fontSerif);
+  el.style.setProperty('--admin-font-sans', tokens.fontSans);
 }

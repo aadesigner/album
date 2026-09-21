@@ -82,8 +82,17 @@ async function loadRenderInput(projectId: number): Promise<{
   const renderPages: PdfRenderPage[] = pages.map((p) => {
     let elements: PdfRenderPage["elements"] = [];
     try {
-      const parsed = p.contentJson ? JSON.parse(p.contentJson) : [];
-      if (Array.isArray(parsed)) elements = parsed;
+      let parsed: unknown = p.contentJson ? JSON.parse(p.contentJson) : [];
+      // Tolerate accidental double-encoding from older clients.
+      if (typeof parsed === "string") {
+        try { parsed = JSON.parse(parsed); } catch { /* keep string */ }
+      }
+      if (Array.isArray(parsed)) {
+        elements = parsed as PdfRenderPage["elements"];
+      } else if (parsed && typeof parsed === "object" && Array.isArray((parsed as { elements?: unknown }).elements)) {
+        // Some older drafts wrapped the array as { elements: [...] }.
+        elements = (parsed as { elements: PdfRenderPage["elements"] }).elements;
+      }
     } catch {
       // Malformed content on a single page shouldn't abort the whole PDF.
     }

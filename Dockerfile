@@ -50,6 +50,11 @@ ENV CI=true \
     BASE_PATH=/ \
     NODE_OPTIONS="--max-old-space-size=384"
 
+# DejaVu fonts for print PDF text (@napi-rs/canvas GlobalFonts).
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends fonts-dejavu-core \
+ && rm -rf /var/lib/apt/lists/*
+
 RUN corepack enable && corepack prepare pnpm@11.8.0 --activate
 
 COPY --from=build /app /app

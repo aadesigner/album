@@ -4,9 +4,11 @@ import {
   subcategoriesTable,
   bookSizesTable,
   appSettingsTable,
+  layoutsTable,
 } from "@workspace/db-tsconfig";
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
+import { BUILTIN_LAYOUTS } from "./builtinLayouts";
 
 /** Default catalog so a fresh Railway/Postgres deploy can show Create Album. */
 const DEFAULT_CATEGORIES = [
@@ -147,6 +149,26 @@ export async function seedCatalog(): Promise<void> {
       .limit(1);
     if (!existing) {
       await db.insert(appSettingsTable).values(setting);
+    }
+  }
+
+  // Seed built-in page layouts (insert missing only — never overwrite edits).
+  {
+    const existingLayouts = await db
+      .select({ slug: layoutsTable.slug })
+      .from(layoutsTable);
+    const have = new Set(existingLayouts.map((r) => r.slug));
+    const toInsert = BUILTIN_LAYOUTS.filter((l) => !have.has(l.slug)).map((l) => ({
+      slug: l.slug,
+      nameAl: l.nameAl,
+      nameEn: l.nameEn,
+      previewIcon: l.previewIcon,
+      gridDefinitionJson: JSON.stringify({ cells: l.cells, category: l.category }),
+      isActive: true,
+    }));
+    if (toInsert.length > 0) {
+      await db.insert(layoutsTable).values(toInsert);
+      logger.info({ inserted: toInsert.length, total: BUILTIN_LAYOUTS.length }, "Seeded built-in layouts");
     }
   }
 

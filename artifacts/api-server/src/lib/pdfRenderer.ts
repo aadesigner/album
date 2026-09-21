@@ -1,24 +1,38 @@
-import { createCanvas, GlobalFonts, loadImage, type Canvas } from "@napi-rs/canvas";
+import { createCanvas, GlobalFonts, loadImage, type Canvas, type Image } from "@napi-rs/canvas";
 import { PDFDocument } from "pdf-lib";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 import { logger } from "./logger";
 
+const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
+
 // ── Fonts ────────────────────────────────────────────────────────────────────
-// The editor uses web fonts (Playfair Display, Inter) that aren't installed
-// on the server. DejaVu ships with the OS and is close enough in metrics to
-// avoid layout surprises without shipping font files.
+// Prefer bundled fonts next to the API package; fall back to common OS paths.
 let fontsRegistered = false;
 function ensureFonts() {
   if (fontsRegistered) return;
   fontsRegistered = true;
-  const candidates: [string, string][] = [
+
+  const bundled = [
+    [path.join(MODULE_DIR, "..", "assets", "fonts", "DejaVuSerif.ttf"), "DejaVu Serif"],
+    [path.join(MODULE_DIR, "..", "assets", "fonts", "DejaVuSerif-Bold.ttf"), "DejaVu Serif"],
+    [path.join(MODULE_DIR, "..", "assets", "fonts", "DejaVuSans.ttf"), "DejaVu Sans"],
+    [path.join(MODULE_DIR, "..", "assets", "fonts", "DejaVuSans-Bold.ttf"), "DejaVu Sans"],
+    [path.join(process.cwd(), "assets", "fonts", "DejaVuSerif.ttf"), "DejaVu Serif"],
+    [path.join(process.cwd(), "assets", "fonts", "DejaVuSans.ttf"), "DejaVu Sans"],
+  ] as const;
+
+  const system: [string, string][] = [
     ["/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf", "DejaVu Serif"],
     ["/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf", "DejaVu Serif"],
     ["/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "DejaVu Sans"],
     ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", "DejaVu Sans"],
+    ["C:/Windows/Fonts/georgia.ttf", "DejaVu Serif"],
+    ["C:/Windows/Fonts/arial.ttf", "DejaVu Sans"],
   ];
-  for (const [file, family] of candidates) {
+
+  for (const [file, family] of [...bundled, ...system]) {
     try {
       if (fs.existsSync(file)) GlobalFonts.registerFromPath(file, family);
     } catch (err) {
@@ -29,31 +43,38 @@ function ensureFonts() {
 
 function resolveFontFamily(family?: string): string {
   const f = (family || "").toLowerCase();
-  if (f.includes("georgia") || f.includes("playfair") || f.includes("serif")) {
+  if (
+    f.includes("georgia") ||
+    f.includes("playfair") ||
+    f.includes("cormorant") ||
+    f.includes("times") ||
+    f.includes("serif") ||
+    f.includes("vibes") ||
+    f.includes("script") ||
+    f.includes("pacifico") ||
+    f.includes("dancing")
+  ) {
     return "DejaVu Serif";
   }
   return "DejaVu Sans";
 }
 
 // ── Must match the editor's design canvas exactly ───────────────────────────
-// DESIGN_W is the fixed logical canvas width used by every book size; the
-// canvas *height* varies per book aspect ratio (see getCanvasHeight below) so
-// content is never stretched on non-3:4 books. DESIGN_H is only the 3:4
-// reference height (kept for the common case / as a fallback).
 const DESIGN_W = 600;
 const DESIGN_H = 800;
 const PAPER_COLOR = "#FEFDF9";
 
-/** Mirrors designs.ts's getCanvasHeight() on the client — duplicated here
- *  because this is a separate package; keep the formula identical. */
+/** Mirrors designs.ts getCanvasHeight() — keep formula identical. */
 function getCanvasHeight(bookWidthCm: number, bookHeightCm: number): number {
   if (!bookWidthCm || !bookHeightCm) return DESIGN_H;
   return Math.round(DESIGN_W * (bookHeightCm / bookWidthCm));
 }
 
-// Print resolution: 300 DPI is the standard for sharp photo-book output.
+// Print resolution: 300 DPI — standard for photo-book print output.
 const PRINT_DPI = 300;
 const CM_TO_INCH = 1 / 2.54;
+/** High JPEG quality for print (balance size vs sharpness). */
+const PRINT_JPEG_QUALITY = 94;
 
 export interface PdfRenderElement {
   id: string;
@@ -82,12 +103,33 @@ export interface PdfRenderElement {
   align?: "left" | "center" | "right";
   lineHeight?: number;
   letterSpacing?: number;
+  cropFocusX?: number;
+  cropFocusY?: number;
 }
 
 export interface PdfRenderPage {
   pageNumber?: number;
   role: string;
   elements: PdfRenderElement[];
+}
+
+/** object-fit: cover crop in source pixels — matches client generatePDF / designs.ts */
+function coverCropRect(
+  naturalW: number,
+  naturalH: number,
+  boxW: number,
+  boxH: number,
+  focusX = 0.5,
+  focusY = 0.5,
+): { x: number; y: number; width: number; height: number } {
+  const scale = Math.max(boxW / Math.max(1, naturalW), boxH / Math.max(1, naturalH));
+  const width = boxW / scale;
+  const height = boxH / scale;
+  const maxX = Math.max(0, naturalW - width);
+  const maxY = Math.max(0, naturalH - height);
+  const fx = Math.min(1, Math.max(0, focusX));
+  const fy = Math.min(1, Math.max(0, focusY));
+  return { x: maxX * fx, y: maxY * fy, width, height };
 }
 
 function roundRectPath(
@@ -136,50 +178,124 @@ function wrapLines(
   return out;
 }
 
-// Resolve an uploaded-photo URL (e.g. "/api/uploads/files/xyz.jpg") to the
-// local file on disk, avoiding a network round-trip through our own server.
-// Also resolves built-in cover art under /designs/*.
-function resolveLocalImagePath(src: string, uploadsDir: string): string | null {
-  const uploadMatch = src.match(/\/api\/uploads\/files\/([\w.\-]+)$/);
-  if (uploadMatch) return path.join(uploadsDir, uploadMatch[1]);
+function designAssetDirs(): string[] {
+  return [
+    // Copied next to the bundled dist/ by build.mjs
+    path.join(MODULE_DIR, "assets", "designs"),
+    path.join(process.cwd(), "assets", "designs"),
+    path.join(MODULE_DIR, "..", "assets", "designs"),
+    path.join(MODULE_DIR, "..", "..", "assets", "designs"),
+    path.join(process.cwd(), "public", "designs"),
+    path.join(process.cwd(), "artifacts", "api-server", "assets", "designs"),
+    path.join(process.cwd(), "artifacts", "api-server", "dist", "assets", "designs"),
+    path.join(process.cwd(), "artifacts", "pergjithmone", "public", "designs"),
+    path.join(MODULE_DIR, "..", "..", "pergjithmone", "public", "designs"),
+  ];
+}
 
-  const designMatch = src.match(/\/designs\/([\w.\-]+)$/);
-  if (designMatch) {
-    const file = designMatch[1];
-    const candidates = [
-      path.join(process.cwd(), "assets", "designs", file),
-      path.join(process.cwd(), "public", "designs", file),
-      path.join(process.cwd(), "../pergjithmone/public/designs", file),
-    ];
-    return candidates.find((p) => fs.existsSync(p)) ?? null;
+/**
+ * Resolve an image src from page contentJson to a local file path, or return
+ * a fetchable absolute URL. Handles absolute site URLs, query strings, and
+ * built-in /designs/* cover art.
+ */
+function resolveUploadFile(filename: string, uploadsDir: string): string | null {
+  const candidates = [
+    path.join(uploadsDir, filename),
+    path.join(process.cwd(), "uploads", filename),
+  ];
+  if (process.env.DATA_DIR) {
+    candidates.push(path.join(process.env.DATA_DIR, "uploads", filename));
   }
+  for (const filePath of candidates) {
+    if (fs.existsSync(filePath)) return filePath;
+  }
+  return null;
+}
+
+function resolveImageSource(
+  src: string,
+  uploadsDir: string,
+): { kind: "file"; path: string } | { kind: "url"; url: string } | null {
+  if (!src) return null;
+  if (src.startsWith("data:")) return { kind: "url", url: src };
+
+  let pathname = src;
+  try {
+    if (/^https?:\/\//i.test(src)) {
+      const u = new URL(src);
+      pathname = u.pathname;
+      const uploadInUrl = pathname.match(/\/api\/uploads\/files\/([^/?#]+)/i);
+      if (uploadInUrl) {
+        const filePath = resolveUploadFile(decodeURIComponent(uploadInUrl[1]), uploadsDir);
+        if (filePath) return { kind: "file", path: filePath };
+      }
+      const designInUrl = pathname.match(/\/designs\/([^/?#]+)/i);
+      if (designInUrl) {
+        const file = decodeURIComponent(designInUrl[1]);
+        for (const dir of designAssetDirs()) {
+          const candidate = path.join(dir, file);
+          if (fs.existsSync(candidate)) return { kind: "file", path: candidate };
+        }
+      }
+      // External wallpaper (Unsplash, etc.)
+      return { kind: "url", url: src };
+    }
+  } catch {
+    // fall through
+  }
+
+  pathname = pathname.split("?")[0].split("#")[0];
+
+  const uploadMatch = pathname.match(/\/api\/uploads\/files\/([^/]+)$/i)
+    || pathname.match(/^\/?uploads\/files\/([^/]+)$/i);
+  if (uploadMatch) {
+    const filePath = resolveUploadFile(decodeURIComponent(uploadMatch[1]), uploadsDir);
+    if (filePath) return { kind: "file", path: filePath };
+    logger.warn({ src }, "PDF render: upload file missing on disk");
+    return null;
+  }
+
+  const designMatch = pathname.match(/\/designs\/([^/]+)$/i);
+  if (designMatch) {
+    const file = decodeURIComponent(designMatch[1]);
+    for (const dir of designAssetDirs()) {
+      const candidate = path.join(dir, file);
+      if (fs.existsSync(candidate)) return { kind: "file", path: candidate };
+    }
+    logger.warn({ src, file }, "PDF render: design asset not found");
+    return null;
+  }
+
+  if (path.isAbsolute(pathname) && fs.existsSync(pathname)) {
+    return { kind: "file", path: pathname };
+  }
+
   return null;
 }
 
 async function loadPageImages(
   elements: PdfRenderElement[],
   uploadsDir: string,
-): Promise<Map<string, import("@napi-rs/canvas").Image>> {
-  const cache = new Map<string, import("@napi-rs/canvas").Image>();
-  await Promise.all(
-    elements
-      .filter((e) => (e.type === "image" || e.type === "background") && e.src)
-      .map(async (e) => {
-        const src = e.src!;
-        if (cache.has(src)) return;
-        try {
-          const localPath = resolveLocalImagePath(src, uploadsDir);
-          if (localPath && fs.existsSync(localPath)) {
-            cache.set(src, await loadImage(localPath));
-          } else {
-            // Fallback for any non-local src (external wallpapers, etc.).
-            cache.set(src, await loadImage(src));
-          }
-        } catch (err) {
-          logger.warn({ err, src }, "PDF render: failed to load page image");
+): Promise<Map<string, Image>> {
+  const cache = new Map<string, Image>();
+  const jobs = elements
+    .filter((e) => (e.type === "image" || e.type === "background") && e.src)
+    .map(async (e) => {
+      const src = e.src!;
+      if (cache.has(src)) return;
+      try {
+        const resolved = resolveImageSource(src, uploadsDir);
+        if (!resolved) return;
+        if (resolved.kind === "file") {
+          cache.set(src, await loadImage(resolved.path));
+        } else {
+          cache.set(src, await loadImage(resolved.url));
         }
-      }),
-  );
+      } catch (err) {
+        logger.warn({ err, src }, "PDF render: failed to load page image");
+      }
+    });
+  await Promise.all(jobs);
   return cache;
 }
 
@@ -193,10 +309,6 @@ async function renderPageToCanvas(
   ensureFonts();
   const canvas = createCanvas(outW, outH);
   const ctx = canvas.getContext("2d");
-  // Elements are authored in DESIGN_W × canvasH logical pixels. Scale each
-  // axis independently onto the real output size — for a well-formed
-  // canvasH (derived from the same aspect ratio as outW/outH) these two
-  // factors come out equal, so this never distorts content.
   const scaleX = outW / DESIGN_W;
   const scaleY = outH / canvasH;
   ctx.scale(scaleX, scaleY);
@@ -219,17 +331,22 @@ async function renderPageToCanvas(
     if (el.type === "background") {
       const wallpaper = el.src ? images.get(el.src) : undefined;
       if (wallpaper) {
-        const sx = DESIGN_W / wallpaper.width;
-        const sy = canvasH / wallpaper.height;
-        const s = Math.max(sx, sy);
-        const cw = DESIGN_W / s;
-        const ch = canvasH / s;
-        const cx = (wallpaper.width - cw) / 2;
-        const cy = (wallpaper.height - ch) / 2;
-        ctx.drawImage(wallpaper, cx, cy, cw, ch, 0, 0, DESIGN_W, canvasH);
+        const crop = coverCropRect(
+          wallpaper.width,
+          wallpaper.height,
+          DESIGN_W,
+          canvasH,
+          el.cropFocusX ?? 0.5,
+          el.cropFocusY ?? 0.5,
+        );
+        ctx.drawImage(
+          wallpaper,
+          crop.x, crop.y, crop.width, crop.height,
+          0, 0, DESIGN_W, canvasH,
+        );
       } else if (el.bgGradientFrom) {
         const ex = el.bgGradientDir === "lr" ? DESIGN_W : el.bgGradientDir === "diag" ? DESIGN_W : 0;
-        const ey = el.bgGradientDir === "lr" ? 0 : el.bgGradientDir === "diag" ? canvasH : canvasH;
+        const ey = el.bgGradientDir === "lr" ? 0 : canvasH;
         const grad = ctx.createLinearGradient(0, 0, ex, ey);
         grad.addColorStop(0, el.bgGradientFrom);
         grad.addColorStop(1, el.bgGradientTo || "#fff");
@@ -261,23 +378,30 @@ async function renderPageToCanvas(
     } else if (el.type === "image" && el.src) {
       const img = images.get(el.src);
       if (img) {
-        const sx = el.w / img.width;
-        const sy = el.h / img.height;
-        const s = Math.max(sx, sy);
-        const cw = el.w / s;
-        const ch = el.h / s;
-        const cx = (img.width - cw) / 2;
-        const cy = (img.height - ch) / 2;
-
+        const crop = coverCropRect(
+          img.width,
+          img.height,
+          el.w,
+          el.h,
+          el.cropFocusX ?? 0.5,
+          el.cropFocusY ?? 0.5,
+        );
         ctx.save();
         ctx.beginPath();
         ctx.rect(el.x, el.y, el.w, el.h);
         ctx.clip();
-        ctx.drawImage(img, cx, cy, cw, ch, el.x, el.y, el.w, el.h);
+        ctx.drawImage(
+          img,
+          crop.x, crop.y, crop.width, crop.height,
+          el.x, el.y, el.w, el.h,
+        );
         ctx.restore();
       } else {
         ctx.fillStyle = "#D8D0C4";
         ctx.fillRect(el.x, el.y, el.w, el.h);
+        ctx.strokeStyle = "#B8AFA3";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(el.x + 1, el.y + 1, el.w - 2, el.h - 2);
       }
     } else if (el.type === "text" && el.text) {
       const pad = 6;
@@ -287,6 +411,7 @@ async function renderPageToCanvas(
       const style = el.fontStyle ?? "normal";
       const color = el.fill ?? "#1a1a1a";
       const alignment = el.align ?? "center";
+      const letterSpacing = el.letterSpacing ?? 0;
 
       const isBold = style.includes("bold");
       const isItalic = style.includes("italic");
@@ -305,10 +430,24 @@ async function renderPageToCanvas(
 
       let startY = el.y + pad;
       for (const line of lines) {
-        let x = el.x + pad;
-        if (alignment === "center") x = el.x + el.w / 2 - ctx.measureText(line).width / 2;
-        if (alignment === "right") x = el.x + el.w - pad - ctx.measureText(line).width;
-        ctx.fillText(line, x, startY);
+        if (letterSpacing) {
+          const chars = [...line];
+          let totalW = 0;
+          for (const ch of chars) totalW += ctx.measureText(ch).width + letterSpacing;
+          totalW -= letterSpacing;
+          let x = el.x + pad;
+          if (alignment === "center") x = el.x + (el.w - totalW) / 2;
+          if (alignment === "right") x = el.x + el.w - pad - totalW;
+          for (const ch of chars) {
+            ctx.fillText(ch, x, startY);
+            x += ctx.measureText(ch).width + letterSpacing;
+          }
+        } else {
+          let x = el.x + pad;
+          if (alignment === "center") x = el.x + el.w / 2 - ctx.measureText(line).width / 2;
+          if (alignment === "right") x = el.x + el.w - pad - ctx.measureText(line).width;
+          ctx.fillText(line, x, startY);
+        }
         startY += lineH;
         if (startY > el.y + el.h) break;
       }
@@ -337,12 +476,33 @@ export async function renderProjectPdf(params: {
 }): Promise<void> {
   const { pages, bookWidthCm, bookHeightCm, uploadsDir, outputPath } = params;
 
+  if (!bookWidthCm || !bookHeightCm || bookWidthCm <= 0 || bookHeightCm <= 0) {
+    throw new Error(`Invalid book size for PDF: ${bookWidthCm}×${bookHeightCm} cm`);
+  }
+
   const outW = Math.round(bookWidthCm * CM_TO_INCH * PRINT_DPI);
   const outH = Math.round(bookHeightCm * CM_TO_INCH * PRINT_DPI);
   const canvasH = getCanvasHeight(bookWidthCm, bookHeightCm);
 
   const ordered = [...pages].sort((a, b) => (a.pageNumber ?? 0) - (b.pageNumber ?? 0));
   const toRender = ordered.filter((p) => p.role !== "locked_left" && p.role !== "locked_right");
+
+  if (toRender.length === 0) {
+    throw new Error("No printable pages found for PDF");
+  }
+
+  logger.info(
+    {
+      pages: toRender.length,
+      bookWidthCm,
+      bookHeightCm,
+      outW,
+      outH,
+      canvasH,
+      dpi: PRINT_DPI,
+    },
+    "Rendering print PDF",
+  );
 
   const pdf = await PDFDocument.create();
   const pointsPerCm = 72 / 2.54;
@@ -351,14 +511,11 @@ export async function renderProjectPdf(params: {
 
   for (const page of toRender) {
     const canvas = await renderPageToCanvas(page, outW, outH, canvasH, uploadsDir);
-    const jpegBuffer = canvas.toBuffer("image/jpeg", 92);
+    const jpegBuffer = canvas.toBuffer("image/jpeg", PRINT_JPEG_QUALITY);
     const jpegImage = await pdf.embedJpg(jpegBuffer);
     const pdfPage = pdf.addPage([pageWidthPt, pageHeightPt]);
     pdfPage.drawImage(jpegImage, { x: 0, y: 0, width: pageWidthPt, height: pageHeightPt });
 
-    // Rendering + JPEG-encoding a page is CPU-bound and synchronous; yield
-    // to the event loop between pages so a 30+ page book doesn't starve the
-    // HTTP server (health checks, other requests) for several seconds straight.
     await new Promise((r) => setImmediate(r));
   }
 
