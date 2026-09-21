@@ -40,6 +40,59 @@ function displayContact(u: { phone?: string | null; email?: string | null }): st
   return email || '—';
 }
 
+type UserFilter = 'all' | 'ordered' | 'not_ordered' | 'has_projects' | 'no_projects' | 'banned' | 'active' | 'admin' | 'user';
+
+const USER_FILTERS: { id: UserFilter; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'ordered', label: 'Ordered' },
+  { id: 'not_ordered', label: 'Not ordered' },
+  { id: 'has_projects', label: 'Has albums' },
+  { id: 'no_projects', label: 'No albums' },
+  { id: 'active', label: 'Active' },
+  { id: 'banned', label: 'Banned' },
+  { id: 'admin', label: 'Admins' },
+  { id: 'user', label: 'Users' },
+];
+
+function csvEscape(value: unknown): string {
+  const s = value == null ? '' : String(value);
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+function downloadUsersCsv(rows: any[], filter: UserFilter) {
+  const headers = [
+    'id', 'name', 'phone', 'email', 'role', 'status',
+    'orders', 'albums', 'joined', 'last_login', 'admin_note',
+  ];
+  const lines = [
+    headers.join(','),
+    ...rows.map((u) => [
+      u.id,
+      u.name || '',
+      u.phone || '',
+      displayEmail(u.email),
+      u.role || '',
+      u.isBanned ? 'banned' : 'active',
+      u.orderCount ?? 0,
+      u.projectCount ?? 0,
+      u.createdAt ? format(new Date(u.createdAt), 'yyyy-MM-dd HH:mm') : '',
+      u.lastLoginAt ? format(new Date(u.lastLoginAt), 'yyyy-MM-dd HH:mm') : '',
+      u.adminNote || '',
+    ].map(csvEscape).join(',')),
+  ];
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = format(new Date(), 'yyyy-MM-dd');
+  a.href = url;
+  a.download = `users-${filter === 'all' ? 'all' : filter}-${stamp}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 // ── Create user modal ─────────────────────────────────────────────────────────
 function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   // Regular members are identified by phone (matching public sign-up); admins created
@@ -525,6 +578,8 @@ function BanConfirm({
 export default function AdminUsers() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [filter, setFilter] = useState<UserFilter>('all');
+  const [exporting, setExporting] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -534,9 +589,14 @@ export default function AdminUsers() {
   const [albumsTarget, setAlbumsTarget] = useState<{ id: number; name: string } | null>(null);
   const [editTarget, setEditTarget] = useState<{ id: number; name: string | null; email: string; phone: string | null; adminNote?: string | null } | null>(null);
 
-  const { user: me } = useAuth();
+  const { user: me, getToken } = useAuth();
   const queryClient = useQueryClient();
-  const { data: usersData, isLoading, refetch } = useListAdminUsers({ page: 1, limit: 50, search: debouncedSearch || undefined });
+  const { data: usersData, isLoading, refetch } = useListAdminUsers({
+    page: 1,
+    limit: 50,
+    search: debouncedSearch || undefined,
+    filter: filter === 'all' ? undefined : filter,
+  });
   const updateUser = useUpdateAdminUser();
   const deleteUser = useDeleteAdminUser();
 
@@ -544,6 +604,28 @@ export default function AdminUsers() {
     const t = setTimeout(() => setDebouncedSearch(search), 350);
     return () => clearTimeout(t);
   }, [search]);
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const token = getToken();
+      const params = new URLSearchParams({ page: '1', limit: '5000' });
+      if (debouncedSearch) params.set('search', debouncedSearch);
+      if (filter !== 'all') params.set('filter', filter);
+      const r = await fetch(`${BASE}/api/admin/users?${params}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: 'include',
+      });
+      if (!r.ok) throw new Error('Export failed');
+      const data = await r.json();
+      const rows = Array.isArray(data?.data) ? data.data : [];
+      downloadUsersCsv(rows, filter);
+    } catch {
+      window.alert('Could not export users. Try again.');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const handleBanConfirm = async () => {
     if (!banTarget) return;
@@ -620,7 +702,30 @@ export default function AdminUsers() {
             Community
           </p>
           <h1 className="text-3xl font-serif font-semibold mb-1" style={{ color: ADMIN.ink }}>Members</h1>
-          <p className="text-sm" style={{ color: ADMIN.muted }}>{total} registered</p>
+          <p className="text-sm" style={{ color: ADMIN.muted }}>
+            {total} {filter === 'all' ? 'registered' : `matching "${USER_FILTERS.find(f => f.id === filter)?.label}"`}
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-1.5 mb-4">
+          {USER_FILTERS.map((f) => {
+            const active = filter === f.id;
+            return (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setFilter(f.id)}
+                className="px-3 py-1.5 rounded-full text-[11px] font-semibold border transition-colors"
+                style={{
+                  borderColor: active ? ADMIN.blush : ADMIN.line,
+                  background: active ? ADMIN.blushSoft : ADMIN.card,
+                  color: active ? ADMIN.blushDeep : ADMIN.muted,
+                }}
+              >
+                {f.label}
+              </button>
+            );
+          })}
         </div>
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-5">
@@ -629,12 +734,23 @@ export default function AdminUsers() {
             <Input
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Search by name or phone…"
+              placeholder="Search by name, phone, or email…"
               className="pl-9 rounded-2xl"
               style={{ borderColor: ADMIN.line }}
             />
           </div>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={exporting || isLoading}
+              className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-2xl border text-xs font-medium transition-colors disabled:opacity-50"
+              style={{ borderColor: ADMIN.line, color: ADMIN.ink, background: ADMIN.card }}
+              title="Download CSV of the current filter"
+            >
+              {exporting ? <RefreshCw size={14} className="animate-spin" /> : <Download size={14} />}
+              Export CSV
+            </button>
             <button onClick={() => refetch()} className="p-2.5 rounded-2xl border transition-colors"
               style={{ borderColor: ADMIN.line, color: ADMIN.muted }}>
               <RefreshCw size={14} />

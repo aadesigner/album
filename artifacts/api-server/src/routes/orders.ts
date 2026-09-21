@@ -6,6 +6,7 @@ import { requireAuth } from "../lib/auth";
 import { queueProjectPdfGeneration } from "../lib/generateProjectPdf";
 import { logger } from "../lib/logger";
 import { getSecuritySettings } from "../lib/securitySettings";
+import { findEmptyInnerPageNumbers } from "../lib/projectEditGuard";
 
 const router: IRouter = Router();
 
@@ -56,6 +57,23 @@ router.post("/orders", requireAuth, async (req, res): Promise<void> => {
 
   if (!project) {
     res.status(404).json({ error: "Project not found" });
+    return;
+  }
+
+  if (project.status === "ordered") {
+    res.status(403).json({ error: "This album has already been ordered." });
+    return;
+  }
+
+  const emptyPages = await findEmptyInnerPageNumbers(projectId);
+  if (emptyPages.length > 0) {
+    res.status(400).json({
+      error:
+        emptyPages.length === 1
+          ? `Page ${emptyPages[0]} is still empty. Add photos or text before ordering.`
+          : `Pages ${emptyPages.join(", ")} are still empty. Add photos or text before ordering.`,
+      emptyPages,
+    });
     return;
   }
 

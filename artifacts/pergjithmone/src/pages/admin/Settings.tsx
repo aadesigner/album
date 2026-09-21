@@ -8,8 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useForm } from 'react-hook-form';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormDescription } from '@/components/ui/form';
-import { DESIGN_CATEGORY_LABELS, mergeDesignMetas } from '@/lib/designMeta';
-import { parseCustomDesigns } from '@/lib/designs';
+import { DESIGN_CATEGORY_LABELS } from '@/lib/designMeta';
+import { parseCustomDesigns, buildDesignCatalog, designFrontElements } from '@/lib/designs';
+import { ResponsivePageThumb } from '@/components/PageThumb';
 import { Eye, EyeOff, Check, AlertTriangle, BookX, BookHeart, Settings, Wrench, DollarSign, Palette, ShieldAlert, FileLock2 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -180,13 +181,18 @@ export default function AdminSettings() {
     }
   };
 
-  const allDesignMetas = useMemo(
-    () => mergeDesignMetas(parseCustomDesigns(s?.customDesigns)),
-    [s?.customDesigns],
+  const designCatalog = useMemo(
+    () => buildDesignCatalog(
+      (s?.designOverrides && typeof s.designOverrides === 'object' && !Array.isArray(s.designOverrides))
+        ? s.designOverrides
+        : {},
+      parseCustomDesigns(s?.customDesigns),
+    ),
+    [s?.designOverrides, s?.customDesigns],
   );
 
   const designsByCategory = useMemo(() => {
-    const present = [...new Set(allDesignMetas.map(d => d.category))];
+    const present = [...new Set(designCatalog.map(d => d.category))];
     const order = [
       ...CATEGORY_ORDER.filter(c => present.includes(c)),
       ...present.filter(c => !CATEGORY_ORDER.includes(c)),
@@ -194,9 +200,9 @@ export default function AdminSettings() {
     return order.map(cat => ({
       cat,
       label: DESIGN_CATEGORY_LABELS[cat]?.en || cat,
-      designs: allDesignMetas.filter(d => d.category === cat),
+      designs: designCatalog.filter(d => d.category === cat),
     }));
-  }, [allDesignMetas]);
+  }, [designCatalog]);
 
   const maintenanceOn  = form.watch('maintenanceMode');
   const bookEnabled    = form.watch('bookCreationEnabled');
@@ -558,9 +564,16 @@ export default function AdminSettings() {
                             style={{ aspectRatio: '3/4', borderColor: hidden ? ADMIN.line : 'transparent' }}
                             title={hidden ? `Show "${d.name.en}"` : `Hide "${d.name.en}"`}
                           >
-                            {d.thumbPhoto
-                              ? <img src={d.thumbPhoto} alt={d.name.en} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
-                              : <div className="absolute inset-0" style={d.thumb} />}
+                            {(() => {
+                              const els = designFrontElements(d);
+                              return els.length > 0 ? (
+                                <div className="absolute inset-0">
+                                  <ResponsivePageThumb elements={els} className="absolute inset-0" />
+                                </div>
+                              ) : (
+                                <div className="absolute inset-0" style={d.thumb} />
+                              );
+                            })()}
                             <div className={`absolute top-1.5 right-1.5 w-5 h-5 rounded-full flex items-center justify-center ${
                               hidden ? 'bg-neutral-700/80' : 'bg-black/40 opacity-0 group-hover:opacity-100'
                             }`}>

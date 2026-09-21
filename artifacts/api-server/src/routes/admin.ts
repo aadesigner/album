@@ -13,7 +13,7 @@ import {
   siteAnalyticsTable,
 } from "@workspace/db-tsconfig";
 import { ipBlocklistTable } from "@workspace/db-tsconfig";
-import { eq, count, sql, desc, ilike, and, or, ne, inArray, gte } from "drizzle-orm";
+import { eq, count, sql, desc, ilike, and, or, ne, inArray, gte, lt } from "drizzle-orm";
 import { requireAdmin, invalidateCachedUser, hashPassword } from "../lib/auth";
 import { invalidatePendingBooksLimitCache } from "./projects";
 import {
@@ -25,8 +25,39 @@ import {
 import { invalidateIpBlocklistCache } from "../lib/ipBlocklist";
 import { queueProjectPdfGeneration, deleteProjectPdfFile } from "../lib/generateProjectPdf";
 import { logger } from "../lib/logger";
+import {
+  adminStatsCacheMeta,
+  getCachedAdminStats,
+  invalidateAdminStatsCache,
+  isAdminStatsRange,
+  resolveStatsRange,
+  setCachedAdminStats,
+  type AdminStatsRange,
+} from "../lib/adminStatsCache";
 
 const router: IRouter = Router();
+
+/** Shared sticky notes for all admins (app_settings.admin_notes). */
+type AdminStickyNote = { id: string; text: string; createdAt: string; updatedAt?: string };
+
+function parseAdminNotes(raw: string | undefined): AdminStickyNote[] {
+  try {
+    const parsed = JSON.parse(raw || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((n): n is AdminStickyNote =>
+        !!n && typeof n === "object" && typeof (n as any).id === "string" && typeof (n as any).text === "string")
+      .map((n) => ({
+        id: String(n.id).slice(0, 64),
+        text: String(n.text).slice(0, 2000),
+        createdAt: typeof n.createdAt === "string" ? n.createdAt : new Date().toISOString(),
+        ...(typeof n.updatedAt === "string" ? { updatedAt: n.updatedAt } : {}),
+      }))
+      .slice(0, 40);
+  } catch {
+    return [];
+  }
+}
 
 /** Operator accounts (seeded super-admin) stay out of every member-facing admin surface. */
 const notHiddenUser = eq(usersTable.isHidden, false);
@@ -74,36 +105,68 @@ function readSecuritySettings(map: Record<string, string>): SecuritySettings {
   return data;
 }
 
-// GET /admin/stats
+// GET /admin/stats?range=today|yesterday|week|month|last_month|last_3_months|year
+// Light in-memory cache (5 min TTL, one entry per range).
 router.get("/admin/stats", requireAdmin, async (req, res): Promise<void> => {
+  const rangeParam = (req.query.range as string) || "month";
+  const range: AdminStatsRange = isAdminStatsRange(rangeParam) ? rangeParam : "month";
+
+  const cached = getCachedAdminStats(range);
+  if (cached) {
+    res.setHeader("X-Admin-Stats-Cache", "HIT");
+    res.json(cached);
+    return;
+  }
+
   const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const bounds = resolveStatsRange(range, now);
+  const { start, end, grain, label: rangeLabel } = bounds;
 
-  // Money that counts as "earned" once the album has left the shop.
   const earnedStatuses = inArray(ordersTable.status, ["shipped", "delivered"]);
-  // Pipeline revenue excludes cancelled only.
   const activeOrder = ne(ordersTable.status, "cancelled");
-
-  // Prefer order.price_lek; if legacy rows stored 0, fall back to project price.
   const orderAmountSql = sql<number>`coalesce(nullif(${ordersTable.priceLek}, 0), ${projectsTable.totalPriceLek}, 0)`;
+
+  const inCreatedRange = and(
+    gte(ordersTable.createdAt, start),
+    lt(ordersTable.createdAt, end),
+  );
+  const inEarnedRange = and(
+    gte(ordersTable.updatedAt, start),
+    lt(ordersTable.updatedAt, end),
+  );
+  const inUserRange = and(
+    notHiddenUser,
+    gte(usersTable.createdAt, start),
+    lt(usersTable.createdAt, end),
+  );
+  const inProjectRange = and(
+    gte(projectsTable.createdAt, start),
+    lt(projectsTable.createdAt, end),
+  );
+
+  const trunc = grain === "hour" ? "hour" : "day";
 
   const [
     [usersCount],
     [ordersCount],
     [projectsCount],
-    [ordersMonth],
-    [revenue],
-    [revenueMonth],
-    [earned],
-    [earnedMonth],
-    [usersToday],
-    [usersWeek],
-    [visitorsToday],
-    [visitorsWeek],
-    [visitorsMonth],
+    [pendingCount],
+    [ordersInRange],
+    [revenueAll],
+    [revenueRange],
+    [earnedAll],
+    [earnedRange],
+    [usersInRange],
+    [projectsInRange],
+    [visitorsRange],
+    [wpClicksRange],
     [wpClicksTotal],
+    statusRows,
+    recentOrders,
+    recentUsers,
+    chartRows,
+    regRows,
+    orderChartRows,
   ] = await Promise.all([
     db.select({ count: count() }).from(usersTable).where(notHiddenUser),
     db.select({ count: count() }).from(ordersTable)
@@ -114,21 +177,20 @@ router.get("/admin/stats", requireAdmin, async (req, res): Promise<void> => {
       .where(notHiddenUser),
     db.select({ count: count() }).from(ordersTable)
       .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
-      .where(and(notHiddenUser, gte(ordersTable.createdAt, monthStart))),
-    // All-time pipeline revenue (non-cancelled)
+      .where(and(notHiddenUser, eq(ordersTable.status, "pending"))),
+    db.select({ count: count() }).from(ordersTable)
+      .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
+      .where(and(notHiddenUser, inCreatedRange)),
     db.select({ total: sql<number>`coalesce(sum(${orderAmountSql}), 0)` })
       .from(ordersTable)
       .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
       .leftJoin(projectsTable, eq(ordersTable.projectId, projectsTable.id))
       .where(and(notHiddenUser, activeOrder)),
-    // This calendar month — by order created date
     db.select({ total: sql<number>`coalesce(sum(${orderAmountSql}), 0)` })
       .from(ordersTable)
       .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
       .leftJoin(projectsTable, eq(ordersTable.projectId, projectsTable.id))
-      .where(and(notHiddenUser, activeOrder, gte(ordersTable.createdAt, monthStart))),
-    // Earned = shipped + delivered (all time). Use updatedAt so marking shipped
-    // this month counts even if the order was placed earlier.
+      .where(and(notHiddenUser, activeOrder, inCreatedRange)),
     db.select({ total: sql<number>`coalesce(sum(${orderAmountSql}), 0)` })
       .from(ordersTable)
       .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
@@ -138,18 +200,33 @@ router.get("/admin/stats", requireAdmin, async (req, res): Promise<void> => {
       .from(ordersTable)
       .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
       .leftJoin(projectsTable, eq(ordersTable.projectId, projectsTable.id))
-      .where(and(notHiddenUser, earnedStatuses, gte(ordersTable.updatedAt, monthStart))),
-    db.select({ count: count() }).from(usersTable).where(and(notHiddenUser, gte(usersTable.createdAt, todayStart))),
-    db.select({ count: count() }).from(usersTable).where(and(notHiddenUser, gte(usersTable.createdAt, weekAgo))),
-    db.select({ count: sql<number>`count(distinct ip)` }).from(siteAnalyticsTable).where(sql`${siteAnalyticsTable.event} = 'page_view' AND ${siteAnalyticsTable.createdAt} >= ${todayStart}`),
-    db.select({ count: sql<number>`count(distinct ip)` }).from(siteAnalyticsTable).where(sql`${siteAnalyticsTable.event} = 'page_view' AND ${siteAnalyticsTable.createdAt} >= ${weekAgo}`),
-    db.select({ count: sql<number>`count(distinct ip)` }).from(siteAnalyticsTable).where(sql`${siteAnalyticsTable.event} = 'page_view' AND ${siteAnalyticsTable.createdAt} >= ${monthStart}`),
+      .where(and(notHiddenUser, earnedStatuses, inEarnedRange)),
+    db.select({ count: count() }).from(usersTable).where(inUserRange),
+    db.select({ count: count() }).from(projectsTable)
+      .innerJoin(usersTable, eq(projectsTable.userId, usersTable.id))
+      .where(and(notHiddenUser, inProjectRange)),
+    db.select({ count: sql<number>`count(distinct ip)` }).from(siteAnalyticsTable).where(sql`
+      ${siteAnalyticsTable.event} = 'page_view'
+      AND ${siteAnalyticsTable.createdAt} >= ${start}
+      AND ${siteAnalyticsTable.createdAt} < ${end}
+    `),
+    db.select({ count: count() }).from(siteAnalyticsTable).where(sql`
+      ${siteAnalyticsTable.event} = 'wp_click'
+      AND ${siteAnalyticsTable.createdAt} >= ${start}
+      AND ${siteAnalyticsTable.createdAt} < ${end}
+    `),
     db.select({ count: count() }).from(siteAnalyticsTable).where(sql`${siteAnalyticsTable.event} = 'wp_click'`),
-  ]);
-
-  // These four don't depend on each other or on the batch above — run them
-  // concurrently instead of paying for four sequential round trips.
-  const [recentOrders, recentUsers, chartRows, regRows] = await Promise.all([
+    db
+      .select({
+        status: ordersTable.status,
+        count: count(),
+        revenue: sql<number>`coalesce(sum(${orderAmountSql}), 0)`,
+      })
+      .from(ordersTable)
+      .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
+      .leftJoin(projectsTable, eq(ordersTable.projectId, projectsTable.id))
+      .where(and(notHiddenUser, inCreatedRange))
+      .groupBy(ordersTable.status),
     db
       .select({
         id: ordersTable.id,
@@ -166,36 +243,57 @@ router.get("/admin/stats", requireAdmin, async (req, res): Promise<void> => {
       .from(ordersTable)
       .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
       .leftJoin(projectsTable, eq(ordersTable.projectId, projectsTable.id))
-      .where(notHiddenUser)
+      .where(and(notHiddenUser, inCreatedRange))
       .orderBy(desc(ordersTable.createdAt))
-      .limit(10),
-
+      .limit(8),
     db
-      .select({ id: usersTable.id, name: usersTable.name, phone: usersTable.phone, email: usersTable.email, createdAt: usersTable.createdAt })
+      .select({
+        id: usersTable.id,
+        name: usersTable.name,
+        phone: usersTable.phone,
+        email: usersTable.email,
+        createdAt: usersTable.createdAt,
+      })
       .from(usersTable)
-      .where(notHiddenUser)
+      .where(inUserRange)
       .orderBy(desc(usersTable.createdAt))
       .limit(6),
-
-    // 30-day chart data
     db.execute(sql`
       SELECT
-        date_trunc('day', created_at AT TIME ZONE 'UTC')::date::text AS date,
+        date_trunc(${sql.raw(`'${trunc}'`)}, created_at AT TIME ZONE 'UTC') AS bucket,
+        date_trunc(${sql.raw(`'${trunc}'`)}, created_at AT TIME ZONE 'UTC')::text AS date,
         count(distinct ip) FILTER (WHERE event = 'page_view') AS visitors,
         count(*) FILTER (WHERE event = 'wp_click') AS wp_clicks
       FROM site_analytics
-      WHERE created_at >= now() - interval '29 days'
-      GROUP BY date ORDER BY date ASC
+      WHERE created_at >= ${start} AND created_at < ${end}
+      GROUP BY bucket
+      ORDER BY bucket ASC
     `),
-
     db.execute(sql`
       SELECT
-        date_trunc('day', created_at AT TIME ZONE 'UTC')::date::text AS date,
+        date_trunc(${sql.raw(`'${trunc}'`)}, created_at AT TIME ZONE 'UTC') AS bucket,
+        date_trunc(${sql.raw(`'${trunc}'`)}, created_at AT TIME ZONE 'UTC')::text AS date,
         count(*) AS registrations
       FROM users
-      WHERE created_at >= now() - interval '29 days'
+      WHERE created_at >= ${start} AND created_at < ${end}
         AND is_hidden = false
-      GROUP BY date ORDER BY date ASC
+      GROUP BY bucket
+      ORDER BY bucket ASC
+    `),
+    db.execute(sql`
+      SELECT
+        date_trunc(${sql.raw(`'${trunc}'`)}, o.created_at AT TIME ZONE 'UTC') AS bucket,
+        date_trunc(${sql.raw(`'${trunc}'`)}, o.created_at AT TIME ZONE 'UTC')::text AS date,
+        count(*) AS orders,
+        coalesce(sum(coalesce(nullif(o.price_lek, 0), p.total_price_lek, 0)), 0) AS revenue
+      FROM orders o
+      INNER JOIN users u ON u.id = o.user_id
+      LEFT JOIN projects p ON p.id = o.project_id
+      WHERE o.created_at >= ${start} AND o.created_at < ${end}
+        AND u.is_hidden = false
+        AND o.status <> 'cancelled'
+      GROUP BY bucket
+      ORDER BY bucket ASC
     `),
   ]);
 
@@ -204,23 +302,55 @@ router.get("/admin/stats", requireAdmin, async (req, res): Promise<void> => {
     return Number.isFinite(n) ? n : 0;
   };
 
-  res.json({
+  const ordersN = toNum(ordersInRange.count);
+  const revenueN = toNum(revenueRange.total);
+  const visitorsN = toNum(visitorsRange.count);
+  const avgOrderValue = ordersN > 0 ? Math.round(revenueN / ordersN) : 0;
+  const conversionRate = visitorsN > 0 ? Math.round((ordersN / visitorsN) * 1000) / 10 : 0;
+
+  const ordersByStatus: Record<string, { count: number; revenue: number }> = {};
+  for (const row of statusRows) {
+    ordersByStatus[row.status] = {
+      count: toNum(row.count),
+      revenue: toNum(row.revenue),
+    };
+  }
+
+  const payload = {
+    range,
+    rangeLabel,
+    rangeStart: start.toISOString(),
+    rangeEnd: end.toISOString(),
+    grain,
+    cachedUntil: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+    // Lifetime / ops (always current)
     totalUsers: usersCount.count,
     totalOrders: ordersCount.count,
     totalProjects: projectsCount.count,
-    ordersThisMonth: ordersMonth.count,
-    // Back-compat: `revenue` = all-time non-cancelled pipeline
-    revenue: toNum(revenue.total),
-    revenueMonth: toNum(revenueMonth.total),
-    // Money actually earned once shipped/delivered
-    earned: toNum(earned.total),
-    earnedMonth: toNum(earnedMonth.total),
-    usersToday: toNum(usersToday.count),
-    usersWeek: toNum(usersWeek.count),
-    visitorsToday: toNum(visitorsToday.count),
-    visitorsWeek: toNum(visitorsWeek.count),
-    visitorsMonth: toNum(visitorsMonth.count),
+    pendingOrders: toNum(pendingCount.count),
+    revenue: toNum(revenueAll.total),
+    earned: toNum(earnedAll.total),
     wpClicksTotal: toNum(wpClicksTotal.count),
+    // Period-scoped
+    visitors: visitorsN,
+    wpClicks: toNum(wpClicksRange.count),
+    newUsers: toNum(usersInRange.count),
+    newProjects: toNum(projectsInRange.count),
+    orders: ordersN,
+    revenuePeriod: revenueN,
+    earnedPeriod: toNum(earnedRange.total),
+    avgOrderValue,
+    conversionRate,
+    ordersByStatus,
+    // Back-compat aliases used by older dashboard widgets
+    visitorsToday: range === "today" ? visitorsN : undefined,
+    visitorsWeek: range === "week" ? visitorsN : undefined,
+    visitorsMonth: range === "month" ? visitorsN : undefined,
+    usersToday: range === "today" ? toNum(usersInRange.count) : undefined,
+    usersWeek: range === "week" ? toNum(usersInRange.count) : undefined,
+    ordersThisMonth: range === "month" ? ordersN : undefined,
+    revenueMonth: range === "month" ? revenueN : undefined,
+    earnedMonth: range === "month" ? toNum(earnedRange.total) : undefined,
     recentOrders,
     recentUsers: recentUsers.map((u) => ({
       id: u.id,
@@ -231,21 +361,66 @@ router.get("/admin/stats", requireAdmin, async (req, res): Promise<void> => {
     })),
     chartData: chartRows.rows,
     regChartData: regRows.rows,
-  });
+    orderChartData: orderChartRows.rows,
+    cache: adminStatsCacheMeta(range),
+  };
+
+  setCachedAdminStats(range, payload);
+  res.setHeader("X-Admin-Stats-Cache", "MISS");
+  res.json(payload);
 });
 
 // GET /admin/users
 router.get("/admin/users", requireAdmin, async (req, res): Promise<void> => {
   const page = parseInt((req.query.page as string) || "1", 10);
-  const limit = parseInt((req.query.limit as string) || "50", 10);
+  const limit = Math.min(parseInt((req.query.limit as string) || "50", 10), 5000);
   const search = req.query.search as string | undefined;
+  const filter = ((req.query.filter as string) || "all").trim().toLowerCase();
   const offset = (page - 1) * limit;
 
   const searchClause = search
-    ? or(ilike(usersTable.name, `%${search}%`), sql`${(usersTable as any).phone} ILIKE ${'%' + search + '%'}`)
+    ? or(
+        ilike(usersTable.name, `%${search}%`),
+        sql`${(usersTable as any).phone} ILIKE ${"%" + search + "%"}`,
+        ilike(usersTable.email, `%${search}%`),
+      )
     : undefined;
+
+  let filterClause: ReturnType<typeof eq> | ReturnType<typeof sql> | undefined;
+  switch (filter) {
+    case "ordered":
+      filterClause = sql`EXISTS (SELECT 1 FROM orders o WHERE o.user_id = ${usersTable.id})`;
+      break;
+    case "not_ordered":
+      filterClause = sql`NOT EXISTS (SELECT 1 FROM orders o WHERE o.user_id = ${usersTable.id})`;
+      break;
+    case "has_projects":
+      filterClause = sql`EXISTS (SELECT 1 FROM projects p WHERE p.user_id = ${usersTable.id})`;
+      break;
+    case "no_projects":
+      filterClause = sql`NOT EXISTS (SELECT 1 FROM projects p WHERE p.user_id = ${usersTable.id})`;
+      break;
+    case "banned":
+      filterClause = eq(usersTable.isBanned, true);
+      break;
+    case "active":
+      filterClause = eq(usersTable.isBanned, false);
+      break;
+    case "admin":
+      filterClause = eq(usersTable.role, "admin");
+      break;
+    case "user":
+      filterClause = eq(usersTable.role, "user");
+      break;
+    default:
+      filterClause = undefined;
+  }
+
   // Hidden accounts (e.g. the auto-provisioned super-admin) never appear in this list.
-  const whereClause = searchClause ? and(searchClause, notHiddenUser) : notHiddenUser;
+  const clauses = [notHiddenUser];
+  if (searchClause) clauses.push(searchClause);
+  if (filterClause) clauses.push(filterClause as typeof notHiddenUser);
+  const whereClause = and(...clauses);
 
   const [users, [total]] = await Promise.all([
     db
@@ -294,7 +469,7 @@ router.get("/admin/users", requireAdmin, async (req, res): Promise<void> => {
     projectCount: projectCounts[u.id] || 0,
   }));
 
-  res.json({ data: enriched, total: total.count, page, limit });
+  res.json({ data: enriched, total: total.count, page, limit, filter });
 });
 
 // POST /admin/users — create user. Regular users are created by phone (matching public
@@ -663,6 +838,7 @@ router.patch(
       .where(eq(ordersTable.id, orderId))
       .returning();
 
+    invalidateAdminStatsCache();
     if (!order) {
       res.status(404).json({ error: "Order not found" });
       return;
@@ -951,6 +1127,7 @@ router.get(
     try { designOverrides = JSON.parse(map["design_overrides"] || "{}"); } catch { designOverrides = {}; }
     let customDesigns: unknown[] = [];
     try { customDesigns = JSON.parse(map["custom_designs"] || "[]"); } catch { customDesigns = []; }
+    const adminNotes = parseAdminNotes(map["admin_notes"]);
 
     res.json({
       whatsappNumber: map["whatsapp_number"] || "+355688755833",
@@ -958,8 +1135,8 @@ router.get(
       minPages: parseInt(map["min_pages"] || "30", 10),
       extraSpreadPriceLek: parseInt(map["extra_spread_price_lek"] || "200", 10),
       siteName: map["site_name"] || "Përgjithmonë",
-      siteTaglineAl: map["site_tagline_al"] || "Kujtimet tua, përgjithmonë",
-      siteTaglineEn: map["site_tagline_en"] || "Your memories, forever kept",
+      siteTaglineAl: map["site_tagline_al"] || "Kujtime që mbeten",
+      siteTaglineEn: map["site_tagline_en"] || "Memories that last",
       maintenanceMode: map["maintenance_mode"] === "true",
       maintenanceMessageAl: map["maintenance_message_al"] || "Jemi duke bërë mirëmbajtje. Do të kthehemi së shpejti.",
       maintenanceMessageEn: map["maintenance_message_en"] || "We're performing maintenance. We'll be back soon.",
@@ -969,6 +1146,7 @@ router.get(
       hiddenDesignIds,
       designOverrides,
       customDesigns,
+      adminNotes,
       requireLoginForPdf: map["require_login_for_pdf"] === "true",
       pendingBooksLimitEnabled: map["pending_books_limit_enabled"] !== "false",
       pendingBooksLimit: parseInt(map["pending_books_limit"] || "10", 10),
@@ -999,6 +1177,7 @@ router.patch(
       hiddenDesignIds: "hidden_design_ids",
       designOverrides: "design_overrides",
       customDesigns: "custom_designs",
+      adminNotes: "admin_notes",
       requireLoginForPdf: "require_login_for_pdf",
       pendingBooksLimitEnabled: "pending_books_limit_enabled",
       pendingBooksLimit: "pending_books_limit",
@@ -1044,6 +1223,49 @@ router.patch(
           value = JSON.stringify(list);
         }
 
+        if (jsKey === "adminNotes") {
+          let list: unknown[] = [];
+          try {
+            list = typeof raw === "string" ? JSON.parse(raw) : (Array.isArray(raw) ? raw : []);
+          } catch {
+            res.status(400).json({ error: "adminNotes must be a JSON array" });
+            return;
+          }
+          if (list.length > 40) {
+            res.status(400).json({ error: "Too many notes (max 40)" });
+            return;
+          }
+          const normalized: AdminStickyNote[] = [];
+          for (const item of list) {
+            if (!item || typeof item !== "object") {
+              res.status(400).json({ error: "Invalid note entry" });
+              return;
+            }
+            const n = item as Record<string, unknown>;
+            if (typeof n.id !== "string" || !n.id.trim()) {
+              res.status(400).json({ error: "Each note needs an id" });
+              return;
+            }
+            if (typeof n.text !== "string") {
+              res.status(400).json({ error: "Each note needs text" });
+              return;
+            }
+            const text = n.text.trim();
+            if (!text) continue;
+            if (text.length > 2000) {
+              res.status(400).json({ error: "Note text too long (max 2000)" });
+              return;
+            }
+            normalized.push({
+              id: n.id.slice(0, 64),
+              text,
+              createdAt: typeof n.createdAt === "string" ? n.createdAt : new Date().toISOString(),
+              ...(typeof n.updatedAt === "string" ? { updatedAt: n.updatedAt } : {}),
+            });
+          }
+          value = JSON.stringify(normalized);
+        }
+
         await db
           .insert(appSettingsTable)
           .values({ key: dbKey, value })
@@ -1061,6 +1283,7 @@ router.patch(
     try { designOverrides2 = JSON.parse(map2["design_overrides"] || "{}"); } catch { designOverrides2 = {}; }
     let customDesigns2: unknown[] = [];
     try { customDesigns2 = JSON.parse(map2["custom_designs"] || "[]"); } catch { customDesigns2 = []; }
+    const adminNotes2 = parseAdminNotes(map2["admin_notes"]);
 
     res.json({
       whatsappNumber: map2["whatsapp_number"] || "+355688755833",
@@ -1068,8 +1291,8 @@ router.patch(
       minPages: parseInt(map2["min_pages"] || "30", 10),
       extraSpreadPriceLek: parseInt(map2["extra_spread_price_lek"] || "200", 10),
       siteName: map2["site_name"] || "Përgjithmonë",
-      siteTaglineAl: map2["site_tagline_al"] || "Kujtimet tua, përgjithmonë",
-      siteTaglineEn: map2["site_tagline_en"] || "Your memories, forever kept",
+      siteTaglineAl: map2["site_tagline_al"] || "Kujtime që mbeten",
+      siteTaglineEn: map2["site_tagline_en"] || "Memories that last",
       maintenanceMode: map2["maintenance_mode"] === "true",
       maintenanceMessageAl: map2["maintenance_message_al"] || "Jemi duke bërë mirëmbajtje. Do të kthehemi së shpejti.",
       maintenanceMessageEn: map2["maintenance_message_en"] || "We're performing maintenance. We'll be back soon.",
@@ -1079,6 +1302,7 @@ router.patch(
       hiddenDesignIds: hiddenDesignIds2,
       designOverrides: designOverrides2,
       customDesigns: customDesigns2,
+      adminNotes: adminNotes2,
       requireLoginForPdf: map2["require_login_for_pdf"] === "true",
       pendingBooksLimitEnabled: map2["pending_books_limit_enabled"] !== "false",
       pendingBooksLimit: parseInt(map2["pending_books_limit"] || "10", 10),

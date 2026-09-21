@@ -27,7 +27,7 @@ const translations: Translations = {
   'nav.logout': { sq: 'Dil', en: 'Log out' },
 
   // Hero
-  'hero.title': { sq: 'Kujtimet tuaja, përgjithmonë', en: 'Your memories, forever kept' },
+  'hero.title': { sq: 'Kujtime që mbeten', en: 'Memories that last' },
   'hero.subtitle': { sq: 'Krijo albumin tënd fotografik me cilësi galerie.', en: 'Create your personalised photobook with gallery quality.' },
   'hero.cta': { sq: 'Krijo Albumin Tënd', en: 'Create Your Photobook' },
 

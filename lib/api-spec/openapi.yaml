@@ -742,6 +742,12 @@ paths:
           in: query
           schema:
             type: string
+        - name: filter
+          in: query
+          description: Filter users by status or activity
+          schema:
+            type: string
+            enum: [all, ordered, not_ordered, has_projects, no_projects, banned, active, admin, user]
       responses:
         "200":
           description: Paginated users list

@@ -402,13 +402,16 @@ export function blankBackCoverElements(lang: 'sq' | 'en' = 'sq'): DE[] {
 // 20 Premade Designs — carefully crafted
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Editorial city cover — solid brand color + framed photo + bold type
- *  (same spirit as Paris/Barcelona landmark covers, without needing a PNG icon). */
+/**
+ * Editorial city cover — same spirit as Paris/Barcelona:
+ * solid brand paper + bold Londrina type + restrained accents.
+ * No place-photo wallpaper (that made sidebar thumbs look like stock BGs).
+ * No thumbPhoto — so applyDesign will not bake a full-bleed photo over the layout.
+ */
 function CITY(
   id: string,
   name: { sq: string; en: string },
   label: string,
-  thumbPhoto: string,
   paper: string,
   opts?: {
     year?: string;
@@ -416,78 +419,78 @@ function CITY(
     fill?: string;
     yearFill?: string;
     accent?: string;
-    layout?: 'postcard' | 'split' | 'banner';
+    layout?: 'stack' | 'year-corner' | 'band';
   },
 ): DesignDef {
   const year = opts?.year ?? String(new Date().getFullYear());
   const labelSize = opts?.labelSize ?? 72;
   const fill = opts?.fill ?? '#FFFFFF';
   const yearFill = opts?.yearFill ?? opts?.accent ?? fill;
-  const accent = opts?.accent ?? 'rgba(255,255,255,0.35)';
-  const layout = opts?.layout ?? 'postcard';
+  const accent = opts?.accent ?? 'rgba(255,255,255,0.45)';
+  const layout = opts?.layout ?? 'stack';
 
-  if (layout === 'split') {
+  if (layout === 'year-corner') {
     return {
-      id, name, category: 'Travel', thumbPhoto,
+      id, name, category: 'Travel',
       thumb: { background: paper },
       thumbAccents: [],
       elements: [
         BG(paper),
-        TX(label, 24, 48, DESIGN_W - 48, 100, {
+        TX(label, 20, 48, DESIGN_W - 40, 120, {
           fontSize: labelSize, fill, align: 'center',
-          fontFamily: "'Londrina Solid', cursive", letterSpacing: 5,
+          fontFamily: "'Londrina Solid', cursive", letterSpacing: 6,
         }),
-        TX(year, 180, 150, 240, 40, {
-          fontSize: 26, fill: yearFill, align: 'center',
+        SH('rect', 80, 200, DESIGN_W - 160, 3, accent, { opacity: 1, strokeWidth: 0 }),
+        SH('circle', 70, 360, 28, 28, accent, { opacity: 0.85, strokeWidth: 0 }),
+        SH('circle', DESIGN_W - 110, 420, 18, 18, fill, { opacity: 0.28, strokeWidth: 0 }),
+        TX(year, 300, 700, 240, 52, {
+          fontSize: 34, fill: yearFill, align: 'right',
           fontFamily: "'Londrina Solid', cursive", letterSpacing: 3,
         }),
-        SH('rect', 28, 210, DESIGN_W - 56, 4, accent, { opacity: 1, strokeWidth: 0 }),
-        IMG(thumbPhoto, 28, 230, DESIGN_W - 56, DESIGN_H - 258),
       ],
     };
   }
 
-  if (layout === 'banner') {
+  if (layout === 'band') {
     return {
-      id, name, category: 'Travel', thumbPhoto,
+      id, name, category: 'Travel',
       thumb: { background: paper },
       thumbAccents: [],
       elements: [
         BG(paper),
-        IMG(thumbPhoto, 0, 160, DESIGN_W, DESIGN_H - 160),
-        SH('rect', 0, 0, DESIGN_W, 168, paper, { opacity: 1, strokeWidth: 0 }),
-        TX(label, 20, 36, DESIGN_W - 40, 90, {
+        SH('rect', 0, 280, DESIGN_W, 200, accent, { opacity: 0.18, strokeWidth: 0 }),
+        TX(label, 16, 320, DESIGN_W - 32, 120, {
           fontSize: labelSize, fill, align: 'center',
           fontFamily: "'Londrina Solid', cursive", letterSpacing: 5,
         }),
-        TX(year, 200, 118, 200, 36, {
-          fontSize: 22, fill: yearFill, align: 'center',
+        TX(year, 180, 460, 240, 44, {
+          fontSize: 26, fill: yearFill, align: 'center',
           fontFamily: "'Londrina Solid', cursive", letterSpacing: 4,
         }),
+        SH('rect', 200, 180, 200, 4, fill, { opacity: 0.35, strokeWidth: 0 }),
+        SH('rect', 200, 660, 200, 4, fill, { opacity: 0.35, strokeWidth: 0 }),
       ],
     };
   }
 
-  // postcard (default) — color field, floating photo card, title/year
+  // stack (default) — title top, year bottom, accents in between (Paris/Barcelona rhythm)
   return {
-    id, name, category: 'Travel', thumbPhoto,
+    id, name, category: 'Travel',
     thumb: { background: paper },
     thumbAccents: [],
     elements: [
       BG(paper),
-      TX(label, 20, 36, DESIGN_W - 40, 100, {
+      TX(label, 16, 56, DESIGN_W - 32, 130, {
         fontSize: labelSize, fill, align: 'center',
         fontFamily: "'Londrina Solid', cursive", letterSpacing: 6,
       }),
-      SH('circle', 48, 150, 18, 18, accent, { opacity: 0.9, strokeWidth: 0 }),
-      SH('circle', DESIGN_W - 66, 160, 12, 12, fill, { opacity: 0.35, strokeWidth: 0 }),
-      IMG(thumbPhoto, 40, 180, DESIGN_W - 80, 460),
-      SH('rect', 40, 180, DESIGN_W - 80, 460, '#000000', { opacity: 0.08, strokeWidth: 0 }),
+      SH('circle', 90, 260, 22, 22, accent, { opacity: 0.9, strokeWidth: 0 }),
+      SH('circle', DESIGN_W - 120, 300, 14, 14, fill, { opacity: 0.3, strokeWidth: 0 }),
+      SH('rect', 140, 400, DESIGN_W - 280, 4, accent, { opacity: 1, strokeWidth: 0 }),
       TX(year, 180, 680, 240, 52, {
-        fontSize: 30, fill: yearFill, align: 'center',
+        fontSize: 32, fill: yearFill, align: 'center',
         fontFamily: "'Londrina Solid', cursive", letterSpacing: 4,
       }),
-      SH('rect', 220, 740, 160, 3, accent, { opacity: 1, strokeWidth: 0 }),
     ],
   };
 }
@@ -553,7 +556,7 @@ export const DESIGNS: DesignDef[] = [
     ],
   },
 
-  // ── TRAVEL — landmark icons + real city photographs ─────────────────────
+  // ── TRAVEL — landmark icons (Paris/Barcelona) + typographic city covers ──
   {
     id: 'paris-pink',
     name: { sq: 'Paris', en: 'Paris' },
@@ -595,23 +598,23 @@ export const DESIGNS: DesignDef[] = [
     ],
   },
 
-  CITY('rome',        { sq: 'Romë', en: 'Rome' },           'ROME',        '/designs/rome-cover-thumb.jpg',        '#C45C26', { labelSize: 88, accent: '#FFE0C2', layout: 'postcard' }),
-  CITY('london',      { sq: 'Londër', en: 'London' },       'LONDON',      '/designs/london-cover-thumb.jpg',      '#1B2A4A', { labelSize: 78, accent: '#7EB6FF', layout: 'banner' }),
-  CITY('venice',      { sq: 'Venecia', en: 'Venice' },      'VENICE',      '/designs/venice-cover-thumb.jpg',      '#0E5C6B', { labelSize: 82, accent: '#B8F0FF', layout: 'split' }),
-  CITY('newyork',     { sq: 'New York', en: 'New York' },   'NEW YORK',    '/designs/newyork-cover-thumb.jpg',     '#111111', { labelSize: 58, fill: '#F5C518', yearFill: '#FFFFFF', accent: '#F5C518', layout: 'banner' }),
-  CITY('istanbul',    { sq: 'Stamboll', en: 'Istanbul' },   'ISTANBUL',    '/designs/istanbul-cover-thumb.jpg',    '#6B2D1A', { labelSize: 64, accent: '#F0C987', layout: 'postcard' }),
-  CITY('tokyo',       { sq: 'Tokio', en: 'Tokyo' },         'TOKYO',       '/designs/tokyo-cover-thumb.jpg',       '#1A0A18', { labelSize: 88, fill: '#FF4D6D', yearFill: '#FFFFFF', accent: '#FF4D6D', layout: 'split' }),
-  CITY('amsterdam',   { sq: 'Amsterdam', en: 'Amsterdam' }, 'AMSTERDAM',   '/designs/amsterdam-cover-thumb.jpg',   '#F4A261', { labelSize: 52, fill: '#1A2A3A', yearFill: '#1A2A3A', accent: '#1A2A3A', layout: 'postcard' }),
-  CITY('athens',      { sq: 'Athinë', en: 'Athens' },       'ATHENS',      '/designs/athens-cover-thumb.jpg',      '#E8D5A3', { labelSize: 82, fill: '#3A2A18', yearFill: '#3A2A18', accent: '#3A2A18', layout: 'split' }),
-  CITY('prague',      { sq: 'Pragë', en: 'Prague' },        'PRAGUE',      '/designs/prague-cover-thumb.jpg',      '#4A1C2A', { labelSize: 82, accent: '#E8B4C0', layout: 'postcard' }),
-  CITY('vienna',      { sq: 'Vjenë', en: 'Vienna' },        'VIENNA',      '/designs/vienna-cover-thumb.jpg',      '#2A2038', { labelSize: 82, accent: '#D4AF37', layout: 'banner' }),
-  CITY('tirana',      { sq: 'Tiranë', en: 'Tirana' },       'TIRANA',      '/designs/tirana-cover-thumb.jpg',      '#E63946', { labelSize: 82, accent: '#FFFFFF', layout: 'postcard' }),
-  CITY('dubrovnik',   { sq: 'Dubrovnik', en: 'Dubrovnik' }, 'DUBROVNIK',   '/designs/dubrovnik-cover-thumb.jpg',   '#0077B6', { labelSize: 52, accent: '#90E0EF', layout: 'split' }),
-  CITY('santorini',   { sq: 'Santorini', en: 'Santorini' }, 'SANTORINI',   '/designs/santorini-cover-thumb.jpg',   '#48CAE4', { labelSize: 58, fill: '#023E8A', yearFill: '#023E8A', accent: '#023E8A', layout: 'postcard' }),
-  CITY('amalfi',      { sq: 'Amalfi', en: 'Amalfi' },       'AMALFI',      '/designs/amalfi-cover-thumb.jpg',      '#2A9D8F', { labelSize: 82, accent: '#E9C46A', layout: 'banner' }),
-  CITY('berlin',      { sq: 'Berlin', en: 'Berlin' },       'BERLIN',      '/designs/berlin-cover-thumb.jpg',      '#0D0D0D', { labelSize: 82, fill: '#E0E0E0', yearFill: '#FF3B30', accent: '#FF3B30', layout: 'split' }),
-  CITY('lisbon',      { sq: 'Lisbonë', en: 'Lisbon' },      'LISBON',      '/designs/lisbon-cover-thumb.jpg',      '#E76F51', { labelSize: 82, accent: '#FFE8D6', layout: 'postcard' }),
-  CITY('florence',    { sq: 'Firence', en: 'Florence' },    'FLORENCE',    '/designs/florence-cover-thumb.jpg',    '#BC6C25', { labelSize: 68, accent: '#FFE6C7', layout: 'banner' }),
+  CITY('rome',        { sq: 'Romë', en: 'Rome' },           'ROME',      '#C45C26', { labelSize: 88, accent: '#FFE0C2', layout: 'stack' }),
+  CITY('london',      { sq: 'Londër', en: 'London' },       'LONDON',    '#1B2A4A', { labelSize: 78, accent: '#7EB6FF', layout: 'band' }),
+  CITY('venice',      { sq: 'Venecia', en: 'Venice' },      'VENICE',    '#0E5C6B', { labelSize: 82, accent: '#B8F0FF', layout: 'year-corner' }),
+  CITY('newyork',     { sq: 'New York', en: 'New York' },   'NEW YORK',  '#111111', { labelSize: 58, fill: '#F5C518', yearFill: '#FFFFFF', accent: '#F5C518', layout: 'band' }),
+  CITY('istanbul',    { sq: 'Stamboll', en: 'Istanbul' },   'ISTANBUL',  '#6B2D1A', { labelSize: 64, accent: '#F0C987', layout: 'stack' }),
+  CITY('tokyo',       { sq: 'Tokio', en: 'Tokyo' },         'TOKYO',     '#1A0A18', { labelSize: 88, fill: '#FF4D6D', yearFill: '#FFFFFF', accent: '#FF4D6D', layout: 'year-corner' }),
+  CITY('amsterdam',   { sq: 'Amsterdam', en: 'Amsterdam' }, 'AMSTERDAM', '#F4A261', { labelSize: 52, fill: '#1A2A3A', yearFill: '#1A2A3A', accent: '#1A2A3A', layout: 'stack' }),
+  CITY('athens',      { sq: 'Athinë', en: 'Athens' },       'ATHENS',    '#E8D5A3', { labelSize: 82, fill: '#3A2A18', yearFill: '#3A2A18', accent: '#3A2A18', layout: 'year-corner' }),
+  CITY('prague',      { sq: 'Pragë', en: 'Prague' },        'PRAGUE',    '#4A1C2A', { labelSize: 82, accent: '#E8B4C0', layout: 'stack' }),
+  CITY('vienna',      { sq: 'Vjenë', en: 'Vienna' },        'VIENNA',    '#2A2038', { labelSize: 82, accent: '#D4AF37', layout: 'band' }),
+  CITY('tirana',      { sq: 'Tiranë', en: 'Tirana' },       'TIRANA',    '#E63946', { labelSize: 82, accent: '#FFFFFF', layout: 'stack' }),
+  CITY('dubrovnik',   { sq: 'Dubrovnik', en: 'Dubrovnik' }, 'DUBROVNIK', '#0077B6', { labelSize: 52, accent: '#90E0EF', layout: 'year-corner' }),
+  CITY('santorini',   { sq: 'Santorini', en: 'Santorini' }, 'SANTORINI', '#48CAE4', { labelSize: 58, fill: '#023E8A', yearFill: '#023E8A', accent: '#023E8A', layout: 'stack' }),
+  CITY('amalfi',      { sq: 'Amalfi', en: 'Amalfi' },       'AMALFI',    '#2A9D8F', { labelSize: 82, accent: '#E9C46A', layout: 'band' }),
+  CITY('berlin',      { sq: 'Berlin', en: 'Berlin' },       'BERLIN',    '#0D0D0D', { labelSize: 82, fill: '#E0E0E0', yearFill: '#FF3B30', accent: '#FF3B30', layout: 'year-corner' }),
+  CITY('lisbon',      { sq: 'Lisbonë', en: 'Lisbon' },      'LISBON',    '#E76F51', { labelSize: 82, accent: '#FFE8D6', layout: 'stack' }),
+  CITY('florence',    { sq: 'Firence', en: 'Florence' },    'FLORENCE',  '#BC6C25', { labelSize: 68, accent: '#FFE6C7', layout: 'band' }),
 
   // ── CELEBRATION ───────────────────────────────────────────────────────────
   {
@@ -836,14 +839,42 @@ export function applyDesignOverrides(
   return designs.map((d) => {
     const norm = normalizeOverride(overrides[d.id]);
     if (!norm) return d;
+
+    // Drop stale city overrides that still bake place photos as wallpaper —
+    // those made Editor/Wizard thumbs look like stock backgrounds instead of
+    // the typography covers (Paris/Barcelona style) defined in DESIGNS.
+    const nextFront = norm.frontElements?.length ? norm.frontElements : d.elements;
+    if (
+      !d.thumbPhoto
+      && !d.isCustom
+      && looksLikeLegacyPlacePhotoLayout(nextFront)
+      && !looksLikeLegacyPlacePhotoLayout(d.elements)
+    ) {
+      return d;
+    }
+
     return {
       ...d,
-      elements: norm.frontElements?.length ? norm.frontElements : d.elements,
+      elements: nextFront,
       backElements: norm.backElements?.length
         ? norm.backElements
         : (d.backElements ?? d.elements),
     };
   });
+}
+
+/** True when layout is a stale place-photo wallpaper (cover-thumb / Unsplash), not landmark art. */
+function looksLikeLegacyPlacePhotoLayout(els: DE[]): boolean {
+  const srcs = els
+    .filter((e) => (e.type === 'background' || e.type === 'image') && !!e.src)
+    .map((e) => String(e.src));
+  if (!srcs.length) return false;
+  const hasLandmarkArt = srcs.some((s) =>
+    /eiffel-tower|sagrada-familia|baby-ador-graphic/i.test(s)
+    || (/\/designs\/.+\.png$/i.test(s) && !/-cover-thumb/i.test(s)),
+  );
+  if (hasLandmarkArt) return false;
+  return srcs.some((s) => /-cover-thumb\./i.test(s) || /images\.unsplash\.com/i.test(s));
 }
 
 export function getDesignWithOverrides(

@@ -3,8 +3,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { SEOMeta } from '@/components/SEOMeta';
 import { Link } from 'wouter';
 import { motion, useMotionValue, useSpring, useTransform, AnimatePresence } from 'framer-motion';
-import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
-import { DESIGNS } from '@/lib/designs';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useListCategories } from '@workspace/api-client-react-tsconfig';
 import {
   CAT_IMG,
@@ -14,270 +13,442 @@ import {
   getCategorySpine,
   getCategorySublabel,
 } from '@/lib/categoryImages';
+import { DESIGNS, designFrontElements } from '@/lib/designs';
+import { PageThumb } from '@/components/PageThumb';
+import { ensureEditorFonts } from '@/lib/editorFonts';
 
-// ── Hero slides ────────────────────────────────────────────────────────────────
+// ── Hero + album starter (CSS 3D book — no WebGL) ─────────────────────────────
 
-const HERO_SLIDES = [
+type AlbumStyle = {
+  key: string;
+  label: { sq: string; en: string };
+  line: { sq: string; en: string };
+  designId: string;
+  spine: string;
+  img: string;
+  ambient: string;
+};
+
+const ALBUM_STYLES: AlbumStyle[] = [
   {
-    img: 'https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=1900&q=88&fit=crop&crop=top',
+    key: 'dasme',
     label: { sq: 'Dasmë', en: 'Wedding' },
-    pos: '50% 30%',
-    headline: {
-      sq: <>dasma juaj,<br /><span className="text-white/48">një ditë</span><br />përgjithmonë</>,
-      en: <>your wedding,<br /><span className="text-white/48">one day</span><br />kept forever</>,
-    },
-    sub: {
-      sq: 'Ditën tuaj më të bukur ta ktheni në art — album premium i lidhur me dorë për gjithë jetën.',
-      en: 'Turn your most beautiful day into art — a hand-bound premium album for a lifetime.',
-    },
+    line: { sq: 'Një ditë. Një libër. Përgjithmonë.', en: 'One day. One book. Forever.' },
+    designId: 'cream-names',
+    spine: '#8B6F47',
+    img: CAT_IMG_BY_SLUG.dasme,
+    ambient: '#2a1810',
   },
   {
-    img: 'https://images.unsplash.com/photo-1516589178581-6cd7833ae3b2?w=1900&q=88&fit=crop',
-    label: { sq: 'Çifte', en: 'Couples' },
-    pos: '50% 42%',
-    headline: {
-      sq: <>dashuria juaj,<br /><span className="text-white/48">ruajtur</span><br />përgjithmonë</>,
-      en: <>your love,<br /><span className="text-white/48">preserved</span><br />forever</>,
-    },
-    sub: {
-      sq: 'Çdo moment bashkë meriton të jetojë brenda faqeve të një albumi të bërë vetëm për ju.',
-      en: 'Every moment together deserves to live inside a book made just for the two of you.',
-    },
+    key: 'udhetime',
+    label: { sq: 'Udhëtime', en: 'Travel' },
+    line: { sq: 'Aventurat tuaja, në faqe.', en: 'Your adventures, on the page.' },
+    designId: 'paris-pink',
+    spine: '#2A4A20',
+    img: CAT_IMG_BY_SLUG.udhetime,
+    ambient: '#101810',
   },
   {
-    img: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1900&q=88&fit=crop&crop=center',
-    label: { sq: 'Udhëtim', en: 'Travel' },
-    pos: '50% 58%',
-    headline: {
-      sq: <>aventura juaj,<br /><span className="text-white/48">fiksohet</span><br />përgjithmonë</>,
-      en: <>your journey,<br /><span className="text-white/48">captured</span><br />forever</>,
-    },
-    sub: {
-      sq: 'Mos i lini kujtimet e udhëtimit vetëm si foto — bëjini histori të shtypura me cilësi galerie.',
-      en: 'Don\'t leave travel memories as just photos — turn them into a gallery-quality printed story.',
-    },
-  },
-  {
-    img: 'https://images.unsplash.com/photo-1609220136736-443140cffec6?w=1900&q=88&fit=crop&crop=center',
+    key: 'familje',
     label: { sq: 'Familje', en: 'Family' },
-    pos: '50% 50%',
-    headline: {
-      sq: <>familja juaj,<br /><span className="text-white/48">e çmuar</span><br />përgjithmonë</>,
-      en: <>your family,<br /><span className="text-white/48">cherished</span><br />forever</>,
-    },
-    sub: {
-      sq: 'Vitet kalojnë, por albumet mbeten — dhuroni diçka që do mbahet me dashuri brez pas brezi.',
-      en: 'Years pass, but albums remain — gift something that will be cherished for generations to come.',
-    },
+    line: { sq: 'Momentet e vogla, të mëdha.', en: 'Small moments, made lasting.' },
+    designId: 'baby-ador',
+    spine: '#5C7A5A',
+    img: CAT_IMG_BY_SLUG.familje,
+    ambient: '#141816',
   },
   {
-    img: 'https://images.unsplash.com/photo-1474552226712-ac0f0961a954?w=1900&q=88&fit=crop&crop=center',
-    label: { sq: 'Kujtime', en: 'Memories' },
-    pos: '50% 40%',
-    headline: {
-      sq: <>kujtimet tuaja,<br /><span className="text-white/48">bukur</span><br />përgjithmonë</>,
-      en: <>your memories,<br /><span className="text-white/48">beautifully</span><br />kept forever</>,
-    },
-    sub: {
-      sq: 'Kthejini kujtimet tuaja në albume me cilësi galerie — të dizajnuara plotësisht nga ju.',
-      en: 'Turn your photos into hand-bound albums with gallery quality — designed entirely by you.',
-    },
+    key: 'miqesi',
+    label: { sq: 'Miqësi', en: 'Friendship' },
+    line: { sq: 'Historia juaj e dashurisë.', en: 'Your love story, bound.' },
+    designId: 'the-wedding-of',
+    spine: '#1A2040',
+    img: CAT_IMG.Çifte,
+    ambient: '#0e1220',
+  },
+  {
+    key: 'festash',
+    label: { sq: 'Festash', en: 'Celebrate' },
+    line: { sq: 'Festat që nuk harrohen.', en: 'Celebrations you keep.' },
+    designId: 'birthday-bloom',
+    spine: '#5C4030',
+    img: CAT_IMG_BY_SLUG.festash,
+    ambient: '#1a1210',
   },
 ];
 
-const SLIDE_MS = 5800;
+const HERO_CYCLE_MS = 5200;
 
-function HeroSlideshow({ lang }: { lang: 'sq' | 'en' }) {
-  const [idx, setIdx] = useState(0);
-  const [dir, setDir] = useState(1);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const swipeRef = useRef<{ x: number; y: number; t: number } | null>(null);
+function usePrefersReducedMotion() {
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setReduced(mq.matches);
+    const onChange = () => setReduced(mq.matches);
+    mq.addEventListener?.('change', onChange);
+    return () => mq.removeEventListener?.('change', onChange);
+  }, []);
+  return reduced;
+}
 
-  const advance = useCallback((d = 1) => {
-    setDir(d);
-    setIdx(i => (i + d + HERO_SLIDES.length) % HERO_SLIDES.length);
+/** Lightweight CSS 3D photobook — one DOM book, cover image swaps (carousel reshaped). */
+function LivingAlbumBook({
+  style,
+  size = 'hero',
+  interactive = true,
+}: {
+  style: AlbumStyle;
+  size?: 'hero' | 'starter';
+  interactive?: boolean;
+}) {
+  const reduced = usePrefersReducedMotion();
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const mx = useMotionValue(0);
+  const my = useMotionValue(0);
+  const rotY = useSpring(useTransform(mx, [-1, 1], interactive && !reduced ? [-14, 18] : [-8, 8]), {
+    stiffness: 120, damping: 22, mass: 0.4,
+  });
+  const rotX = useSpring(useTransform(my, [-1, 1], interactive && !reduced ? [8, -8] : [4, -2]), {
+    stiffness: 120, damping: 22, mass: 0.4,
+  });
+
+  const coverEls = useMemo(() => {
+    const d = DESIGNS.find(x => x.id === style.designId);
+    return d ? designFrontElements(d) : [];
+  }, [style.designId]);
+
+  const [coverSize, setCoverSize] = useState({ w: 0, h: 0 });
+  const coverFaceRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = coverFaceRef.current;
+    if (!el) return;
+    const measure = () => {
+      const r = el.getBoundingClientRect();
+      const w = Math.round(r.width);
+      const h = Math.round(r.height);
+      if (w > 0 && h > 0) setCoverSize({ w, h });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
   }, []);
 
-  // Reset auto-advance whenever idx changes
-  useEffect(() => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => advance(1), SLIDE_MS);
-    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [idx, advance]);
+  useEffect(() => { void ensureEditorFonts(); }, []);
 
-  const goTo = (i: number) => { setDir(i > idx ? 1 : -1); setIdx(i); };
-  const slide = HERO_SLIDES[idx];
+  useEffect(() => {
+    for (const el of coverEls) {
+      if ((el.type === 'image' || el.type === 'background') && el.src) {
+        const img = new Image();
+        img.src = el.src;
+      }
+    }
+  }, [coverEls]);
+
+  const d = size === 'hero' ? 22 : 16;
+  const maxW = size === 'hero' ? 280 : 200;
+  const maxH = size === 'hero' ? 372 : 266;
+
+  const onMove = (e: React.MouseEvent) => {
+    if (!interactive || reduced || !wrapRef.current) return;
+    const r = wrapRef.current.getBoundingClientRect();
+    mx.set(((e.clientX - r.left) / r.width) * 2 - 1);
+    my.set(((e.clientY - r.top) / r.height) * 2 - 1);
+  };
+  const onLeave = () => { mx.set(0); my.set(0); };
+
+  return (
+    <div
+      ref={wrapRef}
+      onMouseMove={onMove}
+      onMouseLeave={onLeave}
+      className="relative mx-auto"
+      style={{
+        width: `min(${size === 'hero' ? 42 : 48}vw, ${maxW}px)`,
+        height: `min(${size === 'hero' ? 56 : 64}vw, ${maxH}px)`,
+        maxWidth: maxW,
+        maxHeight: maxH,
+        perspective: 1100,
+        touchAction: 'manipulation',
+      }}
+    >
+      <div
+        aria-hidden
+        className="absolute left-1/2 -translate-x-1/2 bottom-[-7%] w-[78%] h-[11%] rounded-[100%] blur-xl opacity-45"
+        style={{ background: 'radial-gradient(ellipse, rgba(0,0,0,0.55), transparent 70%)' }}
+      />
+      <motion.div
+        style={{
+          width: '100%',
+          height: '100%',
+          position: 'relative',
+          transformStyle: 'preserve-3d',
+          rotateY: rotY,
+          rotateX: rotX,
+        }}
+      >
+        <div
+          aria-hidden
+          style={{
+            position: 'absolute',
+            left: -d, top: 0,
+            width: d, height: '100%',
+            transformOrigin: 'right center',
+            transform: 'rotateY(-90deg)',
+            background: `linear-gradient(to right, ${style.spine}66, ${style.spine})`,
+            borderRadius: '2px 0 0 2px',
+            overflow: 'hidden',
+          }}
+        >
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: 'linear-gradient(to right, rgba(0,0,0,0.5), rgba(0,0,0,0.1))',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <span style={{
+              writingMode: 'vertical-rl',
+              fontSize: size === 'hero' ? 8 : 7,
+              letterSpacing: '0.28em',
+              textTransform: 'uppercase',
+              color: 'rgba(255,255,255,0.32)',
+              fontWeight: 600,
+            }}>
+              përgjithmonë
+            </span>
+          </div>
+        </div>
+
+        <div
+          ref={coverFaceRef}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            borderRadius: '0 4px 4px 0',
+            overflow: 'hidden',
+            boxShadow: '10px 22px 44px rgba(0,0,0,0.32), 2px 4px 12px rgba(0,0,0,0.18)',
+            background: (DESIGNS.find(x => x.id === style.designId)?.thumb?.background as string) || '#1a1410',
+          }}
+        >
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={style.designId}
+              initial={reduced ? { opacity: 1 } : { opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+              style={{ position: 'absolute', inset: 0 }}
+            >
+              {coverEls.length > 0 && coverSize.w > 0 ? (
+                <PageThumb elements={coverEls} width={coverSize.w} height={coverSize.h} />
+              ) : coverEls.length === 0 ? (
+                <img
+                  src={style.img}
+                  alt=""
+                  draggable={false}
+                  loading="eager"
+                  decoding="async"
+                  style={{
+                    position: 'absolute', inset: 0,
+                    width: '100%', height: '100%',
+                    objectFit: 'cover', display: 'block',
+                  }}
+                />
+              ) : null}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+
+        <div
+          aria-hidden
+          style={{
+            position: 'absolute',
+            right: -d, top: '2%',
+            width: d, height: '96%',
+            transformOrigin: 'left center',
+            transform: 'rotateY(90deg)',
+            background: 'linear-gradient(to left, #c8c4bc, #ebe6de)',
+            overflow: 'hidden',
+          }}
+        >
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} style={{
+              position: 'absolute', left: 1, right: 1,
+              top: `${(i / 8) * 100}%`, height: 1,
+              background: 'rgba(0,0,0,0.07)',
+            }} />
+          ))}
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: 'linear-gradient(to right, rgba(0,0,0,0.2), transparent 50%)',
+          }} />
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
+  const reduced = usePrefersReducedMotion();
+  const [idx, setIdx] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const style = ALBUM_STYLES[idx];
+  const swipeRef = useRef<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    if (reduced || paused) return;
+    const t = window.setTimeout(() => {
+      setIdx(i => (i + 1) % ALBUM_STYLES.length);
+    }, HERO_CYCLE_MS);
+    return () => clearTimeout(t);
+  }, [idx, reduced, paused]);
+
+  // Prefetch next cover's layout assets
+  useEffect(() => {
+    const next = ALBUM_STYLES[(idx + 1) % ALBUM_STYLES.length];
+    const d = DESIGNS.find(x => x.id === next.designId);
+    const els = d ? designFrontElements(d) : [];
+    for (const el of els) {
+      if ((el.type === 'image' || el.type === 'background') && el.src) {
+        const img = new Image();
+        img.src = el.src;
+      }
+    }
+  }, [idx]);
+
+  const go = (d: number) => {
+    setIdx(i => (i + d + ALBUM_STYLES.length) % ALBUM_STYLES.length);
+  };
 
   return (
     <section
-      className="relative w-full min-h-[38dvh] md:min-h-[68dvh] flex items-end overflow-hidden bg-[#0c0b09]"
-      style={{ touchAction: 'pan-y' }}
+      className="relative w-full overflow-hidden"
+      style={{
+        minHeight: 'min(100svh, 920px)',
+        background: `radial-gradient(120% 80% at 70% 40%, ${style.ambient} 0%, #0a0908 55%, #060504 100%)`,
+        transition: reduced ? undefined : 'background 0.9s ease',
+      }}
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
       onTouchStart={(e) => {
-        swipeRef.current = {
-          x: e.touches[0].clientX,
-          y: e.touches[0].clientY,
-          t: Date.now(),
-        };
+        swipeRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
       }}
       onTouchEnd={(e) => {
         if (!swipeRef.current) return;
         const dx = e.changedTouches[0].clientX - swipeRef.current.x;
         const dy = e.changedTouches[0].clientY - swipeRef.current.y;
-        const dt = Math.max(1, Date.now() - swipeRef.current.t);
         swipeRef.current = null;
-        if (Math.abs(dx) <= Math.abs(dy)) return;
-        const vel = Math.abs(dx) / dt;
-        if (Math.abs(dx) < 28 && vel < 0.22) return;
-        // Swipe left → next, swipe right → previous
-        advance(dx < 0 ? 1 : -1);
+        if (Math.abs(dx) < 36 || Math.abs(dx) < Math.abs(dy)) return;
+        go(dx < 0 ? 1 : -1);
       }}
     >
+      {/* Atmosphere — CSS only, no extra images */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 opacity-[0.35]"
+        style={{
+          backgroundImage: `radial-gradient(ellipse 60% 50% at 75% 45%, ${style.spine}55, transparent 70%)`,
+          transition: reduced ? undefined : 'background 0.9s ease',
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 opacity-[0.04]"
+        style={{
+          backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=\'0 0 200 200\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cfilter id=\'n\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'0.85\' numOctaves=\'3\' stitchTiles=\'stitch\'/%3E%3C/filter%3E%3Crect width=\'100%25\' height=\'100%25\' filter=\'url(%23n)\'/%3E%3C/svg%3E")',
+          backgroundSize: '180px',
+        }}
+      />
 
-      {/* ── Slides (crossfade + Ken Burns) ── */}
-      <AnimatePresence initial={false}>
-        <motion.div
-          key={idx}
-          className="absolute inset-0"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 1.1, ease: 'easeInOut' }}
-        >
-          {/* Ken Burns zoom */}
-          <motion.div
-            className="absolute inset-0"
-            initial={{ scale: 1.07 }}
-            animate={{ scale: 1.0 }}
-            transition={{ duration: SLIDE_MS / 1000 + 0.5, ease: 'easeOut' }}
+      <div className="relative z-10 max-w-7xl mx-auto px-5 md:px-10 pt-8 pb-12 md:pt-16 md:pb-20 min-h-[inherit] flex flex-col justify-center">
+        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] gap-6 md:gap-8 md:items-center">
+          {/* Brand — always first */}
+          <motion.p
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+            className="order-1 md:col-start-1 font-serif text-[clamp(2.75rem,9vw,4.75rem)] leading-[0.95] tracking-[-0.02em] text-white text-center md:text-left"
           >
-            <img
-              src={slide.img}
-              alt=""
-              draggable={false}
-              className="w-full h-full object-cover select-none"
-              style={{ objectPosition: slide.pos }}
-            />
-          </motion.div>
+            Përgjithmonë
+          </motion.p>
 
-          {/* Gradient layers */}
-          <div className="absolute inset-0 bg-gradient-to-t from-[#0c0b09]/92 via-[#0c0b09]/30 to-[#0c0b09]/10" />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#0c0b09]/55 via-transparent to-transparent" />
-        </motion.div>
-      </AnimatePresence>
-
-      {/* ── Content ── */}
-      <div className="relative z-10 w-full pb-8 md:pb-10 px-5 md:px-12">
-        <div className="max-w-7xl mx-auto">
-
-          {/* Eyebrow — category name animates per slide */}
-          <div className="mb-7 md:mb-8 h-4 relative overflow-hidden">
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.p
-                key={idx}
-                className="absolute inset-0 text-white/38 text-[9px] uppercase tracking-[0.38em]"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.45, ease: 'easeOut' }}
-              >
-                {lang === 'sq'
-                  ? `— ${slide.label.sq} · albume fotografike premium`
-                  : `— ${slide.label.en} · premium photo books`}
-              </motion.p>
-            </AnimatePresence>
-          </div>
-
-          <div className="max-w-2xl">
-
-            {/* Per-slide headline + sub — crossfade on slide change */}
-            <AnimatePresence mode="wait" initial={true}>
-              <motion.div
-                key={idx}
-                initial={{ opacity: 0, y: 22 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -14 }}
-                transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
-              >
-                <h1 className="text-[30px] md:text-[66px] font-serif font-medium text-white leading-[1.05] tracking-[-0.01em] mb-3.5 md:mb-5">
-                  {slide.headline[lang]}
-                </h1>
-                <p className="text-[13px] md:text-[14px] text-white/55 mb-5 md:mb-7 max-w-[400px] leading-[1.65]">
-                  {slide.sub[lang]}
-                </p>
-              </motion.div>
-            </AnimatePresence>
-
-            {/* CTA — static, never re-animates */}
-            <div className="flex flex-wrap items-center gap-3">
-              <Link href="/krijo">
-                <button
-                  className="px-8 py-3.5 bg-white text-[#1a1a1a] rounded-full text-[12.5px] font-semibold hover:bg-neutral-100 active:scale-[0.97] transition-all shadow-xl shadow-black/20"
-                >
-                  {lang === 'sq' ? 'krijo albumin tënd' : 'create your photobook'}
-                </button>
-              </Link>
-              <Link href="/shembuj">
-                <button className="px-6 py-3.5 border border-white/22 text-white/75 rounded-full text-[12.5px] hover:border-white/45 hover:text-white transition-all backdrop-blur-sm">
-                  {lang === 'sq' ? 'shiko shembuj' : 'browse examples'}
-                </button>
-              </Link>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Bottom controls bar ── */}
-      <div className="absolute bottom-0 left-0 right-0 z-20 pb-5 px-5 md:px-12 pointer-events-none">
-        <div className="max-w-7xl mx-auto flex items-end justify-end">
-
-          {/* Progress lines + arrows */}
-          <div className="pointer-events-auto flex items-center gap-4">
-            {/* Prev/next */}
-            <div className="hidden md:flex items-center gap-1.5">
+          {/* Dominant 3D book — second on mobile so it sits in first viewport */}
+          <div className="order-2 md:order-none md:col-start-2 md:row-start-1 md:row-span-2 flex flex-col items-center justify-center py-1 md:py-0">
+            <LivingAlbumBook style={style} size="hero" />
+            <div className="mt-5 flex items-center gap-4 md:hidden">
               <button
-                onClick={() => advance(-1)}
-                style={{
-                  width: 30, height: 30, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.18)',
-                  background: 'rgba(255,255,255,0.08)', backdropFilter: 'blur(8px)',
-                  color: 'rgba(255,255,255,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: 'pointer', fontSize: 13, transition: 'all 0.18s',
-                }}
-                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.18)')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')}
+                type="button"
+                onClick={() => go(-1)}
+                className="w-9 h-9 rounded-full border border-white/20 text-white/70 text-lg leading-none"
+                aria-label="Previous"
               >‹</button>
+              <span className="text-[10px] tracking-[0.2em] text-white/35 tabular-nums">
+                {String(idx + 1).padStart(2, '0')} / {String(ALBUM_STYLES.length).padStart(2, '0')}
+              </span>
               <button
-                onClick={() => advance(1)}
-                style={{
-                  width: 30, height: 30, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.18)',
-                  background: 'rgba(255,255,255,0.08)', backdropFilter: 'blur(8px)',
-                  color: 'rgba(255,255,255,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: 'pointer', fontSize: 13, transition: 'all 0.18s',
-                }}
-                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.18)')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')}
+                type="button"
+                onClick={() => go(1)}
+                className="w-9 h-9 rounded-full border border-white/20 text-white/70 text-lg leading-none"
+                aria-label="Next"
               >›</button>
             </div>
+          </div>
 
-            {/* Progress segments */}
-            <div className="flex items-center gap-1.5">
-              {HERO_SLIDES.map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => goTo(i)}
-                  style={{
-                    width: i === idx ? 36 : 20, height: 2, borderRadius: 2,
-                    overflow: 'hidden', padding: 0, border: 'none',
-                    background: i < idx ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.20)',
-                    cursor: 'pointer', transition: 'width 0.3s ease, background 0.3s',
-                    flexShrink: 0,
-                  }}
+          {/* Headline + CTA */}
+          <div className="order-3 md:col-start-1 text-center md:text-left">
+            <div className="h-[3.2em] md:h-[3.6em] relative mb-3 md:mb-4 overflow-hidden">
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.h1
+                  key={style.key}
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -12 }}
+                  transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                  className="absolute inset-x-0 md:inset-x-auto top-0 font-serif text-[clamp(1.35rem,3.4vw,2rem)] text-white/88 leading-[1.2] font-medium"
                 >
+                  {style.line[lang]}
+                </motion.h1>
+              </AnimatePresence>
+            </div>
+
+            <p className="text-[13px] md:text-[14.5px] text-white/50 max-w-md mx-auto md:mx-0 leading-relaxed mb-6 md:mb-8">
+              {lang === 'sq'
+                ? 'Albume fotografike premium — dizajnoni online, printohen me cilësi galerie, mbërrijnë në derën tuaj.'
+                : 'Premium photo books — design online, printed at gallery quality, delivered to your door.'}
+            </p>
+
+            <div className="flex flex-wrap items-center justify-center md:justify-start gap-3">
+              <Link href={`/krijo?category=${encodeURIComponent(style.key)}&design=${encodeURIComponent(style.designId)}`}>
+                <motion.button
+                  whileTap={{ scale: 0.97 }}
+                  className="px-8 py-3.5 bg-white text-[#12100e] rounded-full text-[12.5px] font-semibold shadow-xl shadow-black/25"
+                >
+                  {lang === 'sq' ? 'krijo albumin' : 'create your book'}
+                </motion.button>
+              </Link>
+              <Link href="/shembuj">
+                <button className="px-6 py-3.5 text-white/70 text-[12.5px] border border-white/20 rounded-full hover:border-white/40 hover:text-white transition-colors">
+                  {lang === 'sq' ? 'shiko shembuj' : 'see examples'}
+                </button>
+              </Link>
+            </div>
+
+            <div className="mt-8 md:mt-10 flex flex-wrap items-center justify-center md:justify-start gap-x-1 gap-y-1">
+              {ALBUM_STYLES.map((s, i) => (
+                <button
+                  key={s.key}
+                  type="button"
+                  onClick={() => setIdx(i)}
+                  aria-label={s.label[lang]}
+                  aria-current={i === idx}
+                  className="relative h-8 px-2.5 text-[10px] tracking-[0.14em] uppercase transition-colors"
+                  style={{ color: i === idx ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.28)' }}
+                >
+                  {s.label[lang]}
                   {i === idx && (
-                    <motion.div
-                      style={{ height: '100%', background: '#fff', borderRadius: 2, transformOrigin: 'left' }}
-                      initial={{ scaleX: 0 }}
-                      animate={{ scaleX: 1 }}
-                      transition={{ duration: SLIDE_MS / 1000, ease: 'linear' }}
+                    <motion.span
+                      layoutId="hero-style-underline"
+                      className="absolute left-2.5 right-2.5 bottom-1 h-px bg-white/70"
                     />
                   )}
                 </button>
@@ -286,377 +457,116 @@ function HeroSlideshow({ lang }: { lang: 'sq' | 'en' }) {
           </div>
         </div>
       </div>
-
-      {/* Scroll pulse */}
-      <motion.div
-        className="absolute left-1/2 -translate-x-1/2 z-20 pointer-events-none"
-        style={{ bottom: 28 }}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 1.8 }}
-      >
-        <motion.div
-          className="w-px h-8 bg-white/25 mx-auto"
-          animate={{ scaleY: [1, 0.35, 1], opacity: [0.4, 0.9, 0.4] }}
-          transition={{ duration: 2, repeat: Infinity }}
-        />
-      </motion.div>
     </section>
   );
 }
 
-// ── 3D Book Showcase ────────────────────────────────────────────────────────────
+function AlbumStarter({ lang }: { lang: 'sq' | 'en' }) {
+  const [idx, setIdx] = useState(0);
+  const style = ALBUM_STYLES[idx];
+  const railRef = useRef<HTMLDivElement>(null);
 
-const SHOWCASE_BOOKS = [
-  {
-    key: 'wedding',
-    label: { sq: 'Dasmë', en: 'Wedding' },
-    sub: { sq: 'dashuria e tyre, gjithmonë', en: 'love forever' },
-    designId: 'cream-names',
-    spine: '#8B6F47',
-    img: CAT_IMG_BY_SLUG.dasme,
-  },
-  {
-    key: 'travel',
-    label: { sq: 'Udhëtime', en: 'Travel' },
-    sub: { sq: 'aventurat tuaja', en: 'your adventures' },
-    designId: 'paris-pink',
-    spine: '#2A4A20',
-    img: CAT_IMG_BY_SLUG.udhetime,
-  },
-  {
-    key: 'family',
-    label: { sq: 'Familje', en: 'Family' },
-    sub: { sq: 'momentet e vogla', en: 'little moments' },
-    designId: 'baby-ador',
-    spine: '#5C7A5A',
-    img: CAT_IMG_BY_SLUG.familje,
-  },
-  {
-    key: 'couples',
-    label: { sq: 'Çifte', en: 'Couples' },
-    sub: { sq: 'historia juaj e dashurisë', en: 'your love story' },
-    designId: 'the-wedding-of',
-    spine: '#1A2040',
-    img: CAT_IMG.Çifte,
-  },
-  {
-    key: 'celebration',
-    label: { sq: 'Festash', en: 'Celebrations' },
-    sub: { sq: 'dhurata perfekte', en: 'the perfect gift' },
-    designId: 'rome',
-    spine: '#5C4030',
-    img: CAT_IMG_BY_SLUG.festash,
-  },
-];
-
-const BOOK_CFG = [
-  { rotY: -34, scale: 0.86 },
-  { rotY: -25, scale: 0.93 },
-  { rotY: -16, scale: 1.00 },
-  { rotY: -25, scale: 0.93 },
-  { rotY: -34, scale: 0.86 },
-];
-
-const BW = 156, BH = 218, BD = 17;
-const BW_MOBILE = 148, BH_MOBILE = 206, BD_MOBILE = 14;
-
-function ShowcaseBook({
-  book, lang, cfg, hoveredKey, onHover, onLeave, mobile = false,
-}: {
-  book: typeof SHOWCASE_BOOKS[0];
-  lang: 'sq' | 'en';
-  cfg: typeof BOOK_CFG[0];
-  hoveredKey: string | null;
-  onHover: () => void;
-  onLeave: () => void;
-  mobile?: boolean;
-}) {
-  const isHov = hoveredKey === book.key;
-  const anyHov = hoveredKey !== null;
-  const w = mobile ? BW_MOBILE : BW;
-  const h = mobile ? BH_MOBILE : BH;
-  const d = mobile ? BD_MOBILE : BD;
-  // Flat books on mobile so the carousel can scroll; 3D fan only on desktop.
-  const rotY   = mobile ? 0 : (isHov ? -4 : cfg.rotY);
-  const scale  = mobile ? 1 : (isHov ? 1.09 : anyHov ? cfg.scale * 0.91 : cfg.scale);
-  const ty     = mobile ? 0 : (isHov ? -20 : 0);
-  const op     = mobile ? 1 : (anyHov && !isHov ? 0.55 : 1);
-  const dragRef = React.useRef({ x: 0, y: 0, moved: false });
-
-  const cover = (
-      <div
-        onMouseEnter={onHover}
-        onMouseLeave={onLeave}
-        title={book.label[lang]}
-        onTouchStart={(e) => {
-          dragRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, moved: false };
-        }}
-        onTouchMove={(e) => {
-          const dx = Math.abs(e.touches[0].clientX - dragRef.current.x);
-          const dy = Math.abs(e.touches[0].clientY - dragRef.current.y);
-          if (dx > 8 || dy > 8) dragRef.current.moved = true;
-        }}
-        style={{
-          position: 'relative',
-          width: w,
-          height: h,
-          transformStyle: mobile ? 'flat' : 'preserve-3d',
-          transform: mobile ? 'none' : `rotateY(${rotY}deg) scale(${scale}) translateY(${ty}px)`,
-          transition: mobile ? undefined : 'transform 0.52s cubic-bezier(0.22,1,0.36,1), opacity 0.38s ease',
-          opacity: op,
-          cursor: 'pointer',
-          margin: mobile ? '0 10px' : `0 ${d + 4}px`,
-          flexShrink: 0,
-          scrollSnapAlign: mobile ? 'center' : undefined,
-          touchAction: mobile ? 'pan-x' : undefined,
-        }}
-      >
-        {/* ── Spine (left face) — desktop 3D only ── */}
-        {!mobile && (
-        <div style={{
-          position: 'absolute',
-          left: -d, top: 0,
-          width: d, height: h,
-          transformOrigin: 'right center',
-          transform: 'rotateY(-90deg)',
-          background: `linear-gradient(to right, ${book.spine}55, ${book.spine}cc)`,
-          borderRadius: '2px 0 0 2px',
-          overflow: 'hidden',
-        }}>
-          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right,rgba(0,0,0,0.58),rgba(0,0,0,0.12))' }}/>
-          <div style={{
-            position: 'absolute', inset: 0,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <span style={{
-              writingMode: 'vertical-rl', fontSize: 7,
-              color: 'rgba(255,255,255,0.30)', letterSpacing: '0.24em',
-              textTransform: 'uppercase', fontWeight: 600,
-            }}>përgjithmonë</span>
-          </div>
-        </div>
-        )}
-
-        {/* ── Cover (front face) ── */}
-        <div style={{
-          position: 'absolute', inset: 0,
-          overflow: 'hidden',
-          borderRadius: mobile ? 10 : '0 3px 3px 0',
-          boxShadow: isHov
-            ? '8px 22px 48px rgba(0,0,0,0.28), 3px 6px 18px rgba(0,0,0,0.16)'
-            : '4px 10px 32px rgba(0,0,0,0.18), 1px 3px 8px rgba(0,0,0,0.10)',
-          transition: 'box-shadow 0.52s',
-          pointerEvents: 'none', // let parent carousel own the touch scroll
-        }}>
-          {/* Photo cover — same Unsplash set as choose-category / collections */}
-          <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', background: '#2a1f15' }}>
-            <img
-              src={book.img}
-              alt={book.label[lang]}
-              draggable={false}
-              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-            />
-          </div>
-          {/* gradient — keep title readable over photos */}
-          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top,rgba(0,0,0,0.78) 0%,rgba(0,0,0,0.10) 52%,rgba(0,0,0,0.00) 100%)' }}/>
-          {/* gloss */}
-          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(130deg,rgba(255,255,255,0.09) 0%,transparent 50%)', pointerEvents: 'none' }}/>
-          {/* label */}
-          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '14px 12px' }}>
-            <p style={{ color: '#fff', fontFamily: 'Georgia,serif', fontSize: 13, fontWeight: 500, lineHeight: 1.2, margin: 0 }}>
-              {book.label[lang]}
-            </p>
-            <p style={{ color: 'rgba(255,255,255,0.38)', fontSize: 8, letterSpacing: '0.22em', textTransform: 'uppercase', marginTop: 4 }}>
-              {book.sub[lang]}
-            </p>
-          </div>
-          {/* hover chip */}
-          <div style={{
-            position: 'absolute', top: 10, right: 10,
-            background: 'rgba(255,255,255,0.13)', backdropFilter: 'blur(8px)',
-            borderRadius: 20, padding: '3px 10px',
-            fontSize: 9, color: 'rgba(255,255,255,0.88)',
-            letterSpacing: '0.14em', textTransform: 'uppercase',
-            opacity: isHov ? 1 : 0,
-            transform: `translateY(${isHov ? 0 : 5}px)`,
-            transition: 'opacity 0.28s,transform 0.28s',
-          }}>
-            {lang === 'sq' ? 'Krijo →' : 'Create →'}
-          </div>
-        </div>
-
-        {/* ── Pages edge (right face) — desktop 3D only ── */}
-        {!mobile && (
-        <div style={{
-          position: 'absolute',
-          right: -d, top: '2%',
-          width: d, height: '96%',
-          transformOrigin: 'left center',
-          transform: 'rotateY(90deg)',
-          background: 'linear-gradient(to left,#c8c4bc,#eae5de)',
-          overflow: 'hidden',
-        }}>
-          {Array.from({ length: 9 }).map((_, i) => (
-            <div key={i} style={{
-              position: 'absolute', left: 1, right: 1,
-              top: `${(i / 9) * 100}%`, height: 1,
-              background: 'rgba(0,0,0,0.07)',
-            }}/>
-          ))}
-          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right,rgba(0,0,0,0.22),transparent 45%)' }}/>
-        </div>
-        )}
-      </div>
-  );
-
-  // On mobile, skip navigation if the finger was scrolling the carousel.
-  const krijoHref = `/krijo?category=${encodeURIComponent(book.key)}&design=${encodeURIComponent(book.designId)}`;
-  if (mobile) {
-    return (
-      <a
-        href={krijoHref}
-        onClick={(e) => {
-          if (dragRef.current.moved) e.preventDefault();
-        }}
-        style={{ textDecoration: 'none', color: 'inherit', flexShrink: 0, scrollSnapAlign: 'center' }}
-      >
-        {cover}
-      </a>
-    );
-  }
-
-  return <Link href={krijoHref}>{cover}</Link>;
-}
-
-function Book3DShowcase({ lang }: { lang: 'sq' | 'en' }) {
-  const [hovKey, setHovKey] = React.useState<string | null>(null);
-  const mobileScrollRef = React.useRef<HTMLDivElement>(null);
-
-  // Center the middle book on first mobile paint.
   useEffect(() => {
-    const el = mobileScrollRef.current;
-    if (!el || window.innerWidth >= 768) return;
-    const mid = Math.floor(SHOWCASE_BOOKS.length / 2);
-    const child = el.children[mid] as HTMLElement | undefined;
+    const el = railRef.current;
+    if (!el) return;
+    const child = el.children[idx] as HTMLElement | undefined;
     if (!child) return;
-    el.scrollLeft = child.offsetLeft - (el.clientWidth - child.clientWidth) / 2;
-  }, []);
+    const left = child.offsetLeft - (el.clientWidth - child.clientWidth) / 2;
+    el.scrollTo({ left: Math.max(0, left), behavior: 'smooth' });
+  }, [idx]);
+
+  const href = `/krijo?category=${encodeURIComponent(style.key)}&design=${encodeURIComponent(style.designId)}`;
 
   return (
-    <section className="bg-[#f7f4f0] pt-12 pb-14 md:pt-16 md:pb-20 overflow-hidden">
-      {/* Section label */}
-      <div className="text-center mb-9 md:mb-[52px]">
-        <p style={{ color: 'rgba(0,0,0,0.32)', fontSize: 9, letterSpacing: '0.35em', textTransform: 'uppercase', margin: '0 0 14px' }}>
-          {lang === 'sq' ? '— koleksioni ynë' : '— our collection'}
-        </p>
-        <h2 style={{
-          fontFamily: 'Georgia,serif',
-          color: 'rgba(0,0,0,0.82)',
-          fontSize: 'clamp(20px,2.8vw,34px)',
-          fontWeight: 500, margin: 0, lineHeight: 1.22,
-        }}>
-          {lang === 'sq' ? 'Çfarë po krijoni sot?' : 'What are you creating today?'}
-        </h2>
-      </div>
-
-      {/* Mobile: horizontal snap swipe — no 3D perspective (breaks touch scroll on iOS) */}
+    <section className="relative bg-[#f3efe9] overflow-hidden">
       <div
-        ref={mobileScrollRef}
-        className="flex md:hidden items-end overflow-x-auto snap-x snap-mandatory pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        style={{
-          WebkitOverflowScrolling: 'touch',
-          touchAction: 'pan-x',
-          paddingLeft: 'calc(50% - 84px)',
-          paddingRight: 'calc(50% - 84px)',
-        }}
-      >
-        {SHOWCASE_BOOKS.map((book, i) => (
-          <ShowcaseBook
-            key={book.key}
-            book={book}
-            lang={lang}
-            cfg={BOOK_CFG[i]}
-            hoveredKey={hovKey}
-            onHover={() => setHovKey(book.key)}
-            onLeave={() => setHovKey(null)}
-            mobile
-          />
-        ))}
-      </div>
+        aria-hidden
+        className="pointer-events-none absolute -top-24 right-[-10%] w-[55%] h-[55%] rounded-full opacity-40 blur-3xl"
+        style={{ background: `radial-gradient(circle, ${style.spine}33, transparent 70%)` }}
+      />
 
-      {/* Desktop: fan layout */}
-      <div className="hidden md:flex" style={{
-        justifyContent: 'center', alignItems: 'flex-end',
-        perspective: '1100px', perspectiveOrigin: '50% 55%',
-        padding: '0 16px',
-      }}>
-        {SHOWCASE_BOOKS.map((book, i) => (
-          <ShowcaseBook
-            key={book.key}
-            book={book}
-            lang={lang}
-            cfg={BOOK_CFG[i]}
-            hoveredKey={hovKey}
-            onHover={() => setHovKey(book.key)}
-            onLeave={() => setHovKey(null)}
-          />
-        ))}
-      </div>
-
-      {/* Category pill tags */}
-      <div style={{
-        display: 'flex', justifyContent: 'center', gap: 7,
-        marginTop: 44, flexWrap: 'wrap', padding: '0 20px',
-      }}>
-        {SHOWCASE_BOOKS.map(book => (
-          <Link key={book.key} href="/krijo">
-            <div
-              onMouseEnter={() => setHovKey(book.key)}
-              onMouseLeave={() => setHovKey(null)}
-              style={{
-                padding: '5px 15px', borderRadius: 20,
-                border: `1px solid ${hovKey === book.key ? 'rgba(0,0,0,0.28)' : 'rgba(0,0,0,0.12)'}`,
-                background: hovKey === book.key ? 'rgba(0,0,0,0.07)' : 'transparent',
-                color: hovKey === book.key ? 'rgba(0,0,0,0.78)' : 'rgba(0,0,0,0.36)',
-                fontSize: 10, letterSpacing: '0.13em', textTransform: 'uppercase',
-                cursor: 'pointer', transition: 'all 0.28s',
-              }}
-            >
-              {book.label[lang]}
-            </div>
-          </Link>
-        ))}
-        <Link href="/krijo">
-          <div style={{
-            padding: '5px 15px', borderRadius: 20,
-            border: '1px solid rgba(0,0,0,0.08)',
-            color: 'rgba(0,0,0,0.22)', fontSize: 10,
-            letterSpacing: '0.13em', textTransform: 'uppercase', cursor: 'pointer',
-          }}>
-            {lang === 'sq' ? '+ të tjera' : '+ more'}
+      <div className="relative max-w-7xl mx-auto px-5 md:px-10 pt-14 pb-16 md:pt-20 md:pb-24">
+        <div className="grid grid-cols-1 lg:grid-cols-[0.9fr_1.1fr] gap-10 lg:gap-16 items-center">
+          {/* Book preview */}
+          <div className="flex justify-center lg:justify-start">
+            <LivingAlbumBook style={style} size="starter" interactive={false} />
           </div>
-        </Link>
-      </div>
 
-      {/* CTA */}
-      <div style={{ textAlign: 'center', marginTop: 44 }}>
-        <Link href="/krijo">
-          <motion.button
-            whileHover={{ borderColor: 'rgba(0,0,0,0.40)', background: 'rgba(0,0,0,0.06)' }}
-            whileTap={{ scale: 0.97 }}
-            style={{
-              padding: '12px 34px',
-              background: 'rgba(0,0,0,0.04)',
-              border: '1px solid rgba(0,0,0,0.16)',
-              borderRadius: 40, color: 'rgba(0,0,0,0.70)',
-              fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase',
-              cursor: 'pointer',
-            }}
-          >
-            {lang === 'sq' ? 'shfletoni të gjitha stilet →' : 'browse all styles →'}
-          </motion.button>
-        </Link>
+          {/* Starter controls */}
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.32em] text-neutral-400 mb-3">
+              {lang === 'sq' ? 'filloni këtu' : 'start here'}
+            </p>
+            <h2 className="font-serif text-[clamp(1.75rem,3.5vw,2.75rem)] text-neutral-900 font-medium leading-[1.15] mb-3">
+              {lang === 'sq' ? 'Çfarë po krijoni sot?' : 'What are you creating today?'}
+            </h2>
+            <p className="text-[14px] text-neutral-500 max-w-md leading-relaxed mb-7">
+              {lang === 'sq'
+                ? 'Zgjidhni një moment — albumi hapet me stilin e duhur. Pastaj shtoni fotot tuaja.'
+                : 'Pick a moment — your book opens with the right style. Then add your photos.'}
+            </p>
+
+            {/* Occasion rail — snap carousel of choices, not a pill dump */}
+            <div
+              ref={railRef}
+              className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 mb-8 -mx-1 px-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              style={{ WebkitOverflowScrolling: 'touch' }}
+            >
+              {ALBUM_STYLES.map((s, i) => {
+                const active = i === idx;
+                return (
+                  <button
+                    key={s.key}
+                    type="button"
+                    onClick={() => setIdx(i)}
+                    className="snap-center shrink-0 text-left transition-all"
+                    style={{
+                      width: 118,
+                      padding: '14px 12px',
+                      borderRadius: 14,
+                      border: active ? '1px solid rgba(26,26,26,0.55)' : '1px solid rgba(26,26,26,0.1)',
+                      background: active ? '#1a1a1a' : 'rgba(255,255,255,0.55)',
+                      color: active ? '#fff' : '#1a1a1a',
+                      boxShadow: active ? '0 10px 28px rgba(0,0,0,0.12)' : 'none',
+                    }}
+                  >
+                    <span
+                      className="block w-7 h-1 rounded-full mb-3"
+                      style={{ background: s.spine, opacity: active ? 1 : 0.7 }}
+                    />
+                    <span className="block font-serif text-[15px] leading-tight mb-1">
+                      {s.label[lang]}
+                    </span>
+                    <span
+                      className="block text-[10px] leading-snug"
+                      style={{ color: active ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.38)' }}
+                    >
+                      {s.line[lang]}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <Link href={href}>
+                <motion.button
+                  whileTap={{ scale: 0.97 }}
+                  className="px-8 py-3.5 bg-[#1a1a1a] text-white rounded-full text-[12.5px] font-semibold"
+                >
+                  {lang === 'sq'
+                    ? `krijo · ${style.label.sq}`
+                    : `create · ${style.label.en}`}
+                </motion.button>
+              </Link>
+              <Link href="/krijo">
+                <button className="px-5 py-3.5 text-[12px] text-neutral-500 hover:text-neutral-800 transition-colors tracking-wide">
+                  {lang === 'sq' ? 'shfletoni të gjitha →' : 'browse all styles →'}
+                </button>
+              </Link>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -1070,10 +980,10 @@ export default function Home() {
       />
 
       {/* ── HERO ─────────────────────────────────────────────────────── */}
-      <HeroSlideshow lang={lang} />
+      <HeroAlbum lang={lang} />
 
       {/* ── 3D BOOK SHOWCASE ─────────────────────────────────────────── */}
-      <Book3DShowcase lang={lang} />
+      <AlbumStarter lang={lang} />
 
       {/* ── TICKER ───────────────────────────────────────────────────── */}
       <div className="bg-[#f7f4f0] border-y border-neutral-200/70 py-3.5 overflow-hidden">

@@ -8,11 +8,13 @@ import { Link, useLocation } from 'wouter';
 import { format } from 'date-fns';
 import { sq as sqLocale } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
-import { BookHeart, Plus, Trash2, Pencil, Check, Loader2 } from 'lucide-react';
+import { BookHeart, Plus, Trash2, Pencil, Check, Loader2, Instagram } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { ResponsivePageThumb } from '@/components/PageThumb';
 import type { EditorElement } from '@/lib/designs';
+
+const INSTAGRAM_URL = 'https://www.instagram.com/pergjithmone.al/';
 
 // ─── Cover thumbnail ──────────────────────────────────────────────────────────
 // Same renderer as the editor / wizard (PageThumb) so dashboard cards match
@@ -262,6 +264,34 @@ export default function Projects() {
             ))}
           </div>
         )}
+
+        <div
+          className="mt-10 rounded-2xl border border-border px-4 py-4 sm:px-5 sm:py-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4"
+          style={{ background: 'linear-gradient(135deg, #f7f4ef 0%, #f0ebe3 100%)' }}
+        >
+          <div className="flex items-start sm:items-center gap-3 flex-1 min-w-0">
+            <div
+              className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center"
+              style={{ background: 'rgba(26,26,26,0.06)' }}
+            >
+              <Instagram size={16} className="text-neutral-700" />
+            </div>
+            <p className="text-sm text-neutral-700 leading-relaxed">
+              {lang === 'sq'
+                ? 'Për çdo pyetje, problem ose ndihmë me albumin tuaj — na shkruani në Instagram. Jemi këtu për ju.'
+                : 'For any questions, problems, or help with your album — message us on Instagram. We’re here for you.'}
+            </p>
+          </div>
+          <a
+            href={INSTAGRAM_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-shrink-0 inline-flex items-center justify-center gap-2 rounded-full bg-neutral-900 text-white text-xs font-medium px-4 py-2.5 hover:bg-neutral-700 transition-colors"
+          >
+            <Instagram size={14} />
+            {lang === 'sq' ? 'Na shkruaj në Instagram' : 'Message us on Instagram'}
+          </a>
+        </div>
       </div>
 
       {/* ── Confirm delete modal ── */}

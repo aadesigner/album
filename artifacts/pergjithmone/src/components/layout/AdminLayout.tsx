@@ -16,6 +16,7 @@ import {
   type AdminPaletteId,
   type AdminTokens,
 } from '@/lib/adminTheme';
+import { AdminStickyNotes } from '@/components/admin/AdminStickyNotes';
 
 /** Mutable theme bag — pages import this; palette switch mutates + re-renders admin shell. */
 export const ADMIN: AdminTokens = { ...getAdminPalette(DEFAULT_ADMIN_PALETTE_ID).tokens };
@@ -817,6 +818,8 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
             `}</style>
             {children}
           </div>
+
+          <AdminStickyNotes />
         </main>
       </div>
     </AdminThemeContext.Provider>

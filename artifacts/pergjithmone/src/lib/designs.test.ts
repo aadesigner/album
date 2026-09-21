@@ -170,6 +170,22 @@ describe("front/back design helpers", () => {
     expect(designBackElements(patched)[1].text).toBe("OV-B");
   });
 
+  it("ignores stale place-photo wallpaper overrides on typographic city covers", () => {
+    const rome = DESIGNS.find((d) => d.id === "rome");
+    expect(rome).toBeTruthy();
+    expect(rome!.thumbPhoto).toBeUndefined();
+    const stale = [
+      { type: "background" as const, x: 0, y: 0, w: DESIGN_W, h: DESIGN_H, rotation: 0, bgColor: "#000", src: "/designs/rome-cover-thumb.jpg" },
+      { type: "text" as const, x: 0, y: 0, w: 100, h: 40, rotation: 0, text: "ROME" },
+    ];
+    const [patched] = applyDesignOverrides(
+      [rome!],
+      { rome: { frontElements: stale, backElements: stale } },
+    );
+    expect(designFrontElements(patched)).toEqual(rome!.elements);
+    expect(designFrontElements(patched).some((e) => e.src?.includes("cover-thumb"))).toBe(false);
+  });
+
   it("rejects malformed custom designs", () => {
     expect(parseCustomDesigns([{ id: "nope" }])).toEqual([]);
     expect(parseCustomDesigns("x")).toEqual([]);

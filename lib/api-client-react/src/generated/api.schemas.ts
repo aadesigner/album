@@ -616,6 +616,8 @@ export type ListAdminUsersParams = {
 page?: number;
 limit?: number;
 search?: string;
+/** Filter users by status or activity */
+filter?: 'all' | 'ordered' | 'not_ordered' | 'has_projects' | 'no_projects' | 'banned' | 'active' | 'admin' | 'user';
 };
 
 export type ListAdminOrdersParams = {

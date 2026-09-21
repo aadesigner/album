@@ -29,26 +29,16 @@ function thumbFontStyle(ff?: string, fs?: string): { fontStyle: string; fontWeig
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Scaled page thumbnail — renders actual page elements at thumb size.
-// This is the single rendering path used everywhere a design/page preview is
-// shown (Editor spread navigator, Editor's Designs panel, Wizard's design
-// picker) so previews are always pixel-accurate to what gets applied to the
-// real photobook — never a hand-drawn approximation.
+// Paint order matches PDF / Konva: element array order (no type-bucket sort).
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const PageThumb = React.memo(function PageThumb({
   elements, width, height, canvasH = DESIGN_H,
 }: { elements: EditorElement[] | Omit<EditorElement, 'id'>[]; width: number; height: number; canvasH?: number }) {
-  // Re-render when webfonts finish so Great Vibes / Londrina swap in (CSS alone
-  // can leave the first paint on a fallback until something else updates).
   const fontsReady = useEditorFontsReady();
   useEffect(() => { void ensureEditorFonts(); }, []);
 
   const scale = width / DESIGN_W;
-  // Sort so backgrounds are behind images, which are behind text/shapes
-  const sorted = [...elements].sort((a, b) => {
-    const z: Record<string, number> = { background: 0, placeholder: 1, image: 2, shape: 3, text: 4 };
-    return (z[a.type] ?? 2) - (z[b.type] ?? 2);
-  });
   return (
     <div
       data-fonts-ready={fontsReady ? '1' : '0'}
@@ -60,7 +50,7 @@ export const PageThumb = React.memo(function PageThumb({
         transformOrigin: 'top left',
         position: 'absolute', top: 0, left: 0,
       }}>
-        {sorted.map((el, i) => {
+        {elements.map((el, i) => {
           const key = (el as EditorElement).id ?? i;
           if (el.type === 'background') {
             if (el.src) {
@@ -84,6 +74,9 @@ export const PageThumb = React.memo(function PageThumb({
               objectFit: 'cover',
               objectPosition: `${(el.cropFocusX ?? 0.5) * 100}% ${(el.cropFocusY ?? 0.5) * 100}%`,
               display: 'block', pointerEvents: 'none',
+              opacity: el.opacity ?? 1,
+              transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
+              transformOrigin: 'top left',
             }}/>;
           }
           if (el.type === 'placeholder') {
@@ -118,10 +111,17 @@ export const PageThumb = React.memo(function PageThumb({
             );
           }
           if (el.type === 'shape') {
+            const fill = el.fill && el.fill !== 'transparent' ? el.fill : (el.bgColor && el.bgColor !== 'transparent' ? el.bgColor : undefined);
+            const hasStroke = !!(el.strokeColor && (el.strokeWidth ?? 0) > 0);
             return <div key={key} style={{
               position: 'absolute', left: el.x, top: el.y, width: el.w, height: el.h,
-              background: el.fill || el.bgColor || '#ccc',
+              background: fill || (hasStroke ? 'transparent' : '#ccc'),
               borderRadius: el.shapeKind === 'circle' ? '50%' : (el.cornerRadius ?? 0),
+              border: hasStroke ? `${el.strokeWidth}px solid ${el.strokeColor}` : undefined,
+              boxSizing: 'border-box',
+              opacity: el.opacity ?? 1,
+              transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
+              transformOrigin: 'center',
             }}/>;
           }
           return null;

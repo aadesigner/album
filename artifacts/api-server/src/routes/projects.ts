@@ -13,6 +13,9 @@ import { v4 as uuidv4 } from "uuid";
 import { logger } from "../lib/logger";
 import { queueProjectPdfGeneration, pdfsDir, isPdfGenerationInFlight, ensureProjectPdfFile } from "../lib/generateProjectPdf";
 import { getSecuritySettings } from "../lib/securitySettings";
+import {
+  getProjectEditBlock,
+} from "../lib/projectEditGuard";
 import path from "path";
 import fs from "fs";
 
@@ -360,6 +363,12 @@ router.patch(
     if (title) updates.title = title;
     if (bookSizeId) updates.bookSizeId = bookSizeId;
 
+    const block = await getProjectEditBlock(projectId, req.user!.id);
+    if (block) {
+      res.status(block.status).json({ error: block.error });
+      return;
+    }
+
     const [updated] = await db
       .update(projectsTable)
       .set(updates)
@@ -471,6 +480,12 @@ router.post(
       return;
     }
 
+    const block = await getProjectEditBlock(projectId, req.user!.id);
+    if (block) {
+      res.status(block.status).json({ error: block.error });
+      return;
+    }
+
     const [page] = await db
       .insert(projectPagesTable)
       .values({
@@ -522,6 +537,12 @@ router.patch(
       .limit(1);
     if (!owned) {
       res.status(404).json({ error: "Project not found" });
+      return;
+    }
+
+    const block = await getProjectEditBlock(projectId, req.user!.id);
+    if (block) {
+      res.status(block.status).json({ error: block.error });
       return;
     }
 
@@ -586,6 +607,12 @@ router.delete(
       .limit(1);
     if (!owned) {
       res.status(404).json({ error: "Project not found" });
+      return;
+    }
+
+    const block = await getProjectEditBlock(projectId, req.user!.id);
+    if (block) {
+      res.status(block.status).json({ error: block.error });
       return;
     }
 
@@ -677,6 +704,12 @@ router.post(
 
     if (!owned) {
       res.status(404).json({ error: "Project not found" });
+      return;
+    }
+
+    const block = await getProjectEditBlock(projectId, req.user!.id);
+    if (block) {
+      res.status(block.status).json({ error: block.error });
       return;
     }
 

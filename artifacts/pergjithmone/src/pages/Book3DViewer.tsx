@@ -61,86 +61,94 @@ const PageMiniRender = memo(function PageMiniRender({ elements, w, h, paperColor
   const scX = w / DESIGN_W;
   const scY = h / canvasH;
 
-  const bg = elements.find(e => e.type === 'background');
-  const shapes = elements.filter(e => e.type === 'shape');
-  const imgs = elements.filter(e => e.type === 'image');
-  const txts = elements.filter(e => e.type === 'text');
-  const phs = elements.filter(e => e.type === 'placeholder');
-
-  const getBg = () => {
-    if (!bg) return paperColor;
-    if (bg.bgGradientFrom) {
-      const dir = bg.bgGradientDir === 'lr' ? 'to right'
-        : bg.bgGradientDir === 'diag' ? '135deg'
-        : 'to bottom';
-      return `linear-gradient(${dir}, ${bg.bgGradientFrom}, ${bg.bgGradientTo || '#fff'})`;
-    }
-    return bg.bgColor || paperColor;
-  };
-
   return (
-    <div style={{ position: 'absolute', inset: 0, background: getBg(), overflow: 'hidden', userSelect: 'none', contain: 'strict' }}>
-      {bg?.src && (
-        <img src={bg.src} alt="" draggable={false} decoding="async"
-          style={{
-            position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover',
-            objectPosition: `${(bg.cropFocusX ?? 0.5) * 100}% ${(bg.cropFocusY ?? 0.5) * 100}%`,
-          }} />
-      )}
-      {shapes.map((el, i) => (
-        <div key={i} style={{
-          position: 'absolute',
-          left: el.x * scX, top: el.y * scY,
-          width: el.w * scX, height: el.h * scY,
-          background: el.fill === 'transparent' ? 'transparent' : (el.fill || 'transparent'),
-          borderRadius: el.shapeKind === 'circle' ? '50%' : (el.cornerRadius ? el.cornerRadius * scX : 0),
-          border: el.strokeColor && el.strokeWidth ? `${el.strokeWidth * scX}px solid ${el.strokeColor}` : undefined,
-          opacity: el.opacity ?? 1,
-          transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
-          transformOrigin: 'center',
-        }} />
-      ))}
-      {phs.map((el, i) => (
-        <div key={i} style={{
-          position: 'absolute',
-          left: el.x * scX, top: el.y * scY,
-          width: el.w * scX, height: el.h * scY,
-          background: 'rgba(200,190,180,0.35)', borderRadius: 2,
-        }} />
-      ))}
-      {imgs.map((el, i) => (
-        <img key={i} src={el.src} draggable={false} alt="" decoding="async" style={{
-          position: 'absolute',
-          left: el.x * scX, top: el.y * scY,
-          width: el.w * scX, height: el.h * scY,
-          objectFit: 'cover',
-          objectPosition: `${(el.cropFocusX ?? 0.5) * 100}% ${(el.cropFocusY ?? 0.5) * 100}%`,
-          transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
-          transformOrigin: 'center',
-        }} />
-      ))}
-      {txts.map((el, i) => (
-        <div key={i} style={{
-          position: 'absolute',
-          left: el.x * scX, top: el.y * scY,
-          width: el.w * scX,
-          // fontSize is a width-relative scalar (see designs.ts DESIGN_W/DESIGN_H
-          // doc) — scale by scX, not scY, so text stays proportional on
-          // non-3:4 books where scX and scY differ.
-          fontSize: (el.fontSize || 18) * scX,
-          fontFamily: el.fontFamily || 'Georgia, serif',
-          fontStyle: el.fontStyle?.includes('italic') ? 'italic' : 'normal',
-          fontWeight: el.fontStyle?.includes('bold') ? '700' : '400',
-          color: el.fill || '#333',
-          textAlign: (el.align || 'center') as any,
-          lineHeight: 1.3,
-          overflow: 'hidden',
-          transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
-          transformOrigin: 'top left',
-          padding: 2 * scX,
-          whiteSpace: 'pre-wrap',
-        }}>{el.text}</div>
-      ))}
+    <div style={{ position: 'absolute', inset: 0, background: paperColor, overflow: 'hidden', userSelect: 'none', contain: 'strict' }}>
+      {elements.map((el, i) => {
+        const key = el.id || i;
+        if (el.type === 'background') {
+          if (el.src) {
+            return (
+              <img key={key} src={el.src} alt="" draggable={false} decoding="async"
+                style={{
+                  position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover',
+                  objectPosition: `${(el.cropFocusX ?? 0.5) * 100}% ${(el.cropFocusY ?? 0.5) * 100}%`,
+                }} />
+            );
+          }
+          let bg = el.bgColor || paperColor;
+          if (el.bgGradientFrom) {
+            const dir = el.bgGradientDir === 'lr' ? 'to right'
+              : el.bgGradientDir === 'diag' ? '135deg'
+              : 'to bottom';
+            bg = `linear-gradient(${dir}, ${el.bgGradientFrom}, ${el.bgGradientTo || '#fff'})`;
+          }
+          return <div key={key} style={{ position: 'absolute', inset: 0, background: bg }} />;
+        }
+        if (el.type === 'shape') {
+          const fill = el.fill === 'transparent' ? 'transparent' : (el.fill || 'transparent');
+          return (
+            <div key={key} style={{
+              position: 'absolute',
+              left: el.x * scX, top: el.y * scY,
+              width: el.w * scX, height: el.h * scY,
+              background: fill,
+              borderRadius: el.shapeKind === 'circle' ? '50%' : (el.cornerRadius ? el.cornerRadius * scX : 0),
+              border: el.strokeColor && el.strokeWidth ? `${el.strokeWidth * scX}px solid ${el.strokeColor}` : undefined,
+              boxSizing: 'border-box',
+              opacity: el.opacity ?? 1,
+              transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
+              transformOrigin: 'center',
+            }} />
+          );
+        }
+        if (el.type === 'placeholder') {
+          return (
+            <div key={key} style={{
+              position: 'absolute',
+              left: el.x * scX, top: el.y * scY,
+              width: el.w * scX, height: el.h * scY,
+              background: 'rgba(200,190,180,0.35)', borderRadius: 2,
+            }} />
+          );
+        }
+        if (el.type === 'image' && el.src) {
+          return (
+            <img key={key} src={el.src} draggable={false} alt="" decoding="async" style={{
+              position: 'absolute',
+              left: el.x * scX, top: el.y * scY,
+              width: el.w * scX, height: el.h * scY,
+              objectFit: 'cover',
+              objectPosition: `${(el.cropFocusX ?? 0.5) * 100}% ${(el.cropFocusY ?? 0.5) * 100}%`,
+              opacity: el.opacity ?? 1,
+              transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
+              transformOrigin: 'center',
+            }} />
+          );
+        }
+        if (el.type === 'text') {
+          return (
+            <div key={key} style={{
+              position: 'absolute',
+              left: el.x * scX, top: el.y * scY,
+              width: el.w * scX,
+              fontSize: (el.fontSize || 18) * scX,
+              fontFamily: el.fontFamily || 'Georgia, serif',
+              fontStyle: el.fontStyle?.includes('italic') ? 'italic' : 'normal',
+              fontWeight: el.fontStyle?.includes('bold') ? '700' : '400',
+              color: el.fill || '#333',
+              textAlign: (el.align || 'center') as any,
+              lineHeight: 1.3,
+              overflow: 'hidden',
+              opacity: el.opacity ?? 1,
+              transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
+              transformOrigin: 'top left',
+              padding: 2 * scX,
+              whiteSpace: 'pre-wrap',
+            }}>{el.text}</div>
+          );
+        }
+        return null;
+      })}
     </div>
   );
 });
