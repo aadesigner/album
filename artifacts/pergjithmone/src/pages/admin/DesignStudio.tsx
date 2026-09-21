@@ -5,18 +5,30 @@ import { useGetAdminSettings, useUpdateAdminSettings, getGetAdminSettingsQueryKe
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { PageThumb } from '@/components/PageThumb';
 import {
   DESIGNS, DESIGN_W, DESIGN_H, CATEGORY_LABELS,
   applyDesignOverrides, designElementsWithIds, designElementsWithoutIds,
-  type DesignDef, type DesignOverrides, type EditorElement, type DE,
+  type DesignDef, type DesignOverrides, type EditorElement,
 } from '@/lib/designs';
+import { DESIGN_METAS } from '@/lib/designMeta';
 import { Check, Loader2, RotateCcw, Save, Eye, EyeOff, AlertTriangle } from 'lucide-react';
 import { useEditorFontsReady, ensureEditorFonts } from '@/lib/editorFonts';
 
 const PREVIEW_W = 300;
 const PREVIEW_H = Math.round(PREVIEW_W * (DESIGN_H / DESIGN_W));
 const SCALE = PREVIEW_W / DESIGN_W;
+
+function bindFrameNode(n: any, id: string, shapeRefs: React.MutableRefObject<Record<string, any>>) {
+  if (!n) return;
+  shapeRefs.current[id] = n;
+  // Frame bounds only — ignore overflowing children (same as editor).
+  n.getSelfRect = () => ({
+    x: 0,
+    y: 0,
+    width: n.width() || 1,
+    height: n.height() || 1,
+  });
+}
 
 function useHtmlImage(src?: string) {
   const [img, setImg] = useState<HTMLImageElement>();
@@ -31,6 +43,38 @@ function useHtmlImage(src?: string) {
   return img;
 }
 
+function BgFill({ el, onSelect }: { el: EditorElement; onSelect: () => void }) {
+  const img = useHtmlImage(el.src);
+  if (img) {
+    return (
+      <KonvaImage
+        image={img}
+        x={0} y={0} width={DESIGN_W} height={DESIGN_H}
+        onClick={onSelect} onTap={onSelect}
+      />
+    );
+  }
+  const hasGrad = !!(el.bgGradientFrom && el.bgGradientTo);
+  const end = el.bgGradientDir === 'lr'
+    ? { x: DESIGN_W, y: 0 }
+    : el.bgGradientDir === 'diag'
+      ? { x: DESIGN_W, y: DESIGN_H }
+      : { x: 0, y: DESIGN_H };
+  return (
+    <Rect
+      x={0} y={0} width={DESIGN_W} height={DESIGN_H}
+      fill={hasGrad ? undefined : (el.bgColor || '#fff')}
+      {...(hasGrad ? {
+        fillLinearGradientStartPoint: { x: 0, y: 0 },
+        fillLinearGradientEndPoint: end,
+        fillLinearGradientColorStops: [0, el.bgGradientFrom!, 1, el.bgGradientTo!],
+      } : {})}
+      onClick={onSelect}
+      onTap={onSelect}
+    />
+  );
+}
+
 function StudioImage({ el, selected, onSelect, onChange, shapeRefs }: {
   el: EditorElement; selected: boolean;
   onSelect: () => void;
@@ -40,7 +84,7 @@ function StudioImage({ el, selected, onSelect, onChange, shapeRefs }: {
   const img = useHtmlImage(el.src);
   return (
     <Group
-      ref={(n: any) => { if (n) shapeRefs.current[el.id] = n; }}
+      ref={(n: any) => bindFrameNode(n, el.id, shapeRefs)}
       x={el.x} y={el.y} width={el.w} height={el.h} rotation={el.rotation || 0}
       draggable
       onMouseDown={(e: any) => { e.cancelBubble = true; onSelect(); }}
@@ -69,6 +113,50 @@ function StudioImage({ el, selected, onSelect, onChange, shapeRefs }: {
   );
 }
 
+function StudioShape({ el, selected, onSelect, onChange, shapeRefs }: {
+  el: EditorElement; selected: boolean;
+  onSelect: () => void;
+  onChange: (c: Partial<EditorElement>) => void;
+  shapeRefs: React.MutableRefObject<Record<string, any>>;
+}) {
+  const isCircle = el.shapeKind === 'circle';
+  return (
+    <Group
+      ref={(n: any) => bindFrameNode(n, el.id, shapeRefs)}
+      x={el.x} y={el.y} width={el.w} height={el.h} rotation={el.rotation || 0}
+      draggable
+      onMouseDown={(e: any) => { e.cancelBubble = true; onSelect(); }}
+      onTouchStart={(e: any) => { e.cancelBubble = true; onSelect(); }}
+      onClick={(e: any) => { e.cancelBubble = true; onSelect(); }}
+      onTap={(e: any) => { e.cancelBubble = true; onSelect(); }}
+      onDragEnd={(e: any) => onChange({ x: e.target.x(), y: e.target.y() })}
+      onTransformEnd={(e: any) => {
+        const n = e.target;
+        const sx = n.scaleX(), sy = n.scaleY();
+        n.scaleX(1); n.scaleY(1);
+        const nw = Math.max(8, (n.width() || el.w) * sx);
+        const nh = Math.max(8, (n.height() || el.h) * sy);
+        n.width(nw); n.height(nh);
+        onChange({ x: n.x(), y: n.y(), w: nw, h: nh, rotation: n.rotation() });
+      }}
+    >
+      <Rect
+        width={el.w}
+        height={el.h}
+        fill={el.fill && el.fill !== 'transparent' ? el.fill : 'rgba(0,0,0,0.001)'}
+        opacity={el.opacity ?? 1}
+        cornerRadius={isCircle ? Math.min(el.w, el.h) / 2 : (el.cornerRadius || 0)}
+        stroke={el.strokeColor}
+        strokeWidth={el.strokeWidth || 0}
+        listening={false}
+      />
+      {selected && (
+        <Rect width={el.w} height={el.h} stroke="#C97B84" strokeWidth={2} listening={false} />
+      )}
+    </Group>
+  );
+}
+
 function StudioText({ el, selected, onSelect, onChange, shapeRefs, fontEpoch }: {
   el: EditorElement; selected: boolean;
   onSelect: () => void;
@@ -79,7 +167,7 @@ function StudioText({ el, selected, onSelect, onChange, shapeRefs, fontEpoch }: 
   const startRef = useRef({ w: el.w, h: el.h });
   return (
     <Group
-      ref={(n: any) => { if (n) shapeRefs.current[el.id] = n; }}
+      ref={(n: any) => bindFrameNode(n, el.id, shapeRefs)}
       x={el.x} y={el.y} width={el.w} height={el.h} rotation={el.rotation || 0}
       draggable
       onMouseDown={(e: any) => { e.cancelBubble = true; onSelect(); }}
@@ -144,13 +232,15 @@ function DesignCanvas({
   const imgs = elements.filter(e => e.type === 'image');
   const txts = elements.filter(e => e.type === 'text');
   const shapes = elements.filter(e => e.type === 'shape');
+  const selected = selectedId ? elements.find(e => e.id === selectedId) : null;
+  const canTransform = selected && selected.type !== 'background';
 
   useEffect(() => {
     if (!trRef.current) return;
-    const node = selectedId ? shapeRefs.current[selectedId] : null;
+    const node = (canTransform && selectedId) ? shapeRefs.current[selectedId] : null;
     trRef.current.nodes(node ? [node] : []);
     trRef.current.getLayer()?.batchDraw();
-  }, [selectedId, elements, fontEpoch]);
+  }, [selectedId, elements, fontEpoch, canTransform]);
 
   return (
     <Stage
@@ -166,27 +256,15 @@ function DesignCanvas({
       }}
     >
       <Layer>
-                {bgs.map(el => (
-                  <React.Fragment key={el.id}>
-                    {el.src ? (
-                      <BgPhoto el={el} />
-                    ) : (
-                      <Rect
-                        x={0} y={0} width={DESIGN_W} height={DESIGN_H}
-                        fill={el.bgColor || '#fff'}
-                        onClick={() => onSelect(el.id)}
-                        onTap={() => onSelect(el.id)}
-                      />
-                    )}
-                  </React.Fragment>
-                ))}
+        {bgs.map(el => (
+          <BgFill key={el.id} el={el} onSelect={() => onSelect(el.id)} />
+        ))}
         {shapes.map(el => (
-          <Rect
-            key={el.id}
-            x={el.x} y={el.y} width={el.w} height={el.h}
-            fill={el.fill && el.fill !== 'transparent' ? el.fill : 'rgba(0,0,0,0.001)'}
-            opacity={el.opacity ?? 1}
-            listening={false}
+          <StudioShape
+            key={el.id} el={el} selected={selectedId === el.id}
+            onSelect={() => onSelect(el.id)}
+            onChange={c => onChangeEl(el.id, c)}
+            shapeRefs={shapeRefs}
           />
         ))}
         {imgs.map(el => (
@@ -210,12 +288,12 @@ function DesignCanvas({
           ref={trRef}
           rotateEnabled
           enabledAnchors={
-            selectedId && elements.find(e => e.id === selectedId)?.type === 'text'
+            selected?.type === 'text'
               ? ['middle-left', 'middle-right', 'top-center', 'bottom-center']
               : ['top-left', 'top-right', 'bottom-left', 'bottom-right', 'middle-left', 'middle-right']
           }
           boundBoxFunc={(oldBox: any, newBox: any) =>
-            newBox.width < 20 || newBox.height < 20 ? oldBox : newBox
+            newBox.width < 8 || newBox.height < 8 ? oldBox : newBox
           }
           borderStroke="#C97B84"
           anchorStroke="#C97B84"
@@ -227,15 +305,27 @@ function DesignCanvas({
   );
 }
 
-function BgPhoto({ el }: { el: EditorElement }) {
-  const img = useHtmlImage(el.src);
-  if (!img) {
-    return <Rect x={0} y={0} width={DESIGN_W} height={DESIGN_H} fill={el.bgColor || '#eee'} />;
-  }
+function CatalogThumb({ designId }: { designId: string }) {
+  const meta = DESIGN_METAS.find(d => d.id === designId);
   return (
-    <KonvaImage image={img} x={0} y={0} width={DESIGN_W} height={DESIGN_H} listening={false} />
+    <div
+      className="w-12 h-16 rounded-md overflow-hidden flex-shrink-0 relative"
+      style={{ border: `1px solid ${ADMIN.line}`, background: (meta?.thumb?.background as string) || ADMIN.bg }}
+    >
+      {meta?.thumbPhoto ? (
+        <img src={meta.thumbPhoto} alt="" loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover" />
+      ) : null}
+      {meta?.thumbAccents?.map((style, i) => (
+        <div key={i} style={{ position: 'absolute', ...style }} />
+      ))}
+      {meta?.thumbLabel ? (
+        <span className="absolute bottom-0.5 left-0 right-0 text-center text-[7px] font-bold tracking-wide text-white"
+          style={{ textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>{meta.thumbLabel}</span>
+      ) : null}
+    </div>
   );
 }
+
 
 export default function AdminDesignStudio() {
   const { data: settings, isLoading } = useGetAdminSettings();
@@ -248,10 +338,22 @@ export default function AdminDesignStudio() {
   const savedHiddenIds: string[] = Array.isArray(s?.hiddenDesignIds) ? s.hiddenDesignIds as string[] : [];
 
   const catalog = useMemo(() => applyDesignOverrides(DESIGNS, savedOverrides), [savedOverrides]);
-  const categories = useMemo(() => [...new Set(catalog.map(d => d.category))], [catalog]);
+  const categories = useMemo(() => {
+    const order = ['Wedding', 'Travel', 'Celebration', 'Baby & Family', 'Modern', 'Portrait', 'Nature', 'Locations'];
+    const present = [...new Set(catalog.map(d => d.category))];
+    return [
+      ...order.filter(c => present.includes(c)),
+      ...present.filter(c => !order.includes(c)),
+    ];
+  }, [catalog]);
 
-  const [activeCat, setActiveCat] = useState('Travel');
-  const [designId, setDesignId] = useState('paris-pink');
+  const [activeCat, setActiveCat] = useState(() => {
+    const hasTravel = DESIGNS.some(d => d.category === 'Travel');
+    return hasTravel ? 'Travel' : (DESIGNS[0]?.category || 'Travel');
+  });
+  const [designId, setDesignId] = useState(() =>
+    DESIGNS.find(d => d.category === 'Travel')?.id || DESIGNS[0]?.id || 'paris-pink',
+  );
   const [draft, setDraft] = useState<EditorElement[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -298,7 +400,7 @@ export default function AdminDesignStudio() {
         [design.id]: designElementsWithoutIds(draft),
       };
       await updateSettings.mutateAsync({
-        data: { designOverrides: JSON.stringify(next) } as any,
+        data: { designOverrides: next } as any,
       });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: getGetAdminSettingsQueryKey() }),
@@ -327,7 +429,7 @@ export default function AdminDesignStudio() {
     setSaving(true);
     try {
       await updateSettings.mutateAsync({
-        data: { designOverrides: JSON.stringify(next) } as any,
+        data: { designOverrides: next } as any,
       });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: getGetAdminSettingsQueryKey() }),
@@ -473,9 +575,7 @@ export default function AdminDesignStudio() {
                           : { borderColor: ADMIN.line, opacity: hidden ? 0.55 : 1 }
                       }
                     >
-                      <div className="w-12 h-16 rounded-md overflow-hidden flex-shrink-0" style={{ border: `1px solid ${ADMIN.line}`, background: ADMIN.bg }}>
-                        <PageThumb elements={d.elements as DE[]} width={48} height={64} />
-                      </div>
+                      <CatalogThumb designId={d.id} />
                       <div className="min-w-0">
                         <p className="text-xs font-semibold truncate" style={{ color: ADMIN.ink }}>{d.name.en}</p>
                         <p className="text-[10px] truncate" style={{ color: ADMIN.muted }}>{d.name.sq}</p>
@@ -531,7 +631,7 @@ export default function AdminDesignStudio() {
               <p className="text-[10px] uppercase tracking-[0.14em] font-semibold" style={{ color: ADMIN.muted }}>Properties</p>
               {!selected ? (
                 <p className="text-sm leading-relaxed" style={{ color: ADMIN.muted }}>
-                  Tap text or a landmark on the cover to edit it.
+                  Tap text, shapes, or landmark art on the cover to edit.
                 </p>
               ) : selected.type === 'text' ? (
                 <div className="space-y-3">
@@ -593,6 +693,36 @@ export default function AdminDesignStudio() {
                     Drag to reposition, use corner handles to resize. Size: {Math.round(selected.w)}×{Math.round(selected.h)}
                   </p>
                 </div>
+              ) : selected.type === 'shape' ? (
+                <div className="space-y-3">
+                  <p className="text-sm" style={{ color: ADMIN.ink }}>Shape</p>
+                  <label className="block text-[11px] font-medium" style={{ color: ADMIN.ink }}>Fill</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="color"
+                      value={(selected.fill && selected.fill.startsWith('#')) ? selected.fill : '#C97B84'}
+                      onChange={e => onChangeEl(selected.id, { fill: e.target.value })}
+                      className="h-9 w-12 rounded border cursor-pointer"
+                      style={{ borderColor: ADMIN.line }}
+                    />
+                    <Input
+                      value={selected.fill || ''}
+                      onChange={e => onChangeEl(selected.id, { fill: e.target.value })}
+                    />
+                  </div>
+                  <label className="block text-[11px] font-medium" style={{ color: ADMIN.ink }}>Opacity</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={selected.opacity ?? 1}
+                    onChange={e => onChangeEl(selected.id, { opacity: Math.min(1, Math.max(0, Number(e.target.value) || 0)) })}
+                  />
+                  <p className="text-[11px]" style={{ color: ADMIN.muted }}>
+                    Drag / resize on canvas. Size: {Math.round(selected.w)}×{Math.round(selected.h)}
+                  </p>
+                </div>
               ) : selected.type === 'background' ? (
                 <div className="space-y-3">
                   <label className="block text-[11px] font-medium" style={{ color: ADMIN.ink }}>Background color</label>
@@ -611,7 +741,7 @@ export default function AdminDesignStudio() {
                   </div>
                 </div>
               ) : (
-                <p className="text-sm" style={{ color: ADMIN.muted }}>Select text or an image to edit.</p>
+                <p className="text-sm" style={{ color: ADMIN.muted }}>Select text, a shape, or an image to edit.</p>
               )}
             </div>
           </div>
