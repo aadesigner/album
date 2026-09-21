@@ -26,23 +26,55 @@ export const DESIGN_CATEGORY_LABELS: Record<string, { sq: string; en: string }> 
   'Locations':     { sq: 'Vendndodhje',    en: 'Locations'     },
 };
 
-// Maps DB category name (Albanian / English / slug) → DESIGNS category key
-export const DB_CAT_TO_DESIGN_CAT: Record<string, string> = {
-  'Dasmë':   'Wedding', 'Dasëm': 'Wedding', 'Wedding': 'Wedding', 'Dasma': 'Wedding', 'dasme': 'Wedding',
-  'Udhëtime':'Travel',  'Udhëtim':'Travel', 'Travel': 'Travel', 'udhetime': 'Travel',
-  'Familje': 'Baby & Family', 'Fëmijë':'Baby & Family', 'Bebe':'Baby & Family',
-  'Fëmijëri':'Baby & Family', 'Family': 'Baby & Family', 'Baby': 'Baby & Family', 'familje': 'Baby & Family',
-  // Birthday / parties / friendship → Celebration (NOT travel city covers)
-  'Ditëlindje':'Celebration', 'ditelindje': 'Celebration',
-  'Festash':'Celebration', 'Festë':'Celebration', 'Festim':'Celebration', 'festash': 'Celebration',
+/** Lowercase + strip diacritics so "Ditëlindje" / "Ditelindje" / slug all match. */
+export function normalizeCatKey(raw: string | null | undefined): string {
+  return String(raw || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+// Maps normalized DB category name / slug / English → DESIGNS category key
+const DB_CAT_TO_DESIGN_CAT_RAW: Record<string, string> = {
+  'Dasmë': 'Wedding', 'Dasëm': 'Wedding', 'Wedding': 'Wedding', 'Dasma': 'Wedding', 'dasme': 'Wedding',
+  'Udhëtime': 'Travel', 'Udhëtim': 'Travel', 'Travel': 'Travel', 'udhetime': 'Travel',
+  'Familje': 'Baby & Family', 'Fëmijë': 'Baby & Family', 'Bebe': 'Baby & Family',
+  'Fëmijëri': 'Baby & Family', 'Family': 'Baby & Family', 'Baby': 'Baby & Family', 'familje': 'Baby & Family',
+  // Birthday / parties / friendship → Celebration (NOT travel)
+  'Ditëlindje': 'Celebration', 'ditelindje': 'Celebration',
+  'Festash': 'Celebration', 'Festë': 'Celebration', 'Festim': 'Celebration', 'festash': 'Celebration',
   'Birthday': 'Celebration', 'Celebrations': 'Celebration', 'Celebration': 'Celebration',
   'Miqësi': 'Celebration', 'miqesi': 'Celebration', 'Friendship': 'Celebration',
-  'Natyrë':  'Travel',  'Peizazh':'Travel', 'Nature': 'Travel',
-  'Çifte':   'Wedding','Dashurinë':'Wedding', 'Portrait': 'Wedding', 'Couples': 'Wedding',
-  'Sport':'Travel','Arkitekturë':'Travel','Graduim':'Celebration',
+  'Natyrë': 'Travel', 'Peizazh': 'Travel', 'Nature': 'Travel',
+  'Çifte': 'Wedding', 'Dashurinë': 'Wedding', 'Portrait': 'Wedding', 'Couples': 'Wedding',
+  'Sport': 'Travel', 'Arkitekturë': 'Travel', 'Graduim': 'Celebration',
   'Modern': 'Travel',
   'Vendndodhje': 'Travel', 'Locations': 'Travel',
 };
+
+export const DB_CAT_TO_DESIGN_CAT: Record<string, string> = Object.fromEntries(
+  Object.entries(DB_CAT_TO_DESIGN_CAT_RAW).flatMap(([k, v]) => [
+    [k, v],
+    [normalizeCatKey(k), v],
+  ]),
+);
+
+/** Resolve design category from a DB category row (nameAl / nameEn / slug). */
+export function resolveDesignCategory(cat: {
+  nameAl?: string | null;
+  nameEn?: string | null;
+  slug?: string | null;
+} | null | undefined): string {
+  if (!cat) return '';
+  const candidates = [cat.nameAl, cat.nameEn, cat.slug];
+  for (const c of candidates) {
+    if (!c) continue;
+    const hit = DB_CAT_TO_DESIGN_CAT[c] || DB_CAT_TO_DESIGN_CAT[normalizeCatKey(c)];
+    if (hit) return hit;
+  }
+  return '';
+}
 
 const cityAccent: CSSProperties[] = [
   { position: 'absolute', bottom: 0, left: 0, right: 0, height: '32%', background: 'linear-gradient(to top,rgba(0,0,0,0.55) 0%,transparent 100%)' },

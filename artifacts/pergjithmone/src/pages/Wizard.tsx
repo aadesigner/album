@@ -7,14 +7,22 @@ import { useLocation } from 'wouter';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Link } from 'wouter';
-import { DESIGN_METAS, DESIGN_CATEGORY_LABELS, DB_CAT_TO_DESIGN_CAT, type DesignMeta } from '@/lib/designMeta';
-import { DESIGNS, BLANK_STARTER_ID, applyDesignOverrides, type DesignOverrides } from '@/lib/designs';
-import { ResponsivePageThumb } from '@/components/PageThumb';
+import { DESIGN_METAS, DESIGN_CATEGORY_LABELS, resolveDesignCategory, type DesignMeta } from '@/lib/designMeta';
+import { BLANK_STARTER_ID } from '@/lib/designs';
 import { SEOMeta } from '@/components/SEOMeta';
 import { useToast } from '@/hooks/use-toast';
 import { getCategoryImage } from '@/lib/categoryImages';
 import { createProjectErrorMessage } from '@/lib/projectErrors';
 
+/** Warm the browser cache for design picker thumbs (no full cover render). */
+function preloadDesignThumbs(designs: DesignMeta[]) {
+  for (const d of designs) {
+    if (!d.thumbPhoto) continue;
+    const img = new Image();
+    img.decoding = 'async';
+    img.src = d.thumbPhoto;
+  }
+}
 
 // ── Book size card ───────────────────────────────────────────────────────────
 export function SizeCard({ size, isSelected, onClick, lang, t }: any) {
@@ -111,40 +119,47 @@ export function SizeCard({ size, isSelected, onClick, lang, t }: any) {
 }
 
 // ── Design card thumbnail ─────────────────────────────────────────────────────
-function DesignCard({ design, isSelected, lang, onClick, overrides }: {
+// Lightweight meta thumb (photo/color + label) — NOT full PageThumb.
+// Rendering every cover with ResizeObserver + webfonts + full images made the
+// picker feel slow after picking a category.
+function DesignCard({ design, isSelected, lang, onClick }: {
   design: DesignMeta; isSelected: boolean; lang: 'sq' | 'en'; onClick: () => void;
-  overrides?: DesignOverrides | null;
 }) {
-  // Render the *real* design elements (same data applyDesign() uses in the
-  // Editor), so this preview is pixel-accurate to what the front cover, back
-  // cover, and page background will actually look like once applied.
-  const realDesign = useMemo(
-    () => applyDesignOverrides(DESIGNS, overrides).find(d => d.id === design.id),
-    [design.id, overrides],
-  );
   return (
-    <motion.button
+    <button
+      type="button"
       onClick={onClick}
-      whileHover={{ y: -3 }}
-      whileTap={{ scale: 0.97 }}
-      transition={{ duration: 0.18 }}
-      className="relative flex flex-col items-center gap-2 group focus:outline-none w-full"
+      className="relative flex flex-col items-center gap-2 group focus:outline-none w-full transition-transform duration-150 hover:-translate-y-0.5 active:scale-[0.97]"
     >
       <div
-        className={`relative w-full overflow-hidden rounded-2xl transition-all duration-200 ${
+        className={`relative w-full overflow-hidden rounded-2xl transition-shadow duration-150 ${
           isSelected
-            ? 'ring-2 ring-neutral-900 shadow-xl scale-[1.01]'
-            : 'ring-1 ring-neutral-200 hover:ring-neutral-400 hover:shadow-lg'
+            ? 'ring-2 ring-neutral-900 shadow-xl'
+            : 'ring-1 ring-neutral-200 hover:ring-neutral-400 hover:shadow-md'
         }`}
+        style={{ aspectRatio: '3/4', ...design.thumb }}
       >
-        {realDesign
-          ? <ResponsivePageThumb elements={realDesign.elements} />
-          : <div style={{ aspectRatio: '3/4', ...design.thumb }}>
-              {design.thumbAccents.map((style, i) => <div key={i} style={{ position: 'absolute', ...style }} />)}
-            </div>
-        }
+        {design.thumbPhoto ? (
+          <img
+            src={design.thumbPhoto}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+        ) : null}
+        {design.thumbAccents.map((style, i) => (
+          <div key={i} style={{ position: 'absolute', ...style }} />
+        ))}
+        {design.thumbLabel ? (
+          <span
+            className="absolute bottom-2 left-1 right-1 text-center text-[10px] font-bold tracking-[0.14em] text-white"
+            style={{ textShadow: '0 1px 4px rgba(0,0,0,0.55)' }}
+          >
+            {design.thumbLabel}
+          </span>
+        ) : null}
 
-        {/* Selected state overlay */}
         {isSelected && (
           <div className="absolute inset-0 bg-black/10 flex items-center justify-center">
             <div className="w-8 h-8 rounded-full bg-neutral-900 flex items-center justify-center shadow-md">
@@ -158,7 +173,7 @@ function DesignCard({ design, isSelected, lang, onClick, overrides }: {
       }`}>
         {design.name[lang]}
       </span>
-    </motion.button>
+    </button>
   );
 }
 
@@ -178,6 +193,24 @@ export default function Wizard() {
   const { data: settings } = useGetAppSettings();
   const createProject = useCreateProject();
   const { toast } = useToast();
+
+  // Prefetch all picker thumbs once — category switch then feels instant.
+  useEffect(() => {
+    let cancelled = false;
+    const run = () => { if (!cancelled) preloadDesignThumbs(DESIGN_METAS); };
+    let idleId: number | undefined;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      idleId = window.requestIdleCallback(run);
+    } else {
+      timeoutId = setTimeout(run, 200);
+    }
+    return () => {
+      cancelled = true;
+      if (idleId != null && 'cancelIdleCallback' in window) window.cancelIdleCallback(idleId);
+      if (timeoutId != null) clearTimeout(timeoutId);
+    };
+  }, []);
 
   // Home category cards deep-link to cover/style selection via ?category=slug
   // Showcase albums also pass ?design=id so the cover is pre-highlighted.
@@ -220,23 +253,19 @@ export default function Wizard() {
   const siteSettings = settings as any;
   const bookCreationEnabled = siteSettings?.bookCreationEnabled !== false;
   const hiddenDesignIds: string[] = siteSettings?.hiddenDesignIds || [];
-  const designOverrides = (siteSettings?.designOverrides || {}) as DesignOverrides;
 
   // Map selected DB category → design category → filter designs
   const selectedCat = useMemo(() => {
     if (selectedCategory === 'blank' || selectedCategory === null) return null;
     return (categories as any[])?.find((c: any) => c.id === selectedCategory) || null;
   }, [selectedCategory, categories]);
-  const selectedCatName = selectedCat?.nameAl || '';
-  const designCategoryKey =
-    DB_CAT_TO_DESIGN_CAT[selectedCatName]
-    || DB_CAT_TO_DESIGN_CAT[selectedCat?.nameEn || '']
-    || DB_CAT_TO_DESIGN_CAT[selectedCat?.slug || '']
-    || '';
+  const designCategoryKey = resolveDesignCategory(selectedCat);
   const shownDesigns = useMemo(() => {
+    // Never fall back to ALL designs — that dumped travel cities into parties
+    // whenever the DB category name didn't exact-match the map.
     const base = designCategoryKey
       ? DESIGN_METAS.filter(d => d.category === designCategoryKey)
-      : DESIGN_METAS;
+      : [];
     return hiddenDesignIds.length > 0
       ? base.filter(d => !hiddenDesignIds.includes(d.id))
       : base;
@@ -250,6 +279,11 @@ export default function Wizard() {
   const handleCategorySelect = (catId: number | 'blank') => {
     setSelectedCategory(catId);
     setSelectedDesignId(null);
+    if (catId !== 'blank') {
+      const cat = (categories as any[])?.find((c: any) => c.id === catId);
+      const key = resolveDesignCategory(cat);
+      if (key) preloadDesignThumbs(DESIGN_METAS.filter(d => d.category === key));
+    }
     // Blank canvas skips the style step entirely.
     setStep(catId === 'blank' ? 3 : 2);
   };
@@ -558,21 +592,14 @@ export default function Wizard() {
                 </div>
 
                 <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 md:gap-4">
-                  {shownDesigns.map((design, idx) => (
-                    <motion.div
+                  {shownDesigns.map((design) => (
+                    <DesignCard
                       key={design.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: idx * 0.025, duration: 0.28 }}
-                    >
-                      <DesignCard
-                        design={design}
-                        isSelected={selectedDesignId === design.id}
-                        lang={lang as 'sq' | 'en'}
-                        onClick={() => handleDesignSelect(design.id)}
-                        overrides={designOverrides}
-                      />
-                    </motion.div>
+                      design={design}
+                      isSelected={selectedDesignId === design.id}
+                      lang={lang as 'sq' | 'en'}
+                      onClick={() => handleDesignSelect(design.id)}
+                    />
                   ))}
                 </div>
 

@@ -47,6 +47,7 @@ import {
   coverCropRect, imageFrameCoverFit, imageFrameFocusFromOffset, applyDesignOverrides,
   type EditorElement, type DE, type DesignDef, type LayoutZone, type DesignOverrides,
 } from '@/lib/designs';
+import { DESIGN_METAS } from '@/lib/designMeta';
 import { PageThumb } from '@/components/PageThumb';
 import { compressImageFile, ImageTooLargeError } from '@/lib/imageCompression';
 import { applyCoverBackground, coverBgMode, type CoverBgMode } from '@/lib/coverBackground';
@@ -2008,12 +2009,23 @@ function LayoutThumb({ zones }: { zones: LayoutZone[] }) {
 }
 
 function DesignThumb({design,lang,onApply}: {design:DesignDef;lang:'sq'|'en';onApply:()=>void}) {
+  const meta = DESIGN_METAS.find(d => d.id === design.id);
   return (
     <button onClick={onApply}
       className="flex flex-col items-center gap-1.5 group transition-transform hover:scale-105 active:scale-95 outline-none">
-      <div className="relative overflow-hidden rounded-md border border-neutral-200 group-hover:border-neutral-700 shadow-sm transition-all group-hover:shadow-md" style={{width:72,height:96}}>
-        {/* Always render real elements so sidebar fonts/layout match the builder */}
-        <PageThumb elements={design.elements} width={72} height={96}/>
+      <div
+        className="relative overflow-hidden rounded-md border border-neutral-200 group-hover:border-neutral-700 shadow-sm transition-all group-hover:shadow-md"
+        style={{ width: 72, height: 96, ...(meta?.thumb || { background: '#ECE7E1' }) }}
+      >
+        {meta?.thumbPhoto ? (
+          <img src={meta.thumbPhoto} alt="" loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover" />
+        ) : (
+          <PageThumb elements={design.elements} width={72} height={96} />
+        )}
+        {meta?.thumbLabel ? (
+          <span className="absolute bottom-1 left-0 right-0 text-center text-[8px] font-bold tracking-wider text-white"
+            style={{ textShadow: '0 1px 3px rgba(0,0,0,0.5)' }}>{meta.thumbLabel}</span>
+        ) : null}
       </div>
       <span className="text-[9px] text-neutral-500 group-hover:text-neutral-800 transition-colors text-center leading-tight w-full truncate px-1">
         {design.name[lang]}
