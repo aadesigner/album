@@ -23,7 +23,7 @@ import {
   type SecuritySettings,
 } from "../lib/securitySettings";
 import { invalidateIpBlocklistCache } from "../lib/ipBlocklist";
-import { queueProjectPdfGeneration } from "../lib/generateProjectPdf";
+import { queueProjectPdfGeneration, deleteProjectPdfFile } from "../lib/generateProjectPdf";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -668,6 +668,47 @@ router.patch(
     }
 
     res.json(order);
+  },
+);
+
+// DELETE /admin/orders/:orderId — permanently remove the order (not soft-cancel).
+// Also unlocks the linked project back to draft and deletes any print PDF.
+router.delete(
+  "/admin/orders/:orderId",
+  requireAdmin,
+  async (req, res): Promise<void> => {
+    const orderId = parseInt(req.params.orderId as string, 10);
+    if (isNaN(orderId)) {
+      res.status(400).json({ error: "Invalid order ID" });
+      return;
+    }
+
+    const [order] = await db
+      .select({
+        id: ordersTable.id,
+        projectId: ordersTable.projectId,
+      })
+      .from(ordersTable)
+      .where(eq(ordersTable.id, orderId))
+      .limit(1);
+
+    if (!order) {
+      res.status(404).json({ error: "Order not found" });
+      return;
+    }
+
+    await db.delete(ordersTable).where(eq(ordersTable.id, orderId));
+
+    // Free the album so the customer can edit / re-order it.
+    deleteProjectPdfFile(order.projectId);
+    await db
+      .update(projectsTable)
+      .set({ status: "draft", pdfUrl: null, updatedAt: new Date() })
+      .where(eq(projectsTable.id, order.projectId));
+
+    invalidatePendingBooksLimitCache();
+
+    res.json({ success: true });
   },
 );
 

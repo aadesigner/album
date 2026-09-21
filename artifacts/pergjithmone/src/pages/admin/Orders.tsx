@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { AdminLayout, ADMIN } from '@/components/layout/AdminLayout';
-import { useListAdminOrders, useUpdateAdminOrder } from '@workspace/api-client-react-tsconfig';
+import { useListAdminOrders, useUpdateAdminOrder, getListAdminOrdersQueryKey, getGetAdminStatsQueryKey } from '@workspace/api-client-react-tsconfig';
 import { format } from 'date-fns';
-import { RefreshCw, Eye, FileX, ExternalLink, X, Download, StickyNote } from 'lucide-react';
+import { RefreshCw, Eye, FileX, ExternalLink, X, Download, StickyNote, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
 
 const BASE = (import.meta as any).env?.BASE_URL?.replace(/\/$/, '') || '';
 
@@ -123,7 +124,6 @@ function DeletePdfConfirm({ orderId, onConfirm, onCancel, loading }: {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={e => e.target === e.currentTarget && onCancel()}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xs p-6 text-center">
-        <div className="text-4xl mb-3">🗑️</div>
         <h3 className="font-serif text-lg font-semibold mb-2">Delete PDF?</h3>
         <p className="text-sm text-neutral-500 mb-5">
           This removes the generated PDF from Order #{orderId}. The order stays registered; you can regenerate the PDF afterward.
@@ -139,12 +139,52 @@ function DeletePdfConfirm({ orderId, onConfirm, onCancel, loading }: {
   );
 }
 
+// ── Delete order confirm (permanent) ──────────────────────────────────────────
+function DeleteOrderConfirm({ orderId, customer, album, onConfirm, onCancel, loading }: {
+  orderId: number; customer: string; album: string;
+  onConfirm: () => void; onCancel: () => void; loading: boolean;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={e => e.target === e.currentTarget && onCancel()}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <div className="w-9 h-9 rounded-xl bg-red-50 flex items-center justify-center">
+            <Trash2 size={16} className="text-red-600" />
+          </div>
+          <div>
+            <h3 className="font-serif text-lg font-semibold leading-tight">Delete order?</h3>
+            <p className="text-[11px] text-neutral-400">Order #{orderId} · permanent</p>
+          </div>
+        </div>
+        <p className="text-sm text-neutral-600 mb-3">
+          This permanently removes the order for <strong>{customer}</strong>
+          {album ? <> — <em>{album}</em></> : null}. It cannot be undone.
+        </p>
+        <ul className="text-[12px] text-neutral-500 mb-5 space-y-1 list-disc pl-4">
+          <li>Order is deleted from the database</li>
+          <li>Print PDF (if any) is removed</li>
+          <li>Album is unlocked back to draft so the customer can edit again</li>
+        </ul>
+        <div className="flex gap-3">
+          <Button type="button" variant="outline" onClick={onCancel} className="flex-1" disabled={loading}>Cancel</Button>
+          <Button type="button" onClick={onConfirm} disabled={loading} className="flex-1 bg-red-500 hover:bg-red-600 text-white">
+            {loading ? 'Deleting…' : 'Delete forever'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminOrders() {
   const { getToken } = useAuth();
+  const { toast } = useToast();
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [pdfModal, setPdfModal] = useState<{ url: string; orderId: number } | null>(null);
   const [deletePdf, setDeletePdf] = useState<{ orderId: number } | null>(null);
   const [deletingPdfId, setDeletingPdfId] = useState<number | null>(null);
+  const [deleteOrder, setDeleteOrder] = useState<{ orderId: number; customer: string; album: string } | null>(null);
+  const [deletingOrderId, setDeletingOrderId] = useState<number | null>(null);
   const [noteTarget, setNoteTarget] = useState<{ orderId: number; note: string } | null>(null);
 
   const { data: ordersData, isLoading, refetch } = useListAdminOrders({
@@ -187,6 +227,37 @@ export default function AdminOrders() {
     } finally { setDeletingPdfId(null); }
   };
 
+  const handleDeleteOrder = async () => {
+    if (!deleteOrder) return;
+    setDeletingOrderId(deleteOrder.orderId);
+    try {
+      const token = getToken();
+      const res = await fetch(`${BASE}/api/admin/orders/${deleteOrder.orderId}`, {
+        method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        toast({
+          title: 'Could not delete order',
+          description: (body as any)?.error || 'Something went wrong',
+          variant: 'destructive',
+        });
+        return;
+      }
+      setDeleteOrder(null);
+      toast({ title: 'Order deleted' });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: getListAdminOrdersQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetAdminStatsQueryKey() }),
+      ]);
+      refetch();
+    } finally {
+      setDeletingOrderId(null);
+    }
+  };
+
   const handleRegenPdf = async (orderId: number) => {
     setRegenId(orderId);
     try {
@@ -216,6 +287,16 @@ export default function AdminOrders() {
           onConfirm={handleDeletePdf}
           onCancel={() => setDeletePdf(null)}
           loading={deletingPdfId === deletePdf.orderId}
+        />
+      )}
+      {deleteOrder && (
+        <DeleteOrderConfirm
+          orderId={deleteOrder.orderId}
+          customer={deleteOrder.customer}
+          album={deleteOrder.album}
+          onConfirm={handleDeleteOrder}
+          onCancel={() => setDeleteOrder(null)}
+          loading={deletingOrderId === deleteOrder.orderId}
         />
       )}
       {noteTarget && (
@@ -262,19 +343,19 @@ export default function AdminOrders() {
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ borderBottom: `1px solid ${ADMIN.line}` }}>
-                  {['#', 'Customer', 'Album', 'Pages', 'Amount', 'Date', 'PDF', 'Status', 'Note', 'Admin Note'].map(h => (
-                    <th key={h} className="px-3 sm:px-4 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider whitespace-nowrap" style={{ color: ADMIN.muted }}>{h}</th>
+                  {['#', 'Customer', 'Album', 'Pages', 'Amount', 'Date', 'PDF', 'Status', 'Note', 'Admin Note', ''].map(h => (
+                    <th key={h || 'actions'} className="px-3 sm:px-4 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider whitespace-nowrap" style={{ color: ADMIN.muted }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {isLoading ? (
                   Array.from({ length: 8 }).map((_, i) => (
-                    <tr key={i}><td colSpan={10} className="px-4 py-4"><div className="h-4 rounded animate-pulse" style={{ background: ADMIN.blushSoft }} /></td></tr>
+                    <tr key={i}><td colSpan={11} className="px-4 py-4"><div className="h-4 rounded animate-pulse" style={{ background: ADMIN.blushSoft }} /></td></tr>
                   ))
                 ) : !orders.length ? (
                   <tr>
-                    <td colSpan={10} className="px-4 py-16 text-center">
+                    <td colSpan={11} className="px-4 py-16 text-center">
                       <p className="text-sm" style={{ color: ADMIN.muted }}>No orders yet</p>
                     </td>
                   </tr>
@@ -372,6 +453,23 @@ export default function AdminOrders() {
                         >
                           <StickyNote size={11} className="shrink-0" />
                           <span className="truncate">{(o as any).adminNote || 'Add note'}</span>
+                        </button>
+                      </td>
+
+                      {/* Delete order */}
+                      <td className="px-3 py-3.5 text-right">
+                        <button
+                          type="button"
+                          onClick={() => setDeleteOrder({
+                            orderId: o.id,
+                            customer: o.userName || (o as any).userPhone || 'Guest',
+                            album: o.projectTitle || `Proj #${o.projectId}`,
+                          })}
+                          disabled={deletingOrderId === o.id}
+                          className="p-2 rounded-xl text-neutral-300 hover:bg-red-50 hover:text-red-600 transition-colors disabled:opacity-50"
+                          title="Delete order permanently"
+                        >
+                          <Trash2 size={14} />
                         </button>
                       </td>
                     </tr>
