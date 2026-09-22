@@ -496,16 +496,16 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
             fetchPriority="high"
             className="absolute inset-0 h-full w-full object-cover"
             style={{
-              objectPosition: '68% center',
-              opacity: 0.42,
-              filter: 'saturate(0.55) brightness(0.72) contrast(1.05)',
-              transform: reduced ? undefined : 'scale(1.06)',
+              objectPosition: '72% center',
+              opacity: 0.62,
+              filter: 'saturate(0.72) brightness(0.88) contrast(1.04)',
+              transform: reduced ? undefined : 'scale(1.05)',
             }}
           />
         </motion.div>
       </AnimatePresence>
 
-      {/* Style-tinted veil — text side solid, book side breathes */}
+      {/* Style-tinted veil — heavy left for type, open right so the book breathes */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0"
@@ -513,13 +513,15 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
           background: `
             linear-gradient(105deg,
               ${style.wash} 0%,
-              ${style.wash}ee 28%,
-              ${style.wash}99 52%,
-              ${style.wash}55 72%,
-              ${style.wash}aa 100%
+              ${style.wash}f8 18%,
+              ${style.wash}e6 34%,
+              ${style.wash}99 48%,
+              ${style.wash}44 66%,
+              ${style.wash}14 84%,
+              transparent 100%
             ),
-            linear-gradient(to top, ${style.wash}f0 0%, transparent 42%),
-            radial-gradient(58% 50% at 78% 42%, ${style.ambient}66 0%, transparent 72%)
+            linear-gradient(to top, ${style.wash}e8 0%, ${style.wash}66 22%, transparent 48%),
+            radial-gradient(52% 48% at 82% 40%, ${style.ambient}44 0%, transparent 70%)
           `,
           transition: 'background 0.7s ease',
         }}
@@ -530,17 +532,17 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
         <>
           <div
             aria-hidden
-            className="pointer-events-none absolute top-[8%] right-[-4%] w-[52%] h-[70%] rounded-full opacity-50 blur-3xl"
+            className="pointer-events-none absolute top-[8%] right-[-4%] w-[52%] h-[70%] rounded-full opacity-35 blur-3xl"
             style={{
-              background: `radial-gradient(circle, ${style.paper}28 0%, ${style.spine}18 40%, transparent 70%)`,
+              background: `radial-gradient(circle, ${style.paper}32 0%, ${style.spine}14 40%, transparent 70%)`,
               transition: 'background 0.7s ease',
             }}
           />
           <div
             aria-hidden
-            className="pointer-events-none absolute bottom-[-18%] left-[-10%] w-[48%] h-[48%] rounded-full opacity-40 blur-3xl"
+            className="pointer-events-none absolute bottom-[-18%] left-[-10%] w-[48%] h-[48%] rounded-full opacity-50 blur-3xl"
             style={{
-              background: `radial-gradient(circle, ${style.spine}22 0%, transparent 68%)`,
+              background: `radial-gradient(circle, ${style.spine}28 0%, transparent 68%)`,
               transition: 'background 0.7s ease',
             }}
           />
