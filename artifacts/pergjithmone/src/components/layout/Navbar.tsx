@@ -140,14 +140,14 @@ export function Navbar() {
         }}
       >
         <div
-          className="max-w-7xl mx-auto px-4 md:px-10 h-[48px] md:h-[54px] flex items-center justify-between"
+          className="max-w-7xl mx-auto px-4 md:px-10 h-[64px] md:h-[72px] flex items-center justify-between"
         >
           {/* Logo */}
           <Link href="/" className="flex items-center shrink-0 z-50">
             <img
               src="/logo-full.png"
               alt="Përgjithmonë"
-              className="w-[140px] h-[26px] md:w-[158px] md:h-[30px]"
+              className="w-[196px] h-[36px] md:w-[228px] md:h-[42px]"
               style={{ objectFit: 'contain', objectPosition: 'left center' }}
             />
           </Link>
