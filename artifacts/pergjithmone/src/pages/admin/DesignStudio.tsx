@@ -25,12 +25,24 @@ import {
 import { useEditorFontsReady, ensureEditorFonts } from '@/lib/editorFonts';
 
 const PREVIEW_W = 440;
+const PREVIEW_W_MIN = 280;
 const CATALOG_THUMB_W = 56;
 const CATALOG_THUMB_H = Math.round(CATALOG_THUMB_W * (DESIGN_H / DESIGN_W));
 
-function previewSizeForCanvas(canvasH: number) {
-  const h = Math.round(PREVIEW_W * (canvasH / DESIGN_W));
-  return { w: PREVIEW_W, h, scale: PREVIEW_W / DESIGN_W };
+function previewSizeForCanvas(canvasH: number, previewW = PREVIEW_W) {
+  const w = Math.max(PREVIEW_W_MIN, Math.min(PREVIEW_W, previewW));
+  const h = Math.round(w * (canvasH / DESIGN_W));
+  return { w, h, scale: w / DESIGN_W };
+}
+
+/** Soft clamp — keep most of the element on the page without hard edges. */
+function studioDragBound(pos: { x: number; y: number }, w: number, h: number, canvasH: number) {
+  const slackX = Math.min(40, w * 0.25);
+  const slackY = Math.min(40, h * 0.25);
+  return {
+    x: Math.min(Math.max(pos.x, -slackX), DESIGN_W - w + slackX),
+    y: Math.min(Math.max(pos.y, -slackY), canvasH - h + slackY),
+  };
 }
 
 function formatSizeLabel(s: { label?: string; widthCm?: number | string; heightCm?: number | string }) {
@@ -92,9 +104,53 @@ function bindFrameNode(n: any, id: string, shapeRefs: React.MutableRefObject<Rec
   n.getSelfRect = () => ({
     x: 0,
     y: 0,
-    width: n.width() || 1,
-    height: n.height() || 1,
+    width: Math.max(1, n.width() || 1),
+    height: Math.max(1, n.height() || 1),
   });
+}
+
+type StudioGesture = {
+  active: React.MutableRefObject<boolean>;
+  begin: () => void;
+  end: () => void;
+};
+
+/**
+ * Smooth builder gestures:
+ * - Always draggable (select + drag in one stroke)
+ * - Never commit React x/y until dragEnd (avoids snap-back)
+ * - Parent skips re-rendering canvas nodes while gesturing
+ */
+function useStudioDrag(
+  el: EditorElement,
+  canvasH: number,
+  onSelect: () => void,
+  onChange: (c: Partial<EditorElement>) => void,
+  gesture: StudioGesture,
+) {
+  return {
+    x: el.x,
+    y: el.y,
+    draggable: true as const,
+    dragDistance: 2,
+    onMouseDown: (e: any) => { e.cancelBubble = true; onSelect(); },
+    onTouchStart: (e: any) => { e.cancelBubble = true; onSelect(); },
+    onClick: (e: any) => { e.cancelBubble = true; onSelect(); },
+    onTap: (e: any) => { e.cancelBubble = true; onSelect(); },
+    dragBoundFunc: (pos: any) => studioDragBound(pos, el.w, el.h, canvasH),
+    onDragStart: (e: any) => {
+      e.cancelBubble = true;
+      onSelect();
+      gesture.begin();
+    },
+    onDragEnd: (e: any) => {
+      e.cancelBubble = true;
+      const b = studioDragBound({ x: e.target.x(), y: e.target.y() }, el.w, el.h, canvasH);
+      e.target.position(b);
+      onChange(b);
+      gesture.end();
+    },
+  };
 }
 
 function useHtmlImage(src?: string) {
@@ -110,14 +166,32 @@ function useHtmlImage(src?: string) {
   return img;
 }
 
-function BgFill({ el, onSelect, canvasH }: { el: EditorElement; onSelect: () => void; canvasH: number }) {
+/** Skip React→Konva prop sync while a gesture is in flight (prevents snap-back). */
+function studioNodePropsEqual(prev: any, next: any) {
+  if (next.gesture?.active?.current) return true;
+  return (
+    prev.el === next.el
+    && prev.selected === next.selected
+    && prev.canvasH === next.canvasH
+    && prev.fontEpoch === next.fontEpoch
+  );
+}
+
+function BgFill({ el, onSelect, canvasH, interactive }: {
+  el: EditorElement; onSelect: () => void; canvasH: number; interactive?: boolean;
+}) {
   const img = useHtmlImage(el.src);
+  const listen = !!interactive;
   if (img) {
     return (
       <KonvaImage
         image={img}
         x={0} y={0} width={DESIGN_W} height={canvasH}
-        onClick={onSelect} onTap={onSelect}
+        listening={listen}
+        onMouseDown={listen ? (e: any) => { e.cancelBubble = true; onSelect(); } : undefined}
+        onTouchStart={listen ? (e: any) => { e.cancelBubble = true; onSelect(); } : undefined}
+        onClick={listen ? onSelect : undefined}
+        onTap={listen ? onSelect : undefined}
       />
     );
   }
@@ -131,215 +205,254 @@ function BgFill({ el, onSelect, canvasH }: { el: EditorElement; onSelect: () => 
     <Rect
       x={0} y={0} width={DESIGN_W} height={canvasH}
       fill={hasGrad ? undefined : (el.bgColor || '#fff')}
+      listening={listen}
       {...(hasGrad ? {
         fillLinearGradientStartPoint: { x: 0, y: 0 },
         fillLinearGradientEndPoint: end,
         fillLinearGradientColorStops: [0, el.bgGradientFrom!, 1, el.bgGradientTo!],
       } : {})}
-      onClick={onSelect}
-      onTap={onSelect}
+      onMouseDown={listen ? (e: any) => { e.cancelBubble = true; onSelect(); } : undefined}
+      onTouchStart={listen ? (e: any) => { e.cancelBubble = true; onSelect(); } : undefined}
+      onClick={listen ? onSelect : undefined}
+      onTap={listen ? onSelect : undefined}
     />
   );
 }
 
-function StudioImage({ el, selected, onSelect, onChange, shapeRefs }: {
+const StudioImage = React.memo(function StudioImage({ el, onSelect, onChange, shapeRefs, gesture, canvasH }: {
   el: EditorElement; selected: boolean;
   onSelect: () => void;
   onChange: (c: Partial<EditorElement>) => void;
   shapeRefs: React.MutableRefObject<Record<string, any>>;
+  gesture: StudioGesture;
+  canvasH: number;
 }) {
   const img = useHtmlImage(el.src);
+  const drag = useStudioDrag(el, canvasH, onSelect, onChange, gesture);
   const startRef = useRef({ w: el.w, h: el.h });
-  const bake = (n: any, sx: number, sy: number) => {
-    // Uniform scale from corners (keepRatio) — avoid stretched icons.
-    const s = Math.max(sx, sy);
-    const nw = Math.max(20, startRef.current.w * s);
-    const nh = Math.max(20, startRef.current.h * s);
-    n.scaleX(1); n.scaleY(1);
-    n.width(nw); n.height(nh);
-    n.clip({ x: 0, y: 0, width: nw, height: nh });
-    n.getChildren().forEach((c: any) => {
-      const name = typeof c.getClassName === 'function' ? c.getClassName() : '';
-      if (name === 'Rect') {
-        c.width(nw); c.height(nh);
-      } else if (name === 'Image' && img) {
-        if (el.objectFit === 'contain' || el.mixBlendMode === 'screen') {
-          const is = Math.min(nw / Math.max(1, img.width), nh / Math.max(1, img.height));
-          const iw = img.width * is;
-          const ih = img.height * is;
-          c.width(iw); c.height(ih);
-          c.x((nw - iw) / 2); c.y((nh - ih) / 2);
-        } else {
-          c.width(nw); c.height(nh); c.x(0); c.y(0);
-        }
-      }
-    });
-    return { nw, nh };
+  const isContain = el.objectFit === 'contain' || el.mixBlendMode === 'screen';
+
+  const layoutImage = (nw: number, nh: number) => {
+    if (!img || !isContain) return { width: nw, height: nh, x: 0, y: 0 };
+    const s = Math.min(nw / Math.max(1, img.width), nh / Math.max(1, img.height));
+    const iw = img.width * s;
+    const ih = img.height * s;
+    return { width: iw, height: ih, x: (nw - iw) / 2, y: (nh - ih) / 2 };
   };
+
+  const laid = layoutImage(el.w, el.h);
+
   return (
     <Group
       ref={(n: any) => bindFrameNode(n, el.id, shapeRefs)}
-      x={el.x} y={el.y} width={el.w} height={el.h} rotation={el.rotation || 0}
+      x={drag.x} y={drag.y} width={el.w} height={el.h} rotation={el.rotation || 0}
       clipX={0} clipY={0} clipWidth={el.w} clipHeight={el.h}
-      draggable
-      onMouseDown={(e: any) => { e.cancelBubble = true; onSelect(); }}
-      onTouchStart={(e: any) => { e.cancelBubble = true; onSelect(); }}
-      onClick={(e: any) => { e.cancelBubble = true; onSelect(); }}
-      onTap={(e: any) => { e.cancelBubble = true; onSelect(); }}
-      onDragEnd={(e: any) => onChange({ x: e.target.x(), y: e.target.y() })}
-      onTransformStart={() => { startRef.current = { w: el.w, h: el.h }; }}
-      onTransform={(e: any) => { bake(e.target, e.target.scaleX(), e.target.scaleY()); }}
+      draggable={drag.draggable}
+      dragDistance={drag.dragDistance}
+      dragBoundFunc={drag.dragBoundFunc}
+      onMouseDown={drag.onMouseDown}
+      onTouchStart={drag.onTouchStart}
+      onClick={drag.onClick}
+      onTap={drag.onTap}
+      onDragStart={drag.onDragStart}
+      onDragEnd={drag.onDragEnd}
+      onTransformStart={() => {
+        startRef.current = { w: el.w, h: el.h };
+        gesture.begin();
+      }}
+      // Let Transformer scale visually (buttery); bake size only on end.
       onTransformEnd={(e: any) => {
         const n = e.target;
+        const sx = n.scaleX();
+        const sy = n.scaleY();
+        const s = Math.max(Math.abs(sx), Math.abs(sy)) || 1;
         n.scaleX(1); n.scaleY(1);
-        const nw = Math.max(20, n.width() || startRef.current.w);
-        const nh = Math.max(20, n.height() || startRef.current.h);
+        const nw = Math.max(20, startRef.current.w * s);
+        const nh = Math.max(20, startRef.current.h * s);
+        const b = studioDragBound({ x: n.x(), y: n.y() }, nw, nh, canvasH);
+        n.position(b);
         n.width(nw); n.height(nh);
         n.clip({ x: 0, y: 0, width: nw, height: nh });
-        onChange({ x: n.x(), y: n.y(), w: nw, h: nh, rotation: n.rotation() });
+        const laidEnd = layoutImage(nw, nh);
+        n.getChildren().forEach((c: any) => {
+          const name = typeof c.getClassName === 'function' ? c.getClassName() : '';
+          if (name === 'Rect') { c.width(nw); c.height(nh); c.x(0); c.y(0); }
+          else if (name === 'Image') {
+            c.width(laidEnd.width); c.height(laidEnd.height); c.x(laidEnd.x); c.y(laidEnd.y);
+          }
+        });
+        onChange({ ...b, w: nw, h: nh, rotation: n.rotation() });
+        gesture.end();
       }}
     >
-      <Rect width={el.w} height={el.h} fill="rgba(0,0,0,0.001)" />
+      <Rect width={el.w} height={el.h} fill="rgba(0,0,0,0.001)" perfectDrawEnabled={false} />
       {img && (
         <KonvaImage
           image={img}
-          width={el.w}
-          height={el.h}
+          x={laid.x} y={laid.y}
+          width={laid.width} height={laid.height}
           perfectDrawEnabled={false}
           listening={false}
-          // Contain-style for landmark PNGs; stretch only if explicitly cover
-          {...(el.objectFit === 'contain' || el.mixBlendMode === 'screen'
-            ? (() => {
-                const s = Math.min(el.w / Math.max(1, img.width), el.h / Math.max(1, img.height));
-                const iw = img.width * s;
-                const ih = img.height * s;
-                return {
-                  width: iw,
-                  height: ih,
-                  x: (el.w - iw) / 2,
-                  y: (el.h - ih) / 2,
-                  globalCompositeOperation: (el.mixBlendMode as GlobalCompositeOperation) || undefined,
-                };
-              })()
-            : {})}
+          globalCompositeOperation={(el.mixBlendMode as GlobalCompositeOperation) || undefined}
         />
-      )}
-      {selected && (
-        <Rect width={el.w} height={el.h} stroke="#C97B84" strokeWidth={2} listening={false} />
       )}
     </Group>
   );
-}
+}, studioNodePropsEqual);
 
-/** Legacy shapes still render for Celebration / Travel overlays — not authorable. */
-function StudioShape({ el, selected, onSelect, onChange, shapeRefs }: {
+/** Decorative lines / shapes — fat hit target, smooth move/resize. */
+const StudioShape = React.memo(function StudioShape({ el, onSelect, onChange, shapeRefs, gesture, canvasH }: {
   el: EditorElement; selected: boolean;
   onSelect: () => void;
   onChange: (c: Partial<EditorElement>) => void;
   shapeRefs: React.MutableRefObject<Record<string, any>>;
+  gesture: StudioGesture;
+  canvasH: number;
 }) {
   const isCircle = el.shapeKind === 'circle';
+  const drag = useStudioDrag(el, canvasH, onSelect, onChange, gesture);
   const startRef = useRef({ w: el.w, h: el.h });
-  const bake = (n: any, sx: number, sy: number) => {
-    const nw = Math.max(8, startRef.current.w * sx);
-    const nh = Math.max(8, startRef.current.h * sy);
-    n.scaleX(1); n.scaleY(1);
-    n.width(nw); n.height(nh);
-    n.getChildren().forEach((c: any) => {
-      if (typeof c.width === 'function') {
-        c.width(nw); c.height(nh);
-        if (isCircle && typeof c.cornerRadius === 'function') {
-          c.cornerRadius(Math.min(nw, nh) / 2);
-        }
-      }
-    });
-    return { nw, nh };
-  };
+  const hitPad = Math.max(0, (24 - Math.min(el.w, el.h)) / 2);
+  const visualFill = el.fill && el.fill !== 'transparent' ? el.fill : undefined;
+  const hitFill = visualFill || 'rgba(0,0,0,0.001)';
+
   return (
     <Group
       ref={(n: any) => bindFrameNode(n, el.id, shapeRefs)}
-      x={el.x} y={el.y} width={el.w} height={el.h} rotation={el.rotation || 0}
-      draggable
-      onMouseDown={(e: any) => { e.cancelBubble = true; onSelect(); }}
-      onTouchStart={(e: any) => { e.cancelBubble = true; onSelect(); }}
-      onClick={(e: any) => { e.cancelBubble = true; onSelect(); }}
-      onTap={(e: any) => { e.cancelBubble = true; onSelect(); }}
-      onDragEnd={(e: any) => onChange({ x: e.target.x(), y: e.target.y() })}
-      onTransformStart={() => { startRef.current = { w: el.w, h: el.h }; }}
-      onTransform={(e: any) => { bake(e.target, e.target.scaleX(), e.target.scaleY()); }}
+      x={drag.x} y={drag.y} width={el.w} height={el.h} rotation={el.rotation || 0}
+      draggable={drag.draggable}
+      dragDistance={drag.dragDistance}
+      dragBoundFunc={drag.dragBoundFunc}
+      onMouseDown={drag.onMouseDown}
+      onTouchStart={drag.onTouchStart}
+      onClick={drag.onClick}
+      onTap={drag.onTap}
+      onDragStart={drag.onDragStart}
+      onDragEnd={drag.onDragEnd}
+      onTransformStart={() => {
+        startRef.current = { w: el.w, h: el.h };
+        gesture.begin();
+      }}
       onTransformEnd={(e: any) => {
         const n = e.target;
+        const sx = Math.abs(n.scaleX()) || 1;
+        const sy = Math.abs(n.scaleY()) || 1;
         n.scaleX(1); n.scaleY(1);
-        const nw = Math.max(8, n.width() || startRef.current.w);
-        const nh = Math.max(8, n.height() || startRef.current.h);
-        onChange({ x: n.x(), y: n.y(), w: nw, h: nh, rotation: n.rotation() });
+        const nw = Math.max(4, startRef.current.w * sx);
+        const nh = Math.max(4, startRef.current.h * sy);
+        const b = studioDragBound({ x: n.x(), y: n.y() }, nw, nh, canvasH);
+        n.position(b);
+        n.width(nw); n.height(nh);
+        const pad = Math.max(0, (24 - Math.min(nw, nh)) / 2);
+        const kids = n.getChildren();
+        if (kids[0]) {
+          kids[0].x(-pad); kids[0].y(-pad);
+          kids[0].width(nw + pad * 2); kids[0].height(nh + pad * 2);
+        }
+        if (kids[1]) {
+          kids[1].x(0); kids[1].y(0);
+          kids[1].width(nw); kids[1].height(nh);
+          if (isCircle && typeof kids[1].cornerRadius === 'function') {
+            kids[1].cornerRadius(Math.min(nw, nh) / 2);
+          }
+        }
+        onChange({ ...b, w: nw, h: nh, rotation: n.rotation() });
+        gesture.end();
       }}
     >
       <Rect
+        name="hit-pad"
+        x={-hitPad} y={-hitPad}
+        width={el.w + hitPad * 2} height={el.h + hitPad * 2}
+        fill="rgba(0,0,0,0.001)"
+        perfectDrawEnabled={false}
+      />
+      <Rect
+        name="shape-fill"
         width={el.w}
         height={el.h}
-        fill={el.fill && el.fill !== 'transparent' ? el.fill : 'rgba(0,0,0,0.001)'}
+        fill={hitFill}
         opacity={el.opacity ?? 1}
         cornerRadius={isCircle ? Math.min(el.w, el.h) / 2 : (el.cornerRadius || 0)}
         stroke={el.strokeColor}
         strokeWidth={el.strokeWidth || 0}
         listening={false}
+        perfectDrawEnabled={false}
       />
-      {selected && (
-        <Rect width={el.w} height={el.h} stroke="#C97B84" strokeWidth={2} listening={false} />
-      )}
     </Group>
   );
-}
+}, studioNodePropsEqual);
 
-function StudioText({ el, selected, onSelect, onChange, shapeRefs, fontEpoch }: {
+const StudioText = React.memo(function StudioText({ el, onSelect, onChange, shapeRefs, fontEpoch, gesture, canvasH }: {
   el: EditorElement; selected: boolean;
   onSelect: () => void;
   onChange: (c: Partial<EditorElement>) => void;
   shapeRefs: React.MutableRefObject<Record<string, any>>;
   fontEpoch?: number;
+  gesture: StudioGesture;
+  canvasH: number;
 }) {
+  const drag = useStudioDrag(el, canvasH, onSelect, onChange, gesture);
   const startRef = useRef({ w: el.w, h: el.h, fontSize: el.fontSize || 20 });
+
+  const bakeText = (n: any, sx: number, sy: number) => {
+    n.scaleX(1); n.scaleY(1);
+    const nw = Math.max(40, startRef.current.w * sx);
+    const nh = Math.max(24, startRef.current.h * sy);
+    const fs = Math.max(10, startRef.current.fontSize * sy);
+    n.width(nw); n.height(nh);
+    n.clip({ x: 0, y: 0, width: nw, height: nh });
+    n.getChildren().forEach((c: any) => {
+      if (typeof c.width === 'function') { c.width(nw); c.height(nh); }
+      if (typeof c.fontSize === 'function') c.fontSize(fs);
+    });
+    return { nw, nh, fs };
+  };
+
   return (
     <Group
       ref={(n: any) => bindFrameNode(n, el.id, shapeRefs)}
-      x={el.x} y={el.y} width={el.w} height={el.h} rotation={el.rotation || 0}
+      x={drag.x} y={drag.y} width={el.w} height={el.h} rotation={el.rotation || 0}
       clipX={0} clipY={0} clipWidth={el.w} clipHeight={el.h}
-      draggable
-      onMouseDown={(e: any) => { e.cancelBubble = true; onSelect(); }}
-      onTouchStart={(e: any) => { e.cancelBubble = true; onSelect(); }}
-      onClick={(e: any) => { e.cancelBubble = true; onSelect(); }}
-      onTap={(e: any) => { e.cancelBubble = true; onSelect(); }}
-      onDragEnd={(e: any) => onChange({ x: e.target.x(), y: e.target.y() })}
+      draggable={drag.draggable}
+      dragDistance={drag.dragDistance}
+      dragBoundFunc={drag.dragBoundFunc}
+      onMouseDown={drag.onMouseDown}
+      onTouchStart={drag.onTouchStart}
+      onClick={drag.onClick}
+      onTap={drag.onTap}
+      onDragStart={drag.onDragStart}
+      onDragEnd={drag.onDragEnd}
       onTransformStart={() => {
         startRef.current = { w: el.w, h: el.h, fontSize: el.fontSize || 20 };
+        gesture.begin();
       }}
+      // Text must live-bake so type stays sharp (no bitmap stretch).
       onTransform={(e: any) => {
-        const n = e.target;
-        const sx = n.scaleX(), sy = n.scaleY();
-        n.scaleX(1); n.scaleY(1);
-        const nw = Math.max(40, startRef.current.w * sx);
-        const nh = Math.max(24, startRef.current.h * sy);
-        // Vertical stretch scales type so "bigger text" feels natural.
-        const fs = Math.max(10, startRef.current.fontSize * sy);
-        n.width(nw); n.height(nh);
-        n.clip({ x: 0, y: 0, width: nw, height: nh });
-        n.getChildren().forEach((c: any) => {
-          if (typeof c.width === 'function') { c.width(nw); c.height(nh); }
-          if (typeof c.fontSize === 'function') c.fontSize(fs);
-        });
+        bakeText(e.target, Math.abs(e.target.scaleX()) || 1, Math.abs(e.target.scaleY()) || 1);
       }}
       onTransformEnd={(e: any) => {
         const n = e.target;
+        // onTransform already baked — scale should be 1; read final metrics from the node.
+        const sx = Math.abs(n.scaleX()) || 1;
+        const sy = Math.abs(n.scaleY()) || 1;
+        if (sx !== 1 || sy !== 1) bakeText(n, sx, sy);
         n.scaleX(1); n.scaleY(1);
-        const nw = Math.max(40, n.width() || el.w);
-        const nh = Math.max(24, n.height() || el.h);
-        const sy = nh / Math.max(1, startRef.current.h);
-        const fs = Math.max(10, Math.round(startRef.current.fontSize * sy));
-        onChange({ x: n.x(), y: n.y(), w: nw, h: nh, fontSize: fs, rotation: n.rotation() });
+        const finalW = Math.max(40, n.width() || startRef.current.w);
+        const finalH = Math.max(24, n.height() || startRef.current.h);
+        let finalFs = startRef.current.fontSize;
+        n.getChildren().forEach((c: any) => {
+          if (typeof c.fontSize === 'function' && c.fontSize()) finalFs = c.fontSize();
+        });
+        finalFs = Math.max(10, Math.round(finalFs));
+        n.width(finalW); n.height(finalH);
+        const b = studioDragBound({ x: n.x(), y: n.y() }, finalW, finalH, canvasH);
+        n.position(b);
+        onChange({ ...b, w: finalW, h: finalH, fontSize: finalFs, rotation: n.rotation() });
+        gesture.end();
       }}
     >
-      <Rect width={el.w} height={el.h} fill="rgba(0,0,0,0.001)" />
+      <Rect width={el.w} height={el.h} fill="rgba(0,0,0,0.001)" perfectDrawEnabled={false} />
       <KonvaText
         key={`studio-txt-${el.id}-f${fontEpoch ?? 0}`}
         text={el.text || ''}
@@ -358,7 +471,7 @@ function StudioText({ el, selected, onSelect, onChange, shapeRefs, fontEpoch }: 
       />
     </Group>
   );
-}
+}, studioNodePropsEqual);
 
 function DesignCanvas({
   elements, selectedId, onSelect, onChangeEl, canvasH,
@@ -370,92 +483,207 @@ function DesignCanvas({
   canvasH: number;
 }) {
   const trRef = useRef<any>(null);
+  const stageRef = useRef<any>(null);
   const shapeRefs = useRef<Record<string, any>>({});
+  const gesturingRef = useRef(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
   const fontsReady = useEditorFontsReady();
   const fontEpoch = fontsReady ? 1 : 0;
   const selected = selectedId ? elements.find(e => e.id === selectedId) : null;
-  const canTransform = selected && selected.type !== 'background';
-  const { w: previewW, h: previewH, scale } = previewSizeForCanvas(canvasH);
+  const canTransform = !!(selected && selected.type !== 'background');
+  const [previewW, setPreviewW] = useState(PREVIEW_W);
+  const [coarsePointer, setCoarsePointer] = useState(false);
+
+  // Fit canvas to available width (mobile-friendly).
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const measure = () => {
+      const avail = el.clientWidth || PREVIEW_W;
+      setPreviewW(Math.max(PREVIEW_W_MIN, Math.min(PREVIEW_W, Math.floor(avail))));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
+    const mq = window.matchMedia('(pointer: coarse)');
+    const apply = () => setCoarsePointer(mq.matches);
+    apply();
+    mq.addEventListener?.('change', apply);
+    return () => mq.removeEventListener?.('change', apply);
+  }, []);
+
+  const { w: stageW, h: stageH, scale } = previewSizeForCanvas(canvasH, previewW);
+  const anchorSize = coarsePointer ? 20 : 14;
+
+  const syncTransformer = useCallback(() => {
     if (!trRef.current) return;
+    if (gesturingRef.current) return;
     const node = (canTransform && selectedId) ? shapeRefs.current[selectedId] : null;
     trRef.current.nodes(node ? [node] : []);
+    trRef.current.forceUpdate?.();
     trRef.current.getLayer()?.batchDraw();
-  }, [selectedId, elements, fontEpoch, canTransform, canvasH]);
+  }, [canTransform, selectedId]);
+
+  const gesture = useMemo<StudioGesture>(() => ({
+    active: gesturingRef,
+    begin: () => {
+      gesturingRef.current = true;
+      const root = wrapRef.current;
+      if (root) root.style.touchAction = 'none';
+      document.body.style.overflow = 'hidden';
+    },
+    end: () => {
+      gesturingRef.current = false;
+      const root = wrapRef.current;
+      if (root) root.style.touchAction = 'none';
+      document.body.style.overflow = '';
+      requestAnimationFrame(() => syncTransformer());
+    },
+  }), [syncTransformer]);
+
+  useEffect(() => () => {
+    document.body.style.overflow = '';
+  }, []);
+
+  useEffect(() => {
+    syncTransformer();
+  }, [syncTransformer, elements, fontEpoch, canvasH, scale]);
+
+  // Prevent browser gestures (scroll/zoom) from stealing canvas touches.
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const block = (e: TouchEvent) => {
+      if (gesturingRef.current) e.preventDefault();
+    };
+    el.addEventListener('touchmove', block, { passive: false });
+    return () => el.removeEventListener('touchmove', block);
+  }, []);
 
   return (
-    <Stage
-      width={previewW}
-      height={previewH}
-      scaleX={scale}
-      scaleY={scale}
-      onMouseDown={(e: any) => {
-        if (e.target === e.target.getStage()) onSelect(null);
-      }}
-      onTouchStart={(e: any) => {
-        if (e.target === e.target.getStage()) onSelect(null);
-      }}
+    <div
+      ref={wrapRef}
+      className="w-full flex justify-center"
+      style={{ touchAction: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
     >
-      <Layer>
-        {elements.map(el => {
-          if (el.type === 'background') {
-            return <BgFill key={el.id} el={el} canvasH={canvasH} onSelect={() => onSelect(el.id)} />;
-          }
-          if (el.type === 'shape') {
-            return (
-              <StudioShape
-                key={el.id} el={el} selected={selectedId === el.id}
-                onSelect={() => onSelect(el.id)}
-                onChange={c => onChangeEl(el.id, c)}
-                shapeRefs={shapeRefs}
-              />
-            );
-          }
-          if (el.type === 'image') {
-            return (
-              <StudioImage
-                key={el.id} el={el} selected={selectedId === el.id}
-                onSelect={() => onSelect(el.id)}
-                onChange={c => onChangeEl(el.id, c)}
-                shapeRefs={shapeRefs}
-              />
-            );
-          }
-          if (el.type === 'text') {
-            return (
-              <StudioText
-                key={el.id} el={el} selected={selectedId === el.id}
-                onSelect={() => onSelect(el.id)}
-                onChange={c => onChangeEl(el.id, c)}
-                shapeRefs={shapeRefs}
-                fontEpoch={fontEpoch}
-              />
-            );
-          }
-          return null;
-        })}
-        <Transformer
-          ref={trRef}
-          rotateEnabled
-          keepRatio={selected?.type === 'image'}
-          enabledAnchors={
-            selected?.type === 'text'
-              ? ['middle-left', 'middle-right', 'top-center', 'bottom-center']
-              : selected?.type === 'image'
-                ? ['top-left', 'top-right', 'bottom-left', 'bottom-right']
-                : ['top-left', 'top-right', 'bottom-left', 'bottom-right', 'middle-left', 'middle-right']
-          }
-          boundBoxFunc={(oldBox: any, newBox: any) =>
-            newBox.width < 8 || newBox.height < 8 ? oldBox : newBox
-          }
-          borderStroke="#C97B84"
-          anchorStroke="#C97B84"
-          anchorFill="#fff"
-          anchorSize={12}
-        />
-      </Layer>
-    </Stage>
+      <Stage
+        ref={stageRef}
+        width={stageW}
+        height={stageH}
+        scaleX={scale}
+        scaleY={scale}
+        onMouseDown={(e: any) => {
+          if (e.target === e.target.getStage()) onSelect(null);
+        }}
+        onTouchStart={(e: any) => {
+          if (e.target === e.target.getStage()) onSelect(null);
+        }}
+      >
+        <Layer>
+          {elements.map(el => {
+            if (el.type === 'background') {
+              return (
+                <BgFill
+                  key={el.id}
+                  el={el}
+                  canvasH={canvasH}
+                  interactive={selectedId === el.id}
+                  onSelect={() => onSelect(el.id)}
+                />
+              );
+            }
+            if (el.type === 'shape') {
+              return (
+                <StudioShape
+                  key={el.id} el={el} selected={selectedId === el.id}
+                  onSelect={() => onSelect(el.id)}
+                  onChange={c => onChangeEl(el.id, c)}
+                  shapeRefs={shapeRefs}
+                  gesture={gesture}
+                  canvasH={canvasH}
+                />
+              );
+            }
+            if (el.type === 'image') {
+              return (
+                <StudioImage
+                  key={el.id} el={el} selected={selectedId === el.id}
+                  onSelect={() => onSelect(el.id)}
+                  onChange={c => onChangeEl(el.id, c)}
+                  shapeRefs={shapeRefs}
+                  gesture={gesture}
+                  canvasH={canvasH}
+                />
+              );
+            }
+            if (el.type === 'text') {
+              return (
+                <StudioText
+                  key={el.id} el={el} selected={selectedId === el.id}
+                  onSelect={() => onSelect(el.id)}
+                  onChange={c => onChangeEl(el.id, c)}
+                  shapeRefs={shapeRefs}
+                  fontEpoch={fontEpoch}
+                  gesture={gesture}
+                  canvasH={canvasH}
+                />
+              );
+            }
+            return null;
+          })}
+          <Transformer
+            ref={trRef}
+            rotateEnabled
+            resizeEnabled
+            keepRatio={selected?.type === 'image'}
+            rotationSnaps={[0, 45, 90, 135, 180, 225, 270, 315]}
+            rotationSnapTolerance={8}
+            padding={coarsePointer ? 6 : 4}
+            rotateAnchorOffset={coarsePointer ? 32 : 24}
+            enabledAnchors={
+              selected?.type === 'text'
+                ? ['middle-left', 'middle-right', 'top-center', 'bottom-center']
+                : selected?.type === 'image'
+                  ? ['top-left', 'top-right', 'bottom-left', 'bottom-right']
+                  : ['top-left', 'top-right', 'bottom-left', 'bottom-right',
+                     'middle-left', 'middle-right', 'top-center', 'bottom-center']
+            }
+            boundBoxFunc={(oldBox: any, newBox: any) => {
+              const minW = selected?.type === 'text' ? 40 : selected?.type === 'shape' ? 4 : 16;
+              const minH = selected?.type === 'text' ? 24 : selected?.type === 'shape' ? 4 : 16;
+              return (newBox.width < minW || newBox.height < minH) ? oldBox : newBox;
+            }}
+            borderStroke="#C97B84"
+            borderStrokeWidth={2}
+            anchorStroke="#C97B84"
+            anchorStrokeWidth={2}
+            anchorFill="#fff"
+            anchorSize={anchorSize}
+            anchorCornerRadius={anchorSize / 2}
+            ignoreStroke
+            anchorStyleFunc={(anchor: any) => {
+              anchor.shadowColor('rgba(40, 20, 30, 0.28)');
+              anchor.shadowBlur(5);
+              anchor.shadowOffsetY(1);
+              anchor.shadowOpacity(1);
+              if (anchor.hasName('rotater')) {
+                anchor.fill('#C97B84');
+                anchor.stroke('#fff');
+                anchor.strokeWidth(2);
+                const s = coarsePointer ? 22 : 18;
+                anchor.width(s); anchor.height(s);
+                anchor.cornerRadius(s / 2);
+                anchor.offsetX(s / 2); anchor.offsetY(s / 2);
+              }
+            }}
+          />
+        </Layer>
+      </Stage>
+    </div>
   );
 }
 
@@ -522,7 +750,6 @@ export default function AdminDesignStudio() {
     [selectedFormat],
   );
   const canvasHRef = useRef(canvasH);
-  const preview = previewSizeForCanvas(canvasH);
 
   const savedOverrides: DesignOverrides = (s?.designOverrides && typeof s.designOverrides === 'object' && !Array.isArray(s.designOverrides))
     ? s.designOverrides as DesignOverrides
@@ -1331,7 +1558,7 @@ export default function AdminDesignStudio() {
                   )}
                   <p className="text-[11px] mb-3 text-center max-w-md" style={{ color: ADMIN.muted }}>
                     {coverSide === 'front'
-                      ? 'Front cover — drag text & images, resize with handles, edit properties on the right.'
+                      ? 'Front cover — tap to select, drag to move, pinch handles to resize.'
                       : 'Back cover — edit independently from the front.'}
                     {selectedFormat
                       ? ` · editing for ${formatSizeLabel(selectedFormat)}`
@@ -1339,8 +1566,8 @@ export default function AdminDesignStudio() {
                     {isHidden ? ' · hidden from customers' : ''}
                     {hasOverride ? ' · override saved' : ''}
                   </p>
-                  <div className="rounded-sm shadow-xl overflow-hidden bg-white max-w-full"
-                    style={{ width: preview.w, height: preview.h }}>
+                  <div className="w-full max-w-[440px] rounded-sm shadow-xl overflow-hidden bg-white"
+                    style={{ touchAction: 'none' }}>
                     <DesignCanvas
                       elements={draft}
                       selectedId={selectedId}
@@ -1456,17 +1683,17 @@ export default function AdminDesignStudio() {
                     {selected.src ? 'Replace image' : 'Upload image'}
                   </Button>
                   <p className="text-[11px]" style={{ color: ADMIN.muted }}>
-                    Drag to move, corner handles to resize. {Math.round(selected.w)}×{Math.round(selected.h)}
+                    Drag to move · corner handles to resize · {Math.round(selected.w)}×{Math.round(selected.h)}
                   </p>
                 </div>
               ) : selected.type === 'shape' ? (
                 <div className="space-y-3">
-                  <p className="text-sm font-medium" style={{ color: ADMIN.ink }}>Legacy decoration</p>
+                  <p className="text-sm font-medium" style={{ color: ADMIN.ink }}>Decoration</p>
                   <p className="text-[12px] leading-relaxed" style={{ color: ADMIN.muted }}>
-                    This shape comes from a built-in template. You can move, resize, or delete it — new shapes cannot be added.
+                    Drag to move, handles to resize. Thin accent lines have a larger touch target.
                   </p>
                   <p className="text-[11px]" style={{ color: ADMIN.muted }}>
-                    Size: {Math.round(selected.w)}×{Math.round(selected.h)}
+                    Size: {Math.round(selected.w)}×{Math.round(selected.h)} · Position: {Math.round(selected.x)}, {Math.round(selected.y)}
                   </p>
                   <Button type="button" variant="outline" className="w-full rounded-xl text-red-700"
                     onClick={deleteSelected}>
