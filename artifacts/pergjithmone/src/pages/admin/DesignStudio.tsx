@@ -14,7 +14,7 @@ import {
   getCanvasHeight, scaleElementsToCanvas, reprojectCanvasElements,
   imageFrameCoverFit,
   type CustomDesignRecord, type DesignDef, type DesignOverrides, type EditorElement, type DE,
-  PHOTO_CORNER_ZOOM, coverCropRect, imageFrameFocusFromOffset,
+  PHOTO_CORNER_ZOOM, coverCropRect, imageFrameFocusFromOffset, minPhotoAdjustZoom,
 } from '@/lib/designs';
 import { applyCoverBackground, coverBgMode, type CoverBgMode } from '@/lib/coverBackground';
 import { compressImageFile, ImageTooLargeError } from '@/lib/imageCompression';
@@ -398,14 +398,26 @@ const StudioImage = React.memo(function StudioImage({ el, selected, onSelect, on
 
   const panInside = !!(selected && photoAdjust && !isContain && img);
   const moveFrame = !!(selected && !panInside);
+  const imgNodeRef = useRef<any>(null);
+  const panStartRef = useRef<{
+    focusX: number; focusY: number; px: number; py: number;
+    maxOffX: number; maxOffY: number;
+  } | null>(null);
 
   const enterAdjust = () => {
     if (isContain || !img) return;
-    if ((el.cropZoom ?? 1) < PHOTO_CORNER_ZOOM) {
-      onChange({ cropZoom: PHOTO_CORNER_ZOOM });
-    }
     onEnterPhotoAdjust?.();
   };
+
+  useEffect(() => {
+    if (!photoAdjust || !img || isContain) return;
+    const need = minPhotoAdjustZoom(img.width, img.height, el.w, el.h);
+    if ((el.cropZoom ?? 1) + 0.001 < need) {
+      onChange({ cropZoom: need });
+    }
+  // intentionally omit onChange — bump once when entering adjust / frame size changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photoAdjust, img, isContain, el.w, el.h, el.cropZoom]);
 
   return (
     <Group
@@ -466,56 +478,80 @@ const StudioImage = React.memo(function StudioImage({ el, selected, onSelect, on
         gesture.end();
       }}
     >
-      {/* When adjusting, hit-test the photo — not this full-frame rect. */}
-      <Rect width={el.w} height={el.h} fill="rgba(0,0,0,0.001)" perfectDrawEnabled={false} listening={!panInside} />
+      {/* Frame-sized hit target for Adjust — avoids oversized bitmap stealing neighbor hits. */}
+      <Rect
+        width={el.w}
+        height={el.h}
+        fill="rgba(0,0,0,0.001)"
+        perfectDrawEnabled={false}
+        listening={true}
+        draggable={panInside}
+        dragDistance={2}
+        dragBoundFunc={() => ({ x: 0, y: 0 })}
+        onDragStart={(e: any) => {
+          if (!panInside) return;
+          e.cancelBubble = true;
+          setPanning(true);
+          gesture.begin();
+          const { maxOffX: mx, maxOffY: my } = panMaxRef.current;
+          const p = e.target.getStage()?.getRelativePointerPosition();
+          panStartRef.current = {
+            focusX, focusY,
+            px: p?.x ?? 0, py: p?.y ?? 0,
+            maxOffX: mx, maxOffY: my,
+          };
+        }}
+        onDragMove={(e: any) => {
+          if (!panInside || !panStartRef.current) return;
+          e.cancelBubble = true;
+          e.target.position({ x: 0, y: 0 });
+          const p = e.target.getStage()?.getRelativePointerPosition();
+          if (!p) return;
+          const s = panStartRef.current;
+          const dx = p.x - s.px;
+          const dy = p.y - s.py;
+          const newOffX = Math.min(s.maxOffX, Math.max(0, s.maxOffX * s.focusX - dx));
+          const newOffY = Math.min(s.maxOffY, Math.max(0, s.maxOffY * s.focusY - dy));
+          const node = imgNodeRef.current;
+          if (node) {
+            node.position({ x: -newOffX, y: -newOffY });
+            node.getLayer()?.batchDraw();
+          }
+        }}
+        onDragEnd={(e: any) => {
+          if (!panInside) return;
+          e.cancelBubble = true;
+          e.target.position({ x: 0, y: 0 });
+          const s = panStartRef.current;
+          panStartRef.current = null;
+          const node = imgNodeRef.current;
+          const mx = s?.maxOffX ?? panMaxRef.current.maxOffX;
+          const my = s?.maxOffY ?? panMaxRef.current.maxOffY;
+          const pos = node ? { x: node.x(), y: node.y() } : { x: imgX, y: imgY };
+          const next = imageFrameFocusFromOffset(pos.x, pos.y, mx, my);
+          if (node) node.position({ x: next.x, y: next.y });
+          setLiveFocus({ x: next.cropFocusX, y: next.cropFocusY });
+          onChange({
+            cropFocusX: next.cropFocusX,
+            cropFocusY: next.cropFocusY,
+            cropZoom: Math.max(
+              cropZoom,
+              img ? minPhotoAdjustZoom(img.width, img.height, el.w, el.h) : PHOTO_CORNER_ZOOM,
+            ),
+          });
+          setPanning(false);
+          gesture.end();
+        }}
+      />
       {img && (
         <KonvaImage
+          ref={(n: any) => { imgNodeRef.current = n; }}
           image={img}
           {...(panning ? {} : { x: imgX, y: imgY })}
           width={iw} height={ih}
           perfectDrawEnabled={false}
-          listening={panInside}
-          draggable={panInside}
-          dragDistance={2}
+          listening={false}
           globalCompositeOperation={(el.mixBlendMode as GlobalCompositeOperation) || undefined}
-          dragBoundFunc={(pos: any) => {
-            const { maxOffX: mx, maxOffY: my } = panMaxRef.current;
-            return {
-              x: Math.min(0, Math.max(-mx, pos.x)),
-              y: Math.min(0, Math.max(-my, pos.y)),
-            };
-          }}
-          onMouseDown={(e: any) => { e.cancelBubble = true; onSelect(); }}
-          onTouchStart={(e: any) => { e.cancelBubble = true; onSelect(); }}
-          onClick={(e: any) => { e.cancelBubble = true; onSelect(); }}
-          onTap={(e: any) => { e.cancelBubble = true; onSelect(); }}
-          onDblClick={(e: any) => { e.cancelBubble = true; enterAdjust(); }}
-          onDblTap={(e: any) => { e.cancelBubble = true; enterAdjust(); }}
-          onDragStart={(e: any) => {
-            if (!panInside) return;
-            e.cancelBubble = true;
-            setPanning(true);
-            gesture.begin();
-          }}
-          onDragMove={(e: any) => {
-            if (!panInside) return;
-            e.cancelBubble = true;
-          }}
-          onDragEnd={(e: any) => {
-            if (!panInside) return;
-            e.cancelBubble = true;
-            const { maxOffX: mx, maxOffY: my } = panMaxRef.current;
-            const next = imageFrameFocusFromOffset(e.target.x(), e.target.y(), mx, my);
-            e.target.position({ x: next.x, y: next.y });
-            setLiveFocus({ x: next.cropFocusX, y: next.cropFocusY });
-            onChange({
-              cropFocusX: next.cropFocusX,
-              cropFocusY: next.cropFocusY,
-              cropZoom: Math.max(cropZoom, PHOTO_CORNER_ZOOM),
-            });
-            setPanning(false);
-            gesture.end();
-          }}
         />
       )}
       {selected && (

@@ -147,7 +147,7 @@ export function Navbar() {
             <img
               src="/logo-nav.png"
               alt="Përgjithmonë"
-              className="h-[34px] md:h-[40px] w-auto"
+              className="h-[30px] md:h-[36px] w-auto"
               style={{ objectFit: 'contain', objectPosition: 'left center', display: 'block' }}
             />
           </Link>

@@ -133,6 +133,29 @@ export function coverCropRect(
 /** Minimum zoom so Adjust-photo can reach all four photo corners (2D pan). */
 export const PHOTO_CORNER_ZOOM = 1.2;
 
+/**
+ * Extra zoom for small frames so pan travel stays usable (~≥40 design-px or 18%).
+ * Large frames stay at PHOTO_CORNER_ZOOM.
+ */
+export function minPhotoAdjustZoom(
+  naturalW: number,
+  naturalH: number,
+  frameW: number,
+  frameH: number,
+): number {
+  const nw = Math.max(1, naturalW);
+  const nh = Math.max(1, naturalH);
+  const fw = Math.max(1, frameW);
+  const fh = Math.max(1, frameH);
+  const coverScale = Math.max(fw / nw, fh / nh);
+  const minOffX = Math.max(40, fw * 0.18);
+  const minOffY = Math.max(40, fh * 0.18);
+  const zX = (fw + minOffX) / (nw * coverScale);
+  const zY = (fh + minOffY) / (nh * coverScale);
+  // Tiny epsilon so float rounding still clears the min-off target.
+  return Math.max(PHOTO_CORNER_ZOOM, zX, zY) * 1.0001;
+}
+
 export function imageFrameCoverFit(
   naturalW: number,
   naturalH: number,

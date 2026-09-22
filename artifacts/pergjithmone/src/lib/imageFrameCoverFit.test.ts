@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { imageFrameCoverFit, imageFrameFocusFromOffset, PHOTO_CORNER_ZOOM } from './designs';
+import { imageFrameCoverFit, imageFrameFocusFromOffset, PHOTO_CORNER_ZOOM, minPhotoAdjustZoom } from './designs';
 
 describe('imageFrameCoverFit', () => {
   it('landscape photo in square frame can pan horizontally only', () => {
@@ -53,6 +53,20 @@ describe('imageFrameCoverFit', () => {
     expect(fit.canPan).toBe(true);
     expect(fit.maxOffX).toBeGreaterThan(1);
     expect(fit.maxOffY).toBeGreaterThan(1);
+  });
+});
+
+describe('minPhotoAdjustZoom', () => {
+  it('stays at corner zoom for large frames', () => {
+    expect(minPhotoAdjustZoom(2000, 1500, 600, 800)).toBeCloseTo(PHOTO_CORNER_ZOOM);
+  });
+
+  it('raises zoom for very small frames so pan travel is usable', () => {
+    const z = minPhotoAdjustZoom(1000, 1000, 120, 120);
+    expect(z).toBeGreaterThan(PHOTO_CORNER_ZOOM);
+    const fit = imageFrameCoverFit(1000, 1000, 120, 120, 0.5, 0.5, z);
+    expect(fit.maxOffX).toBeGreaterThanOrEqual(40);
+    expect(fit.maxOffY).toBeGreaterThanOrEqual(40);
   });
 });
 

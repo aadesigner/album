@@ -68,7 +68,7 @@ import {
   DESIGN_W, DESIGN_H, LAYOUTS, DESIGNS, CATEGORY_LABELS, LAYOUT_CATEGORY_LABELS,
   getCanvasHeight, scaleElementsToCanvas, elementsWithCoverWallpaper,
   BLANK_STARTER_ID, blankFrontCoverElements, blankBackCoverElements,
-  coverCropRect, imageFrameCoverFit, imageFrameContainFit, imageFrameFocusFromOffset, PHOTO_CORNER_ZOOM,
+  coverCropRect, imageFrameCoverFit, imageFrameContainFit, imageFrameFocusFromOffset, PHOTO_CORNER_ZOOM, minPhotoAdjustZoom,
   designFrontElements, designBackElements, buildDesignCatalog, parseCustomDesigns,
   type EditorElement, type DE, type DesignDef, type LayoutZone, type LayoutDef, type DesignOverrides,
 } from '@/lib/designs';
@@ -536,6 +536,17 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
     if (photoAdjust && img && el.objectFit === 'contain') onExitPhotoAdjustRef.current?.();
   }, [photoAdjust, img, el.objectFit]);
 
+  // Entering Adjust: bump zoom so small 2/3-photo frames still have usable pan travel.
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  useEffect(() => {
+    if (!photoAdjust || !img || el.objectFit === 'contain') return;
+    const need = minPhotoAdjustZoom(img.naturalWidth, img.naturalHeight, el.w, el.h);
+    if ((el.cropZoom ?? 1) + 0.001 < need) {
+      onChangeRef.current({ cropZoom: need });
+    }
+  }, [photoAdjust, img, el.w, el.h, el.objectFit, el.cropZoom]);
+
   const panInside = isSelected && !!photoAdjust && canPan;
   const moveFrame = isSelected && !panInside;
   const adjustingVisual = panInside;
@@ -543,6 +554,13 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
   // don't fight Konva and snap the photo back to the last committed focus.
   const [panning, setPanning] = useState(false);
   const panMaxRef = useRef({ maxOffX: 0, maxOffY: 0 });
+  const imgNodeRef = useRef<any>(null);
+  // Frame-local pan (not dragging the oversized bitmap) — keeps hit-testing inside
+  // the slot so 2/3-photo layouts don't steal events from neighbors.
+  const panStartRef = useRef<{
+    focusX: number; focusY: number; px: number; py: number;
+    maxOffX: number; maxOffY: number;
+  } | null>(null);
 
   const setStageCursor = (cursor: string) => {
     const stage = shapeRefs.current[el.id]?.getStage?.();
@@ -692,62 +710,89 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
         onGuides?.(null);
       }}
     >
-      <Rect width={el.w} height={el.h} fill="rgba(0,0,0,0.001)" listening={!panInside} />
-      <KonvaImage
-        image={img}
-        {...(!panning ? { x: -offX, y: -offY } : {})}
-        width={iw}
-        height={ih}
-        perfectDrawEnabled={false}
-        listening={panInside}
+      <Rect
+        width={el.w}
+        height={el.h}
+        fill="rgba(0,0,0,0.001)"
+        listening={true}
         draggable={panInside}
-        globalCompositeOperation={(el.mixBlendMode as GlobalCompositeOperation | undefined) || undefined}
         dragDistance={2}
-        dragBoundFunc={(pos: any) => {
-          const { maxOffX: mx, maxOffY: my } = panMaxRef.current;
-          return {
-            x: Math.min(0, Math.max(-mx, pos.x)),
-            y: Math.min(0, Math.max(-my, pos.y)),
-          };
-        }}
+        dragBoundFunc={() => ({ x: 0, y: 0 })}
         onMouseEnter={() => { if (panInside) setStageCursor('grab'); }}
         onMouseLeave={() => setStageCursor(moveFrame ? 'move' : 'default')}
         onDragStart={(e: any) => {
+          if (!panInside) return;
           e.cancelBubble = true;
           setPanning(true);
           setStageCursor('grabbing');
           onGestureStart?.();
           onDragActive?.(true, { keepTransformer: true });
-        }}
-        onDragMove={(e: any) => { e.cancelBubble = true; }}
-        onDragEnd={(e: any) => {
-          e.cancelBubble = true;
           const { maxOffX: mx, maxOffY: my } = panMaxRef.current;
-          const next = imageFrameFocusFromOffset(e.target.x(), e.target.y(), mx, my);
-          e.target.position({ x: next.x, y: next.y });
+          const p = e.target.getStage()?.getRelativePointerPosition();
+          panStartRef.current = {
+            focusX,
+            focusY,
+            px: p?.x ?? 0,
+            py: p?.y ?? 0,
+            maxOffX: mx,
+            maxOffY: my,
+          };
+        }}
+        onDragMove={(e: any) => {
+          if (!panInside || !panStartRef.current) return;
+          e.cancelBubble = true;
+          e.target.position({ x: 0, y: 0 });
+          const p = e.target.getStage()?.getRelativePointerPosition();
+          if (!p) return;
+          const s = panStartRef.current;
+          const dx = p.x - s.px;
+          const dy = p.y - s.py;
+          const startOffX = s.maxOffX * s.focusX;
+          const startOffY = s.maxOffY * s.focusY;
+          const newOffX = Math.min(s.maxOffX, Math.max(0, startOffX - dx));
+          const newOffY = Math.min(s.maxOffY, Math.max(0, startOffY - dy));
+          const node = imgNodeRef.current;
+          if (node) {
+            node.position({ x: -newOffX, y: -newOffY });
+            node.getLayer()?.batchDraw();
+          }
+        }}
+        onDragEnd={(e: any) => {
+          if (!panInside) return;
+          e.cancelBubble = true;
+          e.target.position({ x: 0, y: 0 });
+          const s = panStartRef.current;
+          panStartRef.current = null;
+          const node = imgNodeRef.current;
+          const mx = s?.maxOffX ?? panMaxRef.current.maxOffX;
+          const my = s?.maxOffY ?? panMaxRef.current.maxOffY;
+          const pos = node ? { x: node.x(), y: node.y() } : { x: -offX, y: -offY };
+          const next = imageFrameFocusFromOffset(pos.x, pos.y, mx, my);
+          if (node) node.position({ x: next.x, y: next.y });
           setLiveFocus({ x: next.cropFocusX, y: next.cropFocusY });
           onChange({
             cropFocusX: next.cropFocusX,
             cropFocusY: next.cropFocusY,
-            cropZoom: Math.max(cropZoom, PHOTO_CORNER_ZOOM),
+            cropZoom: Math.max(
+              cropZoom,
+              minPhotoAdjustZoom(img.naturalWidth, img.naturalHeight, el.w, el.h),
+            ),
           });
           setPanning(false);
           onDragActive?.(false);
           onGuides?.(null);
           setStageCursor(panInside ? 'grab' : 'default');
         }}
-        onMouseDown={(e: any) => { e.cancelBubble = true; onSelect(); }}
-        onTouchStart={(e: any) => { e.cancelBubble = true; onSelect(); }}
-        onClick={(e: any) => { e.cancelBubble = true; onSelect(); }}
-        onTap={(e: any) => { e.cancelBubble = true; onSelect(); }}
-        onDblClick={(e: any) => {
-          e.cancelBubble = true;
-          if (canPan) onTogglePhotoAdjust?.();
-        }}
-        onDblTap={(e: any) => {
-          e.cancelBubble = true;
-          if (canPan) onTogglePhotoAdjust?.();
-        }}
+      />
+      <KonvaImage
+        ref={(n: any) => { imgNodeRef.current = n; }}
+        image={img}
+        {...(!panning ? { x: -offX, y: -offY } : {})}
+        width={iw}
+        height={ih}
+        perfectDrawEnabled={false}
+        listening={false}
+        globalCompositeOperation={(el.mixBlendMode as GlobalCompositeOperation | undefined) || undefined}
       />
       {/* Stroke inside the group so it tracks during drag/resize */}
       {(isSelected || isDropTarget) && (
@@ -1206,10 +1251,6 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
                   photoAdjust={photoAdjustId===el.id}
                   onTogglePhotoAdjust={()=>{
                     if (el.objectFit === 'contain') return;
-                    const entering = photoAdjustId !== el.id;
-                    if (entering && (el.cropZoom ?? 1) < PHOTO_CORNER_ZOOM) {
-                      onChangeEl(el.id, { cropZoom: PHOTO_CORNER_ZOOM });
-                    }
                     setPhotoAdjustId(cur => cur===el.id ? null : el.id);
                     onSelectId(el.id);
                   }}
@@ -1500,9 +1541,6 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
                   disabled={adjustDisabled}
                   onClick={()=>{
                     if (adjustDisabled) return;
-                    if ((sel.cropZoom ?? 1) < PHOTO_CORNER_ZOOM) {
-                      onChangeEl(sel.id, { cropZoom: PHOTO_CORNER_ZOOM });
-                    }
                     setPhotoAdjustId(sel.id);
                   }}
                   title={
