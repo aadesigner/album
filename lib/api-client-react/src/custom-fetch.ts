@@ -386,7 +386,7 @@ export async function customFetch<T = unknown>(
 
   const requestInfo = { method, url: resolveUrl(input) };
 
-  const response = await fetch(input, { ...init, method, headers });
+  const response = await fetch(input, { credentials: "include", ...init, method, headers });
 
   // A bearer-authenticated request that comes back 401 likely just has a
   // stale access token — try to refresh once and replay the request rather

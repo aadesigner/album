@@ -12,7 +12,9 @@ import {
   designElementsWithIds, designElementsWithoutIds,
   blankCoverElements, newCustomDesignId,
   getCanvasHeight, scaleElementsToCanvas, reprojectCanvasElements,
+  imageFrameCoverFit,
   type CustomDesignRecord, type DesignDef, type DesignOverrides, type EditorElement, type DE,
+  PHOTO_CORNER_ZOOM, coverCropRect, imageFrameFocusFromOffset,
 } from '@/lib/designs';
 import { applyCoverBackground, coverBgMode, type CoverBgMode } from '@/lib/coverBackground';
 import { compressImageFile, ImageTooLargeError } from '@/lib/imageCompression';
@@ -21,28 +23,31 @@ import { PageThumb } from '@/components/PageThumb';
 import {
   Check, Loader2, RotateCcw, Save, Eye, EyeOff, AlertTriangle,
   Plus, Trash2, X, Upload, Image as ImageIcon, Type, Palette, Droplets,
+  Copy, Layers,
 } from 'lucide-react';
 import { useEditorFontsReady, ensureEditorFonts } from '@/lib/editorFonts';
 
-const PREVIEW_W = 440;
+const PREVIEW_W = 560;
 const PREVIEW_W_MIN = 280;
-const CATALOG_THUMB_W = 56;
+const CATALOG_THUMB_W = 48;
 const CATALOG_THUMB_H = Math.round(CATALOG_THUMB_W * (DESIGN_H / DESIGN_W));
 
-function previewSizeForCanvas(canvasH: number, previewW = PREVIEW_W) {
-  const w = Math.max(PREVIEW_W_MIN, Math.min(PREVIEW_W, previewW));
-  const h = Math.round(w * (canvasH / DESIGN_W));
+function previewSizeForCanvas(canvasH: number, availW = PREVIEW_W, availH?: number) {
+  const maxW = Math.max(PREVIEW_W_MIN, Math.min(PREVIEW_W, Math.floor(availW)));
+  let w = maxW;
+  let h = Math.round(w * (canvasH / DESIGN_W));
+  // Fit portrait (tall) formats into the panel height so the full page is visible.
+  if (availH && availH > 120 && h > availH) {
+    w = Math.max(PREVIEW_W_MIN, Math.floor(availH * (DESIGN_W / canvasH)));
+    w = Math.min(w, maxW);
+    h = Math.round(w * (canvasH / DESIGN_W));
+  }
   return { w, h, scale: w / DESIGN_W };
 }
 
-/** Soft clamp — keep most of the element on the page without hard edges. */
-function studioDragBound(pos: { x: number; y: number }, w: number, h: number, canvasH: number) {
-  const slackX = Math.min(40, w * 0.25);
-  const slackY = Math.min(40, h * 0.25);
-  return {
-    x: Math.min(Math.max(pos.x, -slackX), DESIGN_W - w + slackX),
-    y: Math.min(Math.max(pos.y, -slackY), canvasH - h + slackY),
-  };
+/** No canvas clamp — text/images may sit partly or fully outside the page. */
+function studioDragBound(pos: { x: number; y: number }, _w?: number, _h?: number, _canvasH?: number) {
+  return { x: pos.x, y: pos.y };
 }
 
 function formatSizeLabel(s: { label?: string; widthCm?: number | string; heightCm?: number | string }) {
@@ -61,6 +66,45 @@ const COVER_SWATCHES = [
   '#C97B84', '#FEC5D7', '#A83442', '#1A2A1A', '#0D1B2A',
   '#1A0A2E', '#FF6B8A', '#C9A227', '#0E4D5C', '#BCC9D1',
 ];
+
+/** Same catalog as the client editor toolbar. */
+const STUDIO_FONTS = [
+  { label: 'Georgia',    value: 'Georgia, serif' },
+  { label: 'Playfair',   value: "'Playfair Display', serif" },
+  { label: 'Cormorant',  value: "'Cormorant Garamond', serif" },
+  { label: 'Raleway',    value: "'Raleway', sans-serif" },
+  { label: 'Montserrat', value: "'Montserrat', sans-serif" },
+  { label: 'Arial',      value: 'Arial, Helvetica, sans-serif' },
+  { label: 'Londrina',   value: "'Londrina Solid', cursive" },
+  { label: 'Dancing',    value: "'Dancing Script', cursive" },
+  { label: 'Vibes',      value: "'Great Vibes', cursive" },
+  { label: 'Pacifico',   value: "'Pacifico', cursive" },
+];
+
+function normalizeStudioFont(ff?: string | null): string {
+  const raw = (ff || 'Georgia, serif').trim();
+  if (STUDIO_FONTS.some(f => f.value === raw)) return raw;
+  const lower = raw.toLowerCase();
+  const byPrimary = STUDIO_FONTS.find(f => {
+    const primary = f.value.split(',')[0].replace(/['"]/g, '').trim().toLowerCase();
+    return primary.length > 0 && lower.includes(primary);
+  });
+  if (byPrimary) return byPrimary.value;
+  if (lower.includes('great vibes')) return "'Great Vibes', cursive";
+  if (lower.includes('londrina')) return "'Londrina Solid', cursive";
+  if (lower.includes('dancing')) return "'Dancing Script', cursive";
+  if (lower.includes('pacifico')) return "'Pacifico', cursive";
+  if (lower.includes('playfair')) return "'Playfair Display', serif";
+  if (lower.includes('cormorant')) return "'Cormorant Garamond', serif";
+  if (lower.includes('raleway')) return "'Raleway', sans-serif";
+  if (lower.includes('montserrat')) return "'Montserrat', sans-serif";
+  if (lower.includes('arial') || lower.includes('helvetica')) return 'Arial, Helvetica, sans-serif';
+  return 'Georgia, serif';
+}
+
+function isScriptFont(ff?: string | null): boolean {
+  return /great vibes|dancing script|pacifico|londrina/i.test(ff || '');
+}
 
 const COVER_GRADIENT_PRESETS: { from: string; to: string; dir: 'tb' | 'lr' | 'diag' }[] = [
   { from: '#1A1A1A', to: '#4A4A4A', dir: 'tb' },
@@ -118,8 +162,7 @@ type StudioGesture = {
 /**
  * Smooth builder gestures:
  * - Always draggable (select + drag in one stroke)
- * - Never commit React x/y until dragEnd (avoids snap-back)
- * - Parent skips re-rendering canvas nodes while gesturing
+ * - Live position kept in a ref so image-load re-renders don't snap Konva back
  */
 function useStudioDrag(
   el: EditorElement,
@@ -128,9 +171,15 @@ function useStudioDrag(
   onChange: (c: Partial<EditorElement>) => void,
   gesture: StudioGesture,
 ) {
+  const livePos = useRef({ x: el.x, y: el.y });
+  // Sync from props only when idle — never mid-gesture.
+  if (!gesture.active.current) {
+    livePos.current = { x: el.x, y: el.y };
+  }
+
   return {
-    x: el.x,
-    y: el.y,
+    x: livePos.current.x,
+    y: livePos.current.y,
     draggable: true as const,
     dragDistance: 2,
     onMouseDown: (e: any) => { e.cancelBubble = true; onSelect(); },
@@ -142,11 +191,17 @@ function useStudioDrag(
       e.cancelBubble = true;
       onSelect();
       gesture.begin();
+      livePos.current = { x: e.target.x(), y: e.target.y() };
+    },
+    onDragMove: (e: any) => {
+      e.cancelBubble = true;
+      livePos.current = { x: e.target.x(), y: e.target.y() };
     },
     onDragEnd: (e: any) => {
       e.cancelBubble = true;
       const b = studioDragBound({ x: e.target.x(), y: e.target.y() }, el.w, el.h, canvasH);
       e.target.position(b);
+      livePos.current = b;
       onChange(b);
       gesture.end();
     },
@@ -174,25 +229,99 @@ function studioNodePropsEqual(prev: any, next: any) {
     && prev.selected === next.selected
     && prev.canvasH === next.canvasH
     && prev.fontEpoch === next.fontEpoch
+    && prev.photoAdjust === next.photoAdjust
   );
 }
 
-function BgFill({ el, onSelect, canvasH, interactive }: {
-  el: EditorElement; onSelect: () => void; canvasH: number; interactive?: boolean;
+function BgFill({ el, onSelect, onChange, canvasH, interactive, gesture }: {
+  el: EditorElement;
+  onSelect: () => void;
+  onChange?: (c: Partial<EditorElement>) => void;
+  canvasH: number;
+  interactive?: boolean;
+  gesture?: StudioGesture;
 }) {
   const img = useHtmlImage(el.src);
+  const panStartRef = useRef<{ focusX: number; focusY: number; px: number; py: number } | null>(null);
+  const focusX = el.cropFocusX ?? 0.5;
+  const focusY = el.cropFocusY ?? 0.5;
+  const zoom = Math.max(1, el.cropZoom ?? 1);
+  const cover = img
+    ? coverCropRect(img.naturalWidth || img.width, img.naturalHeight || img.height, DESIGN_W, canvasH, focusX, focusY, zoom)
+    : null;
+  // Pan when selected and the photo overflows the page (or zoom unlocks corners).
+  const canPan = !!(interactive && cover && onChange && (cover.maxX > 1 || cover.maxY > 1));
   const listen = !!interactive;
-  if (img) {
+
+  if (img && cover) {
     return (
-      <KonvaImage
-        image={img}
-        x={0} y={0} width={DESIGN_W} height={canvasH}
-        listening={listen}
-        onMouseDown={listen ? (e: any) => { e.cancelBubble = true; onSelect(); } : undefined}
-        onTouchStart={listen ? (e: any) => { e.cancelBubble = true; onSelect(); } : undefined}
-        onClick={listen ? onSelect : undefined}
-        onTap={listen ? onSelect : undefined}
-      />
+      <>
+        <KonvaImage
+          image={img}
+          x={0} y={0} width={DESIGN_W} height={canvasH}
+          crop={{ x: cover.x, y: cover.y, width: cover.width, height: cover.height }}
+          listening={listen}
+          draggable={canPan}
+          dragDistance={3}
+          dragBoundFunc={() => ({ x: 0, y: 0 })}
+          onMouseDown={listen ? (e: any) => { e.cancelBubble = true; onSelect(); } : undefined}
+          onTouchStart={listen ? (e: any) => { e.cancelBubble = true; onSelect(); } : undefined}
+          onClick={listen ? onSelect : undefined}
+          onTap={listen ? onSelect : undefined}
+          onDragStart={(e: any) => {
+            if (!canPan || !cover) return;
+            gesture?.begin();
+            const p = e.target.getStage()?.getRelativePointerPosition() ?? e.target.getStage()?.getPointerPosition();
+            panStartRef.current = {
+              focusX: el.cropFocusX ?? 0.5,
+              focusY: el.cropFocusY ?? 0.5,
+              px: p?.x ?? 0,
+              py: p?.y ?? 0,
+            };
+          }}
+          onDragMove={(e: any) => {
+            if (!canPan || !cover || !panStartRef.current) return;
+            e.target.position({ x: 0, y: 0 });
+            const p = e.target.getStage()?.getRelativePointerPosition() ?? e.target.getStage()?.getPointerPosition();
+            if (!p) return;
+            const dx = p.x - panStartRef.current.px;
+            const dy = p.y - panStartRef.current.py;
+            const startCropX = panStartRef.current.focusX * cover.maxX;
+            const startCropY = panStartRef.current.focusY * cover.maxY;
+            const newCropX = Math.min(cover.maxX, Math.max(0, startCropX - dx / cover.scale));
+            const newCropY = Math.min(cover.maxY, Math.max(0, startCropY - dy / cover.scale));
+            e.target.crop({ x: newCropX, y: newCropY, width: cover.width, height: cover.height });
+            e.target.getLayer()?.batchDraw();
+          }}
+          onDragEnd={(e: any) => {
+            e.target.position({ x: 0, y: 0 });
+            if (!canPan || !cover || !panStartRef.current) {
+              gesture?.end();
+              return;
+            }
+            const p = e.target.getStage()?.getRelativePointerPosition() ?? e.target.getStage()?.getPointerPosition();
+            let fx = el.cropFocusX ?? 0.5;
+            let fy = el.cropFocusY ?? 0.5;
+            if (p) {
+              const dx = p.x - panStartRef.current.px;
+              const dy = p.y - panStartRef.current.py;
+              const startCropX = panStartRef.current.focusX * cover.maxX;
+              const startCropY = panStartRef.current.focusY * cover.maxY;
+              const newCropX = Math.min(cover.maxX, Math.max(0, startCropX - dx / cover.scale));
+              const newCropY = Math.min(cover.maxY, Math.max(0, startCropY - dy / cover.scale));
+              fx = cover.maxX <= 0 ? 0.5 : newCropX / cover.maxX;
+              fy = cover.maxY <= 0 ? 0.5 : newCropY / cover.maxY;
+            }
+            onChange?.({ cropFocusX: fx, cropFocusY: fy });
+            panStartRef.current = null;
+            gesture?.end();
+          }}
+        />
+        {interactive && (
+          <Rect x={0} y={0} width={DESIGN_W} height={canvasH}
+            stroke="#C97B84" strokeWidth={3} dash={[10, 6]} listening={false} />
+        )}
+      </>
     );
   }
   const hasGrad = !!(el.bgGradientFrom && el.bgGradientTo);
@@ -219,49 +348,89 @@ function BgFill({ el, onSelect, canvasH, interactive }: {
   );
 }
 
-const StudioImage = React.memo(function StudioImage({ el, onSelect, onChange, shapeRefs, gesture, canvasH }: {
+const StudioImage = React.memo(function StudioImage({ el, selected, onSelect, onChange, shapeRefs, gesture, canvasH, photoAdjust, onEnterPhotoAdjust, onExitPhotoAdjust }: {
   el: EditorElement; selected: boolean;
   onSelect: () => void;
   onChange: (c: Partial<EditorElement>) => void;
   shapeRefs: React.MutableRefObject<Record<string, any>>;
   gesture: StudioGesture;
   canvasH: number;
+  photoAdjust?: boolean;
+  onEnterPhotoAdjust?: () => void;
+  onExitPhotoAdjust?: () => void;
 }) {
   const img = useHtmlImage(el.src);
   const drag = useStudioDrag(el, canvasH, onSelect, onChange, gesture);
   const startRef = useRef({ w: el.w, h: el.h });
   const isContain = el.objectFit === 'contain' || el.mixBlendMode === 'screen';
+  const [liveFocus, setLiveFocus] = useState<{ x: number; y: number } | null>(null);
+  const focusX = liveFocus?.x ?? el.cropFocusX ?? 0.5;
+  const focusY = liveFocus?.y ?? el.cropFocusY ?? 0.5;
+  const cropZoom = Math.max(1, el.cropZoom ?? 1);
+  const [panning, setPanning] = useState(false);
+  const panMaxRef = useRef({ maxOffX: 0, maxOffY: 0 });
 
-  const layoutImage = (nw: number, nh: number) => {
-    if (!img || !isContain) return { width: nw, height: nh, x: 0, y: 0 };
-    const s = Math.min(nw / Math.max(1, img.width), nh / Math.max(1, img.height));
-    const iw = img.width * s;
-    const ih = img.height * s;
-    return { width: iw, height: ih, x: (nw - iw) / 2, y: (nh - ih) / 2 };
+  useEffect(() => { setLiveFocus(null); }, [el.cropFocusX, el.cropFocusY, el.cropZoom, el.src]);
+  useEffect(() => {
+    if (photoAdjust && isContain) onExitPhotoAdjust?.();
+  }, [photoAdjust, isContain, onExitPhotoAdjust]);
+  useEffect(() => {
+    if (!photoAdjust && panning) setPanning(false);
+  }, [photoAdjust, panning]);
+
+  const fit = img && !isContain
+    ? imageFrameCoverFit(img.width, img.height, el.w, el.h, focusX, focusY, cropZoom)
+    : null;
+  const containLaid = img && isContain
+    ? (() => {
+        const s = Math.min(el.w / Math.max(1, img.width), el.h / Math.max(1, img.height));
+        const iw = img.width * s;
+        const ih = img.height * s;
+        return { iw, ih, x: (el.w - iw) / 2, y: (el.h - ih) / 2 };
+      })()
+    : null;
+
+  const iw = fit?.iw ?? containLaid?.iw ?? el.w;
+  const ih = fit?.ih ?? containLaid?.ih ?? el.h;
+  const imgX = fit ? -fit.offX : (containLaid?.x ?? 0);
+  const imgY = fit ? -fit.offY : (containLaid?.y ?? 0);
+  if (fit) panMaxRef.current = { maxOffX: fit.maxOffX, maxOffY: fit.maxOffY };
+
+  const panInside = !!(selected && photoAdjust && !isContain && img);
+  const moveFrame = !!(selected && !panInside);
+
+  const enterAdjust = () => {
+    if (isContain || !img) return;
+    if ((el.cropZoom ?? 1) < PHOTO_CORNER_ZOOM) {
+      onChange({ cropZoom: PHOTO_CORNER_ZOOM });
+    }
+    onEnterPhotoAdjust?.();
   };
-
-  const laid = layoutImage(el.w, el.h);
 
   return (
     <Group
       ref={(n: any) => bindFrameNode(n, el.id, shapeRefs)}
       x={drag.x} y={drag.y} width={el.w} height={el.h} rotation={el.rotation || 0}
       clipX={0} clipY={0} clipWidth={el.w} clipHeight={el.h}
-      draggable={drag.draggable}
+      draggable={moveFrame}
       dragDistance={drag.dragDistance}
       dragBoundFunc={drag.dragBoundFunc}
-      onMouseDown={drag.onMouseDown}
-      onTouchStart={drag.onTouchStart}
-      onClick={drag.onClick}
-      onTap={drag.onTap}
-      onDragStart={drag.onDragStart}
-      onDragEnd={drag.onDragEnd}
+      onMouseDown={(e: any) => { e.cancelBubble = true; onSelect(); }}
+      onTouchStart={(e: any) => { e.cancelBubble = true; onSelect(); }}
+      onClick={(e: any) => { e.cancelBubble = true; onSelect(); }}
+      onTap={(e: any) => { e.cancelBubble = true; onSelect(); }}
+      onDblClick={(e: any) => { e.cancelBubble = true; enterAdjust(); }}
+      onDblTap={(e: any) => { e.cancelBubble = true; enterAdjust(); }}
+      onDragStart={moveFrame ? drag.onDragStart : undefined}
+      onDragMove={moveFrame ? drag.onDragMove : undefined}
+      onDragEnd={moveFrame ? drag.onDragEnd : undefined}
       onTransformStart={() => {
+        if (panInside) return;
         startRef.current = { w: el.w, h: el.h };
         gesture.begin();
       }}
-      // Let Transformer scale visually (buttery); bake size only on end.
       onTransformEnd={(e: any) => {
+        if (panInside) return;
         const n = e.target;
         const sx = n.scaleX();
         const sy = n.scaleY();
@@ -273,7 +442,19 @@ const StudioImage = React.memo(function StudioImage({ el, onSelect, onChange, sh
         n.position(b);
         n.width(nw); n.height(nh);
         n.clip({ x: 0, y: 0, width: nw, height: nh });
-        const laidEnd = layoutImage(nw, nh);
+        const laidEnd = img
+          ? (isContain
+              ? (() => {
+                  const sc = Math.min(nw / Math.max(1, img.width), nh / Math.max(1, img.height));
+                  const w = img.width * sc;
+                  const h = img.height * sc;
+                  return { width: w, height: h, x: (nw - w) / 2, y: (nh - h) / 2 };
+                })()
+              : (() => {
+                  const f = imageFrameCoverFit(img.width, img.height, nw, nh, focusX, focusY, cropZoom);
+                  return { width: f.iw, height: f.ih, x: -f.offX, y: -f.offY };
+                })())
+          : { width: nw, height: nh, x: 0, y: 0 };
         n.getChildren().forEach((c: any) => {
           const name = typeof c.getClassName === 'function' ? c.getClassName() : '';
           if (name === 'Rect') { c.width(nw); c.height(nh); c.x(0); c.y(0); }
@@ -285,15 +466,64 @@ const StudioImage = React.memo(function StudioImage({ el, onSelect, onChange, sh
         gesture.end();
       }}
     >
-      <Rect width={el.w} height={el.h} fill="rgba(0,0,0,0.001)" perfectDrawEnabled={false} />
+      {/* When adjusting, hit-test the photo — not this full-frame rect. */}
+      <Rect width={el.w} height={el.h} fill="rgba(0,0,0,0.001)" perfectDrawEnabled={false} listening={!panInside} />
       {img && (
         <KonvaImage
           image={img}
-          x={laid.x} y={laid.y}
-          width={laid.width} height={laid.height}
+          {...(panning ? {} : { x: imgX, y: imgY })}
+          width={iw} height={ih}
           perfectDrawEnabled={false}
-          listening={false}
+          listening={panInside}
+          draggable={panInside}
+          dragDistance={2}
           globalCompositeOperation={(el.mixBlendMode as GlobalCompositeOperation) || undefined}
+          dragBoundFunc={(pos: any) => {
+            const { maxOffX: mx, maxOffY: my } = panMaxRef.current;
+            return {
+              x: Math.min(0, Math.max(-mx, pos.x)),
+              y: Math.min(0, Math.max(-my, pos.y)),
+            };
+          }}
+          onMouseDown={(e: any) => { e.cancelBubble = true; onSelect(); }}
+          onTouchStart={(e: any) => { e.cancelBubble = true; onSelect(); }}
+          onClick={(e: any) => { e.cancelBubble = true; onSelect(); }}
+          onTap={(e: any) => { e.cancelBubble = true; onSelect(); }}
+          onDblClick={(e: any) => { e.cancelBubble = true; enterAdjust(); }}
+          onDblTap={(e: any) => { e.cancelBubble = true; enterAdjust(); }}
+          onDragStart={(e: any) => {
+            if (!panInside) return;
+            e.cancelBubble = true;
+            setPanning(true);
+            gesture.begin();
+          }}
+          onDragMove={(e: any) => {
+            if (!panInside) return;
+            e.cancelBubble = true;
+          }}
+          onDragEnd={(e: any) => {
+            if (!panInside) return;
+            e.cancelBubble = true;
+            const { maxOffX: mx, maxOffY: my } = panMaxRef.current;
+            const next = imageFrameFocusFromOffset(e.target.x(), e.target.y(), mx, my);
+            e.target.position({ x: next.x, y: next.y });
+            setLiveFocus({ x: next.cropFocusX, y: next.cropFocusY });
+            onChange({
+              cropFocusX: next.cropFocusX,
+              cropFocusY: next.cropFocusY,
+              cropZoom: Math.max(cropZoom, PHOTO_CORNER_ZOOM),
+            });
+            setPanning(false);
+            gesture.end();
+          }}
+        />
+      )}
+      {selected && (
+        <Rect width={el.w} height={el.h}
+          stroke={panInside ? '#0D9488' : '#C97B84'}
+          strokeWidth={2}
+          dash={panInside ? [6, 4] : undefined}
+          listening={false}
         />
       )}
     </Group>
@@ -328,6 +558,7 @@ const StudioShape = React.memo(function StudioShape({ el, onSelect, onChange, sh
       onClick={drag.onClick}
       onTap={drag.onTap}
       onDragStart={drag.onDragStart}
+      onDragMove={drag.onDragMove}
       onDragEnd={drag.onDragEnd}
       onTransformStart={() => {
         startRef.current = { w: el.w, h: el.h };
@@ -422,6 +653,7 @@ const StudioText = React.memo(function StudioText({ el, onSelect, onChange, shap
       onClick={drag.onClick}
       onTap={drag.onTap}
       onDragStart={drag.onDragStart}
+      onDragMove={drag.onDragMove}
       onDragEnd={drag.onDragEnd}
       onTransformStart={() => {
         startRef.current = { w: el.w, h: el.h, fontSize: el.fontSize || 20 };
@@ -454,11 +686,11 @@ const StudioText = React.memo(function StudioText({ el, onSelect, onChange, shap
     >
       <Rect width={el.w} height={el.h} fill="rgba(0,0,0,0.001)" perfectDrawEnabled={false} />
       <KonvaText
-        key={`studio-txt-${el.id}-f${fontEpoch ?? 0}`}
+        key={`studio-txt-${el.id}-f${fontEpoch ?? 0}-${normalizeStudioFont(el.fontFamily)}`}
         text={el.text || ''}
         width={el.w} height={el.h}
         fontSize={el.fontSize || 20}
-        fontFamily={el.fontFamily || 'Georgia, serif'}
+        fontFamily={normalizeStudioFont(el.fontFamily)}
         fill={el.fill || '#111'}
         align={el.align || 'center'}
         verticalAlign="top"
@@ -474,13 +706,16 @@ const StudioText = React.memo(function StudioText({ el, onSelect, onChange, shap
 }, studioNodePropsEqual);
 
 function DesignCanvas({
-  elements, selectedId, onSelect, onChangeEl, canvasH,
+  elements, selectedId, onSelect, onChangeEl, canvasH, photoAdjustId, onEnterPhotoAdjust, onExitPhotoAdjust,
 }: {
   elements: EditorElement[];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   onChangeEl: (id: string, patch: Partial<EditorElement>) => void;
   canvasH: number;
+  photoAdjustId?: string | null;
+  onEnterPhotoAdjust?: (id: string) => void;
+  onExitPhotoAdjust?: () => void;
 }) {
   const trRef = useRef<any>(null);
   const stageRef = useRef<any>(null);
@@ -490,23 +725,32 @@ function DesignCanvas({
   const fontsReady = useEditorFontsReady();
   const fontEpoch = fontsReady ? 1 : 0;
   const selected = selectedId ? elements.find(e => e.id === selectedId) : null;
-  const canTransform = !!(selected && selected.type !== 'background');
-  const [previewW, setPreviewW] = useState(PREVIEW_W);
+  const adjusting = !!(photoAdjustId && photoAdjustId === selectedId);
+  const canTransform = !!(selected && selected.type !== 'background' && !adjusting);
+  const [previewBox, setPreviewBox] = useState({ w: PREVIEW_W, h: 0 });
   const [coarsePointer, setCoarsePointer] = useState(false);
 
-  // Fit canvas to available width (mobile-friendly).
+  // Fit canvas to available width AND height so portrait formats stay fully visible.
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
     const measure = () => {
-      const avail = el.clientWidth || PREVIEW_W;
-      setPreviewW(Math.max(PREVIEW_W_MIN, Math.min(PREVIEW_W, Math.floor(avail))));
+      if (gesturingRef.current) return; // freeze Stage size mid-drag
+      const availW = el.clientWidth || PREVIEW_W;
+      // Prefer parent column height when available (panel is viewport-locked).
+      const parent = el.parentElement;
+      const availH = Math.max(
+        160,
+        (parent?.clientHeight || el.clientHeight || 600) - 8,
+      );
+      setPreviewBox({ w: availW, h: availH });
     };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
+    if (el.parentElement) ro.observe(el.parentElement);
     return () => ro.disconnect();
-  }, []);
+  }, [canvasH]);
 
   useEffect(() => {
     const mq = window.matchMedia('(pointer: coarse)');
@@ -516,7 +760,7 @@ function DesignCanvas({
     return () => mq.removeEventListener?.('change', apply);
   }, []);
 
-  const { w: stageW, h: stageH, scale } = previewSizeForCanvas(canvasH, previewW);
+  const { w: stageW, h: stageH, scale } = previewSizeForCanvas(canvasH, previewBox.w, previewBox.h || undefined);
   const anchorSize = coarsePointer ? 20 : 14;
 
   const syncTransformer = useCallback(() => {
@@ -534,24 +778,19 @@ function DesignCanvas({
       gesturingRef.current = true;
       const root = wrapRef.current;
       if (root) root.style.touchAction = 'none';
-      document.body.style.overflow = 'hidden';
+      // Do NOT toggle body.overflow — that resizes the Stage mid-drag.
     },
     end: () => {
       gesturingRef.current = false;
       const root = wrapRef.current;
       if (root) root.style.touchAction = 'none';
-      document.body.style.overflow = '';
       requestAnimationFrame(() => syncTransformer());
     },
   }), [syncTransformer]);
 
-  useEffect(() => () => {
-    document.body.style.overflow = '';
-  }, []);
-
   useEffect(() => {
     syncTransformer();
-  }, [syncTransformer, elements, fontEpoch, canvasH, scale]);
+  }, [syncTransformer, elements, fontEpoch, canvasH, scale, adjusting]);
 
   // Prevent browser gestures (scroll/zoom) from stealing canvas touches.
   useEffect(() => {
@@ -564,10 +803,19 @@ function DesignCanvas({
     return () => el.removeEventListener('touchmove', block);
   }, []);
 
+  useEffect(() => {
+    if (!adjusting) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onExitPhotoAdjust?.();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [adjusting, onExitPhotoAdjust]);
+
   return (
     <div
       ref={wrapRef}
-      className="w-full flex justify-center"
+      className="w-full h-full min-h-[200px] flex justify-center items-start"
       style={{ touchAction: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
     >
       <Stage
@@ -593,6 +841,8 @@ function DesignCanvas({
                   canvasH={canvasH}
                   interactive={selectedId === el.id}
                   onSelect={() => onSelect(el.id)}
+                  onChange={c => onChangeEl(el.id, c)}
+                  gesture={gesture}
                 />
               );
             }
@@ -617,6 +867,9 @@ function DesignCanvas({
                   shapeRefs={shapeRefs}
                   gesture={gesture}
                   canvasH={canvasH}
+                  photoAdjust={photoAdjustId === el.id}
+                  onEnterPhotoAdjust={() => onEnterPhotoAdjust?.(el.id)}
+                  onExitPhotoAdjust={onExitPhotoAdjust}
                 />
               );
             }
@@ -793,6 +1046,7 @@ export default function AdminDesignStudio() {
   const [draftFront, setDraftFront] = useState<EditorElement[]>([]);
   const [draftBack, setDraftBack] = useState<EditorElement[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [photoAdjustId, setPhotoAdjustId] = useState<string | null>(null);
   const [dirtyFront, setDirtyFront] = useState(false);
   const [dirtyBack, setDirtyBack] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -941,7 +1195,7 @@ export default function AdminDesignStudio() {
       patchSide(side, prev => {
         if (idAtStart && prev.some(e => e.id === idAtStart && e.type === 'image')) {
           return prev.map(e => e.id === idAtStart
-            ? { ...e, src: url, cropFocusX: 0.5, cropFocusY: 0.5 }
+            ? { ...e, src: url, cropFocusX: 0.5, cropFocusY: 0.5, cropZoom: PHOTO_CORNER_ZOOM }
             : e);
         }
         const el: EditorElement = {
@@ -949,7 +1203,7 @@ export default function AdminDesignStudio() {
           type: 'image',
           src: url,
           x: 80, y: Math.round(canvasHRef.current * 0.2), w: 440, h: Math.round(canvasHRef.current * 0.35), rotation: 0,
-          cropFocusX: 0.5, cropFocusY: 0.5,
+          cropFocusX: 0.5, cropFocusY: 0.5, cropZoom: PHOTO_CORNER_ZOOM,
         };
         queueMicrotask(() => setSelectedId(el.id));
         return [...prev, el];
@@ -1014,6 +1268,7 @@ export default function AdminDesignStudio() {
     setDesignId(id);
     setCoverSide('front');
     setSelectedId(null);
+    setPhotoAdjustId(null);
   };
 
   const save = async () => {
@@ -1255,57 +1510,57 @@ export default function AdminDesignStudio() {
     return [...new Set(keys)];
   }, []);
 
-  const panelH = 'min-h-[560px] lg:h-[calc(100vh-11rem)] lg:max-h-[calc(100vh-11rem)]';
+  const panelH = 'min-h-[520px] lg:h-[calc(100vh-7.5rem)] lg:max-h-[calc(100vh-7.5rem)]';
 
   return (
     <AdminLayout>
-      <div className="p-3 sm:p-5 md:p-6 w-full max-w-none">
-        <div className="flex flex-col sm:flex-row sm:flex-wrap items-start justify-between gap-3 mb-4">
-          <div>
-            <p className="text-[10px] font-semibold tracking-[0.18em] uppercase mb-1" style={{ color: ADMIN.blush }}>
-              Covers
-            </p>
-            <h1 className="text-2xl md:text-3xl font-serif font-semibold mb-0.5" style={{ color: ADMIN.ink }}>Design Studio</h1>
-            <p className="text-sm max-w-2xl" style={{ color: ADMIN.muted }}>
-              Author covers with text, background, and images. Front and back edit separately — customers see the result in Wizard and Editor after save.
+      <div className="p-2.5 sm:p-4 w-full max-w-none flex flex-col gap-3">
+        {/* Compact top bar */}
+        <div className="flex flex-wrap items-center justify-between gap-2.5">
+          <div className="min-w-0">
+            <h1 className="text-xl md:text-2xl font-serif font-semibold leading-tight" style={{ color: ADMIN.ink }}>
+              Design Studio
+            </h1>
+            <p className="text-[12px] mt-0.5 truncate" style={{ color: ADMIN.muted }}>
+              Edit front &amp; back covers · changes go live after Save
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-            <Button type="button" variant="outline" onClick={() => setShowCreate(true)}
-              disabled={saving || creating} className="rounded-2xl flex-1 sm:flex-none">
-              <Plus size={14} className="mr-1.5" /> Create
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Button type="button" variant="outline" size="sm" onClick={() => setShowCreate(true)}
+              disabled={saving || creating} className="rounded-xl h-9">
+              <Plus size={14} className="mr-1" /> New
             </Button>
-            <Button type="button" variant="outline" onClick={toggleHidden}
-              disabled={!design || hiding || saving} className="rounded-2xl flex-1 sm:flex-none"
+            <Button type="button" variant="outline" size="sm" onClick={toggleHidden}
+              disabled={!design || hiding || saving} className="rounded-xl h-9"
               title={isHidden ? 'Show in wizard & editor' : 'Hide from wizard & editor'}>
-              {hiding ? <Loader2 size={14} className="mr-1.5 animate-spin" /> :
-                isHidden ? <Eye size={14} className="mr-1.5" /> : <EyeOff size={14} className="mr-1.5" />}
+              {hiding ? <Loader2 size={14} className="mr-1 animate-spin" /> :
+                isHidden ? <Eye size={14} className="mr-1" /> : <EyeOff size={14} className="mr-1" />}
               {isHidden ? 'Show' : 'Hide'}
             </Button>
             {design?.isCustom && (
-              <Button type="button" variant="outline" onClick={deleteCustom}
-                disabled={deleting || saving} className="rounded-2xl flex-1 sm:flex-none text-red-700">
-                {deleting ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <Trash2 size={14} className="mr-1.5" />}
+              <Button type="button" variant="outline" size="sm" onClick={deleteCustom}
+                disabled={deleting || saving} className="rounded-xl h-9 text-red-700">
+                {deleting ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Trash2 size={14} className="mr-1" />}
                 Delete
               </Button>
             )}
-            <Button type="button" variant="outline" onClick={resetToDefault}
-              disabled={!design || saving} className="rounded-2xl flex-1 sm:flex-none">
-              <RotateCcw size={14} className="mr-1.5" /> Reset
+            <Button type="button" variant="outline" size="sm" onClick={resetToDefault}
+              disabled={!design || saving} className="rounded-xl h-9">
+              <RotateCcw size={14} className="mr-1" /> Reset
             </Button>
-            <Button type="button" onClick={save} disabled={!design || !dirty || saving}
-              className="rounded-2xl text-white hover:opacity-90 flex-1 sm:flex-none"
-              style={{ background: ADMIN.blush }}>
-              {saving ? <Loader2 size={14} className="mr-1.5 animate-spin" /> :
-                savedFlash ? <Check size={14} className="mr-1.5" /> :
-                <Save size={14} className="mr-1.5" />}
-              {savedFlash ? 'Saved' : 'Save covers'}
+            <Button type="button" size="sm" onClick={save} disabled={!design || !dirty || saving}
+              className="rounded-xl h-9 text-white hover:opacity-90 min-w-[7.5rem]"
+              style={{ background: dirty ? ADMIN.blush : ADMIN.ink }}>
+              {saving ? <Loader2 size={14} className="mr-1 animate-spin" /> :
+                savedFlash ? <Check size={14} className="mr-1" /> :
+                <Save size={14} className="mr-1" />}
+              {savedFlash ? 'Saved' : dirty ? 'Save' : 'Saved'}
             </Button>
           </div>
         </div>
 
         {saveError && (
-          <div className="mb-4 flex items-start gap-2.5 rounded-2xl px-4 py-3 text-sm"
+          <div className="flex items-start gap-2.5 rounded-xl px-3.5 py-2.5 text-sm"
             style={{ background: '#FDF2F2', border: '1px solid #F0C9C9', color: '#8B3A3A' }}>
             <AlertTriangle size={16} className="shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
@@ -1318,11 +1573,11 @@ export default function AdminDesignStudio() {
         )}
 
         {showCreate && (
-          <div className="mb-4 rounded-2xl p-4 sm:p-5 space-y-4"
+          <div className="rounded-xl p-3.5 sm:p-4 space-y-3"
             style={{ background: ADMIN.card, border: `1px solid ${ADMIN.line}` }}>
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-sm font-serif font-semibold" style={{ color: ADMIN.ink }}>Create custom design</p>
+                <p className="text-sm font-serif font-semibold" style={{ color: ADMIN.ink }}>New custom design</p>
                 <p className="text-[11px] mt-0.5" style={{ color: ADMIN.muted }}>
                   Blank covers or duplicate an existing layout.
                 </p>
@@ -1331,7 +1586,7 @@ export default function AdminDesignStudio() {
                 <X size={16} />
               </button>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
               <div>
                 <label className="block text-[11px] font-medium mb-1" style={{ color: ADMIN.ink }}>Name (EN)</label>
                 <Input value={createForm.nameEn}
@@ -1385,12 +1640,12 @@ export default function AdminDesignStudio() {
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button type="button" onClick={createDesign} disabled={creating}
-                className="rounded-2xl text-white" style={{ background: ADMIN.blush }}>
-                {creating ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <Plus size={14} className="mr-1.5" />}
+              <Button type="button" size="sm" onClick={createDesign} disabled={creating}
+                className="rounded-xl text-white" style={{ background: ADMIN.blush }}>
+                {creating ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Plus size={14} className="mr-1" />}
                 Create
               </Button>
-              <Button type="button" variant="outline" onClick={() => setShowCreate(false)} className="rounded-2xl">
+              <Button type="button" size="sm" variant="outline" onClick={() => setShowCreate(false)} className="rounded-xl">
                 Cancel
               </Button>
             </div>
@@ -1402,16 +1657,32 @@ export default function AdminDesignStudio() {
             <Loader2 className="animate-spin" size={16} /> Loading designs…
           </div>
         ) : (
-          <div className={`grid grid-cols-1 lg:grid-cols-[300px_minmax(0,1fr)_320px] gap-3 sm:gap-4 ${panelH}`}>
-            {/* Left: categories + designs */}
-            <div className="rounded-2xl overflow-hidden flex flex-col order-2 lg:order-1 min-h-0"
+          <div className={`grid grid-cols-1 lg:grid-cols-[248px_minmax(0,1fr)_300px] gap-2.5 sm:gap-3 ${panelH}`}>
+            {/* Left: catalog */}
+            <div className="rounded-xl overflow-hidden flex flex-col order-2 lg:order-1 min-h-0"
               style={{ background: ADMIN.card, border: `1px solid ${ADMIN.line}` }}>
+              <div className="flex items-center justify-between gap-2 px-2.5 py-2 shrink-0"
+                style={{ borderBottom: `1px solid ${ADMIN.line}` }}>
+                <span className="text-[10px] uppercase tracking-[0.14em] font-semibold" style={{ color: ADMIN.muted }}>
+                  Catalog
+                </span>
+                <div className="flex gap-0.5 p-0.5 rounded-lg" style={{ background: ADMIN.bg }}>
+                  {VIS_FILTERS.map(f => (
+                    <button key={f} type="button" onClick={() => setVisFilter(f)}
+                      className="px-1.5 py-0.5 rounded-md text-[9px] font-semibold capitalize"
+                      style={
+                        visFilter === f
+                          ? { background: ADMIN.ink, color: '#fff' }
+                          : { color: ADMIN.muted }
+                      }>
+                      {f}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div className="flex flex-1 min-h-0">
-                <div className="w-[118px] shrink-0 overflow-y-auto py-2"
+                <div className="w-[96px] shrink-0 overflow-y-auto py-1.5"
                   style={{ borderRight: `1px solid ${ADMIN.line}`, background: ADMIN.bg }}>
-                  <p className="px-2.5 mb-1.5 text-[9px] uppercase tracking-[0.14em] font-semibold" style={{ color: ADMIN.muted }}>
-                    Categories
-                  </p>
                   {categories.map(cat => {
                     const count = categoryCounts[cat] || 0;
                     const active = activeCat === cat;
@@ -1430,164 +1701,161 @@ export default function AdminDesignStudio() {
                           });
                           if (first) selectDesign(first.id);
                         }}
-                        className="w-full flex items-center justify-between gap-1 px-2.5 py-2 text-left transition-colors"
+                        className="w-full flex flex-col items-start gap-0.5 px-2 py-1.5 text-left transition-colors"
                         style={
                           active
                             ? { background: ADMIN.blushSoft, color: ADMIN.blushDeep, borderRight: `2px solid ${ADMIN.blush}` }
                             : { color: ADMIN.ink }
                         }
                       >
-                        <span className="text-[11px] font-semibold leading-tight truncate">
+                        <span className="text-[10px] font-semibold leading-tight line-clamp-2">
                           {CATEGORY_LABELS[cat]?.en ?? cat}
                         </span>
-                        <span className="text-[10px] tabular-nums shrink-0" style={{ color: ADMIN.muted }}>{count}</span>
+                        <span className="text-[9px] tabular-nums" style={{ color: ADMIN.muted }}>{count}</span>
                       </button>
                     );
                   })}
                 </div>
-                <div className="flex-1 min-w-0 flex flex-col min-h-0">
-                  <div className="flex gap-1 p-2 shrink-0" style={{ borderBottom: `1px solid ${ADMIN.line}` }}>
-                    {VIS_FILTERS.map(f => (
-                      <button key={f} type="button" onClick={() => setVisFilter(f)}
-                        className="flex-1 px-1.5 py-1 rounded-lg text-[10px] font-semibold capitalize"
+                <div className="flex-1 min-w-0 overflow-y-auto p-1.5 space-y-1">
+                  {catDesigns.length === 0 && (
+                    <p className="text-[11px] py-6 text-center" style={{ color: ADMIN.muted }}>No designs here.</p>
+                  )}
+                  {catDesigns.map(d => {
+                    const overridden = !d.isCustom && !!savedOverrides[d.id];
+                    const hidden = savedHiddenIds.includes(d.id);
+                    const previewEls = designFrontElements(d);
+                    return (
+                      <button
+                        key={d.id}
+                        type="button"
+                        onClick={() => selectDesign(d.id)}
+                        className="w-full flex items-center gap-2 p-1 rounded-lg border text-left transition-all"
                         style={
-                          visFilter === f
-                            ? { background: ADMIN.ink, color: '#fff' }
-                            : { background: ADMIN.bg, color: ADMIN.muted }
-                        }>
-                        {f}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="overflow-y-auto p-2 space-y-1.5 flex-1 min-h-0">
-                    {catDesigns.length === 0 && (
-                      <p className="text-[11px] py-6 text-center" style={{ color: ADMIN.muted }}>No designs here.</p>
-                    )}
-                    {catDesigns.map(d => {
-                      const overridden = !d.isCustom && !!savedOverrides[d.id];
-                      const hidden = savedHiddenIds.includes(d.id);
-                      const previewEls = designFrontElements(d);
-                      return (
-                        <button
-                          key={d.id}
-                          type="button"
-                          onClick={() => selectDesign(d.id)}
-                          className="w-full flex items-center gap-2.5 p-1.5 rounded-xl border text-left transition-all"
-                          style={
-                            designId === d.id
-                              ? { borderColor: ADMIN.blush, background: ADMIN.blushSoft, boxShadow: `0 0 0 1px ${ADMIN.blush}` }
-                              : { borderColor: ADMIN.line, opacity: hidden ? 0.55 : 1 }
-                          }
-                        >
-                          <div className="rounded-md overflow-hidden shrink-0 relative bg-white"
-                            style={{ width: CATALOG_THUMB_W, height: CATALOG_THUMB_H, border: `1px solid ${ADMIN.line}` }}>
-                            {previewEls.length > 0 ? (
-                              <PageThumb elements={previewEls} width={CATALOG_THUMB_W} height={CATALOG_THUMB_H} />
-                            ) : (
-                              <div className="w-full h-full" style={{ background: (d.thumb?.background as string) || ADMIN.bg }} />
+                          designId === d.id
+                            ? { borderColor: ADMIN.blush, background: ADMIN.blushSoft, boxShadow: `0 0 0 1px ${ADMIN.blush}` }
+                            : { borderColor: 'transparent', background: 'transparent', opacity: hidden ? 0.55 : 1 }
+                        }
+                      >
+                        <div className="rounded overflow-hidden shrink-0 relative bg-white"
+                          style={{ width: CATALOG_THUMB_W, height: CATALOG_THUMB_H, border: `1px solid ${ADMIN.line}` }}>
+                          {previewEls.length > 0 ? (
+                            <PageThumb elements={previewEls} width={CATALOG_THUMB_W} height={CATALOG_THUMB_H} />
+                          ) : (
+                            <div className="w-full h-full" style={{ background: (d.thumb?.background as string) || ADMIN.bg }} />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[11px] font-semibold truncate leading-tight" style={{ color: ADMIN.ink }}>{d.name.en}</p>
+                          <div className="flex flex-wrap gap-1 mt-0.5">
+                            {d.isCustom && (
+                              <span className="text-[8px] font-semibold uppercase tracking-wide" style={{ color: ADMIN.blush }}>Yours</span>
+                            )}
+                            {overridden && (
+                              <span className="text-[8px] font-semibold uppercase tracking-wide" style={{ color: ADMIN.blush }}>Edited</span>
+                            )}
+                            {hidden && (
+                              <span className="inline-flex items-center gap-0.5 text-[8px] font-semibold uppercase tracking-wide text-neutral-500">
+                                <EyeOff size={8} /> Hidden
+                              </span>
                             )}
                           </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-semibold truncate" style={{ color: ADMIN.ink }}>{d.name.en}</p>
-                            <p className="text-[10px] truncate" style={{ color: ADMIN.muted }}>{d.name.sq}</p>
-                            <div className="flex flex-wrap gap-1 mt-0.5">
-                              {d.isCustom && (
-                                <span className="text-[9px] font-semibold uppercase tracking-wide" style={{ color: ADMIN.blush }}>Yours</span>
-                              )}
-                              {overridden && (
-                                <span className="text-[9px] font-semibold uppercase tracking-wide" style={{ color: ADMIN.blush }}>Edited</span>
-                              )}
-                              {hidden && (
-                                <span className="inline-flex items-center gap-0.5 text-[9px] font-semibold uppercase tracking-wide text-neutral-500">
-                                  <EyeOff size={9} /> Hidden
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
 
-            {/* Center: canvas */}
-            <div className="rounded-2xl flex flex-col items-center justify-center p-4 sm:p-6 order-1 lg:order-2 min-h-0 overflow-auto"
+            {/* Center: canvas workspace */}
+            <div className="rounded-xl flex flex-col order-1 lg:order-2 min-h-0 overflow-hidden"
               style={{ background: ADMIN.bg, border: `1px solid ${ADMIN.line}` }}>
               {design ? (
                 <>
-                  <p className="text-base font-serif font-semibold mb-1" style={{ color: ADMIN.ink }}>{design.name.en}</p>
-                  <div className="flex flex-wrap gap-1 mb-2 justify-center">
-                    {(['front', 'back'] as const).map(side => (
-                      <button key={side} type="button"
-                        onClick={() => { setCoverSide(side); setSelectedId(null); }}
-                        className="px-4 py-1.5 rounded-full text-[11px] font-semibold capitalize"
-                        style={
-                          coverSide === side
-                            ? { background: ADMIN.blush, color: '#fff' }
-                            : { background: ADMIN.blushSoft, color: ADMIN.blushDeep }
-                        }>
-                        {side}
-                        {(side === 'front' ? dirtyFront : dirtyBack) ? ' ·' : ''}
-                      </button>
-                    ))}
-                  </div>
-                  {bookSizes.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mb-2 justify-center max-w-md">
-                      {bookSizes.map((sz: any) => {
-                        const active = sz.id === formatSizeId;
-                        return (
-                          <button
-                            key={sz.id}
-                            type="button"
-                            onClick={() => setFormatSizeId(sz.id)}
-                            className="px-3 py-1.5 rounded-full text-[10px] font-semibold"
-                            title={`${Number(sz.widthCm)}×${Number(sz.heightCm)} cm`}
-                            style={
-                              active
-                                ? { background: ADMIN.ink, color: '#fff' }
-                                : { background: ADMIN.card, color: ADMIN.muted, border: `1px solid ${ADMIN.line}` }
-                            }
-                          >
-                            {formatSizeLabel(sz)}
-                          </button>
-                        );
-                      })}
+                  {/* Workspace chrome */}
+                  <div className="shrink-0 flex flex-wrap items-center gap-2 px-3 py-2"
+                    style={{ background: ADMIN.card, borderBottom: `1px solid ${ADMIN.line}` }}>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-serif font-semibold truncate" style={{ color: ADMIN.ink }}>{design.name.en}</p>
+                      <p className="text-[10px] truncate" style={{ color: ADMIN.muted }}>
+                        {isHidden ? 'Hidden from customers' : 'Visible to customers'}
+                        {hasOverride ? ' · override' : ''}
+                        {dirty ? ` · unsaved${dirtyFront && dirtyBack ? ' (both)' : dirtyFront ? ' (front)' : ' (back)'}` : ''}
+                      </p>
                     </div>
-                  )}
-                  <p className="text-[11px] mb-3 text-center max-w-md" style={{ color: ADMIN.muted }}>
-                    {coverSide === 'front'
-                      ? 'Front cover — tap to select, drag to move, pinch handles to resize.'
-                      : 'Back cover — edit independently from the front.'}
-                    {selectedFormat
-                      ? ` · editing for ${formatSizeLabel(selectedFormat)}`
-                      : ''}
-                    {isHidden ? ' · hidden from customers' : ''}
-                    {hasOverride ? ' · override saved' : ''}
-                  </p>
-                  <div className="w-full max-w-[440px] rounded-sm shadow-xl overflow-hidden bg-white"
-                    style={{ touchAction: 'none' }}>
-                    <DesignCanvas
-                      elements={draft}
-                      selectedId={selectedId}
-                      onSelect={setSelectedId}
-                      onChangeEl={onChangeEl}
-                      canvasH={canvasH}
-                    />
+                    <div className="inline-flex p-0.5 rounded-lg" style={{ background: ADMIN.bg }}>
+                      {(['front', 'back'] as const).map(side => (
+                        <button key={side} type="button"
+                          onClick={() => { setCoverSide(side); setSelectedId(null); setPhotoAdjustId(null); }}
+                          className="px-3 py-1 rounded-md text-[11px] font-semibold capitalize"
+                          style={
+                            coverSide === side
+                              ? { background: ADMIN.blush, color: '#fff' }
+                              : { color: ADMIN.muted }
+                          }>
+                          {side}{(side === 'front' ? dirtyFront : dirtyBack) ? ' ·' : ''}
+                        </button>
+                      ))}
+                    </div>
+                    {bookSizes.length > 0 && (
+                      <label className="inline-flex items-center gap-1.5 text-[10px] font-semibold" style={{ color: ADMIN.muted }}>
+                        <Layers size={12} />
+                        <select
+                          value={formatSizeId ?? ''}
+                          onChange={e => setFormatSizeId(e.target.value ? Number(e.target.value) : null)}
+                          className="h-8 rounded-lg px-2 text-[11px] font-semibold outline-none max-w-[11rem]"
+                          style={{ border: `1px solid ${ADMIN.line}`, background: ADMIN.card, color: ADMIN.ink }}
+                          title="Preview book format"
+                        >
+                          {bookSizes.map((sz: any) => (
+                            <option key={sz.id} value={sz.id}>{formatSizeLabel(sz)}</option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
                   </div>
-                  <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5">
+
+                  {/* Canvas stage area */}
+                  <div className="flex-1 min-h-0 overflow-auto flex justify-center items-start p-3 sm:p-4">
+                    <div className="w-full max-w-[560px] h-full min-h-[200px] rounded-md shadow-lg overflow-hidden bg-white flex flex-col"
+                      style={{ touchAction: 'none' }}>
+                      <DesignCanvas
+                        elements={draft}
+                        selectedId={selectedId}
+                        onSelect={(id) => {
+                          setSelectedId(id);
+                          setPhotoAdjustId(cur => (cur && cur !== id ? null : cur));
+                        }}
+                        onChangeEl={onChangeEl}
+                        canvasH={canvasH}
+                        photoAdjustId={photoAdjustId}
+                        onEnterPhotoAdjust={(id) => {
+                          const el = draft.find(e => e.id === id);
+                          if (el && (el.cropZoom ?? 1) < PHOTO_CORNER_ZOOM) {
+                            onChangeEl(id, { cropZoom: PHOTO_CORNER_ZOOM });
+                          }
+                          setSelectedId(id);
+                          setPhotoAdjustId(id);
+                        }}
+                        onExitPhotoAdjust={() => setPhotoAdjustId(null)}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Tool strip */}
+                  <div className="shrink-0 flex flex-wrap items-center justify-center gap-1 px-2 py-2"
+                    style={{ background: ADMIN.card, borderTop: `1px solid ${ADMIN.line}` }}>
                     <input ref={imageFileRef} type="file" accept="image/*" className="hidden"
                       onChange={e => { const f = e.target.files?.[0]; if (f) void uploadAndReplaceImage(f); e.target.value = ''; }} />
                     <input ref={bgFileRef} type="file" accept="image/*" className="hidden"
                       onChange={e => { const f = e.target.files?.[0]; if (f) void uploadAndSetBgPhoto(f); e.target.value = ''; }} />
                     <button type="button" onClick={addText} disabled={uploading}
-                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-semibold"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold disabled:opacity-50"
                       style={{ background: ADMIN.blushSoft, color: ADMIN.blushDeep }}>
                       <Type size={13} /> Text
                     </button>
                     <button type="button" onClick={() => imageFileRef.current?.click()} disabled={uploading}
-                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-semibold"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold disabled:opacity-50"
                       style={{ background: ADMIN.blushSoft, color: ADMIN.blushDeep }}>
                       {uploading ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />} Image
                     </button>
@@ -1596,117 +1864,233 @@ export default function AdminDesignStudio() {
                       if (bg) setSelectedId(bg.id);
                       else setCoverBg({ mode: 'color', bgColor: '#FFFFFF' });
                     }}
-                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-semibold"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold"
                       style={{ background: ADMIN.blushSoft, color: ADMIN.blushDeep }}>
                       <Palette size={13} /> Background
                     </button>
                     <button type="button" onClick={deleteSelected}
                       disabled={!selected || selected.type === 'background'}
-                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-semibold text-red-700 disabled:opacity-40"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-red-700 disabled:opacity-40"
                       style={{ background: '#FDF2F2' }}>
                       <Trash2 size={13} /> Delete
                     </button>
                     {coverSide === 'back' && (
                       <button type="button" onClick={copyFrontToBack}
-                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-semibold"
-                        style={{ background: ADMIN.card, color: ADMIN.ink, border: `1px solid ${ADMIN.line}` }}>
-                        Copy front → back
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold"
+                        style={{ background: ADMIN.bg, color: ADMIN.ink, border: `1px solid ${ADMIN.line}` }}>
+                        <Copy size={13} /> Copy front → back
                       </button>
                     )}
                   </div>
-                  {dirty && (
-                    <p className="mt-2 text-[11px] text-amber-700 font-medium">
-                      Unsaved changes{dirtyFront && dirtyBack ? ' (front & back)' : dirtyFront ? ' (front)' : ' (back)'}
-                    </p>
-                  )}
                 </>
               ) : (
-                <p className="text-sm" style={{ color: ADMIN.muted }}>Select a design</p>
+                <div className="flex-1 flex items-center justify-center p-8">
+                  <p className="text-sm" style={{ color: ADMIN.muted }}>Select a design from the catalog</p>
+                </div>
               )}
             </div>
 
             {/* Right: inspector */}
-            <div className="rounded-2xl p-4 space-y-4 order-3 min-h-0 overflow-y-auto"
+            <div className="rounded-xl flex flex-col order-3 min-h-0 overflow-hidden"
               style={{ background: ADMIN.card, border: `1px solid ${ADMIN.line}` }}>
-              <p className="text-[10px] uppercase tracking-[0.14em] font-semibold" style={{ color: ADMIN.muted }}>
-                Properties · {coverSide === 'front' ? 'Front' : 'Back'}
-              </p>
-              {!selected ? (
-                <p className="text-sm leading-relaxed" style={{ color: ADMIN.muted }}>
-                  Select an element or use Text, Image, or Background.
+              <div className="shrink-0 px-3 py-2 flex items-center justify-between gap-2"
+                style={{ borderBottom: `1px solid ${ADMIN.line}` }}>
+                <p className="text-[10px] uppercase tracking-[0.14em] font-semibold" style={{ color: ADMIN.muted }}>
+                  Properties
                 </p>
+                <span className="text-[10px] font-semibold capitalize px-1.5 py-0.5 rounded"
+                  style={{ background: ADMIN.bg, color: ADMIN.ink }}>
+                  {coverSide}
+                </span>
+              </div>
+              <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
+              {!selected ? (
+                <div className="rounded-lg px-3 py-4 text-center" style={{ background: ADMIN.bg }}>
+                  <p className="text-[12px] leading-relaxed" style={{ color: ADMIN.muted }}>
+                    Select an element on the cover, or add Text / Image / Background below the canvas.
+                  </p>
+                </div>
               ) : selected.type === 'text' ? (
-                <div className="space-y-3">
-                  <label className="block text-[11px] font-medium" style={{ color: ADMIN.ink }}>Text</label>
+                <div className="space-y-2.5">
+                  <p className="text-[11px] font-semibold" style={{ color: ADMIN.ink }}>Text</p>
                   <Input value={selected.text || ''}
                     onChange={e => onChangeEl(selected.id, { text: e.target.value })} />
-                  <label className="block text-[11px] font-medium" style={{ color: ADMIN.ink }}>Font size</label>
-                  <Input type="number" value={selected.fontSize || 20}
-                    onChange={e => onChangeEl(selected.id, { fontSize: Number(e.target.value) || 20 })} />
-                  <label className="block text-[11px] font-medium" style={{ color: ADMIN.ink }}>Color</label>
+                  <label className="block text-[10px] font-medium" style={{ color: ADMIN.muted }}>Font</label>
+                  <select
+                    value={normalizeStudioFont(selected.fontFamily)}
+                    onChange={e => onChangeEl(selected.id, { fontFamily: e.target.value })}
+                    className="w-full h-9 rounded-lg px-2.5 text-[12px] outline-none"
+                    style={{
+                      border: `1px solid ${ADMIN.line}`,
+                      background: ADMIN.card,
+                      color: ADMIN.ink,
+                      fontFamily: normalizeStudioFont(selected.fontFamily),
+                    }}
+                  >
+                    {STUDIO_FONTS.map(f => (
+                      <option key={f.value} value={f.value} style={{ fontFamily: f.value }}>
+                        {f.label}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
+                    <div>
+                      <label className="block text-[10px] font-medium mb-1" style={{ color: ADMIN.muted }}>Size</label>
+                      <Input type="number" value={selected.fontSize || 20}
+                        onChange={e => onChangeEl(selected.id, { fontSize: Number(e.target.value) || 20 })} />
+                    </div>
+                    <div className="flex gap-1 pb-0.5">
+                      <button
+                        type="button"
+                        disabled={isScriptFont(selected.fontFamily)}
+                        onClick={() => {
+                          const fs = selected.fontStyle || 'normal';
+                          const next = fs.includes('bold')
+                            ? fs.replace('bold', '').replace(/\s+/g, ' ').trim() || 'normal'
+                            : (fs === 'normal' || !fs ? 'bold' : `${fs} bold`.trim());
+                          onChangeEl(selected.id, { fontStyle: next });
+                        }}
+                        className="w-9 h-9 rounded-lg text-[12px] font-bold disabled:opacity-40"
+                        style={
+                          (selected.fontStyle || '').includes('bold')
+                            ? { background: ADMIN.blush, color: '#fff' }
+                            : { background: ADMIN.blushSoft, color: ADMIN.blushDeep }
+                        }
+                      >
+                        B
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isScriptFont(selected.fontFamily)}
+                        onClick={() => {
+                          const fs = selected.fontStyle || 'normal';
+                          const next = fs.includes('italic')
+                            ? fs.replace('italic', '').replace(/\s+/g, ' ').trim() || 'normal'
+                            : (fs === 'normal' || !fs ? 'italic' : `${fs} italic`.trim());
+                          onChangeEl(selected.id, { fontStyle: next });
+                        }}
+                        className="w-9 h-9 rounded-lg text-[12px] italic disabled:opacity-40"
+                        style={
+                          (selected.fontStyle || '').includes('italic')
+                            ? { background: ADMIN.blush, color: '#fff' }
+                            : { background: ADMIN.blushSoft, color: ADMIN.blushDeep }
+                        }
+                      >
+                        I
+                      </button>
+                    </div>
+                  </div>
+                  <label className="block text-[10px] font-medium" style={{ color: ADMIN.muted }}>Color</label>
                   <div className="flex gap-2">
                     <input type="color" value={selected.fill || '#111111'}
                       onChange={e => onChangeEl(selected.id, { fill: e.target.value })}
-                      className="h-9 w-12 rounded border cursor-pointer" style={{ borderColor: ADMIN.line }} />
+                      className="h-9 w-11 rounded border cursor-pointer" style={{ borderColor: ADMIN.line }} />
                     <Input value={selected.fill || '#111111'}
                       onChange={e => onChangeEl(selected.id, { fill: e.target.value })} />
                   </div>
-                  <label className="block text-[11px] font-medium" style={{ color: ADMIN.ink }}>Letter spacing</label>
-                  <Input type="number" value={selected.letterSpacing ?? 0}
-                    onChange={e => onChangeEl(selected.id, { letterSpacing: Number(e.target.value) || 0 })} />
-                  <label className="block text-[11px] font-medium" style={{ color: ADMIN.ink }}>Align</label>
-                  <div className="flex gap-1">
-                    {(['left', 'center', 'right'] as const).map(a => (
-                      <button key={a} type="button" onClick={() => onChangeEl(selected.id, { align: a })}
-                        className="flex-1 py-1.5 rounded-xl text-[11px] font-semibold capitalize"
-                        style={
-                          (selected.align || 'center') === a
-                            ? { background: ADMIN.blush, color: '#fff' }
-                            : { background: ADMIN.blushSoft, color: ADMIN.blushDeep }
-                        }>
-                        {a}
-                      </button>
-                    ))}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] font-medium mb-1" style={{ color: ADMIN.muted }}>Tracking</label>
+                      <Input type="number" value={selected.letterSpacing ?? 0}
+                        onChange={e => onChangeEl(selected.id, { letterSpacing: Number(e.target.value) || 0 })} />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-medium mb-1" style={{ color: ADMIN.muted }}>Align</label>
+                      <div className="flex gap-0.5">
+                        {(['left', 'center', 'right'] as const).map(a => (
+                          <button key={a} type="button" onClick={() => onChangeEl(selected.id, { align: a })}
+                            className="flex-1 h-9 rounded-lg text-[10px] font-semibold capitalize"
+                            style={
+                              (selected.align || 'center') === a
+                                ? { background: ADMIN.blush, color: '#fff' }
+                                : { background: ADMIN.blushSoft, color: ADMIN.blushDeep }
+                            }>
+                            {a[0]}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
               ) : selected.type === 'image' ? (
-                <div className="space-y-3">
-                  <p className="text-sm font-medium" style={{ color: ADMIN.ink }}>Image / icon</p>
+                <div className="space-y-2.5">
+                  <p className="text-[11px] font-semibold" style={{ color: ADMIN.ink }}>Image</p>
                   {selected.src ? (
-                    <img src={selected.src} alt="" className="w-full h-28 object-cover rounded-xl"
+                    <img src={selected.src} alt="" className="w-full h-28 object-contain rounded-lg bg-neutral-50"
                       style={{ border: `1px solid ${ADMIN.line}` }} />
                   ) : null}
-                  <p className="text-[11px] break-all" style={{ color: ADMIN.muted }}>{selected.src || 'No image yet'}</p>
-                  <Button type="button" variant="outline" className="w-full rounded-xl" disabled={uploading}
+                  <p className="text-[10px] tabular-nums" style={{ color: ADMIN.muted }}>
+                    {Math.round(selected.w)}×{Math.round(selected.h)} · ({Math.round(selected.x)}, {Math.round(selected.y)})
+                  </p>
+                  {(() => {
+                    const adjustDisabled = selected.objectFit === 'contain' || selected.mixBlendMode === 'screen' || !selected.src;
+                    const adjusting = photoAdjustId === selected.id;
+                    return (
+                      <>
+                        <div className="flex gap-0.5 p-0.5 rounded-lg" style={{ background: ADMIN.bg }}>
+                          <button type="button" onClick={() => setPhotoAdjustId(null)}
+                            className="flex-1 py-1.5 rounded-md text-[10px] font-semibold"
+                            style={!adjusting ? { background: ADMIN.ink, color: '#fff' } : { color: ADMIN.muted }}>
+                            Move frame
+                          </button>
+                          <button type="button" disabled={adjustDisabled}
+                            onClick={() => {
+                              if (adjustDisabled) return;
+                              if ((selected.cropZoom ?? 1) < PHOTO_CORNER_ZOOM) {
+                                onChangeEl(selected.id, { cropZoom: PHOTO_CORNER_ZOOM });
+                              }
+                              setPhotoAdjustId(selected.id);
+                            }}
+                            className="flex-1 py-1.5 rounded-md text-[10px] font-semibold disabled:opacity-40"
+                            style={adjusting ? { background: '#0D9488', color: '#fff' } : { color: ADMIN.muted }}>
+                            Adjust photo
+                          </button>
+                        </div>
+                        {(adjusting || (selected.cropZoom ?? 1) > 1) && !adjustDisabled && (
+                          <div>
+                            <label className="block text-[10px] font-medium mb-1" style={{ color: ADMIN.muted }}>
+                              Zoom {Math.round((selected.cropZoom ?? 1) * 100)}%
+                            </label>
+                            <input type="range" min={100} max={300} step={5}
+                              value={Math.round((selected.cropZoom ?? 1) * 100)}
+                              onChange={e => onChangeEl(selected.id, { cropZoom: Math.max(1, Number(e.target.value) / 100) })}
+                              className="w-full" style={{ accentColor: ADMIN.blush }} />
+                          </div>
+                        )}
+                        <p className="text-[10px] leading-relaxed" style={{ color: ADMIN.muted }}>
+                          {adjusting
+                            ? 'Drag inside the frame to reposition · Esc to exit'
+                            : adjustDisabled
+                              ? 'Landmark graphics stay letterboxed — drag/resize the frame.'
+                              : 'Move frame on the page, or Adjust photo to pan inside the frame.'}
+                        </p>
+                      </>
+                    );
+                  })()}
+                  <Button type="button" variant="outline" size="sm" className="w-full rounded-lg" disabled={uploading}
                     onClick={() => imageFileRef.current?.click()}>
                     {uploading ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <Upload size={14} className="mr-1.5" />}
-                    {selected.src ? 'Replace image' : 'Upload image'}
+                    {selected.src ? 'Replace' : 'Upload'}
                   </Button>
-                  <p className="text-[11px]" style={{ color: ADMIN.muted }}>
-                    Drag to move · corner handles to resize · {Math.round(selected.w)}×{Math.round(selected.h)}
-                  </p>
                 </div>
               ) : selected.type === 'shape' ? (
-                <div className="space-y-3">
-                  <p className="text-sm font-medium" style={{ color: ADMIN.ink }}>Decoration</p>
-                  <p className="text-[12px] leading-relaxed" style={{ color: ADMIN.muted }}>
-                    Drag to move, handles to resize. Thin accent lines have a larger touch target.
+                <div className="space-y-2.5">
+                  <p className="text-[11px] font-semibold" style={{ color: ADMIN.ink }}>Decoration</p>
+                  <p className="text-[10px] tabular-nums" style={{ color: ADMIN.muted }}>
+                    {Math.round(selected.w)}×{Math.round(selected.h)} · ({Math.round(selected.x)}, {Math.round(selected.y)})
                   </p>
-                  <p className="text-[11px]" style={{ color: ADMIN.muted }}>
-                    Size: {Math.round(selected.w)}×{Math.round(selected.h)} · Position: {Math.round(selected.x)}, {Math.round(selected.y)}
-                  </p>
-                  <Button type="button" variant="outline" className="w-full rounded-xl text-red-700"
+                  <Button type="button" variant="outline" size="sm" className="w-full rounded-lg text-red-700"
                     onClick={deleteSelected}>
-                    <Trash2 size={14} className="mr-1.5" /> Delete decoration
+                    <Trash2 size={14} className="mr-1.5" /> Delete
                   </Button>
                 </div>
               ) : selected.type === 'background' ? (
-                <div className="space-y-3">
-                  <label className="block text-[11px] font-medium" style={{ color: ADMIN.ink }}>Background</label>
-                  <div className="flex gap-1">
+                <div className="space-y-2.5">
+                  <p className="text-[11px] font-semibold" style={{ color: ADMIN.ink }}>Background</p>
+                  <div className="flex gap-0.5 p-0.5 rounded-lg" style={{ background: ADMIN.bg }}>
                     {([
                       { id: 'color' as const, label: 'Color', icon: Droplets },
-                      { id: 'gradient' as const, label: 'Gradient', icon: Palette },
+                      { id: 'gradient' as const, label: 'Grad', icon: Palette },
                       { id: 'photo' as const, label: 'Photo', icon: ImageIcon },
                     ]).map(m => (
                       <button key={m.id} type="button"
@@ -1721,11 +2105,11 @@ export default function AdminDesignStudio() {
                           });
                           else setCoverBg({ mode: 'photo', src: selected.src || undefined });
                         }}
-                        className="flex-1 inline-flex items-center justify-center gap-1 py-1.5 rounded-xl text-[10px] font-semibold"
+                        className="flex-1 inline-flex items-center justify-center gap-1 py-1.5 rounded-md text-[10px] font-semibold"
                         style={
                           bgUiMode === m.id
                             ? { background: ADMIN.blush, color: '#fff' }
-                            : { background: ADMIN.blushSoft, color: ADMIN.blushDeep }
+                            : { color: ADMIN.blushDeep }
                         }>
                         <m.icon size={11} /> {m.label}
                       </button>
@@ -1754,7 +2138,7 @@ export default function AdminDesignStudio() {
                       <div className="flex gap-2">
                         <input type="color" value={selected.bgColor || '#ffffff'}
                           onChange={e => setCoverBg({ mode: 'color', bgColor: e.target.value })}
-                          className="h-9 w-12 rounded border cursor-pointer" style={{ borderColor: ADMIN.line }} />
+                          className="h-9 w-11 rounded border cursor-pointer" style={{ borderColor: ADMIN.line }} />
                         <Input value={selected.bgColor || '#ffffff'}
                           onChange={e => setCoverBg({ mode: 'color', bgColor: e.target.value })} />
                       </div>
@@ -1793,7 +2177,7 @@ export default function AdminDesignStudio() {
                             bgGradientTo: selected.bgGradientTo || '#666666',
                             bgGradientDir: selected.bgGradientDir || 'tb',
                           })}
-                          className="h-9 w-12 rounded border cursor-pointer" style={{ borderColor: ADMIN.line }} />
+                          className="h-9 w-11 rounded border cursor-pointer" style={{ borderColor: ADMIN.line }} />
                         <span className="text-[10px]" style={{ color: ADMIN.muted }}>→</span>
                         <input type="color"
                           value={selected.bgGradientTo || '#666666'}
@@ -1803,9 +2187,9 @@ export default function AdminDesignStudio() {
                             bgGradientTo: e.target.value,
                             bgGradientDir: selected.bgGradientDir || 'tb',
                           })}
-                          className="h-9 w-12 rounded border cursor-pointer" style={{ borderColor: ADMIN.line }} />
+                          className="h-9 w-11 rounded border cursor-pointer" style={{ borderColor: ADMIN.line }} />
                       </div>
-                      <div className="flex gap-1">
+                      <div className="flex gap-0.5 p-0.5 rounded-lg" style={{ background: ADMIN.bg }}>
                         {([
                           { id: 'tb' as const, label: '↓' },
                           { id: 'lr' as const, label: '→' },
@@ -1818,11 +2202,11 @@ export default function AdminDesignStudio() {
                               bgGradientTo: selected.bgGradientTo || '#666666',
                               bgGradientDir: d.id,
                             })}
-                            className="flex-1 py-1.5 rounded-xl text-sm font-semibold"
+                            className="flex-1 py-1.5 rounded-md text-sm font-semibold"
                             style={
                               (selected.bgGradientDir || 'tb') === d.id
                                 ? { background: ADMIN.ink, color: '#fff' }
-                                : { background: ADMIN.bg, color: ADMIN.muted }
+                                : { color: ADMIN.muted }
                             }
                           >{d.label}</button>
                         ))}
@@ -1833,21 +2217,43 @@ export default function AdminDesignStudio() {
                   {bgUiMode === 'photo' && (
                     <div className="space-y-2">
                       {selected.src ? (
-                        <img src={selected.src} alt="" className="w-full h-28 object-cover rounded-xl"
+                        <img src={selected.src} alt="" className="w-full h-28 object-cover rounded-lg"
                           style={{ border: `1px solid ${ADMIN.line}` }} />
                       ) : (
                         <p className="text-[11px]" style={{ color: ADMIN.muted }}>No photo yet — upload one.</p>
                       )}
-                      <Button type="button" variant="outline" className="w-full rounded-xl" disabled={uploading}
+                      <Button type="button" variant="outline" size="sm" className="w-full rounded-lg" disabled={uploading}
                         onClick={() => bgFileRef.current?.click()}>
                         {uploading ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <Upload size={14} className="mr-1.5" />}
                         {selected.src ? 'Replace photo' : 'Upload photo'}
                       </Button>
                       {selected.src && (
-                        <Button type="button" variant="ghost" className="w-full rounded-xl text-red-700"
-                          onClick={() => setCoverBg({ mode: 'color', bgColor: selected.bgColor || '#FFFFFF' })}>
-                          Remove photo
-                        </Button>
+                        <>
+                          <div>
+                            <label className="block text-[10px] font-medium mb-1" style={{ color: ADMIN.muted }}>
+                              Zoom {Math.round((selected.cropZoom ?? 1) * 100)}%
+                            </label>
+                            <input type="range" min={100} max={300} step={5}
+                              value={Math.round((selected.cropZoom ?? 1) * 100)}
+                              onChange={e => {
+                                const z = Math.max(1, Number(e.target.value) / 100);
+                                onChangeEl(selected.id, { cropZoom: z });
+                              }}
+                              onPointerDown={() => {
+                                if ((selected.cropZoom ?? 1) < PHOTO_CORNER_ZOOM) {
+                                  onChangeEl(selected.id, { cropZoom: PHOTO_CORNER_ZOOM });
+                                }
+                              }}
+                              className="w-full" style={{ accentColor: ADMIN.blush }} />
+                          </div>
+                          <p className="text-[10px] leading-relaxed" style={{ color: ADMIN.muted }}>
+                            Drag the background on the canvas to reposition. Use zoom to unlock more crop room.
+                          </p>
+                          <Button type="button" variant="ghost" size="sm" className="w-full rounded-lg text-red-700"
+                            onClick={() => setCoverBg({ mode: 'color', bgColor: selected.bgColor || '#FFFFFF' })}>
+                            Remove photo
+                          </Button>
+                        </>
                       )}
                     </div>
                   )}
@@ -1855,6 +2261,7 @@ export default function AdminDesignStudio() {
               ) : (
                 <p className="text-sm" style={{ color: ADMIN.muted }}>Select text, background, or an image to edit.</p>
               )}
+              </div>
             </div>
           </div>
         )}

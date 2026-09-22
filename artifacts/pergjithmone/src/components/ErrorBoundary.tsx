@@ -20,6 +20,10 @@ export class ErrorBoundary extends React.Component<Props, State> {
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     console.error('[ErrorBoundary]', error, info.componentStack);
 
+    // Custom fallback = caller owns recovery (e.g. 3D viewer). Don't remount
+    // the whole subtree — that was wiping Editor state when 3D crashed.
+    if (this.props.fallback) return;
+
     if (this.recoverTimer) return;
 
     this.recoverCount += 1;

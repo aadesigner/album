@@ -194,12 +194,14 @@ async function renderPage(elements: PdfElement[], canvasH: number): Promise<stri
     if (el.type === 'background') {
       const wallpaper = el.src ? imgCache.get(el.src) : undefined;
       if (wallpaper) {
-        // object-fit: cover the full page (honours crop focus)
-        const sx = DESIGN_W / wallpaper.naturalWidth;
-        const sy = canvasH / wallpaper.naturalHeight;
-        const s = Math.max(sx, sy);
-        const cw = DESIGN_W / s;
-        const ch = canvasH / s;
+        // object-fit: cover the full page (honours crop focus + zoom)
+        const z = Math.max(1, el.cropZoom ?? 1);
+        const scale = Math.max(
+          DESIGN_W / Math.max(1, wallpaper.naturalWidth),
+          canvasH / Math.max(1, wallpaper.naturalHeight),
+        ) * z;
+        const cw = DESIGN_W / scale;
+        const ch = canvasH / scale;
         const maxX = Math.max(0, wallpaper.naturalWidth - cw);
         const maxY = Math.max(0, wallpaper.naturalHeight - ch);
         const fx = Math.min(1, Math.max(0, el.cropFocusX ?? 0.5));

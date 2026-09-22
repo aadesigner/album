@@ -68,10 +68,15 @@ router.post("/orders", requireAuth, async (req, res): Promise<void> => {
 
   const emptyPages = await findEmptyInnerPageNumbers(projectId);
   if (emptyPages.length > 0) {
+    const lang = String(req.query.lang || req.body?.lang || "").toLowerCase();
+    const sq = lang === "sq" || lang.startsWith("sq");
     res.status(400).json({
-      error:
-        emptyPages.length === 1
-          ? `Page ${emptyPages[0]} is still empty. Add photos or text before ordering.`
+      error: sq
+        ? emptyPages.length === 1
+          ? `Faqja ${emptyPages[0]} është ende bosh. Shto foto ose tekst përpara se të porosisësh.`
+          : `Faqet ${emptyPages.join(", ")} janë ende bosh. Shto foto ose tekst përpara se të porosisësh.`
+        : emptyPages.length === 1
+          ? `Page ${emptyPages[0]} is still empty. Add a photo or text before ordering.`
           : `Pages ${emptyPages.join(", ")} are still empty. Add photos or text before ordering.`,
       emptyPages,
     });

@@ -126,7 +126,7 @@ function heroBgUrl(src: string): string {
   }
 }
 
-const HERO_CYCLE_MS = 3400;
+const HERO_CYCLE_MS = 2600;
 
 function usePrefersReducedMotion() {
   const [reduced, setReduced] = useState(false);

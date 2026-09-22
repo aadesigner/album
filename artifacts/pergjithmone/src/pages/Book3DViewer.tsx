@@ -2,27 +2,15 @@ import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from '
 import { X, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ensureEditorFonts } from '@/lib/editorFonts';
+import { PageThumb } from '@/components/PageThumb';
+import { DESIGN_W, DESIGN_H, PAPER_COLOR, type EditorElement } from '@/lib/designs';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
-interface EditorElement {
-  id: string; type: 'background'|'shape'|'placeholder'|'image'|'text';
-  x: number; y: number; w: number; h: number; rotation: number;
-  bgColor?: string; bgGradientFrom?: string; bgGradientTo?: string;
-  bgGradientDir?: 'tb'|'lr'|'diag';
-  fill?: string; shapeKind?: 'rect'|'circle'; opacity?: number;
-  strokeColor?: string; strokeWidth?: number; cornerRadius?: number;
-  src?: string; cropFocusX?: number; cropFocusY?: number;
-  text?: string; fontSize?: number; fontFamily?: string;
-  fontStyle?: string; align?: 'left'|'center'|'right'; fontWeight?: string;
-}
 interface PageDef { dbId: number; role: string; pageNumber?: number }
 interface SpreadDef {
   id: string; navLabel: string; isSolo: boolean;
   left: PageDef | null; right: PageDef | null;
 }
-
-const DESIGN_W = 600;
-const DESIGN_H = 800;
 
 // ─── Color helpers — used to tint the 3D viewer's ambient background and the
 // browse-mode "stage" so they harmonize with the user's chosen cover color,
@@ -54,120 +42,24 @@ function relLuminance(hex: string): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
-// ─── Mini page renderer ───────────────────────────────────────────────────────
-const PageMiniRender = memo(function PageMiniRender({ elements, w, h, paperColor = '#F2EDE5', canvasH = DESIGN_H }: {
+/**
+ * 3D face renderer — same paint path as Design Studio thumbs / wizard
+ * (objectFit contain, mixBlendMode screen, letterSpacing, etc.).
+ */
+const PageMiniRender = memo(function PageMiniRender({ elements, w, h, paperColor = PAPER_COLOR, canvasH = DESIGN_H }: {
   elements: EditorElement[]; w: number; h: number; paperColor?: string; canvasH?: number;
 }) {
-  const scX = w / DESIGN_W;
-  const scY = h / canvasH;
-
+  const safe = Array.isArray(elements) ? elements : [];
   return (
-    <div style={{ position: 'absolute', inset: 0, background: paperColor, overflow: 'hidden', userSelect: 'none', contain: 'strict' }}>
-      {elements.map((el, i) => {
-        const key = el.id || i;
-        if (el.type === 'background') {
-          if (el.src) {
-            return (
-              <img key={key} src={el.src} alt="" draggable={false} decoding="async"
-                style={{
-                  position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover',
-                  objectPosition: `${(el.cropFocusX ?? 0.5) * 100}% ${(el.cropFocusY ?? 0.5) * 100}%`,
-                }} />
-            );
-          }
-          let bg = el.bgColor || paperColor;
-          if (el.bgGradientFrom) {
-            const dir = el.bgGradientDir === 'lr' ? 'to right'
-              : el.bgGradientDir === 'diag' ? '135deg'
-              : 'to bottom';
-            bg = `linear-gradient(${dir}, ${el.bgGradientFrom}, ${el.bgGradientTo || '#fff'})`;
-          }
-          return <div key={key} style={{ position: 'absolute', inset: 0, background: bg }} />;
-        }
-        if (el.type === 'shape') {
-          const fill = el.fill === 'transparent' ? 'transparent' : (el.fill || 'transparent');
-          return (
-            <div key={key} style={{
-              position: 'absolute',
-              left: el.x * scX, top: el.y * scY,
-              width: el.w * scX, height: el.h * scY,
-              background: fill,
-              borderRadius: el.shapeKind === 'circle' ? '50%' : (el.cornerRadius ? el.cornerRadius * scX : 0),
-              border: el.strokeColor && el.strokeWidth ? `${el.strokeWidth * scX}px solid ${el.strokeColor}` : undefined,
-              boxSizing: 'border-box',
-              opacity: el.opacity ?? 1,
-              transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
-              transformOrigin: 'center',
-            }} />
-          );
-        }
-        if (el.type === 'placeholder') {
-          return (
-            <div key={key} style={{
-              position: 'absolute',
-              left: el.x * scX, top: el.y * scY,
-              width: el.w * scX, height: el.h * scY,
-              background: 'rgba(200,190,180,0.35)', borderRadius: 2,
-            }} />
-          );
-        }
-        if (el.type === 'image' && el.src) {
-          const zoom = Math.max(1, (el as any).cropZoom ?? 1);
-          const fx = (el.cropFocusX ?? 0.5) * 100;
-          const fy = (el.cropFocusY ?? 0.5) * 100;
-          return (
-            <div
-              key={key}
-              style={{
-                position: 'absolute',
-                left: el.x * scX, top: el.y * scY,
-                width: el.w * scX, height: el.h * scY,
-                overflow: 'hidden',
-                opacity: el.opacity ?? 1,
-                transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
-                transformOrigin: 'center',
-              }}
-            >
-              <img
-                src={el.src}
-                draggable={false}
-                alt=""
-                decoding="async"
-                style={{
-                  width: '100%', height: '100%', display: 'block',
-                  objectFit: 'cover',
-                  objectPosition: `${fx}% ${fy}%`,
-                  transform: zoom > 1 ? `scale(${zoom})` : undefined,
-                  transformOrigin: `${fx}% ${fy}%`,
-                }}
-              />
-            </div>
-          );
-        }
-        if (el.type === 'text') {
-          return (
-            <div key={key} style={{
-              position: 'absolute',
-              left: el.x * scX, top: el.y * scY,
-              width: el.w * scX,
-              fontSize: (el.fontSize || 18) * scX,
-              fontFamily: el.fontFamily || 'Georgia, serif',
-              fontStyle: el.fontStyle?.includes('italic') ? 'italic' : 'normal',
-              fontWeight: el.fontStyle?.includes('bold') ? '700' : '400',
-              color: el.fill || '#333',
-              textAlign: (el.align || 'center') as any,
-              lineHeight: 1.3,
-              overflow: 'hidden',
-              opacity: el.opacity ?? 1,
-              transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
-              transformOrigin: 'top left',
-              padding: 2 * scX,
-              whiteSpace: 'pre-wrap',
-            }}>{el.text}</div>
-          );
-        }
-        return null;
-      })}
+    <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', userSelect: 'none', contain: 'strict' }}>
+      <PageThumb
+        elements={safe}
+        width={w}
+        height={h}
+        canvasH={canvasH}
+        fit="width"
+        background={paperColor}
+      />
     </div>
   );
 });
@@ -491,7 +383,7 @@ export function Book3DViewer({
   const W = 270;
   const H = Math.round(W * (canvasH / DESIGN_W)); // ≈ 360 for 3:4 books
   // Keep the block thin — real albums are slim; old formula looked like a brick.
-  const D = Math.max(3, Math.min(10, Math.round((project.pageCount || 20) * 0.16)));
+  const D = Math.max(3, Math.min(10, Math.round((project?.pageCount || 20) * 0.16)));
 
   // Auto-rotation — only while spinning; stops the rAF loop when idle/browsing
   useEffect(() => {

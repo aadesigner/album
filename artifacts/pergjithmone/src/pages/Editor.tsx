@@ -4,14 +4,14 @@ import { useGetProject, useCreateOrder, useListBookSizes, useGetAppSettings, use
 import { useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, ShoppingBag, LayoutTemplate, Image as ImageIcon, Type,
-  Trash2, Check, X, Plus, Camera, Lock, Loader2, Wand2, Box, Undo2, FileDown,
+  Trash2, Check, X, Plus, Camera, Lock, Loader2, Wand2, Box, Undo2,
   Palette, Droplets,
 } from 'lucide-react';
-import { generatePDF } from '@/lib/generatePDF';
 import { Link, useRoute } from 'wouter';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,6 +25,30 @@ import {
 const Book3DViewer = React.lazy(() =>
   import('./Book3DViewer').then(m => ({ default: m.Book3DViewer }))
 );
+
+/** Keeps Editor alive if 3D crashes — without this, app ErrorBoundary remounts
+ *  the whole builder and can wipe/re-apply covers. */
+function Book3DCrashFallback({ onClose, lang }: { onClose: () => void; lang: 'sq' | 'en' }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 px-6"
+      style={{ background: 'rgba(20,16,12,0.88)' }}
+    >
+      <p className="text-white/90 text-sm text-center max-w-sm">
+        {lang === 'sq'
+          ? 'Pamja 3D nuk u hap. Dizajni yt në builder është i paprekur.'
+          : '3D view failed to open. Your builder design is unchanged.'}
+      </p>
+      <button
+        type="button"
+        onClick={onClose}
+        className="px-5 py-2.5 rounded-full bg-white text-neutral-900 text-sm font-medium"
+      >
+        {lang === 'sq' ? 'Mbyll' : 'Close'}
+      </button>
+    </div>
+  );
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared design/layout data — moved to @/lib/designs so it can also be
@@ -112,24 +136,19 @@ function mergeEditorLayouts(dbLayouts: { slug: string; nameAl: string; nameEn: s
   return [...byId.values()];
 }
 
-/** Live clamp while dragging so elements don't jump on release. */
-function dragBoundBox(pos: { x: number; y: number }, w: number, h: number, canvasH: number) {
-  const maxX = Math.max(0, DESIGN_W - w);
-  const maxY = Math.max(0, canvasH - h);
-  return {
-    x: Math.min(Math.max(pos.x, 0), maxX),
-    y: Math.min(Math.max(pos.y, 0), maxY),
-  };
+/** No canvas clamp — frames can sit outside the page; guides still snap to midlines. */
+function dragBoundBox(pos: { x: number; y: number }, _w?: number, _h?: number, _canvasH?: number) {
+  return { x: pos.x, y: pos.y };
 }
 
 const GUIDE_SNAP_PX = 5;
 
-/** Clamp + snap element center to page midlines; returns guide flags for UI. */
+/** Snap element center to page midlines (no edge clamp). */
 function dragBoundWithGuides(
   pos: { x: number; y: number },
   w: number, h: number, canvasH: number,
 ): { x: number; y: number; guideV: boolean; guideH: boolean } {
-  let { x, y } = dragBoundBox(pos, w, h, canvasH);
+  let { x, y } = pos;
   const midX = DESIGN_W / 2;
   const midY = canvasH / 2;
   let guideV = false;
@@ -142,12 +161,33 @@ function dragBoundWithGuides(
     y = midY - h / 2;
     guideH = true;
   }
-  // Re-clamp after snap (edge cases when w/h > canvas)
-  const clamped = dragBoundBox({ x, y }, w, h, canvasH);
-  return { ...clamped, guideV, guideH };
+  return { x, y, guideV, guideH };
 }
 
 type GuideState = { v: boolean; h: boolean } | null;
+
+/** MIME used when dragging a library photo onto a layout slot. */
+const PHOTO_DRAG_MIME = 'application/x-album-photo';
+
+/** Topmost placeholder/image frame under a design-space point (AABB). */
+function findPhotoDropTarget(els: EditorElement[], x: number, y: number): EditorElement | null {
+  for (let i = els.length - 1; i >= 0; i--) {
+    const e = els[i];
+    if (e.type !== 'placeholder' && e.type !== 'image') continue;
+    if (x >= e.x && x <= e.x + e.w && y >= e.y && y <= e.y + e.h) return e;
+  }
+  return null;
+}
+
+function dataTransferHasPhoto(dt: DataTransfer | null): boolean {
+  if (!dt) return false;
+  return Array.from(dt.types).some(t => t === PHOTO_DRAG_MIME || t === 'text/uri-list');
+}
+
+function readPhotoDragUrl(dt: DataTransfer): string {
+  return dt.getData(PHOTO_DRAG_MIME) || dt.getData('text/uri-list') || dt.getData('text/plain') || '';
+}
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -301,8 +341,9 @@ function KBgEl({el,canvasH,interactive,isSelected,onChange,onGestureStart}: {
 
   const focusX = el.cropFocusX ?? 0.5;
   const focusY = el.cropFocusY ?? 0.5;
+  const cropZoom = Math.max(1, el.cropZoom ?? 1);
   const cover = (el.src && img)
-    ? coverCropRect(img.naturalWidth, img.naturalHeight, DESIGN_W, canvasH, focusX, focusY)
+    ? coverCropRect(img.naturalWidth, img.naturalHeight, DESIGN_W, canvasH, focusX, focusY, cropZoom)
     : null;
   // Only listen when already selected (for photo pan). Never steal clicks from
   // text/shapes/images — cover bg is selected via the Background chip only.
@@ -443,8 +484,8 @@ function KShapeEl({el,isSelected,onSelect,onChange,onGestureStart,onDragActive,o
     }}/>;
 }
 
-function KImgEl({el,isSelected,onSelect,onChange,onGestureStart,onDragActive,onGuides,shapeRefs,canvasH,photoAdjust,onTogglePhotoAdjust,onExitPhotoAdjust,onCanPanChange}: {
-  el: EditorElement; isSelected:boolean; onSelect:()=>void;
+function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onDragActive,onGuides,shapeRefs,canvasH,photoAdjust,onTogglePhotoAdjust,onExitPhotoAdjust,onCanPanChange}: {
+  el: EditorElement; isSelected:boolean; isDropTarget?: boolean; onSelect:()=>void;
   onChange:(c:Partial<EditorElement>)=>void; onGestureStart?:()=>void;
   onDragActive?:(active:boolean, opts?: { keepTransformer?: boolean })=>void; onGuides?:(g:GuideState)=>void;
   shapeRefs:React.MutableRefObject<Record<string,any>>; canvasH:number;
@@ -709,15 +750,15 @@ function KImgEl({el,isSelected,onSelect,onChange,onGestureStart,onDragActive,onG
         }}
       />
       {/* Stroke inside the group so it tracks during drag/resize */}
-      {isSelected && (
+      {(isSelected || isDropTarget) && (
         <Rect
           width={el.w}
           height={el.h}
-          stroke={adjustingVisual ? '#0D9488' : '#2563EB'}
+          stroke={isDropTarget ? '#0D9488' : adjustingVisual ? '#0D9488' : '#2563EB'}
           strokeWidth={2.5}
           listening={false}
           cornerRadius={2}
-          dash={adjustingVisual ? [8, 5] : undefined}
+          dash={isDropTarget || adjustingVisual ? [8, 5] : undefined}
         />
       )}
     </Group>
@@ -845,21 +886,24 @@ function KTxtEl({el,onSelect,onChange,onStartEdit,onGestureStart,onDragActive,on
   );
 }
 
-function KPlaceholderEl({el,isSelected,onSelect,onOpenPhotos,shapeRefs}: {
-  el: EditorElement; isSelected:boolean; onSelect:()=>void; onOpenPhotos?:()=>void;
+function KPlaceholderEl({el,isSelected,isDropTarget,onSelect,onOpenPhotos,shapeRefs}: {
+  el: EditorElement; isSelected:boolean; isDropTarget?: boolean; onSelect:()=>void; onOpenPhotos?:()=>void;
   shapeRefs:React.MutableRefObject<Record<string,any>>;
 }) {
   const handleTap=(e?: any)=>{ if (e) e.cancelBubble = true; onSelect(); onOpenPhotos?.(); };
+  const active = isSelected || !!isDropTarget;
   return <>
     <Rect ref={(n:any)=>{if(n) shapeRefs.current[el.id]=n;}}
       x={el.x} y={el.y} width={el.w} height={el.h} rotation={el.rotation}
-      fill={isSelected?'#E8E0D5':'#EDE8E0'} stroke={isSelected?'#8B7355':'#C8BDA8'}
-      strokeWidth={isSelected?2:1.5} dash={[10,6]} cornerRadius={3}
+      fill={isDropTarget ? '#D4EDE8' : isSelected ? '#E8E0D5' : '#EDE8E0'}
+      stroke={isDropTarget ? '#0D9488' : isSelected ? '#8B7355' : '#C8BDA8'}
+      strokeWidth={active ? 2.5 : 1.5} dash={isDropTarget ? [8, 5] : [10, 6]} cornerRadius={3}
       onMouseDown={(e:any)=>{ e.cancelBubble=true; onSelect(); }}
       onTouchStart={(e:any)=>{ e.cancelBubble=true; onSelect(); }}
       onClick={handleTap} onTap={handleTap}/>
     <KonvaText x={el.x} y={el.y+el.h/2-16} width={el.w}
-      text="📷  tap to place photo" fontSize={12} fill="#A09080" align="center" listening={false}/>
+      text={isDropTarget ? 'Drop photo here' : '📷  tap or drop photo'} fontSize={12}
+      fill={isDropTarget ? '#0D9488' : '#A09080'} align="center" listening={false}/>
   </>;
 }
 
@@ -867,20 +911,24 @@ function KPlaceholderEl({el,isSelected,onSelect,onOpenPhotos,shapeRefs}: {
 // Page Canvas
 // ─────────────────────────────────────────────────────────────────────────────
 
-function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos,onDelete,onGestureStart,onElementDragActive,onPageSwipe,editRequestId,onEditRequestHandled,isActive,pageW,pageH,canvasH,shapeRefs,side,isMobile}: {
+function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos,onDelete,onGestureStart,onElementDragActive,onPageSwipe,editRequestId,onEditRequestHandled,onDropPhoto,isActive,pageW,pageH,canvasH,shapeRefs,side,isMobile}: {
   page:PageDef; elements:EditorElement[]; selectedId:string|null;
   onSelectId:(id:string|null)=>void; onChangeEl:(id:string,c:Partial<EditorElement>)=>void;
   onOpenPhotos?:()=>void; onDelete?:()=>void; onGestureStart?:()=>void;
   onElementDragActive?:(active:boolean)=>void;
   onPageSwipe?:(dir:1|-1)=>void;
   editRequestId?:string|null; onEditRequestHandled?:()=>void;
+  /** Place a library photo into the layout slot under the drop point. */
+  onDropPhoto?:(url:string, targetId:string)=>void;
   isActive:boolean; pageW:number; pageH:number; canvasH:number;
   shapeRefs:React.MutableRefObject<Record<string,any>>; side:'left'|'right'|'solo'; isMobile?:boolean;
 }) {
   const trRef = useRef<any>(null);
   const stageRef = useRef<any>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
   const scX = pageW/DESIGN_W, scY = pageH/canvasH;
   const {lang: chipLang} = useLanguage();
+  const [dropTargetId, setDropTargetId] = useState<string|null>(null);
 
   const [editId,setEditId]=useState<string|null>(null);
   const [editText,setEditText]=useState('');
@@ -1047,17 +1095,73 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
   const toolbarStyle=canvasFontStyle(toolbarEl?.fontFamily, toolbarEl?.fontStyle);
   const isBold=toolbarStyle.includes('bold');
   const isItalic=toolbarStyle.includes('italic');
-  // Smart panel placement: below the text if room, otherwise above
-  const PANEL_W=366; const PANEL_H=90;
-  const elBottom=toolbarEl?(toolbarEl.y+toolbarEl.h)*scY:0;
+  // Prefer beside the text (right, then left) so the panel doesn’t cover it.
+  const PANEL_W=366; const PANEL_H=90; const GAP=8;
+  const elLeft=toolbarEl?toolbarEl.x*scX:0;
+  const elRight=toolbarEl?(toolbarEl.x+toolbarEl.w)*scX:0;
   const elTop=toolbarEl?toolbarEl.y*scY:0;
-  const panelShowBelow=toolbarEl&&(elBottom+PANEL_H+10<=pageH);
-  const panelTop=toolbarEl?(panelShowBelow?elBottom+8:Math.max(4,elTop-PANEL_H-8)):0;
-  const panelLeft=toolbarEl?Math.max(4,Math.min(toolbarEl.x*scX,pageW-PANEL_W-4)):4;
+  const elMidY=toolbarEl?(toolbarEl.y+toolbarEl.h/2)*scY:0;
+  const roomRight=toolbarEl?(pageW-elRight-GAP>=PANEL_W):false;
+  const roomLeft=toolbarEl?(elLeft-GAP>=PANEL_W):false;
+  let panelLeft=4;
+  let panelTop=4;
+  if (toolbarEl) {
+    if (roomRight) panelLeft = elRight + GAP;
+    else if (roomLeft) panelLeft = elLeft - GAP - PANEL_W;
+    else panelLeft = Math.max(4, Math.min(elLeft, pageW - PANEL_W - 4));
+    // Vertically align near the text mid, clamped on-page (not forced above).
+    panelTop = Math.max(4, Math.min(elMidY - PANEL_H / 2, pageH - PANEL_H - 4));
+    // If neither side fits, fall back under/over only as last resort.
+    if (!roomRight && !roomLeft) {
+      const elBottom = (toolbarEl.y + toolbarEl.h) * scY;
+      if (elBottom + PANEL_H + GAP <= pageH) panelTop = elBottom + GAP;
+      else if (elTop - PANEL_H - GAP >= 4) panelTop = elTop - PANEL_H - GAP;
+    }
+  }
   const coverInteractive = page.role === 'front_cover' || page.role === 'back_cover';
 
+  const clientToDesign = useCallback((clientX: number, clientY: number) => {
+    const rect = wrapRef.current?.getBoundingClientRect();
+    if (!rect) return { x: 0, y: 0 };
+    return {
+      x: (clientX - rect.left) / scX,
+      y: (clientY - rect.top) / scY,
+    };
+  }, [scX, scY]);
+
+  const updateDropHighlight = useCallback((clientX: number, clientY: number) => {
+    if (!onDropPhoto) return;
+    const { x, y } = clientToDesign(clientX, clientY);
+    const hit = findPhotoDropTarget(elements, x, y);
+    setDropTargetId(hit?.id ?? null);
+  }, [clientToDesign, elements, onDropPhoto]);
+
   return (
-    <div style={{position:'relative',width:pageW,height:pageH,flexShrink:0}}>
+    <div
+      ref={wrapRef}
+      style={{position:'relative',width:pageW,height:pageH,flexShrink:0}}
+      onDragOver={onDropPhoto ? (e) => {
+        if (!dataTransferHasPhoto(e.dataTransfer)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = 'copy';
+        updateDropHighlight(e.clientX, e.clientY);
+      } : undefined}
+      onDragLeave={onDropPhoto ? (e) => {
+        if (!wrapRef.current?.contains(e.relatedTarget as Node)) setDropTargetId(null);
+      } : undefined}
+      onDrop={onDropPhoto ? (e) => {
+        if (!dataTransferHasPhoto(e.dataTransfer)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const url = readPhotoDragUrl(e.dataTransfer).trim();
+        setDropTargetId(null);
+        if (!url) return;
+        const { x, y } = clientToDesign(e.clientX, e.clientY);
+        const hit = findPhotoDropTarget(elements, x, y);
+        if (hit) onDropPhoto(url, hit.id);
+      } : undefined}
+    >
       <Stage ref={stageRef} width={pageW} height={pageH} scaleX={scX} scaleY={scY}
         pixelRatio={isMobile ? Math.min(window.devicePixelRatio ?? 1, 1.5) : window.devicePixelRatio ?? 1}
         onMouseDown={(e:any)=>{if(e.target===e.target.getStage()){if(editId)commitEdit();onSelectId(null);}}}
@@ -1087,12 +1191,14 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
             if (el.type === 'placeholder') {
               return (
                 <KPlaceholderEl key={el.id} el={el} isSelected={selectedId===el.id}
+                  isDropTarget={dropTargetId===el.id}
                   onSelect={()=>{if(editId)commitEdit();onSelectId(el.id);}} onOpenPhotos={onOpenPhotos} shapeRefs={shapeRefs}/>
               );
             }
             if (el.type === 'image') {
               return (
                 <KImgEl key={el.id} el={el} isSelected={selectedId===el.id}
+                  isDropTarget={dropTargetId===el.id}
                   onSelect={()=>{if(editId)commitEdit();onSelectId(el.id);}}
                   onChange={c=>onChangeEl(el.id,c)} onGestureStart={onGestureStart} onDragActive={setDragActive}
                   onGuides={reportGuides}
@@ -1415,6 +1521,23 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
                 >
                   {chipLang==='sq'?'Rregullo foton':'Adjust photo'}
                 </button>
+                {adjusting && (
+                  <label
+                    style={{
+                      display:'flex', alignItems:'center', gap:6, padding:'0 8px 0 4px',
+                      fontSize:10, fontWeight:600, color:'#555', whiteSpace:'nowrap',
+                    }}
+                    title={chipLang==='sq'?'Zmadho foton':'Zoom photo'}
+                  >
+                    {Math.round((sel.cropZoom ?? 1) * 100)}%
+                    <input
+                      type="range" min={100} max={300} step={5}
+                      value={Math.round((sel.cropZoom ?? 1) * 100)}
+                      onChange={e => onChangeEl(sel.id, { cropZoom: Math.max(1, Number(e.target.value) / 100) })}
+                      style={{ width: 72, accentColor: '#0D9488' }}
+                    />
+                  </label>
+                )}
               </div>
             )}
           </div>
@@ -1543,7 +1666,7 @@ function LockedPageView({pageW,pageH,role,side}: {pageW:number;pageH:number;role
 // Spread View — realistic book
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SpreadView = React.memo(function SpreadView({spread,spreadContent,selectedId,activeSide,onActiveSide,onSelectId,onChangeEl,onOpenPhotos,onDelete,onGestureStart,onElementDragActive,onPageSwipe,editRequestId,onEditRequestHandled,pageW,pageH,canvasH,shapeRefs,isMobile,readOnly}: {
+const SpreadView = React.memo(function SpreadView({spread,spreadContent,selectedId,activeSide,onActiveSide,onSelectId,onChangeEl,onOpenPhotos,onDelete,onGestureStart,onElementDragActive,onPageSwipe,editRequestId,onEditRequestHandled,onDropPhoto,pageW,pageH,canvasH,shapeRefs,isMobile,readOnly}: {
   spread:SpreadDef; spreadContent:Record<number,EditorElement[]>;
   selectedId:string|null; activeSide:'left'|'right'; onActiveSide:(s:'left'|'right')=>void;
   onSelectId:(id:string|null)=>void; onChangeEl:(pid:number,eid:string,c:Partial<EditorElement>)=>void;
@@ -1551,6 +1674,7 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
   onElementDragActive?:(active:boolean)=>void;
   onPageSwipe?:(dir:1|-1)=>void;
   editRequestId?:string|null; onEditRequestHandled?:()=>void;
+  onDropPhoto?:(pageId:number, url:string, targetId:string)=>void;
   pageW:number; pageH:number; canvasH:number;
   shapeRefs:React.MutableRefObject<Record<string,any>>; isMobile?:boolean;
   readOnly?:boolean;
@@ -1590,6 +1714,10 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
         onPageSwipe={onPageSwipe}
         editRequestId={readOnly ? null : editRequestId}
         onEditRequestHandled={onEditRequestHandled}
+        onDropPhoto={readOnly || !onDropPhoto ? undefined : (url, targetId) => {
+          onActiveSide(side);
+          onDropPhoto(page.dbId, url, targetId);
+        }}
         isActive={activeSide===side} pageW={pageW} pageH={pageH} canvasH={canvasH} shapeRefs={shapeRefs} side={side} isMobile={isMobile}/>
     </div>;
   };
@@ -1617,6 +1745,9 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
               onPageSwipe={onPageSwipe}
               editRequestId={readOnly ? null : editRequestId}
               onEditRequestHandled={onEditRequestHandled}
+              onDropPhoto={readOnly || !onDropPhoto ? undefined : (url, targetId) => {
+                onDropPhoto(soloPage.dbId, url, targetId);
+              }}
               isActive={true} pageW={pageW} pageH={pageH} canvasH={canvasH} shapeRefs={shapeRefs} side="solo" isMobile={isMobile}/>
           </div>
         </div>
@@ -1655,6 +1786,10 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
                 onPageSwipe={onPageSwipe}
                 editRequestId={readOnly ? null : editRequestId}
                 onEditRequestHandled={onEditRequestHandled}
+                onDropPhoto={readOnly || !onDropPhoto ? undefined : (url, targetId) => {
+                  onActiveSide(activeSide);
+                  onDropPhoto(page.dbId, url, targetId);
+                }}
                 isActive={true} pageW={pageW} pageH={pageH} canvasH={canvasH} shapeRefs={shapeRefs} side="solo" isMobile={true}/>
           }
         </div>
@@ -2189,7 +2324,7 @@ const COVER_GRADIENT_PRESETS: { from: string; to: string; dir: 'tb' | 'lr' | 'di
 
 function CoverBackgroundPanel({
   bg, photos, uploading, lang, compact,
-  onSetColor, onSetGradient, onSetPhoto, onUploadPhoto,
+  onSetColor, onSetGradient, onSetPhoto, onUploadPhoto, onChangeCrop,
 }: {
   bg?: EditorElement | null;
   photos: string[];
@@ -2200,6 +2335,7 @@ function CoverBackgroundPanel({
   onSetGradient: (from: string, to: string, dir: 'tb' | 'lr' | 'diag', opts?: { live?: boolean }) => void;
   onSetPhoto: (url: string | null) => void;
   onUploadPhoto: (file: File) => void;
+  onChangeCrop?: (patch: Partial<EditorElement>) => void;
 }) {
   const mode = coverBgMode(bg);
   const [uiMode, setUiMode] = useState<CoverBgMode>(mode);
@@ -2330,10 +2466,31 @@ function CoverBackgroundPanel({
             {lang === 'sq' ? 'Ngarko sfond' : 'Upload background'}
           </button>
           {bg?.src && (
-            <button type="button" onClick={() => onSetPhoto(null)}
-              className="w-full py-1.5 text-[10px] text-neutral-500 hover:text-neutral-800 rounded-lg hover:bg-neutral-50 transition-colors">
-              {lang === 'sq' ? 'Hiq foton e sfondit' : 'Remove background photo'}
-            </button>
+            <>
+              <p className="text-[10px] text-neutral-500 leading-snug">
+                {lang === 'sq'
+                  ? 'Tërhiq sfondin në faqe për ta pozicionuar. Rrit zoom për më shumë lëvizje.'
+                  : 'Drag the background on the page to reposition. Increase zoom for more room to pan.'}
+              </p>
+              {onChangeCrop && (
+                <label className="block text-[10px] font-medium text-neutral-500">
+                  {lang === 'sq' ? 'Zoom' : 'Zoom'} {Math.round((bg.cropZoom ?? 1) * 100)}%
+                  <input type="range" min={100} max={300} step={5} className="w-full mt-1 accent-neutral-900"
+                    value={Math.round((bg.cropZoom ?? 1) * 100)}
+                    onChange={e => onChangeCrop({ cropZoom: Math.max(1, Number(e.target.value) / 100) })}
+                    onPointerDown={() => {
+                      if ((bg.cropZoom ?? 1) < PHOTO_CORNER_ZOOM) {
+                        onChangeCrop({ cropZoom: PHOTO_CORNER_ZOOM });
+                      }
+                    }}
+                  />
+                </label>
+              )}
+              <button type="button" onClick={() => onSetPhoto(null)}
+                className="w-full py-1.5 text-[10px] text-neutral-500 hover:text-neutral-800 rounded-lg hover:bg-neutral-50 transition-colors">
+                {lang === 'sq' ? 'Hiq foton e sfondit' : 'Remove background photo'}
+              </button>
+            </>
           )}
           {photos.length > 0 ? (
             <div className="grid grid-cols-3 gap-1.5 max-h-36 overflow-y-auto">
@@ -2371,9 +2528,10 @@ const CoverBackgroundDock = React.forwardRef<HTMLElement, {
   onSetGradient: (from: string, to: string, dir: 'tb' | 'lr' | 'diag', opts?: { live?: boolean }) => void;
   onSetPhoto: (url: string | null) => void;
   onUploadPhoto: (file: File) => void;
+  onChangeCrop?: (patch: Partial<EditorElement>) => void;
 }>(function CoverBackgroundDock({
   side, bg, photos, uploading, lang, onClose,
-  onSetColor, onSetGradient, onSetPhoto, onUploadPhoto,
+  onSetColor, onSetGradient, onSetPhoto, onUploadPhoto, onChangeCrop,
 }, ref) {
   return (
     <motion.aside
@@ -2413,6 +2571,7 @@ const CoverBackgroundDock = React.forwardRef<HTMLElement, {
           onSetGradient={onSetGradient}
           onSetPhoto={onSetPhoto}
           onUploadPhoto={onUploadPhoto}
+          onChangeCrop={onChangeCrop}
         />
       </div>
     </motion.aside>
@@ -2421,7 +2580,7 @@ const CoverBackgroundDock = React.forwardRef<HTMLElement, {
 
 function CoverBgMobileSheet({
   show, onClose, bg, photos, uploading, lang,
-  onSetColor, onSetGradient, onSetPhoto, onUploadPhoto,
+  onSetColor, onSetGradient, onSetPhoto, onUploadPhoto, onChangeCrop,
 }: {
   show: boolean;
   onClose: () => void;
@@ -2433,6 +2592,7 @@ function CoverBgMobileSheet({
   onSetGradient: (from: string, to: string, dir: 'tb' | 'lr' | 'diag', opts?: { live?: boolean }) => void;
   onSetPhoto: (url: string | null) => void;
   onUploadPhoto: (file: File) => void;
+  onChangeCrop?: (patch: Partial<EditorElement>) => void;
 }) {
   return (
     <AnimatePresence>
@@ -2464,6 +2624,7 @@ function CoverBgMobileSheet({
               onSetGradient={onSetGradient}
               onSetPhoto={onSetPhoto}
               onUploadPhoto={onUploadPhoto}
+              onChangeCrop={onChangeCrop}
             />
           </div>
         </motion.div>
@@ -2509,23 +2670,26 @@ function DesignsPanel({onApply, lang, designs}: {
 // Desktop Sidebar
 // ─────────────────────────────────────────────────────────────────────────────
 
-function Sidebar({tab,onTab,photos,onUpload,uploading,onAddPhoto,onAddText,onLayout,onApplyDesign,selectedId,onDelete,lang,designs,layouts}: {
+function Sidebar({tab,onTab,photos,onUpload,uploading,onAddPhoto,onAddText,onLayout,onApplyDesign,selectedId,onDelete,lang,designs,layouts,showDesigns}: {
   tab:SideTab; onTab:(t:SideTab)=>void; photos:string[]; onUpload:(f:File)=>void; uploading:boolean;
   onAddPhoto:(url:string)=>void; onAddText:(s?:{fontSize?:number;fontStyle?:string;align?:'left'|'center'|'right'})=>void; onLayout:(id:string)=>void;
   onApplyDesign:(d:DesignDef)=>void; selectedId:string|null; onDelete:()=>void; lang:'sq'|'en';
   designs: DesignDef[];
   layouts: LayoutDef[];
+  /** Designs apply to outer covers only — hide on inner pages. */
+  showDesigns?: boolean;
 }) {
   const fileRef=useRef<HTMLInputElement>(null);
+  const tabs = ([
+    ...(showDesigns ? [{id:'designs' as const, Icon:Wand2, label:lang==='sq'?'Dizajne':'Designs'}] : []),
+    {id:'layouts' as const, Icon:LayoutTemplate, label:lang==='sq'?'Paraqitje':'Layout'},
+    {id:'photos' as const, Icon:ImageIcon, label:lang==='sq'?'Foto':'Photos'},
+    {id:'text' as const, Icon:Type, label:lang==='sq'?'Tekst':'Text'},
+  ]);
   return (
     <div className="w-64 flex-shrink-0 bg-white border-r border-neutral-200 flex flex-col h-full">
-      <div className="grid grid-cols-4 border-b border-neutral-100 flex-shrink-0">
-        {([
-          {id:'designs',Icon:Wand2,      label:lang==='sq'?'Dizajne':'Designs'},
-          {id:'layouts',Icon:LayoutTemplate,label:lang==='sq'?'Paraqitje':'Layout'},
-          {id:'photos', Icon:ImageIcon,     label:lang==='sq'?'Foto':'Photos'},
-          {id:'text',   Icon:Type,          label:lang==='sq'?'Tekst':'Text'},
-        ] as const).map(({id,Icon,label})=>(
+      <div className={`grid border-b border-neutral-100 flex-shrink-0 ${showDesigns ? 'grid-cols-4' : 'grid-cols-3'}`}>
+        {tabs.map(({id,Icon,label})=>(
           <button key={id} onClick={()=>onTab(id)}
             className={`flex flex-col items-center gap-1 py-2.5 text-[9px] font-semibold transition-colors border-b-2 ${tab===id?'text-neutral-900 border-neutral-900':'text-neutral-400 border-transparent hover:text-neutral-600'}`}>
             <Icon size={15}/>{label}
@@ -2533,7 +2697,7 @@ function Sidebar({tab,onTab,photos,onUpload,uploading,onAddPhoto,onAddText,onLay
         ))}
       </div>
       <div className="flex flex-col flex-1 overflow-hidden min-h-0">
-        {tab==='designs' && <DesignsPanel onApply={onApplyDesign} lang={lang} designs={designs}/>}
+        {showDesigns && tab==='designs' && <DesignsPanel onApply={onApplyDesign} lang={lang} designs={designs}/>}
         {tab==='layouts' && (
           <div className="overflow-y-auto flex-1 p-3">
             <p className="text-[9px] uppercase tracking-widest text-neutral-400 mb-3">
@@ -2574,8 +2738,15 @@ function Sidebar({tab,onTab,photos,onUpload,uploading,onAddPhoto,onAddText,onLay
               <div className="grid grid-cols-2 gap-1.5">
                 {photos.map((url,i)=>(
                   <button key={i} onClick={()=>onAddPhoto(url)}
-                    className="aspect-square rounded-lg overflow-hidden border border-neutral-200 hover:border-neutral-700 hover:scale-105 transition-all">
-                    <img src={url} alt="" className="w-full h-full object-cover"/>
+                    draggable
+                    onDragStart={e=>{
+                      e.dataTransfer.setData(PHOTO_DRAG_MIME, url);
+                      e.dataTransfer.setData('text/uri-list', url);
+                      e.dataTransfer.setData('text/plain', url);
+                      e.dataTransfer.effectAllowed = 'copy';
+                    }}
+                    className="aspect-square rounded-lg overflow-hidden border border-neutral-200 hover:border-neutral-700 hover:scale-105 transition-all cursor-grab active:cursor-grabbing">
+                    <img src={url} alt="" className="w-full h-full object-cover pointer-events-none" draggable={false}/>
                   </button>
                 ))}
               </div>
@@ -2622,14 +2793,20 @@ function Sidebar({tab,onTab,photos,onUpload,uploading,onAddPhoto,onAddText,onLay
 // Mobile Bottom Sheet
 // ─────────────────────────────────────────────────────────────────────────────
 
-function MobileSheet({tab,show,onClose,photos,onUpload,uploading,onAddPhoto,onLayout,onAddText,onApplyDesign,lang,designs,layouts}: {
+function MobileSheet({tab,show,onClose,photos,onUpload,uploading,onAddPhoto,onLayout,onAddText,onApplyDesign,lang,designs,layouts,showDesigns}: {
   tab:SideTab; show:boolean; onClose:()=>void; photos:string[]; onUpload:(f:File)=>void; uploading:boolean;
   onAddPhoto:(url:string)=>void; onLayout:(id:string)=>void; onAddText:(s?:{fontSize?:number;fontStyle?:string;align?:'left'|'center'|'right'})=>void;
   onApplyDesign:(d:DesignDef)=>void; lang:'sq'|'en';
   designs: DesignDef[];
   layouts: LayoutDef[];
+  showDesigns?: boolean;
 }) {
   const fileRef=useRef<HTMLInputElement>(null);
+  const sheetTitle =
+    tab==='designs'  ? (lang==='sq'?'Dizajne':'Designs')   :
+    tab==='layouts'  ? (lang==='sq'?'Paraqitje':'Layouts') :
+    tab==='photos'   ? (lang==='sq'?'Foto':'Photos')       :
+    (lang==='sq'?'Tekst':'Text');
   return (
     <AnimatePresence>
       {show && <>
@@ -2638,16 +2815,11 @@ function MobileSheet({tab,show,onClose,photos,onUpload,uploading,onAddPhoto,onLa
           transition={{type:'spring',damping:34,stiffness:400}}
           className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-2xl flex flex-col" style={{maxHeight:'72vh'}}>
           <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-100 flex-shrink-0">
-            <span className="text-sm font-semibold capitalize">{
-              tab==='designs'  ? (lang==='sq'?'Dizajne':'Designs')   :
-              tab==='layouts'  ? (lang==='sq'?'Paraqitje':'Layouts') :
-              tab==='photos'   ? (lang==='sq'?'Foto':'Photos')       :
-              (lang==='sq'?'Tekst':'Text')
-            }</span>
+            <span className="text-sm font-semibold capitalize">{sheetTitle}</span>
             <button onClick={onClose}><X size={18} className="text-neutral-400"/></button>
           </div>
           <div className="overflow-y-auto flex-1 p-4">
-            {tab==='designs' && (
+            {showDesigns && tab==='designs' && (
               <div className="space-y-4">
                 <p className="text-[10px] text-neutral-400 leading-snug">
                   {lang === 'sq'
@@ -2700,8 +2872,15 @@ function MobileSheet({tab,show,onClose,photos,onUpload,uploading,onAddPhoto,onLa
                 <div className="grid grid-cols-3 gap-2">
                   {photos.map((url,i)=>(
                     <button key={i} onClick={()=>{onAddPhoto(url);onClose();}}
-                      className="aspect-square rounded-xl overflow-hidden border border-neutral-200">
-                      <img src={url} alt="" className="w-full h-full object-cover"/>
+                      draggable
+                      onDragStart={e=>{
+                        e.dataTransfer.setData(PHOTO_DRAG_MIME, url);
+                        e.dataTransfer.setData('text/uri-list', url);
+                        e.dataTransfer.setData('text/plain', url);
+                        e.dataTransfer.effectAllowed = 'copy';
+                      }}
+                      className="aspect-square rounded-xl overflow-hidden border border-neutral-200 cursor-grab active:cursor-grabbing">
+                      <img src={url} alt="" className="w-full h-full object-cover pointer-events-none" draggable={false}/>
                     </button>
                   ))}
                 </div>
@@ -2789,10 +2968,22 @@ function OrderModal({project,onClose,lang,flushSave}: {
     }catch(e:any){
       try{waTab?.close();}catch{/* ignore */}
       const status=e?.status;
+      const emptyPages=Array.isArray(e?.data?.emptyPages)?e.data.emptyPages as number[]:null;
       const apiErr=typeof e?.data?.error==='string'?e.data.error:null;
-      const msg=apiErr
-        || (typeof e?.message==='string'?e.message:null)
-        || (lang==='sq'?'Ndodhi një gabim.':'An error occurred.');
+      let msg:string;
+      if (emptyPages && emptyPages.length>0) {
+        msg = lang==='sq'
+          ? (emptyPages.length===1
+              ? `Faqja ${emptyPages[0]} është ende bosh. Shto foto ose tekst përpara se të porosisësh.`
+              : `Faqet ${emptyPages.join(', ')} janë ende bosh. Shto foto ose tekst përpara se të porosisësh.`)
+          : (emptyPages.length===1
+              ? `Page ${emptyPages[0]} is still empty. Add a photo or text before ordering.`
+              : `Pages ${emptyPages.join(', ')} are still empty. Add photos or text before ordering.`);
+      } else {
+        msg=apiErr
+          || (typeof e?.message==='string'?e.message:null)
+          || (lang==='sq'?'Ndodhi një gabim.':'An error occurred.');
+      }
       // Surface rate-limit / cap errors clearly — silent failures were why
       // WhatsApp could open (or look like it did) without an admin order.
       setErrMsg(status===429
@@ -2896,10 +3087,6 @@ export default function Editor() {
   const currentSpread=spreads[spreadIdx];
 
   const [pagesContent,setPagesContent]=useState<Record<number,EditorElement[]>>({});
-  const emptyInnerPages = useMemo(
-    () => (isOrdered ? [] : getEmptyInnerPageNumbers(project?.pages as any, pagesContent)),
-    [isOrdered, project?.pages, pagesContent],
-  );
   // Filmstrip thumbs can lag a frame behind — keeps drag/edit on the canvas snappy.
   const deferredPagesContent=useDeferredValue(pagesContent);
   const [selectedId,setSelectedId]=useState<string|null>(null);
@@ -2910,7 +3097,6 @@ export default function Editor() {
   const [showOrder,setShowOrder]=useState(false);
   const [emptyPagesWarn,setEmptyPagesWarn]=useState<number[]>([]);
   const [show3D,setShow3D]=useState(false);
-  const [pdfProgress,setPdfProgress]=useState<{current:number;total:number}|null>(null);
   const [showSheet,setShowSheet]=useState(false);
   const [addingSpread,setAddingSpread]=useState(false);
   const [pickerOpen,setPickerOpen]=useState(false);
@@ -3097,6 +3283,16 @@ export default function Editor() {
   },[currentSpread,activeSide]);
 
   const isCoverPage = activePageRole === 'front_cover' || activePageRole === 'back_cover';
+
+  // Cover ↔ inner: Designs only on outer covers; switch tab when page type changes.
+  useEffect(() => {
+    if (!activePageRole) return;
+    if (activePageRole === 'front_cover' || activePageRole === 'back_cover') {
+      setTab(prev => (prev === 'layouts' ? 'designs' : prev));
+    } else {
+      setTab(prev => (prev === 'designs' ? 'layouts' : prev));
+    }
+  }, [activePageRole]);
 
   const activeCoverBg = useMemo(() => {
     if (!isCoverPage || !activePageId) return null;
@@ -3331,7 +3527,7 @@ export default function Editor() {
     const selImg=els.find(e=>e.id===selectedId&&e.type==='image'&&!!e.src);
     if (selImg){
       updatePage(activePageId,els.map(e=>e.id===selImg.id
-        ?{...e,src:url,cropFocusX:0.5,cropFocusY:0.5}
+        ?{...e,src:url,cropFocusX:0.5,cropFocusY:0.5,cropZoom:PHOTO_CORNER_ZOOM}
         :e));
       return;
     }
@@ -3339,17 +3535,29 @@ export default function Editor() {
            ??els.find(e=>e.type==='placeholder');
     if (ph){
       updatePage(activePageId,els.map(e=>e.id===ph.id
-        ?{...e,type:'image' as const,src:url,cropFocusX:0.5,cropFocusY:0.5}
+        ?{...e,type:'image' as const,src:url,cropFocusX:0.5,cropFocusY:0.5,cropZoom:PHOTO_CORNER_ZOOM}
         :e));
       setSelectedId(null);
       return;
     }
     const hasImages=els.some(e=>e.type==='image');
     const el:EditorElement=hasImages
-      ?{id:`img-${Date.now()}`,type:'image',src:url,x:50,y:Math.round(60*canvasH/DESIGN_H),w:500,h:Math.round(340*canvasH/DESIGN_H),rotation:0,cropFocusX:0.5,cropFocusY:0.5}
-      :{id:`img-${Date.now()}`,type:'image',src:url,x:0,y:0,w:DESIGN_W,h:canvasH,rotation:0,cropFocusX:0.5,cropFocusY:0.5};
+      ?{id:`img-${Date.now()}`,type:'image',src:url,x:50,y:Math.round(60*canvasH/DESIGN_H),w:500,h:Math.round(340*canvasH/DESIGN_H),rotation:0,cropFocusX:0.5,cropFocusY:0.5,cropZoom:PHOTO_CORNER_ZOOM}
+      :{id:`img-${Date.now()}`,type:'image',src:url,x:0,y:0,w:DESIGN_W,h:canvasH,rotation:0,cropFocusX:0.5,cropFocusY:0.5,cropZoom:PHOTO_CORNER_ZOOM};
     updatePage(activePageId,[...els,el]); setSelectedId(el.id);
   },[activePageId,selectedId,updatePage,canvasH,isOrdered]);
+
+  /** Drop a library photo onto a specific placeholder or image frame. */
+  const placePhotoInTarget=useCallback((pageId:number, url:string, targetId:string)=>{
+    if (isOrdered || !url) return;
+    const els=liveContent.current[pageId]??[];
+    const target=els.find(e=>e.id===targetId);
+    if (!target || (target.type!=='placeholder' && target.type!=='image')) return;
+    updatePage(pageId, els.map(e=>e.id===targetId
+      ?{...e, type:'image' as const, src:url, cropFocusX:0.5, cropFocusY:0.5, cropZoom:PHOTO_CORNER_ZOOM}
+      :e));
+    setSelectedId(targetId);
+  },[isOrdered, updatePage]);
 
   const applyCoverPatch = useCallback((
     patch: Parameters<typeof applyCoverBackground>[2],
@@ -3718,13 +3926,15 @@ export default function Editor() {
     if (pagesLoadedOnce.current||autoAppliedRef.current) return;
     if (Object.keys(pagesContent).length===0) return;
     pagesLoadedOnce.current=true;
-    const designId=sessionStorage.getItem('wizard_initial_design');
-    const consumeKey=`${projectId}:${designId||'none'}`;
+    // Key by project only — if we include designId, a remount after clearing
+    // sessionStorage becomes `${id}:none` and can wrongly apply the blank starter.
+    const consumeKey = String(projectId);
     if (consumedWizardDesignKeys.has(consumeKey)) {
       autoAppliedRef.current=true;
       return;
     }
     consumedWizardDesignKeys.add(consumeKey);
+    const designId=sessionStorage.getItem('wizard_initial_design');
     sessionStorage.removeItem('wizard_initial_design');
     autoAppliedRef.current=true;
     const allEmpty=Object.values(pagesContent).every(els=>!els?.length);
@@ -3755,24 +3965,6 @@ export default function Editor() {
   const openPhotos=useCallback(()=>{
     setPickerOpen(true);
   },[]);
-
-  const handleDownloadPDF=useCallback(async()=>{
-    if (isOrdered || !project?.pages) return;
-    const pages=(project.pages as any[]).map(p=>({
-      dbId:p.id as number,
-      role:(p.pageType==='inside_cover'?'locked_left':p.pageType==='inside_back_cover'?'locked_right':p.pageType) as string,
-      pageNumber:(p.pageNumber??0) as number,
-      elements:pagesContent[p.id as number]??(p.contentJson?JSON.parse(p.contentJson):[]),
-    }));
-    const total=pages.filter(p=>p.role!=='locked_left'&&p.role!=='locked_right').length;
-    setPdfProgress({current:0,total});
-    try {
-      await generatePDF(pages,project.title||'album',(current,t)=>setPdfProgress({current,total:t}),
-        bookSize?{widthCm:Number(bookSize.widthCm),heightCm:Number(bookSize.heightCm)}:undefined);
-    } finally {
-      setPdfProgress(null);
-    }
-  },[project,pagesContent,bookSize,isOrdered]);
 
   if (authLoading || isLoading || (projectQueryEnabled && !project && !isError)) return (
     <div className="flex flex-col" style={{height:'100dvh',overflow:'hidden',background:'#F4F1EC'}}>
@@ -3902,16 +4094,6 @@ export default function Editor() {
             <Undo2 size={13} className="scale-x-[-1]"/>
             {redoLen>0 && <span className="hidden md:inline tabular-nums">{redoLen}</span>}
           </button>
-          {!isOrdered && (
-          <button
-            onClick={handleDownloadPDF}
-            disabled={!!pdfProgress}
-            title={lang==='sq'?'Shkarko PDF':'Download PDF'}
-            className="hidden md:flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-medium border transition-all bg-white text-neutral-600 border-neutral-200 hover:border-neutral-400 disabled:opacity-40 disabled:cursor-not-allowed">
-            {pdfProgress ? <Loader2 size={13} className="animate-spin"/> : <FileDown size={13}/>}
-            <span>PDF</span>
-          </button>
-          )}
           <button
             onClick={()=>setShow3D(v=>!v)}
             title={lang==='sq'?'Pamje 3D':'3D View'}
@@ -3933,23 +4115,20 @@ export default function Editor() {
           ) : (
           <button
             onClick={async()=>{
-              if (emptyInnerPages.length>0){setEmptyPagesWarn(emptyInnerPages);return;}
+              // Use live canvas state so a just-filled page isn't missed.
+              const empty = getEmptyInnerPageNumbers(
+                project?.pages as any,
+                liveContent.current,
+              );
+              if (empty.length > 0) {
+                setEmptyPagesWarn(empty);
+                return;
+              }
               await flushSave();
               setShowOrder(true);
             }}
-            disabled={emptyInnerPages.length>0}
-            title={
-              emptyInnerPages.length>0
-                ? (lang==='sq'
-                    ? `Mbush faqet bosh (${emptyInnerPages.map(n=>`F${n}`).join(', ')}) përpara se të porosisësh`
-                    : `Fill empty pages (${emptyInnerPages.map(n=>`P${n}`).join(', ')}) before ordering`)
-                : (lang==='sq'?'Porosit':'Order')
-            }
-            className={`flex items-center gap-2 px-4 md:px-5 py-2 rounded-full text-xs md:text-sm font-medium transition-colors shadow-sm ${
-              emptyInnerPages.length>0
-                ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
-                : 'bg-neutral-900 text-white hover:bg-neutral-700'
-            }`}>
+            title={lang==='sq'?'Porosit albumin':'Order album'}
+            className="flex items-center gap-2 px-4 md:px-5 py-2 rounded-full text-xs md:text-sm font-medium transition-colors shadow-sm bg-neutral-900 text-white hover:bg-neutral-700">
             <ShoppingBag size={14}/><span>{lang==='sq'?'Porosit':'Order'}</span>
           </button>
           )}
@@ -3992,7 +4171,7 @@ export default function Editor() {
           <Sidebar tab={tab} onTab={setTab} photos={photos} onUpload={upload} uploading={uploading}
             onAddPhoto={addPhoto} onAddText={addText} onLayout={applyLayout} onApplyDesign={requestApplyDesign}
             selectedId={selectedIsBackground ? null : selectedId} onDelete={deleteSelected} lang={lang}
-            designs={designsCatalog} layouts={editorLayouts}/>
+            designs={designsCatalog} layouts={editorLayouts} showDesigns={isCoverPage}/>
         )}
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
 
@@ -4149,6 +4328,9 @@ export default function Editor() {
                   onSetGradient={setCoverGradient}
                   onSetPhoto={setCoverPhoto}
                   onUploadPhoto={uploadCoverPhoto}
+                  onChangeCrop={(patch) => {
+                    if (activeCoverBg?.id && activePageId) changeEl(activePageId, activeCoverBg.id, patch);
+                  }}
                 />
               )}
             </AnimatePresence>
@@ -4166,6 +4348,7 @@ export default function Editor() {
                   onElementDragActive={onElementDragActive}
                   onPageSwipe={isMobile ? onPageSwipe : undefined}
                   editRequestId={editRequestId} onEditRequestHandled={clearEditRequest}
+                  onDropPhoto={isOrdered ? undefined : placePhotoInTarget}
                   pageW={pageW} pageH={pageH} canvasH={canvasH} shapeRefs={shapeRefs} isMobile={isMobile}
                   readOnly={isOrdered}/>
               ) : <p className="text-neutral-400 text-sm">No pages found</p>}
@@ -4184,6 +4367,9 @@ export default function Editor() {
                   onSetGradient={setCoverGradient}
                   onSetPhoto={setCoverPhoto}
                   onUploadPhoto={uploadCoverPhoto}
+                  onChangeCrop={(patch) => {
+                    if (activeCoverBg?.id && activePageId) changeEl(activePageId, activeCoverBg.id, patch);
+                  }}
                 />
               )}
             </AnimatePresence>
@@ -4198,11 +4384,11 @@ export default function Editor() {
           {isMobile && !isOrdered && (
             <div className="flex items-center border-t border-neutral-200 bg-white py-1 px-1 flex-shrink-0" style={{gap:2}}>
               {([
-                {id:'designs',Icon:Wand2,         label:lang==='sq'?'Dizajne':'Style'},
-                {id:'layouts',Icon:LayoutTemplate, label:lang==='sq'?'Paraqitje':'Layout'},
-                {id:'photos', Icon:ImageIcon,      label:lang==='sq'?'Foto':'Photos'},
-                {id:'text',   Icon:Type,           label:lang==='sq'?'Tekst':'Text'},
-              ] as const).map(({id,Icon,label})=>(
+                ...(isCoverPage ? [{id:'designs' as const, Icon:Wand2, label:lang==='sq'?'Dizajne':'Style'}] : []),
+                {id:'layouts' as const, Icon:LayoutTemplate, label:lang==='sq'?'Paraqitje':'Layout'},
+                {id:'photos' as const, Icon:ImageIcon, label:lang==='sq'?'Foto':'Photos'},
+                {id:'text' as const, Icon:Type, label:lang==='sq'?'Tekst':'Text'},
+              ]).map(({id,Icon,label})=>(
                 <button key={id} onClick={()=>{setTab(id);setShowSheet(true);}}
                   className={`flex flex-col items-center gap-0.5 flex-1 py-1.5 rounded-xl text-[10px] transition-colors ${tab===id&&showSheet?'text-neutral-900 bg-neutral-100':'text-neutral-400'}`}>
                   <Icon size={20}/>{label}
@@ -4220,7 +4406,8 @@ export default function Editor() {
       {isMobile && !isOrdered && <MobileSheet tab={tab} show={showSheet} onClose={()=>setShowSheet(false)}
         photos={photos} onUpload={upload} uploading={uploading}
         onAddPhoto={addPhoto} onLayout={applyLayout} onAddText={addText}
-        onApplyDesign={requestApplyDesign} lang={lang} designs={designsCatalog} layouts={editorLayouts}/>}
+        onApplyDesign={requestApplyDesign} lang={lang} designs={designsCatalog} layouts={editorLayouts}
+        showDesigns={isCoverPage}/>}
 
       {isMobile && !isOrdered && (
         <CoverBgMobileSheet
@@ -4234,6 +4421,9 @@ export default function Editor() {
           onSetGradient={setCoverGradient}
           onSetPhoto={setCoverPhoto}
           onUploadPhoto={uploadCoverPhoto}
+          onChangeCrop={(patch) => {
+            if (activeCoverBg?.id && activePageId) changeEl(activePageId, activeCoverBg.id, patch);
+          }}
         />
       )}
 
@@ -4252,56 +4442,45 @@ export default function Editor() {
         {showOrder && !isOrdered && <OrderModal key="ord" project={project} onClose={()=>setShowOrder(false)} lang={lang} flushSave={flushSave}/>}
       </AnimatePresence>
 
-      {/* PDF generation progress overlay */}
-      <AnimatePresence>
-        {pdfProgress && (
-          <motion.div key="pdf-progress" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
-            className="fixed inset-0 z-50 flex items-center justify-center" style={{background:'rgba(0,0,0,0.55)'}}>
-            <motion.div initial={{scale:0.92,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:0.92,opacity:0}}
-              className="bg-white rounded-2xl p-8 shadow-2xl flex flex-col items-center gap-5 mx-4" style={{minWidth:260}}>
-              <FileDown size={32} className="text-neutral-400"/>
-              <div className="text-center">
-                <p className="font-semibold text-neutral-800 text-base mb-1">
-                  {lang==='sq'?'Duke gjeneruar PDF…':'Generating PDF…'}
-                </p>
-                <p className="text-sm text-neutral-400">
-                  {lang==='sq'?`Faqja ${pdfProgress.current} nga ${pdfProgress.total}`:`Page ${pdfProgress.current} of ${pdfProgress.total}`}
-                </p>
-              </div>
-              {/* Progress bar */}
-              <div className="w-full h-1.5 bg-neutral-100 rounded-full overflow-hidden">
-                <div className="h-full bg-neutral-800 rounded-full transition-all duration-300"
-                  style={{width:`${pdfProgress.total>0?(pdfProgress.current/pdfProgress.total)*100:0}%`}}/>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Empty pages warning */}
+      {/* Empty pages warning — shown when client taps Porosit with blank inners */}
       <AnimatePresence>
         {emptyPagesWarn.length>0 && (
           <motion.div key="empty-warn" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
-            className="fixed inset-0 z-50 flex items-end md:items-center justify-center" style={{background:'rgba(0,0,0,0.5)'}}>
+            className="fixed inset-0 z-50 flex items-end md:items-center justify-center" style={{background:'rgba(0,0,0,0.5)'}}
+            onClick={()=>setEmptyPagesWarn([])}>
             <motion.div initial={{y:60,opacity:0}} animate={{y:0,opacity:1}} exit={{y:60,opacity:0}}
+              onClick={e=>e.stopPropagation()}
               className="bg-white w-full md:max-w-sm md:rounded-2xl rounded-t-2xl p-6 shadow-2xl">
-              <div className="flex items-center gap-3 mb-4">
-                <span className="text-2xl">⚠️</span>
-                <h3 className="font-semibold text-neutral-800 text-base">
-                  {lang==='sq'?`${emptyPagesWarn.length} faqe bosh`:`${emptyPagesWarn.length} empty page${emptyPagesWarn.length!==1?'s':''}`}
-                </h3>
+              <div className="flex items-start gap-3 mb-3">
+                <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center flex-shrink-0 text-lg" aria-hidden>
+                  ⚠️
+                </div>
+                <div className="min-w-0">
+                  <h3 className="font-semibold text-neutral-900 text-base leading-snug">
+                    {lang==='sq'?'Albumi nuk është gati ende':'Your album isn\'t ready yet'}
+                  </h3>
+                  <p className="text-xs text-neutral-400 mt-1">
+                    {lang==='sq'
+                      ? (emptyPagesWarn.length===1
+                          ? '1 faqe e brendshme është ende bosh'
+                          : `${emptyPagesWarn.length} faqe të brendshme janë ende bosh`)
+                      : (emptyPagesWarn.length===1
+                          ? '1 inner page is still empty'
+                          : `${emptyPagesWarn.length} inner pages are still empty`)}
+                  </p>
+                </div>
               </div>
-              <div className="flex flex-wrap gap-1.5 mb-3">
+              <div className="flex flex-wrap gap-1.5 mb-4">
                 {emptyPagesWarn.map(n=>(
-                  <span key={n} className="px-2.5 py-1 bg-amber-100 text-amber-800 rounded-full text-xs font-medium">
-                    {lang==='sq'?`F${n}`:`P${n}`}
+                  <span key={n} className="px-2.5 py-1 bg-amber-50 text-amber-900 border border-amber-100 rounded-full text-xs font-medium">
+                    {lang==='sq'?`Faqja ${n}`:`Page ${n}`}
                   </span>
                 ))}
               </div>
-              <p className="text-sm text-neutral-500 mb-5 leading-relaxed">
+              <p className="text-sm text-neutral-600 mb-5 leading-relaxed">
                 {lang==='sq'
-                  ? 'Çdo faqe e brendshme duhet të ketë foto ose tekst përpara se të porosisësh. Kopertinat dhe faqet e mbyllura nuk llogariten.'
-                  : 'Every inner page needs a photo or text before you can order. Covers and locked pages are ignored.'}
+                  ? 'Para se të porosisësh, plotëso çdo faqe të brendshme me foto ose tekst. Kopertinat dhe faqet e mbyllura nuk llogariten.'
+                  : 'Before you order, fill every inner page with a photo or text. Covers and locked pages don\'t count.'}
               </p>
               <button onClick={()=>setEmptyPagesWarn([])}
                 className="w-full py-2.5 rounded-xl bg-neutral-900 text-white text-sm font-medium active:bg-neutral-700 transition-colors">
@@ -4315,20 +4494,22 @@ export default function Editor() {
       <AnimatePresence>
         {show3D && (
           <motion.div key="3d" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:0.3}}>
-            <React.Suspense fallback={
-              <div className="fixed inset-0 z-50 flex items-center justify-center" style={{background:'rgba(0,0,0,0.85)'}}>
-                <Loader2 size={32} className="animate-spin text-white opacity-60"/>
-              </div>
-            }>
-              <Book3DViewer
-                project={project}
-                pagesContent={pagesContent}
-                spreads={spreads as any}
-                onClose={()=>setShow3D(false)}
-                lang={lang}
-                canvasH={canvasH}
-              />
-            </React.Suspense>
+            <ErrorBoundary fallback={<Book3DCrashFallback onClose={()=>setShow3D(false)} lang={lang} />}>
+              <React.Suspense fallback={
+                <div className="fixed inset-0 z-50 flex items-center justify-center" style={{background:'rgba(0,0,0,0.85)'}}>
+                  <Loader2 size={32} className="animate-spin text-white opacity-60"/>
+                </div>
+              }>
+                <Book3DViewer
+                  project={project}
+                  pagesContent={pagesContent}
+                  spreads={spreads as any}
+                  onClose={()=>setShow3D(false)}
+                  lang={lang}
+                  canvasH={canvasH}
+                />
+              </React.Suspense>
+            </ErrorBoundary>
           </motion.div>
         )}
       </AnimatePresence>

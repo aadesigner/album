@@ -47,15 +47,24 @@ export function applyCoverBackground(
       bgGradientDir: dir,
     };
   } else {
-    // Photo: keep a solid fallback color under the image; never keep gradients.
+    // Photo: keep solid fallback; preserve crop focus/zoom when the URL stays the same.
+    const nextSrc = patch.src === null || patch.src === undefined || patch.src === ''
+      ? undefined
+      : patch.src;
+    const samePhoto = !!(nextSrc && existing?.src && nextSrc === existing.src);
     nextBg = {
       id: existing?.id ?? `bg-${Date.now()}`,
       type: 'background',
       x: 0, y: 0, w: DESIGN_W, h: canvasH, rotation: 0,
       bgColor: existing?.bgColor ?? '#1A1A1A',
-      src: patch.src === null || patch.src === undefined || patch.src === ''
-        ? undefined
-        : patch.src,
+      src: nextSrc,
+      ...(nextSrc
+        ? {
+            cropFocusX: samePhoto ? (existing?.cropFocusX ?? 0.5) : 0.5,
+            cropFocusY: samePhoto ? (existing?.cropFocusY ?? 0.5) : 0.5,
+            cropZoom: samePhoto ? (existing?.cropZoom ?? 1) : 1,
+          }
+        : {}),
     };
   }
 

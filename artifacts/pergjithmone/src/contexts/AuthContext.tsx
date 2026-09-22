@@ -30,6 +30,10 @@ function writeCachedUser(u: User | null) {
   } catch {}
 }
 
+function sleep(ms: number) {
+  return new Promise<void>(r => setTimeout(r, ms));
+}
+
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
@@ -50,35 +54,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const accessTokenRef = useRef<string | null>(null);
 
   // Dedupe concurrent refresh attempts: the refresh token is rotated
-  // single-use server-side, so if several requests 401 at once (e.g. a page
-  // that fires off multiple queries) each one calling refresh separately
-  // would race — only the first exchange succeeds and the rest get 401,
-  // wrongly logging the user out. All callers share one in-flight promise.
+  // single-use server-side, so if several requests 401 at once each calling
+  // refresh separately would race — only the first exchange succeeds.
   const refreshInFlightRef = useRef<Promise<boolean> | null>(null);
 
-  // Token ready = initial refresh attempt finished (success or fail)
+  // Initial refresh finished (success or fail).
   const [tokenReady, setTokenReady] = useState(false);
+  // Refresh cookie exchanged successfully — keep the user logged in.
+  const [sessionRestored, setSessionRestored] = useState(false);
 
-  // Session user — localStorage for instant paint, then /auth/me (or login
-  // response) keeps it in sync. Must be state, not a mount-only memo: after
-  // login we write the user immediately so isAuthenticated is true before
-  // navigate, otherwise /krijo → editor can mount in a blank half-auth gap.
+  // Session user — localStorage for instant paint, then refresh / /auth/me.
   const [sessionUser, setSessionUser] = useState<User | null>(readCachedUser);
 
-  // Register the token getter so all API calls carry the bearer token
   useMemo(() => {
     setAuthTokenGetter(() => accessTokenRef.current);
   }, []);
 
-  // Shared refresh-token exchange: swaps the httpOnly refresh cookie for a
-  // fresh access token. Used both on mount and whenever a request comes
-  // back 401 because the short-lived access token expired mid-session
-  // (e.g. a visitor spends a while browsing the create-album wizard before
-  // finally submitting).
+  const applyAuthSession = useCallback((accessToken: string, nextUser?: User | null) => {
+    accessTokenRef.current = accessToken;
+    if (nextUser) {
+      setSessionUser(nextUser);
+      writeCachedUser(nextUser);
+      queryClient.setQueryData(getGetMeQueryKey(), nextUser);
+    }
+  }, [queryClient]);
+
+  // Shared refresh-token exchange: cookie → access token (+ user).
   const refreshAccessToken = useCallback((): Promise<boolean> => {
     if (refreshInFlightRef.current) return refreshInFlightRef.current;
 
-    const attempt = (async (): Promise<boolean> => {
+    const attemptOnce = async (): Promise<{ ok: boolean; retry429?: boolean }> => {
       try {
         const res = await fetch('/api/auth/refresh', {
           method: 'POST',
@@ -87,13 +92,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (res.ok) {
           const data = await res.json();
           if (data?.accessToken) {
-            accessTokenRef.current = data.accessToken;
-            return true;
+            applyAuthSession(data.accessToken, data.user ?? null);
+            return { ok: true };
           }
         }
+        // Concurrent tab/request hit — retry shortly instead of logging out.
+        if (res.status === 429) return { ok: false, retry429: true };
       } catch {
-        // No refresh token / network error — not logged in
+        // Network / no cookie
       }
+      return { ok: false };
+    };
+
+    const attempt = (async (): Promise<boolean> => {
+      let result = await attemptOnce();
+      if (!result.ok && result.retry429) {
+        await sleep(200);
+        result = await attemptOnce();
+      }
+      if (result.ok) return true;
       accessTokenRef.current = null;
       return false;
     })();
@@ -103,46 +120,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (refreshInFlightRef.current === attempt) refreshInFlightRef.current = null;
     });
     return attempt;
-  }, []);
+  }, [applyAuthSession]);
 
-  // Let every API call transparently recover from an expired access token:
-  // on a 401, try the refresh above once and, if it works, the request is
-  // replayed automatically. Otherwise the user is left logged out rather
-  // than silently failing forever.
   useEffect(() => {
     setUnauthorizedHandler(refreshAccessToken);
     return () => setUnauthorizedHandler(null);
   }, [refreshAccessToken]);
 
-  // On mount: try the httpOnly refresh-token cookie to get a new access token.
-  // This is what keeps users "permanently" logged in across page reloads.
+  // On mount: restore session from httpOnly refresh cookie.
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      await refreshAccessToken();
-      if (!cancelled) setTokenReady(true);
+      const ok = await refreshAccessToken();
+      if (cancelled) return;
+      setSessionRestored(ok);
+      if (!ok) {
+        // No valid refresh cookie — clear any stale cached persona.
+        setSessionUser(null);
+        writeCachedUser(null);
+        queryClient.setQueryData(getGetMeQueryKey(), null);
+      }
+      setTokenReady(true);
     })();
     return () => { cancelled = true; };
-  }, [refreshAccessToken]);
+  }, [refreshAccessToken, queryClient]);
 
-  // Only fire /auth/me after we have (or tried to get) an access token
-  const { data: fetchedUser, isLoading: queryLoading } = useGetMe({
+  // Only hit /auth/me when we actually have an access token.
+  const {
+    data: fetchedUser,
+    isLoading: meLoading,
+    isSuccess: meSuccess,
+    isFetching: meFetching,
+  } = useGetMe({
     query: {
       retry: false,
       refetchOnWindowFocus: false,
       queryKey: getGetMeQueryKey(),
-      enabled: tokenReady,
+      enabled: tokenReady && sessionRestored,
     },
   });
 
-  // Keep session + localStorage in sync once /auth/me settles. While a refetch
-  // is in flight we keep the current sessionUser so login → navigate never
-  // briefly looks logged-out (that used to blank the builder).
+  // Sync from /me on success only — never treat "still loading / no data yet"
+  // as logout (that was wiping sessionUser on every hard refresh).
   useEffect(() => {
-    if (!tokenReady || queryLoading) return;
-    setSessionUser(fetchedUser ?? null);
-    writeCachedUser(fetchedUser ?? null);
-  }, [fetchedUser, tokenReady, queryLoading]);
+    if (!tokenReady || !sessionRestored) return;
+    if (meSuccess && fetchedUser) {
+      setSessionUser(fetchedUser);
+      writeCachedUser(fetchedUser);
+    }
+  }, [tokenReady, sessionRestored, meSuccess, fetchedUser]);
 
   const user: User | null = sessionUser;
 
@@ -151,32 +177,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logoutMutation = useLogout();
   const changePasswordMutation = useChangePassword();
 
-  // Login/register can be reached with ?next=/some-path (e.g. the guest
-  // AI-album flow sends users here mid-flow so it can resume them exactly
-  // where they left off after auth). Fall back to the wizard when absent.
   const getNextPath = useCallback(() => {
     const params = new URLSearchParams(window.location.search);
     const next = params.get('next');
     return next && next.startsWith('/') ? next : '/krijo';
   }, []);
 
-  /** Apply token + user from login/register before navigating away. */
-  const applyAuthSession = useCallback((accessToken: string, nextUser: User) => {
-    accessTokenRef.current = accessToken;
-    setSessionUser(nextUser);
-    writeCachedUser(nextUser);
-    queryClient.setQueryData(getGetMeQueryKey(), nextUser);
-  }, [queryClient]);
-
   const handleLogin = useCallback(async (data: LoginInput) => {
     try {
       const response = await loginMutation.mutateAsync({ data });
       if (response?.accessToken && response?.user) {
         applyAuthSession(response.accessToken, response.user as User);
+        setSessionRestored(true);
       } else if (response?.accessToken) {
         accessTokenRef.current = response.accessToken;
+        setSessionRestored(true);
       }
-      // Background reconcile — do not block navigation on /me.
       void queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
       setLocation(getNextPath());
     } catch (error: any) {
@@ -194,8 +210,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const response = await registerMutation.mutateAsync({ data });
       if (response?.accessToken && response?.user) {
         applyAuthSession(response.accessToken, response.user as User);
+        setSessionRestored(true);
       } else if (response?.accessToken) {
         accessTokenRef.current = response.accessToken;
+        setSessionRestored(true);
       }
       void queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
       setLocation(getNextPath());
@@ -220,6 +238,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Ignore logout errors — clear local state regardless
     } finally {
       accessTokenRef.current = null;
+      setSessionRestored(false);
       setSessionUser(null);
       writeCachedUser(null);
       queryClient.setQueryData(getGetMeQueryKey(), null);
@@ -229,8 +248,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const getToken = useCallback(() => accessTokenRef.current, []);
 
-  // Rotates the access/refresh token pair server-side, so keep the in-memory
-  // token in sync — no need to invalidate/refetch the user, their data didn't change.
   const handleChangePassword = useCallback(async (currentPassword: string, newPassword: string) => {
     const response = await changePasswordMutation.mutateAsync({
       data: { currentPassword, newPassword },
@@ -240,16 +257,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [changePasswordMutation]);
 
+  // Stay in loading until mount refresh finishes; if restored, also wait for
+  // /me when we don't have a user yet (avoid ProtectedRoute bounce to /hyr).
+  const isLoading =
+    !tokenReady
+    || (sessionRestored && !user && (meLoading || meFetching));
+
   const value = useMemo(() => ({
     user,
-    isLoading: !tokenReady,
+    isLoading,
     isAuthenticated: !!user,
     login: handleLogin,
     register: handleRegister,
     logout: handleLogout,
     getToken,
     changePassword: handleChangePassword,
-  }), [user, tokenReady, handleLogin, handleRegister, handleLogout, getToken, handleChangePassword]);
+  }), [user, isLoading, handleLogin, handleRegister, handleLogout, getToken, handleChangePassword]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

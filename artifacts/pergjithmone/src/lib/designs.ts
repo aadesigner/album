@@ -254,7 +254,7 @@ export interface DesignDef {
 }
 
 /** Shared rev for Travel builtins (Paris/Barcelona + city photo covers). */
-export const TRAVEL_LAYOUT_REV = 7;
+export const TRAVEL_LAYOUT_REV = 9;
 export interface LayoutZone { x:number; y:number; w:number; h:number; type:string; rotation?:number }
 export interface LayoutDef { id:string; category:string; label:{sq:string;en:string}; zones:LayoutZone[] }
 
@@ -279,6 +279,9 @@ export const LAYOUTS: LayoutDef[] = [
   { id:'two-h-4060',     category:'2 Photos', label:{sq:'Ngushtë + Gjerë',  en:'Narrow + Wide'},     zones:[{x:0,y:0,w:0.38,h:1,type:'photo'},{x:0.40,y:0,w:0.60,h:1,type:'photo'}] },
   { id:'two-v-7030',     category:'2 Photos', label:{sq:'Madhe + Holle',    en:'Tall + Thin'},       zones:[{x:0,y:0,w:1,h:0.68,type:'photo'},{x:0,y:0.70,w:1,h:0.30,type:'photo'}] },
   { id:'two-v-3070',     category:'2 Photos', label:{sq:'Holle + Madhe',    en:'Thin + Tall'},       zones:[{x:0,y:0,w:1,h:0.30,type:'photo'},{x:0,y:0.32,w:1,h:0.68,type:'photo'}] },
+  // Padded (corner margin) — same idea as 1-photo “Me kufi”
+  { id:'two-h-pad',      category:'2 Photos', label:{sq:'2 Kolona me kufi', en:'2 Columns padded'},  zones:[{x:0.06,y:0.05,w:0.42,h:0.90,type:'photo'},{x:0.52,y:0.05,w:0.42,h:0.90,type:'photo'}] },
+  { id:'two-v-pad',      category:'2 Photos', label:{sq:'2 Shtresa me kufi',en:'2 Stacked padded'},  zones:[{x:0.06,y:0.05,w:0.88,h:0.43,type:'photo'},{x:0.06,y:0.52,w:0.88,h:0.43,type:'photo'}] },
 
   // ── 3-photo ───────────────────────────────────────────────────────────────
   { id:'strips-3',       category:'3 Photos', label:{sq:'3 Shtresa',         en:'3 Strips'},          zones:[{x:0,y:0,w:1,h:0.316,type:'photo'},{x:0,y:0.342,w:1,h:0.316,type:'photo'},{x:0,y:0.684,w:1,h:0.316,type:'photo'}] },
@@ -287,10 +290,12 @@ export const LAYOUTS: LayoutDef[] = [
   { id:'hero-l',         category:'3 Photos', label:{sq:'2 + Kryesore',      en:'2 left + Hero'},     zones:[{x:0,y:0,w:0.35,h:0.487,type:'photo'},{x:0,y:0.513,w:0.35,h:0.487,type:'photo'},{x:0.37,y:0,w:0.63,h:1,type:'photo'}] },
   { id:'hero-r',         category:'3 Photos', label:{sq:'Kryesore + 2',      en:'Hero + 2 right'},    zones:[{x:0,y:0,w:0.63,h:1,type:'photo'},{x:0.65,y:0,w:0.35,h:0.487,type:'photo'},{x:0.65,y:0.513,w:0.35,h:0.487,type:'photo'}] },
   { id:'tall-l-2r',      category:'3 Photos', label:{sq:'E gjatë + 2',       en:'Tall + 2 right'},    zones:[{x:0,y:0,w:0.55,h:1,type:'photo'},{x:0.57,y:0,w:0.43,h:0.487,type:'photo'},{x:0.57,y:0.513,w:0.43,h:0.487,type:'photo'}] },
-  { id:'triptych',       category:'3 Photos', label:{sq:'Triptik',           en:'Triptych'},          zones:[{x:0,y:0,w:0.316,h:1,type:'photo'},{x:0.342,y:0,w:0.316,h:1,type:'photo'},{x:0.684,y:0,w:0.316,h:1,type:'photo'}] },
   { id:'strips-3-uneven',category:'3 Photos', label:{sq:'3 Shtresa ≠',       en:'3 Uneven strips'},   zones:[{x:0,y:0,w:1,h:0.38,type:'photo'},{x:0,y:0.40,w:1,h:0.20,type:'photo'},{x:0,y:0.62,w:1,h:0.38,type:'photo'}] },
   { id:'strips-3-focus', category:'3 Photos', label:{sq:'3 Fokus mes',       en:'3 Mid focus'},       zones:[{x:0,y:0,w:1,h:0.22,type:'photo'},{x:0,y:0.24,w:1,h:0.52,type:'photo'},{x:0,y:0.78,w:1,h:0.22,type:'photo'}] },
   { id:'three-mid',      category:'3 Photos', label:{sq:'3 Qendrore',        en:'3 Centered'},        zones:[{x:0,y:0.13,w:0.316,h:0.74,type:'photo'},{x:0.342,y:0.13,w:0.316,h:0.74,type:'photo'},{x:0.684,y:0.13,w:0.316,h:0.74,type:'photo'}] },
+  // Padded
+  { id:'land-2port-pad', category:'3 Photos', label:{sq:'Sipër + 2 me kufi', en:'Top + 2 padded'},    zones:[{x:0.06,y:0.05,w:0.88,h:0.42,type:'photo'},{x:0.06,y:0.50,w:0.42,h:0.45,type:'photo'},{x:0.52,y:0.50,w:0.42,h:0.45,type:'photo'}] },
+  { id:'strips-3-pad',   category:'3 Photos', label:{sq:'3 Shtresa me kufi', en:'3 Strips padded'},   zones:[{x:0.06,y:0.05,w:0.88,h:0.28,type:'photo'},{x:0.06,y:0.36,w:0.88,h:0.28,type:'photo'},{x:0.06,y:0.67,w:0.88,h:0.28,type:'photo'}] },
 
   // ── 4-photo ───────────────────────────────────────────────────────────────
   { id:'strips-4',       category:'4 Photos', label:{sq:'4 Shtresa',         en:'4 Strips'},          zones:[{x:0,y:0,w:1,h:0.235,type:'photo'},{x:0,y:0.255,w:1,h:0.235,type:'photo'},{x:0,y:0.510,w:1,h:0.235,type:'photo'},{x:0,y:0.765,w:1,h:0.235,type:'photo'}] },
@@ -299,32 +304,23 @@ export const LAYOUTS: LayoutDef[] = [
   { id:'top-3below',     category:'4 Photos', label:{sq:'Sipër + 3',         en:'Top + 3 below'},     zones:[{x:0,y:0,w:1,h:0.55,type:'photo'},{x:0,y:0.57,w:0.316,h:0.43,type:'photo'},{x:0.342,y:0.57,w:0.316,h:0.43,type:'photo'},{x:0.684,y:0.57,w:0.316,h:0.43,type:'photo'}] },
   { id:'hero-3r',        category:'4 Photos', label:{sq:'Kryesore + 3',      en:'Hero + 3 right'},    zones:[{x:0,y:0,w:0.63,h:1,type:'photo'},{x:0.65,y:0,w:0.35,h:0.316,type:'photo'},{x:0.65,y:0.342,w:0.35,h:0.316,type:'photo'},{x:0.65,y:0.684,w:0.35,h:0.316,type:'photo'}] },
   { id:'hero-3l',        category:'4 Photos', label:{sq:'3 + Kryesore',      en:'3 left + Hero'},     zones:[{x:0,y:0,w:0.35,h:0.316,type:'photo'},{x:0,y:0.342,w:0.35,h:0.316,type:'photo'},{x:0,y:0.684,w:0.35,h:0.316,type:'photo'},{x:0.37,y:0,w:0.63,h:1,type:'photo'}] },
+  // Padded
+  { id:'grid4-pad',      category:'4 Photos', label:{sq:'Rrjetë 4 me kufi',  en:'4 Grid padded'},     zones:[{x:0.06,y:0.05,w:0.42,h:0.43,type:'photo'},{x:0.52,y:0.05,w:0.42,h:0.43,type:'photo'},{x:0.06,y:0.52,w:0.42,h:0.43,type:'photo'},{x:0.52,y:0.52,w:0.42,h:0.43,type:'photo'}] },
+  { id:'strips-4-pad',   category:'4 Photos', label:{sq:'4 Shtresa me kufi', en:'4 Strips padded'},   zones:[{x:0.06,y:0.04,w:0.88,h:0.20,type:'photo'},{x:0.06,y:0.28,w:0.88,h:0.20,type:'photo'},{x:0.06,y:0.52,w:0.88,h:0.20,type:'photo'},{x:0.06,y:0.76,w:0.88,h:0.20,type:'photo'}] },
 
   // ── 5-6 photo ─────────────────────────────────────────────────────────────
-  { id:'filmstrip-5',    category:'5-6 Photos', label:{sq:'Shirit 5',          en:'Filmstrip 5'},       zones:[{x:0,y:0,w:0.188,h:1,type:'photo'},{x:0.203,y:0,w:0.188,h:1,type:'photo'},{x:0.406,y:0,w:0.188,h:1,type:'photo'},{x:0.609,y:0,w:0.188,h:1,type:'photo'},{x:0.812,y:0,w:0.188,h:1,type:'photo'}] },
   { id:'gallery-5',      category:'5-6 Photos', label:{sq:'Galeri 5',          en:'Gallery 5'},         zones:[{x:0,y:0,w:0.487,h:0.45,type:'photo'},{x:0.513,y:0,w:0.487,h:0.45,type:'photo'},{x:0,y:0.47,w:0.316,h:0.53,type:'photo'},{x:0.342,y:0.47,w:0.316,h:0.53,type:'photo'},{x:0.684,y:0.47,w:0.316,h:0.53,type:'photo'}] },
-  { id:'grid-6',         category:'5-6 Photos', label:{sq:'Rrjetë 6',          en:'6 Grid'},            zones:[{x:0,y:0,w:0.487,h:0.316,type:'photo'},{x:0.513,y:0,w:0.487,h:0.316,type:'photo'},{x:0,y:0.342,w:0.487,h:0.316,type:'photo'},{x:0.513,y:0.342,w:0.487,h:0.316,type:'photo'},{x:0,y:0.684,w:0.487,h:0.316,type:'photo'},{x:0.513,y:0.684,w:0.487,h:0.316,type:'photo'}] },
 
   // ── magazine / editorial ──────────────────────────────────────────────────
   { id:'mag',            category:'Magazine', label:{sq:'Revistë',           en:'Magazine'},          zones:[{x:0,y:0,w:0.55,h:0.62,type:'photo'},{x:0.57,y:0,w:0.43,h:1,type:'photo'},{x:0,y:0.64,w:0.55,h:0.36,type:'text'}] },
   { id:'text-2photos',   category:'Magazine', label:{sq:'Tekst + 2 Foto',    en:'Text + 2 Photos'},   zones:[{x:0.06,y:0.05,w:0.88,h:0.22,type:'text'},{x:0,y:0.30,w:0.487,h:0.70,type:'photo'},{x:0.513,y:0.30,w:0.487,h:0.70,type:'photo'}] },
 
   // ── casual / scattered ────────────────────────────────────────────────────
-  { id:'casual-toss-3',  category:'Casual', label:{sq:'Të hedhura 3',      en:'Tossed 3'},          zones:[
-    {x:0.06,y:0.05,w:0.52,h:0.42,type:'photo',rotation:-6},
-    {x:0.40,y:0.46,w:0.54,h:0.42,type:'photo',rotation:4},
-    {x:0.04,y:0.55,w:0.40,h:0.34,type:'photo',rotation:-3},
-  ]},
   { id:'casual-pile-4',  category:'Casual', label:{sq:'Grumbull 4',        en:'Photo pile 4'},      zones:[
     {x:0.10,y:0.06,w:0.46,h:0.40,type:'photo',rotation:5},
     {x:0.42,y:0.10,w:0.48,h:0.40,type:'photo',rotation:-4},
     {x:0.06,y:0.50,w:0.46,h:0.40,type:'photo',rotation:-6},
     {x:0.44,y:0.54,w:0.46,h:0.38,type:'photo',rotation:3},
-  ]},
-  { id:'casual-strip-3', category:'Casual', label:{sq:'Shirit i lirë 3',   en:'Loose strip 3'},     zones:[
-    {x:0.02,y:0.10,w:0.32,h:0.66,type:'photo',rotation:-5},
-    {x:0.35,y:0.02,w:0.32,h:0.66,type:'photo',rotation:3},
-    {x:0.67,y:0.14,w:0.31,h:0.66,type:'photo',rotation:-2},
   ]},
   { id:'casual-note-2',  category:'Casual', label:{sq:'Shënim + 2',        en:'Note + 2 tossed'},   zones:[
     {x:0.08,y:0.06,w:0.46,h:0.38,type:'photo',rotation:-5},
@@ -697,17 +693,18 @@ export const DESIGNS: DesignDef[] = [
     thumbAccents: [],
     elements: [
       BG('#FEC5D7'),
-      TX('PARIS', 12, 22, DESIGN_W - 24, 88, {
-        fontSize: 92, fill: '#FFFFFF', align: 'center',
-        fontFamily: "'Londrina Solid', cursive", letterSpacing: 10, lineHeight: 0.92,
+      // City title — tower overlaps the middle letters (mockup).
+      TX('PARIS', 8, 28, DESIGN_W - 16, 100, {
+        fontSize: 100, fill: '#FFFFFF', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 12, lineHeight: 0.9,
       }),
-      TX('2022', 12, 108, DESIGN_W - 24, 36, {
-        fontSize: 30, fill: '#F06BAF', align: 'center',
+      // Year sits under the right side of the title with clear air (not flush).
+      TX('2022', 300, 148, 260, 40, {
+        fontSize: 30, fill: '#F06BAF', align: 'right',
         fontFamily: "'Londrina Solid', cursive", letterSpacing: 8,
       }),
-      SH('rect', 240, 150, 120, 3, '#FFFFFF', { opacity: 0.55, strokeWidth: 0 }),
-      IMG('/designs/eiffel-tower.png', 40, 160, 520, 620, {
-        objectFit: 'contain', mixBlendMode: 'screen',
+      IMG('/designs/eiffel-tower.png', 70, 90, 460, 680, {
+        objectFit: 'contain',
       }),
     ],
   },
@@ -721,17 +718,17 @@ export const DESIGNS: DesignDef[] = [
     thumbAccents: [],
     elements: [
       BG('#A83442'),
-      TX('BARCELONA', 8, 24, DESIGN_W - 16, 72, {
+      // Title only at top — year belongs under the landmark (mockup).
+      TX('BARCELONA', 8, 36, DESIGN_W - 16, 70, {
         fontSize: 58, fill: '#FCB426', align: 'center',
-        fontFamily: "'Londrina Solid', cursive", letterSpacing: 4, lineHeight: 0.95,
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 4, lineHeight: 0.92,
       }),
-      TX('2026', 8, 96, DESIGN_W - 16, 36, {
+      IMG('/designs/sagrada-familia.png', 40, 130, 520, 520, {
+        objectFit: 'contain',
+      }),
+      TX('2026', 8, 670, DESIGN_W - 16, 40, {
         fontSize: 30, fill: '#FCB426', align: 'center',
         fontFamily: "'Londrina Solid', cursive", letterSpacing: 8,
-      }),
-      SH('rect', 230, 138, 140, 3, '#FCB426', { opacity: 0.7, strokeWidth: 0 }),
-      IMG('/designs/sagrada-familia.png', 20, 150, 560, 620, {
-        objectFit: 'contain', mixBlendMode: 'screen',
       }),
     ],
   },
