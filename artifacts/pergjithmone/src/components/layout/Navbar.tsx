@@ -142,13 +142,13 @@ export function Navbar() {
         <div
           className="max-w-7xl mx-auto px-4 md:px-10 h-[64px] md:h-[72px] flex items-center justify-between"
         >
-          {/* Logo */}
+          {/* Logo — cropped wordmark (logo-full.png is a padded 500² square) */}
           <Link href="/" className="flex items-center shrink-0 z-50">
             <img
-              src="/logo-full.png"
+              src="/logo-nav.png"
               alt="Përgjithmonë"
-              className="w-[196px] h-[36px] md:w-[228px] md:h-[42px]"
-              style={{ objectFit: 'contain', objectPosition: 'left center' }}
+              className="h-[44px] md:h-[52px] w-auto"
+              style={{ objectFit: 'contain', objectPosition: 'left center', display: 'block' }}
             />
           </Link>
 
