@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Stage, Layer, Rect, Text as KonvaText, Image as KonvaImage, Transformer, Group } from 'react-konva';
 import { AdminLayout, ADMIN } from '@/components/layout/AdminLayout';
-import { useGetAdminSettings, useUpdateAdminSettings, getGetAdminSettingsQueryKey, getGetAppSettingsQueryKey } from '@workspace/api-client-react-tsconfig';
+import { useGetAdminSettings, useUpdateAdminSettings, getGetAdminSettingsQueryKey, getGetAppSettingsQueryKey, useListBookSizes } from '@workspace/api-client-react-tsconfig';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,7 @@ import {
   designFrontElements, designBackElements,
   designElementsWithIds, designElementsWithoutIds,
   blankCoverElements, newCustomDesignId,
+  getCanvasHeight, scaleElementsToCanvas, reprojectCanvasElements,
   type CustomDesignRecord, type DesignDef, type DesignOverrides, type EditorElement, type DE,
 } from '@/lib/designs';
 import { applyCoverBackground, coverBgMode, type CoverBgMode } from '@/lib/coverBackground';
@@ -24,10 +25,24 @@ import {
 import { useEditorFontsReady, ensureEditorFonts } from '@/lib/editorFonts';
 
 const PREVIEW_W = 440;
-const PREVIEW_H = Math.round(PREVIEW_W * (DESIGN_H / DESIGN_W));
-const SCALE = PREVIEW_W / DESIGN_W;
 const CATALOG_THUMB_W = 56;
 const CATALOG_THUMB_H = Math.round(CATALOG_THUMB_W * (DESIGN_H / DESIGN_W));
+
+function previewSizeForCanvas(canvasH: number) {
+  const h = Math.round(PREVIEW_W * (canvasH / DESIGN_W));
+  return { w: PREVIEW_W, h, scale: PREVIEW_W / DESIGN_W };
+}
+
+function formatSizeLabel(s: { label?: string; widthCm?: number | string; heightCm?: number | string }) {
+  const w = Number(s.widthCm);
+  const h = Number(s.heightCm);
+  const dims = (Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0)
+    ? `${w}×${h} cm`
+    : '';
+  const name = String(s.label || '').trim();
+  if (name && dims) return `${name} · ${dims}`;
+  return name || dims || 'Format';
+}
 
 const COVER_SWATCHES = [
   '#FFFFFF', '#F7F5F2', '#ECE7E1', '#1A1A1A', '#2A2A2A',
@@ -95,13 +110,13 @@ function useHtmlImage(src?: string) {
   return img;
 }
 
-function BgFill({ el, onSelect }: { el: EditorElement; onSelect: () => void }) {
+function BgFill({ el, onSelect, canvasH }: { el: EditorElement; onSelect: () => void; canvasH: number }) {
   const img = useHtmlImage(el.src);
   if (img) {
     return (
       <KonvaImage
         image={img}
-        x={0} y={0} width={DESIGN_W} height={DESIGN_H}
+        x={0} y={0} width={DESIGN_W} height={canvasH}
         onClick={onSelect} onTap={onSelect}
       />
     );
@@ -110,11 +125,11 @@ function BgFill({ el, onSelect }: { el: EditorElement; onSelect: () => void }) {
   const end = el.bgGradientDir === 'lr'
     ? { x: DESIGN_W, y: 0 }
     : el.bgGradientDir === 'diag'
-      ? { x: DESIGN_W, y: DESIGN_H }
-      : { x: 0, y: DESIGN_H };
+      ? { x: DESIGN_W, y: canvasH }
+      : { x: 0, y: canvasH };
   return (
     <Rect
-      x={0} y={0} width={DESIGN_W} height={DESIGN_H}
+      x={0} y={0} width={DESIGN_W} height={canvasH}
       fill={hasGrad ? undefined : (el.bgColor || '#fff')}
       {...(hasGrad ? {
         fillLinearGradientStartPoint: { x: 0, y: 0 },
@@ -346,12 +361,13 @@ function StudioText({ el, selected, onSelect, onChange, shapeRefs, fontEpoch }: 
 }
 
 function DesignCanvas({
-  elements, selectedId, onSelect, onChangeEl,
+  elements, selectedId, onSelect, onChangeEl, canvasH,
 }: {
   elements: EditorElement[];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   onChangeEl: (id: string, patch: Partial<EditorElement>) => void;
+  canvasH: number;
 }) {
   const trRef = useRef<any>(null);
   const shapeRefs = useRef<Record<string, any>>({});
@@ -359,20 +375,21 @@ function DesignCanvas({
   const fontEpoch = fontsReady ? 1 : 0;
   const selected = selectedId ? elements.find(e => e.id === selectedId) : null;
   const canTransform = selected && selected.type !== 'background';
+  const { w: previewW, h: previewH, scale } = previewSizeForCanvas(canvasH);
 
   useEffect(() => {
     if (!trRef.current) return;
     const node = (canTransform && selectedId) ? shapeRefs.current[selectedId] : null;
     trRef.current.nodes(node ? [node] : []);
     trRef.current.getLayer()?.batchDraw();
-  }, [selectedId, elements, fontEpoch, canTransform]);
+  }, [selectedId, elements, fontEpoch, canTransform, canvasH]);
 
   return (
     <Stage
-      width={PREVIEW_W}
-      height={PREVIEW_H}
-      scaleX={SCALE}
-      scaleY={SCALE}
+      width={previewW}
+      height={previewH}
+      scaleX={scale}
+      scaleY={scale}
       onMouseDown={(e: any) => {
         if (e.target === e.target.getStage()) onSelect(null);
       }}
@@ -383,7 +400,7 @@ function DesignCanvas({
       <Layer>
         {elements.map(el => {
           if (el.type === 'background') {
-            return <BgFill key={el.id} el={el} onSelect={() => onSelect(el.id)} />;
+            return <BgFill key={el.id} el={el} canvasH={canvasH} onSelect={() => onSelect(el.id)} />;
           }
           if (el.type === 'shape') {
             return (
@@ -459,10 +476,53 @@ function loadCoverDrafts(design: DesignDef): { front: EditorElement[]; back: Edi
 
 export default function AdminDesignStudio() {
   const { data: settings, isLoading } = useGetAdminSettings();
+  const { data: bookSizesRaw } = useListBookSizes();
   const updateSettings = useUpdateAdminSettings();
   const queryClient = useQueryClient();
   const { getToken } = useAuth();
   const s = settings as any;
+
+  const bookSizes = useMemo(() => {
+    const list = Array.isArray(bookSizesRaw) ? [...(bookSizesRaw as any[])] : [];
+    return list.sort((a, b) => {
+      const aw = Number(a.widthCm) || 0;
+      const ah = Number(a.heightCm) || 0;
+      const bw = Number(b.widthCm) || 0;
+      const bh = Number(b.heightCm) || 0;
+      return (aw * ah) - (bw * bh) || String(a.label || '').localeCompare(String(b.label || ''));
+    });
+  }, [bookSizesRaw]);
+
+  const [formatSizeId, setFormatSizeId] = useState<number | null>(null);
+
+  // Prefer a 3:4-ish size as the default authoring format when available.
+  useEffect(() => {
+    if (!bookSizes.length) return;
+    if (formatSizeId != null && bookSizes.some(s => s.id === formatSizeId)) return;
+    const prefer = bookSizes.find((s) => {
+      const w = Number(s.widthCm);
+      const h = Number(s.heightCm);
+      if (!w || !h) return false;
+      const r = h / w;
+      return Math.abs(r - (DESIGN_H / DESIGN_W)) < 0.04;
+    }) || bookSizes[0];
+    setFormatSizeId(prefer.id);
+  }, [bookSizes, formatSizeId]);
+
+  const selectedFormat = useMemo(
+    () => bookSizes.find(s => s.id === formatSizeId) || null,
+    [bookSizes, formatSizeId],
+  );
+
+  const canvasH = useMemo(
+    () => getCanvasHeight(
+      selectedFormat ? Number(selectedFormat.widthCm) : null,
+      selectedFormat ? Number(selectedFormat.heightCm) : null,
+    ),
+    [selectedFormat],
+  );
+  const canvasHRef = useRef(canvasH);
+  const preview = previewSizeForCanvas(canvasH);
 
   const savedOverrides: DesignOverrides = (s?.designOverrides && typeof s.designOverrides === 'object' && !Array.isArray(s.designOverrides))
     ? s.designOverrides as DesignOverrides
@@ -553,13 +613,24 @@ export default function AdminDesignStudio() {
     if (!design) return;
     if (dirtyRef.current) return;
     const { front, back } = loadCoverDrafts(design);
-    setDraftFront(front);
-    setDraftBack(back);
+    setDraftFront(scaleElementsToCanvas(front, canvasH));
+    setDraftBack(scaleElementsToCanvas(back, canvasH));
     setSelectedId(null);
     setDirtyFront(false);
     setDirtyBack(false);
     setCoverSide('front');
-  }, [design?.id, overrideFingerprint, customFingerprint]);
+    canvasHRef.current = canvasH;
+  }, [design?.id, overrideFingerprint, customFingerprint, canvasH]);
+
+  // Switching album format reprojects the live draft into the new aspect.
+  useEffect(() => {
+    const prevH = canvasHRef.current;
+    if (prevH === canvasH) return;
+    setDraftFront(prev => reprojectCanvasElements(prev, prevH, canvasH));
+    setDraftBack(prev => reprojectCanvasElements(prev, prevH, canvasH));
+    canvasHRef.current = canvasH;
+    setSelectedId(null);
+  }, [canvasH]);
 
   useEffect(() => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -599,7 +670,7 @@ export default function AdminDesignStudio() {
 
   const setCoverBg = useCallback((patch: Parameters<typeof applyCoverBackground>[2]) => {
     setDraft(prev => {
-      const next = applyCoverBackground(prev, DESIGN_H, patch);
+      const next = applyCoverBackground(prev, canvasHRef.current, patch);
       const nextBg = next.find(e => e.type === 'background');
       if (nextBg) queueMicrotask(() => setSelectedId(nextBg.id));
       return next;
@@ -621,7 +692,7 @@ export default function AdminDesignStudio() {
       const url = await uploadStudioImage(file, getToken());
       setBgUiMode('photo');
       patchSide(side, prev => {
-        const next = applyCoverBackground(prev, DESIGN_H, { mode: 'photo', src: url });
+        const next = applyCoverBackground(prev, canvasHRef.current, { mode: 'photo', src: url });
         const nextBg = next.find(e => e.type === 'background');
         if (nextBg) queueMicrotask(() => setSelectedId(nextBg.id));
         return next;
@@ -650,7 +721,7 @@ export default function AdminDesignStudio() {
           id: `img-${Date.now()}`,
           type: 'image',
           src: url,
-          x: 80, y: 160, w: 440, h: 280, rotation: 0,
+          x: 80, y: Math.round(canvasHRef.current * 0.2), w: 440, h: Math.round(canvasHRef.current * 0.35), rotation: 0,
           cropFocusX: 0.5, cropFocusY: 0.5,
         };
         queueMicrotask(() => setSelectedId(el.id));
@@ -664,11 +735,12 @@ export default function AdminDesignStudio() {
   };
 
   const addText = () => {
+    const h = canvasHRef.current;
     const el: EditorElement = {
       id: `tx-${Date.now()}`,
       type: 'text',
       text: 'New text',
-      x: 60, y: 260, w: DESIGN_W - 120, h: 60, rotation: 0,
+      x: 60, y: Math.round(h * 0.32), w: DESIGN_W - 120, h: 60, rotation: 0,
       fontSize: 32, fill: '#1A1A1A', align: 'center',
       fontFamily: "'Londrina Solid', cursive",
     };
@@ -722,8 +794,14 @@ export default function AdminDesignStudio() {
     setSaving(true);
     setSaveError(null);
     try {
-      const frontElements = designElementsWithoutIds(draftFront);
-      const backElements = designElementsWithoutIds(draftBack);
+      // Always persist in the 3:4 reference canvas so every album format
+      // can reproject via scaleElementsToCanvas at apply-time.
+      const toCanonical = (els: EditorElement[]) =>
+        designElementsWithoutIds(
+          reprojectCanvasElements(els, canvasHRef.current, DESIGN_H),
+        );
+      const frontElements = toCanonical(draftFront);
+      const backElements = toCanonical(draftBack);
 
       if (design.isCustom) {
         const now = new Date().toISOString();
@@ -775,8 +853,8 @@ export default function AdminDesignStudio() {
     if (!design) return;
     if (design.isCustom) {
       if (!window.confirm(`Reset "${design.name.en}" to blank front & back covers?`)) return;
-      const front = blankCoverElements('FRONT');
-      const back = blankCoverElements('BACK');
+      const front = scaleElementsToCanvas(blankCoverElements('FRONT'), canvasHRef.current);
+      const back = scaleElementsToCanvas(blankCoverElements('BACK'), canvasHRef.current);
       setDraftFront(designElementsWithIds(`${design.id}-f`, front));
       setDraftBack(designElementsWithIds(`${design.id}-b`, back));
       setDirtyFront(true);
@@ -790,8 +868,8 @@ export default function AdminDesignStudio() {
     if (!base) return;
     if (!window.confirm(`Reset "${base.name.en}" to the built-in layout?`)) return;
     const { front, back } = loadCoverDrafts(base);
-    setDraftFront(front);
-    setDraftBack(back);
+    setDraftFront(scaleElementsToCanvas(front, canvasHRef.current));
+    setDraftBack(scaleElementsToCanvas(back, canvasHRef.current));
     setDirtyFront(false);
     setDirtyBack(false);
     setSaveError(null);
@@ -1213,7 +1291,7 @@ export default function AdminDesignStudio() {
               {design ? (
                 <>
                   <p className="text-base font-serif font-semibold mb-1" style={{ color: ADMIN.ink }}>{design.name.en}</p>
-                  <div className="flex gap-1 mb-2">
+                  <div className="flex flex-wrap gap-1 mb-2 justify-center">
                     {(['front', 'back'] as const).map(side => (
                       <button key={side} type="button"
                         onClick={() => { setCoverSide(side); setSelectedId(null); }}
@@ -1228,20 +1306,47 @@ export default function AdminDesignStudio() {
                       </button>
                     ))}
                   </div>
+                  {bookSizes.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mb-2 justify-center max-w-md">
+                      {bookSizes.map((sz: any) => {
+                        const active = sz.id === formatSizeId;
+                        return (
+                          <button
+                            key={sz.id}
+                            type="button"
+                            onClick={() => setFormatSizeId(sz.id)}
+                            className="px-3 py-1.5 rounded-full text-[10px] font-semibold"
+                            title={`${Number(sz.widthCm)}×${Number(sz.heightCm)} cm`}
+                            style={
+                              active
+                                ? { background: ADMIN.ink, color: '#fff' }
+                                : { background: ADMIN.card, color: ADMIN.muted, border: `1px solid ${ADMIN.line}` }
+                            }
+                          >
+                            {formatSizeLabel(sz)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                   <p className="text-[11px] mb-3 text-center max-w-md" style={{ color: ADMIN.muted }}>
                     {coverSide === 'front'
                       ? 'Front cover — drag text & images, resize with handles, edit properties on the right.'
                       : 'Back cover — edit independently from the front.'}
+                    {selectedFormat
+                      ? ` · editing for ${formatSizeLabel(selectedFormat)}`
+                      : ''}
                     {isHidden ? ' · hidden from customers' : ''}
                     {hasOverride ? ' · override saved' : ''}
                   </p>
                   <div className="rounded-sm shadow-xl overflow-hidden bg-white max-w-full"
-                    style={{ width: PREVIEW_W, height: PREVIEW_H }}>
+                    style={{ width: preview.w, height: preview.h }}>
                     <DesignCanvas
                       elements={draft}
                       selectedId={selectedId}
                       onSelect={setSelectedId}
                       onChangeEl={onChangeEl}
+                      canvasH={canvasH}
                     />
                   </div>
                   <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5">

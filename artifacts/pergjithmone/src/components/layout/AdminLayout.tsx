@@ -367,7 +367,7 @@ function Sidebar({
             onClick={onClose}
             className="lg:hidden w-10 h-10 flex items-center justify-center transition-transform active:scale-95"
             style={{
-              color: theme.sidebarTextActive,
+              color: theme.ink,
               background: theme.card,
               border: `1px solid ${theme.sidebarLine}`,
               borderRadius: theme.radius,
@@ -406,9 +406,11 @@ function Sidebar({
                       borderRadius: theme.radius,
                       ...(isActive
                         ? {
-                            background: theme.card,
+                            // Stay on the rail (not a white chip) so dark-sidebar
+                            // palettes keep light type readable.
+                            background: theme.sidebarActive,
                             color: theme.sidebarTextActive,
-                            boxShadow: `0 4px 16px rgba(40,20,30,0.06), inset 3px 0 0 ${theme.accent}`,
+                            boxShadow: `inset 3px 0 0 ${theme.accent}`,
                           }
                         : { color: theme.sidebarText }),
                     }}
@@ -465,10 +467,10 @@ function Sidebar({
             {initials}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold truncate" style={{ color: theme.sidebarTextActive, fontFamily: theme.fontSans }}>
+            <p className="text-sm font-semibold truncate" style={{ color: isMobile ? theme.ink : theme.sidebarTextActive, fontFamily: theme.fontSans }}>
               {user?.name || 'Admin'}
             </p>
-            <p className="text-[11px] truncate" style={{ color: theme.sidebarText, opacity: 0.7 }}>
+            <p className="text-[11px] truncate" style={{ color: isMobile ? theme.muted : theme.sidebarText, opacity: isMobile ? 1 : 0.7 }}>
               {(user as any)?.phone || 'Administrator'}
             </p>
           </div>
@@ -485,7 +487,7 @@ function Sidebar({
             style={{
               borderRadius: theme.radius,
               ...(isMobile
-                ? { color: theme.sidebarTextActive, background: theme.card, border: `1px solid ${theme.sidebarLine}` }
+                ? { color: theme.ink, background: theme.card, border: `1px solid ${theme.sidebarLine}` }
                 : { color: theme.sidebarText }),
             }}
             onMouseEnter={(e) => {
@@ -535,8 +537,8 @@ function MenuToggle({ open, onClick, theme }: {
       className="relative w-11 h-11 flex items-center justify-center transition-transform active:scale-95 shrink-0"
       style={{
         background: open ? theme.accent : theme.card,
-        color: open ? '#fff' : theme.sidebarTextActive,
-        border: open ? 'none' : `1px solid ${theme.sidebarLine}`,
+        color: open ? '#fff' : theme.ink,
+        border: open ? 'none' : `1px solid ${theme.line}`,
         borderRadius: theme.radius,
         boxShadow: open
           ? `0 8px 22px ${theme.accent}55`
@@ -749,8 +751,8 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
           <header
             className="lg:hidden sticky top-0 z-30 px-3.5 pt-[max(0.55rem,env(safe-area-inset-top))] pb-2.5"
             style={{
-              background: `linear-gradient(180deg, ${theme.sidebar}f5 0%, ${theme.bg}f0 100%)`,
-              borderBottom: `1px solid ${theme.sidebarLine}`,
+              background: `linear-gradient(180deg, ${theme.card}f8 0%, ${theme.bg}f2 100%)`,
+              borderBottom: `1px solid ${theme.line}`,
               backdropFilter: 'blur(16px)',
               WebkitBackdropFilter: 'blur(16px)',
             }}
@@ -770,13 +772,13 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
                 <div className="min-w-0">
                   <p
                     className="text-[9px] font-semibold tracking-[0.16em] uppercase leading-none"
-                    style={{ color: theme.sidebarText, opacity: 0.65, fontFamily: theme.fontSans }}
+                    style={{ color: theme.muted, fontFamily: theme.fontSans }}
                   >
                     Studio
                   </p>
                   <p
                     className="font-semibold text-[15px] leading-tight truncate mt-0.5"
-                    style={{ color: theme.sidebarTextActive, fontFamily: theme.fontSerif }}
+                    style={{ color: theme.ink, fontFamily: theme.fontSerif }}
                   >
                     {currentLabel}
                   </p>

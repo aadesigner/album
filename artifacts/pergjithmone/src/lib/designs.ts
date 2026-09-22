@@ -52,6 +52,17 @@ export function scaleElementsToCanvas<T extends { y: number; h: number }>(
   return elements.map(el => ({ ...el, y: el.y * k, h: el.h * k }));
 }
 
+/** Re-project absolute canvas elements between two heights (same DESIGN_W). */
+export function reprojectCanvasElements<T extends { y: number; h: number }>(
+  elements: T[],
+  fromH: number,
+  toH: number,
+): T[] {
+  if (!fromH || !toH || fromH === toH) return elements;
+  const k = toH / fromH;
+  return elements.map(el => ({ ...el, y: el.y * k, h: el.h * k }));
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface EditorElement {
