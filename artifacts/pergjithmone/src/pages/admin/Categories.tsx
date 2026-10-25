@@ -441,7 +441,7 @@ export default function AdminCategories() {
         />
       )}
 
-      <div className="p-4 sm:p-5 md:p-8 max-w-screen-xl mx-auto">
+      <div className="p-3 sm:p-4 md:p-5 max-w-screen-xl mx-auto">
         <div className="mb-8 flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4">
           <div>
             <p className="text-[10px] font-semibold tracking-[0.18em] uppercase mb-1.5" style={{ color: ADMIN.blush }}>Catalog</p>

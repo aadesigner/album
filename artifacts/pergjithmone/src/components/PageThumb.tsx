@@ -5,27 +5,15 @@ import {
   type DesignDef, type EditorElement,
 } from '@/lib/designs';
 import { isStrokeOnlyShape, shapePathForElement } from '@/lib/shapes';
-import { useEditorFontsReady, ensureEditorFonts } from '@/lib/editorFonts';
+import { useEditorFontsReady, ensureEditorFonts, normalizeEditorFont, isEditorSingleCutFont } from '@/lib/editorFonts';
 
 function thumbFontFamily(ff?: string): string {
-  const raw = (ff || 'Georgia, serif').trim();
-  const lower = raw.toLowerCase();
-  if (lower.includes('great vibes')) return "'Great Vibes', cursive";
-  if (lower.includes('londrina')) return "'Londrina Solid', cursive";
-  if (lower.includes('dancing')) return "'Dancing Script', cursive";
-  if (lower.includes('pacifico')) return "'Pacifico', cursive";
-  if (lower.includes('playfair')) return "'Playfair Display', serif";
-  if (lower.includes('cormorant')) return "'Cormorant Garamond', serif";
-  if (lower.includes('raleway')) return "'Raleway', sans-serif";
-  if (lower.includes('montserrat')) return "'Montserrat', sans-serif";
-  return raw;
+  return normalizeEditorFont(ff);
 }
 
 function thumbFontStyle(ff?: string, fs?: string): { fontStyle: string; fontWeight: number | string } {
-  const family = thumbFontFamily(ff).toLowerCase();
-  const isScript = /great vibes|dancing script|pacifico|londrina/.test(family);
   const bold = !!fs?.includes('bold');
-  if (isScript) return { fontStyle: 'normal', fontWeight: bold ? 700 : 400 };
+  if (isEditorSingleCutFont(ff)) return { fontStyle: 'normal', fontWeight: bold ? 700 : 400 };
   return {
     fontStyle: fs?.includes('italic') ? 'italic' : 'normal',
     fontWeight: bold ? 700 : 400,

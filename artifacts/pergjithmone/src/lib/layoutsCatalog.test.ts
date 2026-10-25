@@ -2,10 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { LAYOUTS, RETIRED_LAYOUT_IDS, LAYOUT_CATEGORY_LABELS } from './designs';
 
 const KEEP_IDS = [
-  'full', 'bordered-single',
-  'two-h', 'two-v', 'two-h-6040', 'two-h-4060', 'two-h-pad', 'two-v-pad',
-  'three-mid', 'strips-3', 'land-2port', 'port-2land', 'hero-l', 'hero-r', 'tall-l-2r',
-  'grid4', 'strips-4',
+  'full', 'bordered-single', 'portrait-center', 'single-inset',
+  'two-h', 'two-v', 'two-h-6040', 'two-h-4060',
+  'triptych', 'strips-3', 'land-2port', 'port-2land', 'hero-l', 'hero-r', 'tall-l-2r',
+  'grid4', 'strips-4', 'hero-3r', 'hero-3l', 'top-3below',
 ] as const;
 
 describe('editor layout catalog', () => {
@@ -35,9 +35,9 @@ describe('editor layout catalog', () => {
 
   it('hides the screenshot X / out-of-scope templates', () => {
     const mustHide = [
-      'portrait-center',
-      'two-v-7030', 'two-v-3070',
-      'grid4-topheavy', 'top-3below', 'hero-3r', 'hero-3l',
+      'two-h-pad', 'two-v-pad', 'two-h-inset',
+      'three-mid', 'scatter-3',
+      'cols-4', 'grid4-topheavy', 'grid4-pad',
       'photo-cap', 'quote', 'gallery-5', 'mag', 'casual-pile-4',
     ];
     for (const id of mustHide) {

@@ -328,7 +328,7 @@ function Sidebar({
       )}
 
       <div
-        className={`relative flex items-center justify-between ${isMobile ? 'px-5 pt-[max(1.1rem,env(safe-area-inset-top))] pb-4' : 'px-5 py-6'}`}
+        className={`relative flex items-center justify-between ${isMobile ? 'px-4 pt-[max(0.85rem,env(safe-area-inset-top))] pb-3' : 'px-3.5 py-4'}`}
         style={{ borderBottom: `1px solid ${theme.sidebarLine}` }}
       >
         <div className="flex items-center gap-3 min-w-0">
@@ -380,9 +380,9 @@ function Sidebar({
         )}
       </div>
 
-      <nav className={`relative flex-1 overflow-y-auto overscroll-contain ${isMobile ? 'py-5 px-4' : 'py-5 px-3'}`}>
+      <nav className={`relative flex-1 overflow-y-auto overscroll-contain ${isMobile ? 'py-3.5 px-3.5' : 'py-3 px-2.5'}`}>
         {navGroups.map((group) => (
-          <div key={group.title} className={isMobile ? 'mb-6' : 'mb-5'}>
+          <div key={group.title} className={isMobile ? 'mb-4' : 'mb-3.5'}>
             <p
               className={`font-semibold tracking-[0.18em] uppercase ${isMobile ? 'px-3 mb-2.5 text-[9px]' : 'px-3 mb-2 text-[9px]'}`}
               style={{ color: theme.sidebarText, opacity: 0.45, fontFamily: theme.fontSans }}
@@ -397,10 +397,10 @@ function Sidebar({
                     key={href}
                     href={href}
                     onClick={onClose}
-                    className={`flex items-center gap-3 font-medium transition-all duration-200 ${
+                    className={`flex items-center gap-2.5 font-medium transition-all duration-200 ${
                       isMobile
-                        ? 'px-3.5 py-[0.85rem] text-[14px]'
-                        : 'px-3 py-2.5 text-[13px]'
+                        ? 'px-3 py-2.5 text-[13px]'
+                        : 'px-2.5 py-2 text-[12.5px]'
                     }`}
                     style={{
                       borderRadius: theme.radius,
@@ -445,7 +445,7 @@ function Sidebar({
       </nav>
 
       <div
-        className={`relative ${isMobile ? 'p-4 pb-[max(1rem,env(safe-area-inset-bottom))]' : 'p-4'}`}
+        className={`relative ${isMobile ? 'p-3 pb-[max(0.85rem,env(safe-area-inset-bottom))]' : 'p-3'}`}
         style={{ borderTop: `1px solid ${theme.sidebarLine}` }}
       >
         <div
@@ -688,7 +688,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
       >
         {/* Desktop: left rail */}
         <aside
-          className="w-[16rem] fixed inset-y-0 left-0 z-30 hidden lg:block"
+          className="w-[14.25rem] fixed inset-y-0 left-0 z-30 hidden lg:block"
           style={{ borderRight: `1px solid ${theme.sidebarLine}` }}
         >
           <Sidebar theme={theme} variant="desktop" />
@@ -710,7 +710,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
 
         {/* Mobile: premium right drawer */}
         <aside
-          className={`fixed inset-y-0 right-0 z-50 w-[min(20.5rem,88vw)] lg:hidden transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+          className={`fixed inset-y-0 right-0 z-50 w-[min(18.5rem,88vw)] lg:hidden transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
             sidebarOpen ? 'translate-x-0' : 'translate-x-full'
           }`}
           style={{
@@ -728,7 +728,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
           />
         </aside>
 
-        <main className="flex-1 lg:ml-[16rem] min-h-[100dvh] flex flex-col min-w-0 relative">
+        <main className="flex-1 lg:ml-[14.25rem] min-h-[100dvh] flex flex-col min-w-0 relative">
           {/* Desktop: sticky theme control, top-right — floats so pages keep full width */}
           {!hideThemeSwitcher && (
             <div

@@ -329,7 +329,7 @@ export default function AdminDashboard() {
 
   return (
     <AdminLayout>
-      <div className="p-4 sm:p-6 md:p-8 max-w-screen-xl mx-auto pb-16">
+      <div className="p-3 sm:p-4 md:p-5 max-w-screen-xl mx-auto pb-14">
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-6">
           <div>

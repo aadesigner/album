@@ -78,7 +78,8 @@ import { getEmptyInnerPageNumbers } from '@/lib/pageContent';
 import { PageThumb, DesignCatalogThumb } from '@/components/PageThumb';
 import { uploadErrorMessage, uploadImageToApi } from '@/lib/uploadImage';
 import { applyCoverBackground, coverBgMode, type CoverBgMode } from '@/lib/coverBackground';
-import { useEditorFontsReady, ensureEditorFonts } from '@/lib/editorFonts';
+import { useEditorFontsReady, ensureEditorFonts, normalizeEditorFont, isEditorSingleCutFont } from '@/lib/editorFonts';
+import { FontPicker } from '@/components/FontPicker';
 
 const PAPER_COLOR = '#FEFDF9';
 const SPINE_W = 1;
@@ -212,59 +213,9 @@ type SideTab = 'designs' | 'layouts' | 'photos' | 'text';
 // Fonts
 // ─────────────────────────────────────────────────────────────────────────────
 
-const FONTS = [
-  { label: 'Georgia',    value: 'Georgia, serif' },
-  { label: 'Playfair',   value: "'Playfair Display', serif" },
-  { label: 'Cormorant',  value: "'Cormorant Garamond', serif" },
-  { label: 'Raleway',    value: "'Raleway', sans-serif" },
-  { label: 'Montserrat', value: "'Montserrat', sans-serif" },
-  { label: 'Arial',      value: 'Arial, Helvetica, sans-serif' },
-  { label: 'Londrina',   value: "'Londrina Solid', cursive" },
-  { label: 'Dancing',    value: "'Dancing Script', cursive" },
-  { label: 'Vibes',      value: "'Great Vibes', cursive" },
-  { label: 'Pacifico',   value: "'Pacifico', cursive" },
-];
-
-/** Map design font stacks onto FONTS option values so the toolbar <select>
- *  always has a matching option (mismatched values made the browser jump to Georgia). */
-function normalizeFontFamily(ff?: string | null): string {
-  const raw = (ff || 'Georgia, serif').trim();
-  if (FONTS.some(f => f.value === raw)) return raw;
-  const lower = raw.toLowerCase();
-  const byPrimary = FONTS.find(f => {
-    const primary = f.value.split(',')[0].replace(/['"]/g, '').trim().toLowerCase();
-    return primary.length > 0 && lower.includes(primary);
-  });
-  if (byPrimary) return byPrimary.value;
-  if (lower.includes('great vibes') || lower.includes('segoescript') || lower.includes('segoe script')) {
-    return "'Great Vibes', cursive";
-  }
-  if (lower.includes('londrina')) return "'Londrina Solid', cursive";
-  if (lower.includes('dancing')) return "'Dancing Script', cursive";
-  if (lower.includes('pacifico')) return "'Pacifico', cursive";
-  if (lower.includes('playfair')) return "'Playfair Display', serif";
-  if (lower.includes('cormorant')) return "'Cormorant Garamond', serif";
-  if (lower.includes('raleway')) return "'Raleway', sans-serif";
-  if (lower.includes('montserrat')) return "'Montserrat', sans-serif";
-  if (lower.includes('arial') || lower.includes('helvetica') || lower.includes('impact') || lower === 'sans-serif') {
-    return 'Arial, Helvetica, sans-serif';
-  }
-  if (lower.includes('georgia') || lower.includes('times')) return 'Georgia, serif';
-  if (lower.includes('mono')) return "'Montserrat', sans-serif";
-  return 'Georgia, serif';
-}
-
-/** Script faces ship as a single cut — Konva "italic" looks for a missing
- *  italic file and silently falls back (often to Georgia), so the text jumps
- *  when the HTML editor overlay (which synthesizes oblique) appears. */
 function canvasFontStyle(ff?: string | null, fs?: string | null): string {
-  const family = normalizeFontFamily(ff).toLowerCase();
-  const isScript =
-    family.includes('great vibes') ||
-    family.includes('dancing script') ||
-    family.includes('pacifico');
   const bold = !!fs?.includes('bold');
-  if (isScript) return bold ? 'bold' : 'normal';
+  if (isEditorSingleCutFont(ff)) return bold ? 'bold' : 'normal';
   return fs || 'normal';
 }
 
@@ -837,7 +788,7 @@ function KTxtEl({el,onSelect,onChange,onStartEdit,onGestureStart,onDragActive,on
   /** Bumps when webfonts finish loading so Konva remounts text with the real face. */
   fontEpoch?: number;
 }) {
-  const family = normalizeFontFamily(el.fontFamily);
+  const family = normalizeEditorFont(el.fontFamily);
   const style = canvasFontStyle(el.fontFamily, el.fontStyle);
   const minH = Math.max(24, (el.fontSize || 20) * (el.lineHeight ?? 1.2) + 12);
   // Snapshot size at transform start — Konva scale is always relative to that.
@@ -1042,7 +993,7 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
   const startEdit=useCallback((el:EditorElement)=>{
     // Persist a Konva/toolbar-safe font stack so canvas + HTML editor match
     // (legacy designs used long stacks + italic on script fonts → visible jump).
-    const family = normalizeFontFamily(el.fontFamily);
+    const family = normalizeEditorFont(el.fontFamily);
     const style = canvasFontStyle(el.fontFamily, el.fontStyle);
     const patch: Partial<EditorElement> = {};
     if (family !== el.fontFamily) patch.fontFamily = family;
@@ -1362,7 +1313,7 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
               left:editEl.x*scX, top:editEl.y*scY,
               width:editEl.w*scX, minHeight:Math.max(editEl.h*scY,32),
               fontSize:(editEl.fontSize||20)*scX,
-              fontFamily:normalizeFontFamily(editEl.fontFamily),
+              fontFamily:normalizeEditorFont(editEl.fontFamily),
               fontStyle:canvasFontStyle(editEl.fontFamily, editEl.fontStyle).includes('italic')?'italic':'normal',
               fontWeight:canvasFontStyle(editEl.fontFamily, editEl.fontStyle).includes('bold')?'bold':'normal',
               color:editEl.fill||'#1a1a1a',
@@ -1389,20 +1340,18 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
             {/* Row 1 — Font · B/I · Align · Size */}
             <div style={{display:'flex',alignItems:'center',gap:5}}>
               {/* Font family */}
-              <select
-                value={normalizeFontFamily(toolbarEl?.fontFamily)}
-                onChange={e=>{onChangeEl(editId,{fontFamily:e.target.value});setTimeout(()=>textareaRef.current?.focus(),20);}}
-                style={{flex:1,minWidth:0,fontSize:11,fontFamily:normalizeFontFamily(toolbarEl?.fontFamily),
-                  border:'1px solid #e8e8e8',borderRadius:7,padding:'4px 7px',
-                  background:'#fafafa',cursor:'pointer',outline:'none',color:'#1a1a1a'}}
-              >
-                {FONTS.map(f=><option key={f.value} value={f.value} style={{fontFamily:f.value}}>{f.label}</option>)}
-              </select>
+              <FontPicker
+                value={toolbarEl?.fontFamily}
+                onChange={fontFamily => {
+                  onChangeEl(editId, { fontFamily });
+                  setTimeout(() => textareaRef.current?.focus(), 20);
+                }}
+              />
               <span style={{width:1,height:20,background:'#e8e8e8',flexShrink:0}}/>
               {/* Bold */}
               <button onMouseDown={e=>{e.preventDefault();
-                const fam=normalizeFontFamily(toolbarEl?.fontFamily);
-                const script=/great vibes|dancing script|pacifico/i.test(fam);
+                const fam=normalizeEditorFont(toolbarEl?.fontFamily);
+                const script=isEditorSingleCutFont(fam);
                 const nextItalic=script?false:isItalic;
                 const fs=[(!isBold?'bold':''),(nextItalic?'italic':'')].filter(Boolean).join(' ')||'normal';
                 onChangeEl(editId,{fontStyle:fs});}}
@@ -1411,15 +1360,15 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
                   background:isBold?'#1a1a1a':'#f0f0f0',color:isBold?'#fff':'#555'}}>B</button>
               {/* Italic — disabled for script fonts (no italic cut; Konva falls back) */}
               <button onMouseDown={e=>{e.preventDefault();
-                const fam=normalizeFontFamily(toolbarEl?.fontFamily);
-                if(/great vibes|dancing script|pacifico/i.test(fam)) return;
+                const fam=normalizeEditorFont(toolbarEl?.fontFamily);
+                if(isEditorSingleCutFont(fam)) return;
                 const fs=[(isBold?'bold':''),(!isItalic?'italic':'')].filter(Boolean).join(' ')||'normal';
                 onChangeEl(editId,{fontStyle:fs});}}
                 style={{width:28,height:28,borderRadius:7,border:'none',
-                  cursor:/great vibes|dancing script|pacifico/i.test(normalizeFontFamily(toolbarEl?.fontFamily))?'default':'pointer',
+                  cursor:isEditorSingleCutFont(toolbarEl?.fontFamily)?'default':'pointer',
                   fontStyle:'italic', fontSize:14,flexShrink:0,transition:'all 0.12s',
                   background:isItalic?'#1a1a1a':'#f0f0f0',color:isItalic?'#fff':'#666',
-                  opacity:/great vibes|dancing script|pacifico/i.test(normalizeFontFamily(toolbarEl?.fontFamily))?0.4:1}}>I</button>
+                  opacity:isEditorSingleCutFont(toolbarEl?.fontFamily)?0.4:1}}>I</button>
               <span style={{width:1,height:20,background:'#e8e8e8',flexShrink:0}}/>
               {/* Alignment — L / C / R */}
               {(['left','center','right'] as const).map(al=>(

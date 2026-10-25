@@ -51,16 +51,15 @@ export function AdminModal({
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-5"
+      className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4"
       style={{ background: 'rgba(20, 12, 16, 0.46)' }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        className={`bg-white shadow-2xl w-full ${SIZE[size]} flex flex-col overflow-hidden`}
+        className={`bg-white shadow-2xl w-full ${SIZE[size]} flex flex-col overflow-hidden rounded-t-2xl sm:rounded-2xl max-sm:max-h-[92dvh]`}
         style={{
-          borderRadius: 20,
-          maxHeight: tall ? 'min(94vh, 920px)' : 'min(90vh, 820px)',
-          height: tall ? 'min(94vh, 920px)' : undefined,
+          maxHeight: tall ? 'min(94dvh, 920px)' : 'min(90dvh, 820px)',
+          height: tall ? 'min(94dvh, 920px)' : undefined,
           border: `1px solid ${ADMIN.line}`,
         }}
         role="dialog"
@@ -68,7 +67,7 @@ export function AdminModal({
         aria-label={title}
       >
         <header
-          className="shrink-0 flex items-start gap-3 px-5 py-3.5"
+          className="shrink-0 flex items-start gap-2.5 px-4 py-2.5"
           style={{ borderBottom: `1px solid ${ADMIN.line}`, background: ADMIN.card }}
         >
           {icon && (
@@ -102,7 +101,7 @@ export function AdminModal({
         </div>
         {footer && (
           <footer
-            className="shrink-0 px-5 py-3.5 flex flex-wrap items-center gap-2"
+            className="shrink-0 px-4 py-2.5 flex flex-wrap items-center gap-2"
             style={{ borderTop: `1px solid ${ADMIN.line}`, background: ADMIN.card }}
           >
             {footer}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseOfferBar, safeOfferHref, sanitizeHexColor, offerBarCopy, OFFER_BAR_DEFAULTS } from "./offerBar";
+import { parseOfferBar, safeOfferHref, sanitizeHexColor, offerBarCopy, mixHex, OFFER_BAR_DEFAULTS } from "./offerBar";
 
 describe("offerBar", () => {
   it("keeps relative builder links and rejects unsafe hrefs", () => {
@@ -26,5 +26,10 @@ describe("offerBar", () => {
 
   it("honors an explicit off switch", () => {
     expect(parseOfferBar({ offerBarEnabled: false }).enabled).toBe(false);
+  });
+
+  it("mixes hex colors for the bar surface", () => {
+    expect(mixHex("#000000", "#FFFFFF", 0.5)).toBe("#808080");
+    expect(mixHex("#8C3A2E", "#FFFFFF", 0)).toBe("#8C3A2E");
   });
 });

@@ -61,7 +61,7 @@ export default function AdminSecurity() {
 
   return (
     <AdminLayout>
-      <div className="p-4 sm:p-5 md:p-8 max-w-4xl mx-auto">
+      <div className="p-3 sm:p-4 md:p-5 max-w-4xl mx-auto">
         <div className="mb-8">
           <p className="text-[10px] font-semibold tracking-[0.18em] uppercase mb-1.5" style={{ color: ADMIN.blush }}>
             Protection

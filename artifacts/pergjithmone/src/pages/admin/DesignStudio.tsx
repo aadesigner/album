@@ -12,7 +12,7 @@ import {
   designFrontElements, designBackElements,
   designElementsWithIds, designElementsWithoutIds,
   blankCoverElements, newCustomDesignId,
-  getCanvasHeight, scaleElementsToCanvas, reprojectCanvasElements, fitDesignToCanvas,
+  getCanvasHeight, fitDesignToCanvas, unfitDesignFromCanvas,
   imageFrameCoverFit,
   type CustomDesignRecord, type DesignDef, type DesignOverrides, type EditorElement, type DE,
   PHOTO_CORNER_ZOOM, coverCropRect, imageFrameFocusFromOffset, minPhotoAdjustZoom,
@@ -20,7 +20,7 @@ import {
 import { applyCoverBackground, coverBgMode, type CoverBgMode } from '@/lib/coverBackground';
 import { uploadErrorMessage, uploadImageToApi } from '@/lib/uploadImage';
 import { useAuth } from '@/contexts/AuthContext';
-import { DesignCatalogThumb, PageThumb } from '@/components/PageThumb';
+import { DesignCatalogThumb } from '@/components/PageThumb';
 import {
   SHAPE_KINDS, SHAPE_LABELS, SHAPE_PRESETS, KEEP_RATIO_SHAPES,
   isStrokeOnlyShape, newShapeElement, shapePathForElement,
@@ -29,10 +29,11 @@ import {
 import {
   Check, Loader2, RotateCcw, Save, Eye, EyeOff, AlertTriangle,
   Plus, Trash2, Upload, Image as ImageIcon, Type, Palette, Droplets,
-  Copy, Layers, ChevronUp, ChevronDown, Hexagon,
-  AlignLeft, AlignCenter, AlignRight,
+  Copy, ChevronUp, ChevronDown, Hexagon,
+  AlignLeft, AlignCenter, AlignRight, MousePointer2,
 } from 'lucide-react';
-import { useEditorFontsReady, ensureEditorFonts } from '@/lib/editorFonts';
+import { useEditorFontsReady, ensureEditorFonts, normalizeEditorFont, isEditorSingleCutFont } from '@/lib/editorFonts';
+import { FontPicker } from '@/components/FontPicker';
 
 const PREVIEW_W_MIN = 160;
 const CATALOG_THUMB_W = 48;
@@ -69,7 +70,7 @@ const TEXT_COLOR_CHIPS = [
 ];
 
 function studioFontStyle(ff?: string | null, fs?: string | null): string {
-  if (isScriptFont(ff)) return (fs || '').includes('bold') ? 'bold' : 'normal';
+  if (isEditorSingleCutFont(ff)) return (fs || '').includes('bold') ? 'bold' : 'normal';
   return fs || 'normal';
 }
 
@@ -84,6 +85,20 @@ function patchFontStyle(current: string | undefined, kind: 'bold' | 'italic', on
 /** No canvas clamp — text/images may sit partly or fully outside the page. */
 function studioDragBound(pos: { x: number; y: number }, _w?: number, _h?: number, _canvasH?: number) {
   return { x: pos.x, y: pos.y };
+}
+
+type StudioCtxMenu = { x: number; y: number; id: string | null };
+
+function hitStudioElement(elements: EditorElement[], x: number, y: number, canvasH: number): string | null {
+  for (let i = elements.length - 1; i >= 0; i--) {
+    const el = elements[i];
+    if (el.type === 'background') continue;
+    if (x >= el.x && x <= el.x + el.w && y >= el.y && y <= el.y + el.h) return el.id;
+  }
+  if (x >= 0 && x <= DESIGN_W && y >= 0 && y <= canvasH) {
+    return elements.find(el => el.type === 'background')?.id ?? null;
+  }
+  return null;
 }
 
 function formatSizeLabel(s: { label?: string; widthCm?: number | string; heightCm?: number | string }) {
@@ -121,45 +136,6 @@ const COVER_SWATCHES = [
   '#C97B84', '#FEC5D7', '#A83442', '#1A2A1A', '#0D1B2A',
   '#1A0A2E', '#FF6B8A', '#C9A227', '#0E4D5C', '#BCC9D1',
 ];
-
-/** Same catalog as the client editor toolbar. */
-const STUDIO_FONTS = [
-  { label: 'Georgia',    value: 'Georgia, serif' },
-  { label: 'Playfair',   value: "'Playfair Display', serif" },
-  { label: 'Cormorant',  value: "'Cormorant Garamond', serif" },
-  { label: 'Raleway',    value: "'Raleway', sans-serif" },
-  { label: 'Montserrat', value: "'Montserrat', sans-serif" },
-  { label: 'Arial',      value: 'Arial, Helvetica, sans-serif' },
-  { label: 'Londrina',   value: "'Londrina Solid', cursive" },
-  { label: 'Dancing',    value: "'Dancing Script', cursive" },
-  { label: 'Vibes',      value: "'Great Vibes', cursive" },
-  { label: 'Pacifico',   value: "'Pacifico', cursive" },
-];
-
-function normalizeStudioFont(ff?: string | null): string {
-  const raw = (ff || 'Georgia, serif').trim();
-  if (STUDIO_FONTS.some(f => f.value === raw)) return raw;
-  const lower = raw.toLowerCase();
-  const byPrimary = STUDIO_FONTS.find(f => {
-    const primary = f.value.split(',')[0].replace(/['"]/g, '').trim().toLowerCase();
-    return primary.length > 0 && lower.includes(primary);
-  });
-  if (byPrimary) return byPrimary.value;
-  if (lower.includes('great vibes')) return "'Great Vibes', cursive";
-  if (lower.includes('londrina')) return "'Londrina Solid', cursive";
-  if (lower.includes('dancing')) return "'Dancing Script', cursive";
-  if (lower.includes('pacifico')) return "'Pacifico', cursive";
-  if (lower.includes('playfair')) return "'Playfair Display', serif";
-  if (lower.includes('cormorant')) return "'Cormorant Garamond', serif";
-  if (lower.includes('raleway')) return "'Raleway', sans-serif";
-  if (lower.includes('montserrat')) return "'Montserrat', sans-serif";
-  if (lower.includes('arial') || lower.includes('helvetica')) return 'Arial, Helvetica, sans-serif';
-  return 'Georgia, serif';
-}
-
-function isScriptFont(ff?: string | null): boolean {
-  return /great vibes|dancing script|pacifico|londrina/i.test(ff || '');
-}
 
 const COVER_GRADIENT_PRESETS: { from: string; to: string; dir: 'tb' | 'lr' | 'diag' }[] = [
   { from: '#1A1A1A', to: '#4A4A4A', dir: 'tb' },
@@ -762,11 +738,11 @@ const StudioText = React.memo(function StudioText({ el, onSelect, onChange, shap
     >
       <Rect width={el.w} height={el.h} fill="rgba(0,0,0,0.001)" perfectDrawEnabled={false} />
       <KonvaText
-        key={`studio-txt-${el.id}-f${fontEpoch ?? 0}-${normalizeStudioFont(el.fontFamily)}`}
+        key={`studio-txt-${el.id}-f${fontEpoch ?? 0}-${normalizeEditorFont(el.fontFamily)}`}
         text={el.text || ''}
         width={el.w} height={el.h}
         fontSize={el.fontSize || 20}
-        fontFamily={normalizeStudioFont(el.fontFamily)}
+        fontFamily={normalizeEditorFont(el.fontFamily)}
         fill={el.fill || '#111'}
         align={el.align || 'center'}
         verticalAlign={el.verticalAlign || 'top'}
@@ -782,7 +758,7 @@ const StudioText = React.memo(function StudioText({ el, onSelect, onChange, shap
 }, studioNodePropsEqual);
 
 function DesignCanvas({
-  elements, selectedId, onSelect, onChangeEl, canvasH, photoAdjustId, onEnterPhotoAdjust, onExitPhotoAdjust,
+  elements, selectedId, onSelect, onChangeEl, canvasH, photoAdjustId, onEnterPhotoAdjust, onExitPhotoAdjust, onContextMenu,
 }: {
   elements: EditorElement[];
   selectedId: string | null;
@@ -792,6 +768,7 @@ function DesignCanvas({
   photoAdjustId?: string | null;
   onEnterPhotoAdjust?: (id: string) => void;
   onExitPhotoAdjust?: () => void;
+  onContextMenu?: (info: StudioCtxMenu) => void;
 }) {
   const trRef = useRef<any>(null);
   const stageRef = useRef<any>(null);
@@ -887,11 +864,59 @@ function DesignCanvas({
     return () => window.removeEventListener('keydown', onKey);
   }, [adjusting, onExitPhotoAdjust]);
 
+  const pickAtPointer = useCallback((): string | null => {
+    const stage = stageRef.current;
+    const pos = stage?.getPointerPosition?.();
+    if (!pos) return null;
+    return hitStudioElement(elements, pos.x / scale - layerX, pos.y / scale - layerY, canvasH);
+  }, [elements, scale, layerX, layerY, canvasH]);
+
+  const openCtx = useCallback((clientX: number, clientY: number, id: string | null) => {
+    onSelect(id);
+    onContextMenu?.({ x: clientX, y: clientY, id });
+  }, [onSelect, onContextMenu]);
+
+  const longPressRef = useRef<number | null>(null);
+  const longPressStart = useRef<{ x: number; y: number } | null>(null);
+  const clearLongPress = useCallback(() => {
+    if (longPressRef.current != null) {
+      window.clearTimeout(longPressRef.current);
+      longPressRef.current = null;
+    }
+    longPressStart.current = null;
+  }, []);
+
+  useEffect(() => () => clearLongPress(), [clearLongPress]);
+
   return (
     <div
       ref={wrapRef}
       className="w-full h-full min-h-[200px] overflow-hidden"
       style={{ touchAction: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        openCtx(e.clientX, e.clientY, pickAtPointer());
+      }}
+      onTouchStart={(e) => {
+        const t = e.touches[0];
+        if (!t) return;
+        clearLongPress();
+        longPressStart.current = { x: t.clientX, y: t.clientY };
+        const cx = t.clientX;
+        const cy = t.clientY;
+        longPressRef.current = window.setTimeout(() => {
+          longPressRef.current = null;
+          openCtx(cx, cy, pickAtPointer());
+        }, 520);
+      }}
+      onTouchMove={(e) => {
+        const t = e.touches[0];
+        const start = longPressStart.current;
+        if (!t || !start) return;
+        if (Math.hypot(t.clientX - start.x, t.clientY - start.y) > 12) clearLongPress();
+      }}
+      onTouchEnd={clearLongPress}
+      onTouchCancel={clearLongPress}
     >
       <Stage
         ref={stageRef}
@@ -904,6 +929,9 @@ function DesignCanvas({
         }}
         onTouchStart={(e: any) => {
           if (e.target === e.target.getStage()) onSelect(null);
+        }}
+        onContextMenu={(e: any) => {
+          e.evt?.preventDefault?.();
         }}
       >
         <Layer x={layerX} y={layerY}>
@@ -1078,10 +1106,7 @@ export default function AdminDesignStudio() {
     [bookSizes, formatSizeId],
   );
 
-  // Author on the 3:4 artboard. Client books (including 21×21) contain-fit this
-  // so the cover is never cropped. The format dropdown is a live fit preview.
-  const canvasH = DESIGN_H;
-  const previewPaperH = useMemo(
+  const canvasH = useMemo(
     () => getCanvasHeight(
       selectedFormat ? Number(selectedFormat.widthCm) : null,
       selectedFormat ? Number(selectedFormat.heightCm) : null,
@@ -1134,6 +1159,8 @@ export default function AdminDesignStudio() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [photoAdjustId, setPhotoAdjustId] = useState<string | null>(null);
   const [showShapes, setShowShapes] = useState(false);
+  const [ctxMenu, setCtxMenu] = useState<StudioCtxMenu | null>(null);
+  const [studioPane, setStudioPane] = useState<'canvas' | 'catalog' | 'props'>('canvas');
   const shapeMenuRef = useRef<HTMLDivElement>(null);
   const [dirtyFront, setDirtyFront] = useState(false);
   const [dirtyBack, setDirtyBack] = useState(false);
@@ -1179,17 +1206,34 @@ export default function AdminDesignStudio() {
   useEffect(() => { void ensureEditorFonts(); }, []);
 
   useEffect(() => {
+    canvasHRef.current = canvasH;
+  }, [canvasH]);
+
+  useEffect(() => {
     if (!design) return;
     if (dirtyRef.current) return;
     const { front, back } = loadCoverDrafts(design);
-    setDraftFront(pinStudioBackground(scaleElementsToCanvas(front, DESIGN_H), DESIGN_H));
-    setDraftBack(pinStudioBackground(scaleElementsToCanvas(back, DESIGN_H), DESIGN_H));
+    const h = canvasH;
+    canvasHRef.current = h;
+    setDraftFront(pinStudioBackground(fitDesignToCanvas(front, h), h));
+    setDraftBack(pinStudioBackground(fitDesignToCanvas(back, h), h));
     setSelectedId(null);
     setDirtyFront(false);
     setDirtyBack(false);
     setCoverSide('front');
-    canvasHRef.current = DESIGN_H;
   }, [design?.id, overrideFingerprint, customFingerprint]);
+
+  const formatHRef = useRef<number | null>(null);
+  useEffect(() => {
+    const prev = formatHRef.current;
+    formatHRef.current = canvasH;
+    if (prev == null || prev === canvasH) return;
+    const remap = (els: EditorElement[]) =>
+      pinStudioBackground(fitDesignToCanvas(unfitDesignFromCanvas(els, prev), canvasH), canvasH);
+    setDraftFront(remap);
+    setDraftBack(remap);
+    canvasHRef.current = canvasH;
+  }, [canvasH]);
 
   useEffect(() => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -1332,39 +1376,70 @@ export default function AdminDesignStudio() {
     };
   }, [showShapes]);
 
+  useEffect(() => {
+    if (!ctxMenu) return;
+    const close = () => setCtxMenu(null);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close();
+    };
+    window.addEventListener('mousedown', close);
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => {
+      window.removeEventListener('mousedown', close);
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+    };
+  }, [ctxMenu]);
+
+  const liveSelected = () => {
+    const id = selectedIdRef.current;
+    if (!id) return null;
+    const els = coverSideRef.current === 'front' ? draftFront : draftBack;
+    return els.find(e => e.id === id) || null;
+  };
+
   const deleteSelected = () => {
-    if (!selected || selected.type === 'background') return;
-    setDraft(prev => prev.filter(e => e.id !== selected.id));
+    const el = liveSelected();
+    if (!el || el.type === 'background') return;
+    setDraft(prev => prev.filter(e => e.id !== el.id));
     setSelectedId(null);
     setPhotoAdjustId(null);
+    setCtxMenu(null);
   };
 
   const duplicateSelected = () => {
-    if (!selected || selected.type === 'background') return;
+    const el = liveSelected();
+    if (!el || el.type === 'background') return;
     const copy: EditorElement = {
-      ...selected,
-      id: `${selected.type}-${Date.now()}`,
-      x: selected.x + 18,
-      y: selected.y + 18,
+      ...el,
+      id: `${el.type}-${Date.now()}`,
+      x: el.x + 18,
+      y: el.y + 18,
     };
     setDraft(prev => [...prev, copy]);
     setSelectedId(copy.id);
     setPhotoAdjustId(null);
+    setCtxMenu(null);
   };
 
   const moveSelectedLayer = (dir: -1 | 1) => {
-    if (!selected || selected.type === 'background') return;
+    const el = liveSelected();
+    if (!el || el.type === 'background') return;
     setDraft(prev => {
-      const i = prev.findIndex(e => e.id === selected.id);
+      const i = prev.findIndex(e => e.id === el.id);
       if (i < 0) return prev;
       const j = i + dir;
       if (j < 0 || j >= prev.length) return prev;
       if (prev[j].type === 'background' && dir < 0) return prev;
       const next = [...prev];
-      const [el] = next.splice(i, 1);
-      next.splice(j, 0, el);
+      const [moved] = next.splice(i, 1);
+      next.splice(j, 0, moved);
       return next;
     });
+    setCtxMenu(null);
   };
 
   const alignSelected = (how: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom') => {
@@ -1452,6 +1527,7 @@ export default function AdminDesignStudio() {
     setCoverSide('front');
     setSelectedId(null);
     setPhotoAdjustId(null);
+    setStudioPane('canvas');
   };
 
   const save = async () => {
@@ -1459,11 +1535,10 @@ export default function AdminDesignStudio() {
     setSaving(true);
     setSaveError(null);
     try {
-      // Always persist in the 3:4 reference canvas so every album format
-      // can reproject via scaleElementsToCanvas at apply-time.
+      // Persist on the 3:4 artboard so every album format can contain-fit.
       const toCanonical = (els: EditorElement[]) =>
         designElementsWithoutIds(
-          reprojectCanvasElements(els, canvasHRef.current, DESIGN_H),
+          unfitDesignFromCanvas(els, canvasHRef.current),
         );
       const frontElements = toCanonical(draftFront);
       const backElements = toCanonical(draftBack);
@@ -1519,8 +1594,8 @@ export default function AdminDesignStudio() {
     if (design.isCustom) {
       if (!window.confirm(`Reset "${design.name.en}" to blank front & back covers?`)) return;
       const h = canvasHRef.current;
-      const front = pinStudioBackground(scaleElementsToCanvas(blankCoverElements('FRONT'), h), h);
-      const back = pinStudioBackground(scaleElementsToCanvas(blankCoverElements('BACK'), h), h);
+      const front = pinStudioBackground(fitDesignToCanvas(blankCoverElements('FRONT'), h), h);
+      const back = pinStudioBackground(fitDesignToCanvas(blankCoverElements('BACK'), h), h);
       setDraftFront(designElementsWithIds(`${design.id}-f`, front));
       setDraftBack(designElementsWithIds(`${design.id}-b`, back));
       setDirtyFront(true);
@@ -1535,8 +1610,8 @@ export default function AdminDesignStudio() {
     if (!window.confirm(`Reset "${base.name.en}" to the built-in layout?`)) return;
     const { front, back } = loadCoverDrafts(base);
     const h = canvasHRef.current;
-    setDraftFront(pinStudioBackground(scaleElementsToCanvas(front, h), h));
-    setDraftBack(pinStudioBackground(scaleElementsToCanvas(back, h), h));
+    setDraftFront(pinStudioBackground(fitDesignToCanvas(front, h), h));
+    setDraftBack(pinStudioBackground(fitDesignToCanvas(back, h), h));
     setDirtyFront(false);
     setDirtyBack(false);
     setSaveError(null);
@@ -1695,53 +1770,75 @@ export default function AdminDesignStudio() {
     return [...new Set(keys)];
   }, []);
 
-  const panelH = 'min-h-[520px] lg:h-[calc(100vh-7.5rem)] lg:max-h-[calc(100vh-7.5rem)]';
+  const panelH = 'h-[min(72dvh,640px)] md:h-[calc(100dvh-7.5rem)] md:max-h-[calc(100dvh-7.5rem)] lg:h-[calc(100dvh-6.25rem)] lg:max-h-[calc(100dvh-6.25rem)]';
+  const paneClass = (pane: 'canvas' | 'catalog' | 'props') =>
+    `${studioPane === pane ? 'flex' : 'hidden'} md:flex`;
+  const ctxEl = ctxMenu?.id ? draft.find(e => e.id === ctxMenu.id) : null;
+  const ctxCanEdit = !!(ctxEl && ctxEl.type !== 'background');
+  const paperThumbH = Math.max(16, Math.round(20 * (canvasH / DESIGN_W)));
 
   return (
     <AdminLayout>
-      <div className="p-2.5 sm:p-4 w-full max-w-none flex flex-col gap-3">
+      <div className="p-2 sm:p-3 w-full max-w-none flex flex-col gap-2">
         {/* Compact top bar */}
-        <div className="flex flex-wrap items-center justify-between gap-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="min-w-0">
-            <h1 className="text-xl md:text-2xl font-serif font-semibold leading-tight" style={{ color: ADMIN.ink }}>
+            <h1 className="text-lg md:text-xl font-serif font-semibold leading-tight" style={{ color: ADMIN.ink }}>
               Design Studio
             </h1>
-            <p className="text-[12px] mt-0.5 truncate" style={{ color: ADMIN.muted }}>
-              Edit front &amp; back covers · changes go live after Save
+            <p className="text-[11px] mt-0.5 truncate" style={{ color: ADMIN.muted }}>
+              Front &amp; back covers · live after Save
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1">
             <Button type="button" variant="outline" size="sm" onClick={() => setShowCreate(true)}
-              disabled={saving || creating} className="rounded-xl h-9">
-              <Plus size={14} className="mr-1" /> New
+              disabled={saving || creating} className="rounded-lg h-8 px-2.5 text-[12px]">
+              <Plus size={13} className="mr-1" /> New
             </Button>
             <Button type="button" variant="outline" size="sm" onClick={toggleHidden}
-              disabled={!design || hiding || saving} className="rounded-xl h-9"
+              disabled={!design || hiding || saving} className="rounded-lg h-8 px-2.5 text-[12px]"
               title={isHidden ? 'Show in wizard & editor' : 'Hide from wizard & editor'}>
-              {hiding ? <Loader2 size={14} className="mr-1 animate-spin" /> :
-                isHidden ? <Eye size={14} className="mr-1" /> : <EyeOff size={14} className="mr-1" />}
+              {hiding ? <Loader2 size={13} className="mr-1 animate-spin" /> :
+                isHidden ? <Eye size={13} className="mr-1" /> : <EyeOff size={13} className="mr-1" />}
               {isHidden ? 'Show' : 'Hide'}
             </Button>
             {design?.isCustom && (
               <Button type="button" variant="outline" size="sm" onClick={deleteCustom}
-                disabled={deleting || saving} className="rounded-xl h-9 text-red-700">
-                {deleting ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Trash2 size={14} className="mr-1" />}
+                disabled={deleting || saving} className="rounded-lg h-8 px-2.5 text-[12px] text-red-700">
+                {deleting ? <Loader2 size={13} className="mr-1 animate-spin" /> : <Trash2 size={13} className="mr-1" />}
                 Delete
               </Button>
             )}
             <Button type="button" variant="outline" size="sm" onClick={resetToDefault}
-              disabled={!design || saving} className="rounded-xl h-9">
-              <RotateCcw size={14} className="mr-1" /> Reset
+              disabled={!design || saving} className="rounded-lg h-8 px-2.5 text-[12px]">
+              <RotateCcw size={13} className="mr-1" /> Reset
             </Button>
             <Button type="button" size="sm" onClick={save} disabled={!design || !dirty || saving}
-              className="rounded-xl h-9 text-white hover:opacity-90 min-w-[7.5rem]"
+              className="rounded-lg h-8 text-white hover:opacity-90 min-w-[6.5rem] text-[12px]"
               style={{ background: dirty ? ADMIN.blush : ADMIN.ink }}>
-              {saving ? <Loader2 size={14} className="mr-1 animate-spin" /> :
-                savedFlash ? <Check size={14} className="mr-1" /> :
-                <Save size={14} className="mr-1" />}
+              {saving ? <Loader2 size={13} className="mr-1 animate-spin" /> :
+                savedFlash ? <Check size={13} className="mr-1" /> :
+                <Save size={13} className="mr-1" />}
               {savedFlash ? 'Saved' : dirty ? 'Save' : 'Saved'}
             </Button>
           </div>
+        </div>
+
+        <div className="md:hidden grid grid-cols-3 gap-0.5 p-0.5 rounded-lg"
+          style={{ background: ADMIN.card, border: `1px solid ${ADMIN.line}` }}>
+          {([
+            ['catalog', 'Catalog'],
+            ['canvas', 'Page'],
+            ['props', 'Props'],
+          ] as const).map(([id, label]) => (
+            <button key={id} type="button" onClick={() => setStudioPane(id)}
+              className="h-8 rounded-md text-[11px] font-semibold"
+              style={studioPane === id
+                ? { background: ADMIN.ink, color: '#fff' }
+                : { color: ADMIN.muted }}>
+              {label}
+            </button>
+          ))}
         </div>
 
         {saveError && (
@@ -1839,9 +1936,9 @@ export default function AdminDesignStudio() {
             <Loader2 className="animate-spin" size={16} /> Loading designs…
           </div>
         ) : (
-          <div className={`grid grid-cols-1 lg:grid-cols-[248px_minmax(0,1fr)_300px] gap-2.5 sm:gap-3 ${panelH}`}>
+          <div className={`grid grid-cols-1 md:grid-cols-[168px_minmax(0,1fr)_220px] xl:grid-cols-[210px_minmax(0,1fr)_256px] gap-2 ${panelH}`}>
             {/* Left: catalog */}
-            <div className="rounded-xl overflow-hidden flex flex-col order-2 lg:order-1 min-h-0"
+            <div className={`rounded-xl overflow-hidden flex-col order-2 md:order-1 min-h-0 ${paneClass('catalog')}`}
               style={{ background: ADMIN.card, border: `1px solid ${ADMIN.line}` }}>
               <div className="flex items-center justify-between gap-2 px-2.5 py-2 shrink-0"
                 style={{ borderBottom: `1px solid ${ADMIN.line}` }}>
@@ -1863,7 +1960,7 @@ export default function AdminDesignStudio() {
                 </div>
               </div>
               <div className="flex flex-1 min-h-0">
-                <div className="w-[96px] shrink-0 overflow-y-auto py-1.5"
+                <div className="w-[76px] shrink-0 overflow-y-auto py-1"
                   style={{ borderRight: `1px solid ${ADMIN.line}`, background: ADMIN.bg }}>
                   {categories.map(cat => {
                     const count = categoryCounts[cat] || 0;
@@ -1950,26 +2047,26 @@ export default function AdminDesignStudio() {
             </div>
 
             {/* Center: canvas workspace */}
-            <div className="rounded-xl flex flex-col order-1 lg:order-2 min-h-0 overflow-hidden"
+            <div className={`rounded-xl flex-col order-1 md:order-2 min-h-0 overflow-hidden ${paneClass('canvas')}`}
               style={{ background: ADMIN.bg, border: `1px solid ${ADMIN.line}` }}>
               {design ? (
                 <>
                   {/* Workspace chrome */}
-                  <div className="shrink-0 flex flex-wrap items-center gap-2 px-3 py-2"
+                  <div className="shrink-0 flex flex-wrap items-center gap-1.5 px-2.5 py-1.5"
                     style={{ background: ADMIN.card, borderBottom: `1px solid ${ADMIN.line}` }}>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-serif font-semibold truncate" style={{ color: ADMIN.ink }}>{design.name.en}</p>
+                      <p className="text-[13px] font-serif font-semibold truncate" style={{ color: ADMIN.ink }}>{design.name.en}</p>
                       <p className="text-[10px] truncate" style={{ color: ADMIN.muted }}>
-                        {isHidden ? 'Hidden from customers' : 'Visible to customers'}
+                        {isHidden ? 'Hidden' : 'Live'}
                         {hasOverride ? ' · override' : ''}
                         {dirty ? ` · unsaved${dirtyFront && dirtyBack ? ' (both)' : dirtyFront ? ' (front)' : ' (back)'}` : ''}
                       </p>
                     </div>
-                    <div className="inline-flex p-0.5 rounded-lg" style={{ background: ADMIN.bg }}>
+                    <div className="inline-flex p-0.5 rounded-md" style={{ background: ADMIN.bg }}>
                       {(['front', 'back'] as const).map(side => (
                         <button key={side} type="button"
                           onClick={() => { setCoverSide(side); setSelectedId(null); setPhotoAdjustId(null); }}
-                          className="px-3 py-1 rounded-md text-[11px] font-semibold capitalize"
+                          className="px-2.5 py-0.5 rounded text-[10px] font-semibold capitalize"
                           style={
                             coverSide === side
                               ? { background: ADMIN.blush, color: '#fff' }
@@ -1980,38 +2077,33 @@ export default function AdminDesignStudio() {
                       ))}
                     </div>
                     {bookSizes.length > 0 && (
-                      <label className="inline-flex items-center gap-2 text-[10px] font-semibold" style={{ color: ADMIN.muted }}>
-                        <Layers size={12} />
+                      <label className="inline-flex items-center gap-1.5 text-[10px] font-semibold" style={{ color: ADMIN.muted }}>
+                        <span
+                          className="hidden sm:inline-flex rounded-[3px] bg-white shrink-0"
+                          style={{
+                            width: 16,
+                            height: paperThumbH,
+                            border: `1px solid ${ADMIN.line}`,
+                            boxShadow: '0 1px 2px rgba(40,16,28,0.06)',
+                          }}
+                          title="Live page shape"
+                        />
                         <select
                           value={formatSizeId ?? ''}
                           onChange={e => setFormatSizeId(e.target.value ? Number(e.target.value) : null)}
-                          className="h-8 rounded-lg px-2 text-[11px] font-semibold outline-none max-w-[11rem]"
+                          className="h-7 rounded-md px-1.5 text-[11px] font-semibold outline-none max-w-[10.5rem]"
                           style={{ border: `1px solid ${ADMIN.line}`, background: ADMIN.card, color: ADMIN.ink }}
-                          title="How this cover fits on each album size"
+                          title="Album size — the page view matches this ratio"
                         >
                           {bookSizes.map((sz: any) => (
                             <option key={sz.id} value={sz.id}>{formatSizeLabel(sz)}</option>
                           ))}
                         </select>
-                        {previewPaperH !== DESIGN_H && (
-                          <span
-                            className="hidden sm:inline-flex overflow-hidden rounded-md"
-                            style={{ border: `1px solid ${ADMIN.line}`, width: 28, height: Math.round(28 * (previewPaperH / DESIGN_W)) }}
-                            title="Client-builder fit"
-                          >
-                            <PageThumb
-                              elements={fitDesignToCanvas(draft, previewPaperH)}
-                              width={28}
-                              height={Math.round(28 * (previewPaperH / DESIGN_W))}
-                              canvasH={previewPaperH}
-                            />
-                          </span>
-                        )}
                       </label>
                     )}
                   </div>
 
-                  {/* Full 3:4 artboard, contain-fitted so nothing is cropped. */}
+                  {/* Live page — square 21×21 or tall 21×28, contain-fitted. */}
                   <div className="flex-1 min-h-0 overflow-hidden">
                     <div className="w-full h-full min-h-[200px] overflow-hidden"
                       style={{ touchAction: 'none', background: ADMIN.bg }}>
@@ -2034,12 +2126,17 @@ export default function AdminDesignStudio() {
                           setPhotoAdjustId(id);
                         }}
                         onExitPhotoAdjust={() => setPhotoAdjustId(null)}
+                        onContextMenu={(info) => {
+                          setSelectedId(info.id);
+                          setPhotoAdjustId(cur => (cur && cur !== info.id ? null : cur));
+                          setCtxMenu(info);
+                        }}
                       />
                     </div>
                   </div>
 
                   {/* Tool strip */}
-                  <div className="shrink-0 flex flex-wrap items-center justify-center gap-1 px-2 py-2"
+                  <div className="shrink-0 flex flex-wrap items-center justify-center gap-1 px-1.5 py-1.5"
                     style={{ background: ADMIN.card, borderTop: `1px solid ${ADMIN.line}` }}>
                     <input ref={imageFileRef} type="file" accept="image/*" className="hidden"
                       onChange={e => { const f = e.target.files?.[0]; if (f) void uploadAndReplaceImage(f); e.target.value = ''; }} />
@@ -2129,9 +2226,9 @@ export default function AdminDesignStudio() {
             </div>
 
             {/* Right: inspector */}
-            <div className="rounded-xl flex flex-col order-3 min-h-0 overflow-hidden"
+            <div className={`rounded-xl flex-col order-3 min-h-0 overflow-hidden ${paneClass('props')}`}
               style={{ background: ADMIN.card, border: `1px solid ${ADMIN.line}` }}>
-              <div className="shrink-0 px-3 py-2 flex items-center justify-between gap-2"
+              <div className="shrink-0 px-2.5 py-1.5 flex items-center justify-between gap-2"
                 style={{ borderBottom: `1px solid ${ADMIN.line}` }}>
                 <p className="text-[10px] uppercase tracking-[0.14em] font-semibold" style={{ color: ADMIN.muted }}>
                   Properties
@@ -2141,7 +2238,7 @@ export default function AdminDesignStudio() {
                   {coverSide}
                 </span>
               </div>
-              <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
+              <div className="flex-1 min-h-0 overflow-y-auto p-2.5 space-y-2.5">
               {draft.length > 0 && (
                 <div>
                   <p className="text-[10px] uppercase tracking-[0.12em] font-semibold mb-1.5" style={{ color: ADMIN.muted }}>
@@ -2168,7 +2265,13 @@ export default function AdminDesignStudio() {
                             setSelectedId(el.id);
                             if (el.type !== 'image') setPhotoAdjustId(null);
                           }}
-                          className="w-full flex items-center gap-2 px-2 py-1.5 text-left text-[11px] font-medium"
+                          onContextMenu={(e) => {
+                            e.preventDefault();
+                            setSelectedId(el.id);
+                            if (el.type !== 'image') setPhotoAdjustId(null);
+                            setCtxMenu({ x: e.clientX, y: e.clientY, id: el.id });
+                          }}
+                          className="w-full flex items-center gap-2 px-2 py-1 text-left text-[11px] font-medium"
                           style={active
                             ? { background: ADMIN.blushSoft, color: ADMIN.blushDeep }
                             : { background: ADMIN.card, color: ADMIN.ink, borderTop: `1px solid ${ADMIN.line}` }}
@@ -2286,21 +2389,11 @@ export default function AdminDesignStudio() {
                     className="w-full rounded-lg px-2.5 py-2 text-[13px] outline-none resize-y min-h-[4.5rem]"
                     style={{ border: `1px solid ${ADMIN.line}`, background: ADMIN.card, color: ADMIN.ink }}
                   />
-                  <select
-                    value={normalizeStudioFont(selected.fontFamily)}
-                    onChange={e => onChangeEl(selected.id, { fontFamily: e.target.value })}
-                    className="w-full h-8 rounded-lg px-2 text-[12px] outline-none"
-                    style={{
-                      border: `1px solid ${ADMIN.line}`,
-                      background: ADMIN.card,
-                      color: ADMIN.ink,
-                      fontFamily: normalizeStudioFont(selected.fontFamily),
-                    }}
-                  >
-                    {STUDIO_FONTS.map(f => (
-                      <option key={f.value} value={f.value} style={{ fontFamily: f.value }}>{f.label}</option>
-                    ))}
-                  </select>
+                  <FontPicker
+                    tone="admin"
+                    value={selected.fontFamily}
+                    onChange={fontFamily => onChangeEl(selected.id, { fontFamily })}
+                  />
                   <div className="flex items-center gap-1.5">
                     <Input type="number" className="h-8 w-16 text-xs px-2" value={selected.fontSize || 20}
                       onChange={e => onChangeEl(selected.id, { fontSize: Math.max(8, Number(e.target.value) || 20) })} />
@@ -2310,7 +2403,7 @@ export default function AdminDesignStudio() {
                         : !(selected.fontStyle || '').includes('bold');
                       return (
                         <button key={w} type="button"
-                          disabled={isScriptFont(selected.fontFamily) && w === 'bold'}
+                          disabled={isEditorSingleCutFont(selected.fontFamily) && w === 'bold'}
                           onClick={() => onChangeEl(selected.id, { fontStyle: patchFontStyle(selected.fontStyle, 'bold', w === 'bold') })}
                           className="h-8 px-2 rounded-md text-[10px] font-semibold capitalize disabled:opacity-40"
                           style={on ? { background: ADMIN.ink, color: '#fff' } : { background: ADMIN.bg, color: ADMIN.muted }}>
@@ -2319,7 +2412,7 @@ export default function AdminDesignStudio() {
                       );
                     })}
                     <button type="button"
-                      disabled={isScriptFont(selected.fontFamily)}
+                      disabled={isEditorSingleCutFont(selected.fontFamily)}
                       onClick={() => onChangeEl(selected.id, {
                         fontStyle: patchFontStyle(selected.fontStyle, 'italic', !(selected.fontStyle || '').includes('italic')),
                       })}
@@ -2778,6 +2871,62 @@ export default function AdminDesignStudio() {
           </div>
         )}
       </div>
+
+      {ctxMenu && (
+        <div
+          className="fixed z-[80] min-w-[176px] rounded-xl py-1 shadow-xl"
+          style={{
+            left: Math.max(8, Math.min(ctxMenu.x, (typeof window !== 'undefined' ? window.innerWidth : 400) - 188)),
+            top: Math.max(8, Math.min(ctxMenu.y, (typeof window !== 'undefined' ? window.innerHeight : 400) - 240)),
+            background: ADMIN.card,
+            border: `1px solid ${ADMIN.line}`,
+          }}
+          onMouseDown={e => e.stopPropagation()}
+          onContextMenu={e => e.preventDefault()}
+        >
+          <p className="px-2.5 pt-1.5 pb-1 text-[9px] font-semibold uppercase tracking-[0.12em]" style={{ color: ADMIN.muted }}>
+            {ctxEl?.type === 'text' ? 'Text'
+              : ctxEl?.type === 'image' ? 'Photo'
+                : ctxEl?.type === 'shape' ? 'Shape'
+                  : ctxEl?.type === 'background' ? 'Background'
+                    : 'Page'}
+          </p>
+          <button type="button"
+            onClick={() => {
+              setSelectedId(ctxMenu.id);
+              setStudioPane('props');
+              setCtxMenu(null);
+            }}
+            className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-[12px] font-medium"
+            style={{ color: ADMIN.ink }}>
+            <MousePointer2 size={13} /> Select
+          </button>
+          {ctxCanEdit && (
+            <>
+              <button type="button" onClick={duplicateSelected}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-[12px] font-medium"
+                style={{ color: ADMIN.ink }}>
+                <Copy size={13} /> Duplicate
+              </button>
+              <button type="button" onClick={() => moveSelectedLayer(1)}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-[12px] font-medium"
+                style={{ color: ADMIN.ink }}>
+                <ChevronUp size={13} /> Bring forward
+              </button>
+              <button type="button" onClick={() => moveSelectedLayer(-1)}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-[12px] font-medium"
+                style={{ color: ADMIN.ink }}>
+                <ChevronDown size={13} /> Send back
+              </button>
+              <div className="my-1 h-px" style={{ background: ADMIN.line }} />
+              <button type="button" onClick={deleteSelected}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-[12px] font-semibold text-red-700">
+                <Trash2 size={13} /> Remove
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </AdminLayout>
   );
 }

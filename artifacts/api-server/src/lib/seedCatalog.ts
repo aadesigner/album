@@ -6,9 +6,9 @@ import {
   appSettingsTable,
   layoutsTable,
 } from "@workspace/db-tsconfig";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { logger } from "./logger";
-import { BUILTIN_LAYOUTS } from "./builtinLayouts";
+import { BUILTIN_LAYOUTS, RETIRED_LAYOUT_SLUGS } from "./builtinLayouts";
 
 /** Default catalog so a fresh Railway/Postgres deploy can show Create Album. */
 const DEFAULT_CATEGORIES = [
@@ -179,6 +179,14 @@ export async function seedCatalog(): Promise<void> {
     if (toInsert.length > 0) {
       await db.insert(layoutsTable).values(toInsert);
       logger.info({ inserted: toInsert.length, total: BUILTIN_LAYOUTS.length }, "Seeded built-in layouts");
+    }
+    const retired = await db
+      .update(layoutsTable)
+      .set({ isActive: false })
+      .where(inArray(layoutsTable.slug, [...RETIRED_LAYOUT_SLUGS]))
+      .returning({ slug: layoutsTable.slug });
+    if (retired.length > 0) {
+      logger.info({ hidden: retired.map((r) => r.slug) }, "Hid retired layouts from the client picker");
     }
   }
 

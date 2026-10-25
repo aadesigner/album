@@ -3,6 +3,7 @@ import {
   getCanvasHeight,
   scaleElementsToCanvas,
   fitDesignToCanvas,
+  unfitDesignFromCanvas,
   elementsWithCoverWallpaper,
   wallpaperSrc,
   DESIGN_H,
@@ -127,6 +128,19 @@ describe("fitDesignToCanvas", () => {
     expect(out[1].y).toBeCloseTo(0);
     expect(out[2].y + out[2].h).toBeLessThanOrEqual(squareH + 0.01);
     expect(out[2].fontSize).toBeCloseTo(40 * k);
+  });
+
+  it("round-trips through a square canvas", () => {
+    const squareH = getCanvasHeight(21, 21);
+    const els = [
+      { type: "text", x: 80, y: 200, w: 400, h: 60, fontSize: 32 },
+    ];
+    const back = unfitDesignFromCanvas(fitDesignToCanvas(els, squareH), squareH);
+    expect(back[0].x).toBeCloseTo(80);
+    expect(back[0].y).toBeCloseTo(200);
+    expect(back[0].w).toBeCloseTo(400);
+    expect(back[0].h).toBeCloseTo(60);
+    expect(back[0].fontSize).toBeCloseTo(32);
   });
 });
 

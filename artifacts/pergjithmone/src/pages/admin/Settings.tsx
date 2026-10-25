@@ -14,6 +14,7 @@ import { ResponsiveDesignCatalogThumb } from '@/components/PageThumb';
 import { Eye, EyeOff, Check, AlertTriangle, BookX, BookHeart, Settings, Wrench, DollarSign, Palette, ShieldAlert, FileLock2, Megaphone } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { OFFER_BAR_DEFAULTS, parseOfferBar, safeOfferHref, sanitizeHexColor } from '@/lib/offerBar';
+import { OfferBarStrip } from '@/components/layout/OfferBarStrip';
 
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -278,7 +279,7 @@ export default function AdminSettings() {
 
   return (
     <AdminLayout>
-      <div className="p-5 md:p-8 max-w-4xl mx-auto pb-28">
+      <div className="p-3 sm:p-4 md:p-5 max-w-4xl mx-auto pb-24">
         <div className="mb-8">
           <p className="text-[10px] font-semibold tracking-[0.18em] uppercase mb-1.5" style={{ color: ADMIN.blush }}>
             Configuration
@@ -345,14 +346,14 @@ export default function AdminSettings() {
                 <SectionHeader
                   icon={Megaphone}
                   title="Offer bar"
-                  desc="Notification strip above Fast Delivery / 30-day guarantee. SQ + EN, with a button into the album builder."
+                  desc="Notification strip at the top of public pages. SQ + EN, with a button into the album builder."
                 />
                 <FormField control={form.control} name="offerBarEnabled" render={({ field }) => (
                   <FormItem>
                     <div className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-white mb-5" style={{ border: `1px solid ${ADMIN.line}` }}>
                       <div className="min-w-0">
                         <FormLabel className="text-base cursor-pointer">Show offer bar</FormLabel>
-                        <FormDescription>When ON, the bar appears on every public page above the delivery strip.</FormDescription>
+                        <FormDescription>When ON, the bar appears at the top of every public page.</FormDescription>
                       </div>
                       <FormControl>
                         <Toggle checked={!!field.value} onChange={field.onChange} />
@@ -374,20 +375,16 @@ export default function AdminSettings() {
                         { label: 'SQ', text: offerPreview.textAl, button: offerPreview.buttonAl },
                         { label: 'EN', text: offerPreview.textEn, button: offerPreview.buttonEn },
                       ] as const).map((row) => (
-                        <div key={row.label} style={{ background: offerPreview.bg, color: offerPreview.textColor }}>
-                          <div className="px-4 py-2.5 flex items-center justify-center gap-3 flex-wrap text-center">
-                            <span className="text-[10px] font-semibold opacity-70">{row.label}</span>
-                            <span className="text-[13px] font-medium">{row.text}</span>
-                            {row.button && (
-                              <span
-                                className="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-semibold uppercase tracking-[0.12em]"
-                                style={{ background: offerPreview.buttonBg, color: offerPreview.buttonText }}
-                              >
-                                {row.button}
-                              </span>
-                            )}
-                          </div>
-                        </div>
+                        <OfferBarStrip
+                          key={row.label}
+                          langTag={row.label}
+                          text={row.text}
+                          button={row.button}
+                          bg={offerPreview.bg}
+                          textColor={offerPreview.textColor}
+                          buttonBg={offerPreview.buttonBg}
+                          buttonText={offerPreview.buttonText}
+                        />
                       ))}
                     </div>
                   ) : (

@@ -69,3 +69,29 @@ export function offerBarCopy(config: OfferBarConfig, lang: 'sq' | 'en'): { text:
     ? { text: config.textAl.trim(), button: config.buttonAl.trim() }
     : { text: config.textEn.trim(), button: config.buttonEn.trim() };
 }
+
+function hexToRgb(hex: string): [number, number, number] | null {
+  const v = sanitizeHexColor(hex, '');
+  if (!v) return null;
+  return [
+    parseInt(v.slice(1, 3), 16),
+    parseInt(v.slice(3, 5), 16),
+    parseInt(v.slice(5, 7), 16),
+  ];
+}
+
+/** Blend two #RRGGBB colors. `amount` 0 = hex, 1 = toward. */
+export function mixHex(hex: string, toward: string, amount: number): string {
+  const a = hexToRgb(hex);
+  const b = hexToRgb(toward);
+  if (!a || !b) return sanitizeHexColor(hex, toward);
+  const t = Math.min(1, Math.max(0, amount));
+  const ch = (i: number) => Math.round(a[i] + (b[i] - a[i]) * t)
+    .toString(16)
+    .padStart(2, '0');
+  return `#${ch(0)}${ch(1)}${ch(2)}`.toUpperCase();
+}
+
+export function offerBarBackground(bg: string): string {
+  return `linear-gradient(180deg, ${mixHex(bg, '#FFFFFF', 0.16)} 0%, ${bg} 46%, ${mixHex(bg, '#000000', 0.14)} 100%)`;
+}

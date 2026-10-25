@@ -72,21 +72,21 @@ const AI_CATEGORY_EXPAND: Record<string, string[]> = {
 
 /** Layouts that look good with object-fit cover photos (no harsh crop strips). */
 const AI_LAYOUT_ALLOW = new Set([
-  'full', 'bordered-single',
-  'two-h', 'two-v', 'two-h-6040', 'two-h-4060', 'two-h-pad', 'two-v-pad',
+  'full', 'bordered-single', 'portrait-center',
+  'two-h', 'two-v', 'two-h-6040', 'two-h-4060',
   'land-2port', 'port-2land', 'hero-l', 'hero-r', 'tall-l-2r',
-  'three-mid', 'grid4',
+  'triptych', 'grid4', 'hero-3r', 'hero-3l', 'top-3below',
 ]);
 
 /** Facing-page recipes — left / right of a spread, in narrative rhythm. */
 const SPREAD_RECIPES: Record<string, [string, string][]> = {
   Wedding: [
-    ['full', 'two-h-pad'],
-    ['bordered-single', 'two-v-pad'],
-    ['two-h-pad', 'full'],
+    ['full', 'two-h'],
+    ['bordered-single', 'two-v'],
+    ['two-h', 'full'],
     ['full', 'bordered-single'],
     ['hero-r', 'bordered-single'],
-    ['two-v-pad', 'two-h'],
+    ['two-v', 'two-h'],
     ['bordered-single', 'two-h-6040'],
     ['two-h', 'full'],
   ],
@@ -95,33 +95,33 @@ const SPREAD_RECIPES: Record<string, [string, string][]> = {
     ['two-h', 'full'],
     ['hero-l', 'two-v'],
     ['port-2land', 'two-h-6040'],
-    ['two-h-pad', 'hero-r'],
+    ['two-h', 'hero-r'],
     ['land-2port', 'bordered-single'],
-    ['three-mid', 'full'],
+    ['triptych', 'full'],
     ['grid4', 'full'],
     ['tall-l-2r', 'two-h'],
   ],
   'Baby & Family': [
-    ['bordered-single', 'two-h-pad'],
-    ['full', 'two-v-pad'],
-    ['two-h-pad', 'bordered-single'],
+    ['bordered-single', 'two-h'],
+    ['full', 'two-v'],
+    ['two-h', 'bordered-single'],
     ['bordered-single', 'full'],
-    ['two-v-pad', 'two-h'],
+    ['two-v', 'two-h'],
     ['hero-r', 'bordered-single'],
   ],
   Celebration: [
     ['full', 'two-h'],
     ['hero-r', 'two-v'],
-    ['three-mid', 'full'],
+    ['triptych', 'full'],
     ['two-h-6040', 'land-2port'],
     ['grid4', 'bordered-single'],
-    ['two-h-pad', 'hero-l'],
+    ['two-h', 'hero-l'],
   ],
   Friendship: [
-    ['full', 'two-h-pad'],
-    ['two-v-pad', 'bordered-single'],
+    ['full', 'two-h'],
+    ['two-v', 'bordered-single'],
     ['two-h', 'full'],
-    ['hero-r', 'two-h-pad'],
+    ['hero-r', 'two-h'],
     ['bordered-single', 'two-v'],
     ['two-h-4060', 'full'],
   ],
@@ -131,16 +131,16 @@ const SPREAD_RECIPES: Record<string, [string, string][]> = {
     ['two-h-6040', 'full'],
     ['grid4', 'two-v'],
     ['port-2land', 'full'],
-    ['two-h-pad', 'hero-r'],
+    ['two-h', 'hero-r'],
   ],
   Portrait: [
     ['full', 'bordered-single'],
-    ['bordered-single', 'two-h-pad'],
-    ['full', 'two-v-pad'],
-    ['two-h-pad', 'full'],
+    ['bordered-single', 'two-h'],
+    ['full', 'two-v'],
+    ['two-h', 'full'],
   ],
   Nature: [
-    ['full', 'two-h-pad'],
+    ['full', 'two-h'],
     ['land-2port', 'full'],
     ['bordered-single', 'two-v'],
     ['two-h', 'hero-r'],
@@ -320,7 +320,7 @@ function planPageLayouts(
       preferred = rand() < 0.74 ? ['full', 'bordered-single'] : ['bordered-single', 'full'];
     } else if (isLast) {
       preferred = left >= 2
-        ? ['bordered-single', 'full', 'two-h-pad', 'two-v-pad']
+        ? ['bordered-single', 'full', 'two-h', 'two-v']
         : ['bordered-single', 'full'];
     } else {
       let pair = recipes[(offset + Math.floor((p - 1) / 2)) % recipes.length];
@@ -332,7 +332,7 @@ function planPageLayouts(
         primary === prevId ? secondary : primary,
         secondary,
         'two-h',
-        'two-h-pad',
+        'two-v',
         'full',
       ];
     }
@@ -349,7 +349,7 @@ function planPageLayouts(
       const current = out[p];
       const currentSlots = current ? photoSlotCount(current) : 0;
       const upgraded = pickFit(
-        ['grid4', 'land-2port', 'hero-r', 'hero-l', 'three-mid', 'tall-l-2r', 'two-h'],
+        ['grid4', 'land-2port', 'hero-r', 'hero-l', 'triptych', 'tall-l-2r', 'two-h'],
         currentSlots + left,
         categoryKey,
         out[p - 1]?.id,

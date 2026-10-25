@@ -5,6 +5,7 @@ import { Link, useLocation } from 'wouter';
 import { ChevronDown, FolderOpen, UserRound, Shield, LogOut } from 'lucide-react';
 import { useGetAppSettings, type User } from '@workspace/api-client-react-tsconfig';
 import { offerBarCopy, parseOfferBar } from '@/lib/offerBar';
+import { OfferBarStrip } from './OfferBarStrip';
 
 function userDisplayName(user: User | null | undefined): string {
   const name = user?.name?.trim();
@@ -60,43 +61,20 @@ export function AnnouncementBar() {
   const offer = parseOfferBar(settings as Record<string, unknown> | undefined);
   const copy = offerBarCopy(offer, lang);
 
+  if (!offer.enabled || !copy.text) return null;
+
   return (
-    <>
-      {offer.enabled && copy.text && (
-        <div
-          role="region"
-          aria-label={lang === 'sq' ? 'Ofertë' : 'Offer'}
-          style={{ background: offer.bg, color: offer.textColor }}
-        >
-          <div className="max-w-7xl mx-auto px-3 py-2 flex items-center justify-center gap-2.5 sm:gap-3 flex-wrap text-center">
-            <span className="text-[11.5px] sm:text-[13px] font-medium tracking-wide leading-snug">
-              {copy.text}
-            </span>
-            {copy.button && (
-              <Link href={offer.href}>
-                <span
-                  className="inline-flex items-center px-3 py-1 rounded-full text-[10.5px] sm:text-[11px] font-semibold uppercase tracking-[0.12em] hover:opacity-90 active:scale-95 transition-all"
-                  style={{ background: offer.buttonBg, color: offer.buttonText }}
-                >
-                  {copy.button}
-                </span>
-              </Link>
-            )}
-          </div>
-        </div>
-      )}
-      <div className="hidden md:block bg-[#1a1a1a] text-white text-[10px] md:text-[11px] py-1.5 px-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-center gap-4 md:gap-8">
-          <span className="tracking-wide opacity-80 whitespace-nowrap">
-            {lang === 'sq' ? '🚚 Dërgesë e Shpejtë' : '🚚 Fast Delivery'}
-          </span>
-          <span className="opacity-30 select-none">·</span>
-          <span className="tracking-wide opacity-80 whitespace-nowrap">
-            {lang === 'sq' ? '✦ 30 Ditë Garanci' : '✦ 30 Day Guarantee'}
-          </span>
-        </div>
-      </div>
-    </>
+    <div role="region" aria-label={lang === 'sq' ? 'Ofertë' : 'Offer'}>
+      <OfferBarStrip
+        text={copy.text}
+        button={copy.button}
+        href={offer.href}
+        bg={offer.bg}
+        textColor={offer.textColor}
+        buttonBg={offer.buttonBg}
+        buttonText={offer.buttonText}
+      />
+    </div>
   );
 }
 

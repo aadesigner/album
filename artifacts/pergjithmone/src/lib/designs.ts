@@ -94,6 +94,39 @@ export function fitDesignToCanvas<T extends FitDesignEl>(
   });
 }
 
+/** Inverse of fitDesignToCanvas — map a live book canvas back to 3:4. */
+export function unfitDesignFromCanvas<T extends FitDesignEl>(
+  elements: T[],
+  canvasH: number,
+): T[] {
+  const fromH = Math.max(1, canvasH);
+  if (fromH === DESIGN_H) {
+    return elements.map((el) => (
+      el.type === 'background' ? { ...el, x: 0, y: 0, w: DESIGN_W, h: DESIGN_H } : el
+    ));
+  }
+  const k = Math.min(1, fromH / DESIGN_H) || 1;
+  const ox = (DESIGN_W - DESIGN_W * k) / 2;
+  const oy = (fromH - DESIGN_H * k) / 2;
+  return elements.map((el) => {
+    if (el.type === 'background') {
+      return { ...el, x: 0, y: 0, w: DESIGN_W, h: DESIGN_H };
+    }
+    const next: T = {
+      ...el,
+      x: (el.x - ox) / k,
+      y: (el.y - oy) / k,
+      w: el.w / k,
+      h: el.h / k,
+    };
+    if (el.fontSize != null) next.fontSize = el.fontSize / k;
+    if (el.strokeWidth != null) next.strokeWidth = el.strokeWidth / k;
+    if (el.letterSpacing != null) next.letterSpacing = el.letterSpacing / k;
+    if (el.cornerRadius != null) next.cornerRadius = el.cornerRadius / k;
+    return next;
+  });
+}
+
 /** Re-project absolute canvas elements between two heights (same DESIGN_W). */
 export function reprojectCanvasElements<T extends { y: number; h: number }>(
   elements: T[],
@@ -325,33 +358,38 @@ export interface LayoutZone { x:number; y:number; w:number; h:number; type:strin
 export interface LayoutDef { id:string; category:string; label:{sq:string;en:string}; zones:LayoutZone[] }
 
 /**
- * Client screenshot (Canva editor brief): keep only marked 1–4 photo templates.
- * Everything else is hidden even if it still exists in the admin DB.
+ * Client screenshot (LAYOUT 1–4 FOTO): keep the unmarked thumbs + landscape
+ * mockups. Red-X templates stay hidden even if they still exist in the DB.
  */
 export const RETIRED_LAYOUT_IDS = new Set([
-  // 1 foto — small centered frames marked X
-  'portrait-center',
-  // 2 foto — thin strips marked X
-  'two-v-7030',
-  'two-v-3070',
-  // 3 foto — not on the keep sheet
-  'triptych',
-  'strips-3-uneven',
-  'strips-3-focus',
-  'land-2port-pad',
-  'strips-3-pad',
-  // 4 foto — 1+3, 2-large+2, hero+3 marked X
-  'grid4-topheavy',
-  'top-3below',
-  'hero-3r',
-  'hero-3l',
-  'grid4-pad',
-  'strips-4-pad',
-  // Categories not on the brief
+  // 1 foto — small letterbox / photo+text marked X
+  'panoramic',
   'photo-cap',
   'cap-top',
   'photo-text-r',
   'quote',
+  // 2 foto — inset / padded pairs marked X
+  'two-h-pad',
+  'two-v-pad',
+  'two-h-inset',
+  'two-portraits',
+  'two-landscape',
+  'two-v-7030',
+  'two-v-3070',
+  // 3 foto — mosaic / padded columns marked X
+  'three-mid',
+  'scatter-3',
+  'asymm-3',
+  'strips-3-uneven',
+  'strips-3-focus',
+  'land-2port-pad',
+  'strips-3-pad',
+  // 4 foto — 4 columns / 6-grid / padded grids marked X
+  'cols-4',
+  'grid4-topheavy',
+  'grid4-pad',
+  'strips-4-pad',
+  'masonry-4',
   'gallery-5',
   'filmstrip-5',
   'grid-6',
@@ -364,20 +402,20 @@ export const RETIRED_LAYOUT_IDS = new Set([
 ]);
 
 export const LAYOUTS: LayoutDef[] = [
-  // LAYOUT 1 FOTO — full page + bordered (X = small centered)
+  // LAYOUT 1 FOTO — large portraits (X = tiny landscape letterbox)
   { id:'full',           category:'1 Photo', label:{sq:'Foto e plotë',      en:'Full bleed'},        zones:[{x:0,y:0,w:1,h:1,type:'photo'}] },
   { id:'bordered-single',category:'1 Photo', label:{sq:'Me kufi',           en:'Bordered'},          zones:[{x:0.06,y:0.05,w:0.88,h:0.90,type:'photo'}] },
+  { id:'portrait-center',category:'1 Photo', label:{sq:'Portret',           en:'Portrait'},          zones:[{x:0.12,y:0.08,w:0.76,h:0.84,type:'photo'}] },
+  { id:'single-inset',   category:'1 Photo', label:{sq:'Kornizë',           en:'Framed'},            zones:[{x:0.16,y:0.12,w:0.68,h:0.76,type:'photo'}] },
 
-  // LAYOUT 2 FOTO — side-by-side / stacked (equal + 60/40 + padded)
+  // LAYOUT 2 FOTO — full-bleed columns / stacked / 60-40 (X = padded inset)
   { id:'two-h',          category:'2 Photos', label:{sq:'2 Kolona',         en:'2 Columns'},         zones:[{x:0,y:0,w:0.487,h:1,type:'photo'},{x:0.513,y:0,w:0.487,h:1,type:'photo'}] },
   { id:'two-v',          category:'2 Photos', label:{sq:'2 Shtresa',        en:'2 Stacked'},         zones:[{x:0,y:0,w:1,h:0.487,type:'photo'},{x:0,y:0.513,w:1,h:0.487,type:'photo'}] },
   { id:'two-h-6040',     category:'2 Photos', label:{sq:'Gjerë + Ngushtë',  en:'Wide + Narrow'},     zones:[{x:0,y:0,w:0.60,h:1,type:'photo'},{x:0.62,y:0,w:0.38,h:1,type:'photo'}] },
   { id:'two-h-4060',     category:'2 Photos', label:{sq:'Ngushtë + Gjerë',  en:'Narrow + Wide'},     zones:[{x:0,y:0,w:0.38,h:1,type:'photo'},{x:0.40,y:0,w:0.60,h:1,type:'photo'}] },
-  { id:'two-h-pad',      category:'2 Photos', label:{sq:'2 Kolona me kufi', en:'2 Columns padded'},  zones:[{x:0.06,y:0.05,w:0.42,h:0.90,type:'photo'},{x:0.52,y:0.05,w:0.42,h:0.90,type:'photo'}] },
-  { id:'two-v-pad',      category:'2 Photos', label:{sq:'2 Shtresa me kufi',en:'2 Stacked padded'},  zones:[{x:0.06,y:0.05,w:0.88,h:0.43,type:'photo'},{x:0.06,y:0.52,w:0.88,h:0.43,type:'photo'}] },
 
-  // LAYOUT 3 FOTO — strips, 1+2, hero+2, 3 columns
-  { id:'three-mid',      category:'3 Photos', label:{sq:'3 Qendrore',        en:'3 Centered'},        zones:[{x:0,y:0.13,w:0.316,h:0.74,type:'photo'},{x:0.342,y:0.13,w:0.316,h:0.74,type:'photo'},{x:0.684,y:0.13,w:0.316,h:0.74,type:'photo'}] },
+  // LAYOUT 3 FOTO — 3 cols, 3 rows, 1+2, hero (X = mosaic)
+  { id:'triptych',       category:'3 Photos', label:{sq:'3 Kolona',          en:'3 Columns'},         zones:[{x:0,y:0,w:0.316,h:1,type:'photo'},{x:0.342,y:0,w:0.316,h:1,type:'photo'},{x:0.684,y:0,w:0.316,h:1,type:'photo'}] },
   { id:'strips-3',       category:'3 Photos', label:{sq:'3 Shtresa',         en:'3 Strips'},          zones:[{x:0,y:0,w:1,h:0.316,type:'photo'},{x:0,y:0.342,w:1,h:0.316,type:'photo'},{x:0,y:0.684,w:1,h:0.316,type:'photo'}] },
   { id:'land-2port',     category:'3 Photos', label:{sq:'Sipër + 2',         en:'Top + 2 below'},     zones:[{x:0,y:0,w:1,h:0.487,type:'photo'},{x:0,y:0.513,w:0.487,h:0.487,type:'photo'},{x:0.513,y:0.513,w:0.487,h:0.487,type:'photo'}] },
   { id:'port-2land',     category:'3 Photos', label:{sq:'2 + Poshtë',        en:'2 top + Bottom'},    zones:[{x:0,y:0,w:0.487,h:0.487,type:'photo'},{x:0.513,y:0,w:0.487,h:0.487,type:'photo'},{x:0,y:0.513,w:1,h:0.487,type:'photo'}] },
@@ -385,9 +423,12 @@ export const LAYOUTS: LayoutDef[] = [
   { id:'hero-r',         category:'3 Photos', label:{sq:'Kryesore + 2',      en:'Hero + 2 right'},    zones:[{x:0,y:0,w:0.63,h:1,type:'photo'},{x:0.65,y:0,w:0.35,h:0.487,type:'photo'},{x:0.65,y:0.513,w:0.35,h:0.487,type:'photo'}] },
   { id:'tall-l-2r',      category:'3 Photos', label:{sq:'E gjatë + 2',       en:'Tall + 2 right'},    zones:[{x:0,y:0,w:0.55,h:1,type:'photo'},{x:0.57,y:0,w:0.43,h:0.487,type:'photo'},{x:0.57,y:0.513,w:0.43,h:0.487,type:'photo'}] },
 
-  // LAYOUT 4 FOTO — 2×2 + 4 strips (X = 1+3 / 2-large+2 / hero+3)
+  // LAYOUT 4 FOTO — 2×2, 4 strips, 1+3 (note: “shtoje te layout me 4 foto”)
   { id:'grid4',          category:'4 Photos', label:{sq:'Rrjetë 4',          en:'4 Grid'},            zones:[{x:0,y:0,w:0.487,h:0.487,type:'photo'},{x:0.513,y:0,w:0.487,h:0.487,type:'photo'},{x:0,y:0.513,w:0.487,h:0.487,type:'photo'},{x:0.513,y:0.513,w:0.487,h:0.487,type:'photo'}] },
   { id:'strips-4',       category:'4 Photos', label:{sq:'4 Shtresa',         en:'4 Strips'},          zones:[{x:0,y:0,w:1,h:0.235,type:'photo'},{x:0,y:0.255,w:1,h:0.235,type:'photo'},{x:0,y:0.510,w:1,h:0.235,type:'photo'},{x:0,y:0.765,w:1,h:0.235,type:'photo'}] },
+  { id:'hero-3r',        category:'4 Photos', label:{sq:'Kryesore + 3',      en:'Hero + 3 right'},    zones:[{x:0,y:0,w:0.63,h:1,type:'photo'},{x:0.65,y:0,w:0.35,h:0.316,type:'photo'},{x:0.65,y:0.342,w:0.35,h:0.316,type:'photo'},{x:0.65,y:0.684,w:0.35,h:0.316,type:'photo'}] },
+  { id:'hero-3l',        category:'4 Photos', label:{sq:'3 + Kryesore',      en:'3 left + Hero'},     zones:[{x:0,y:0,w:0.35,h:0.316,type:'photo'},{x:0,y:0.342,w:0.35,h:0.316,type:'photo'},{x:0,y:0.684,w:0.35,h:0.316,type:'photo'},{x:0.37,y:0,w:0.63,h:1,type:'photo'}] },
+  { id:'top-3below',     category:'4 Photos', label:{sq:'Sipër + 3',         en:'Top + 3 below'},     zones:[{x:0,y:0,w:1,h:0.55,type:'photo'},{x:0,y:0.57,w:0.316,h:0.43,type:'photo'},{x:0.342,y:0.57,w:0.316,h:0.43,type:'photo'},{x:0.684,y:0.57,w:0.316,h:0.43,type:'photo'}] },
 ];
 
 export const LAYOUT_CATEGORY_LABELS: Record<string, {sq: string; en: string}> = {

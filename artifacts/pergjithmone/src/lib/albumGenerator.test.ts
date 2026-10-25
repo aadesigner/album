@@ -56,7 +56,7 @@ describe("generateAlbum", () => {
   it("avoids banned strip/casual/filmstrip layouts", () => {
     const banned = new Set([
       "strips-3", "strips-4", "cols-4", "filmstrip-5",
-      "strips-3-uneven", "strips-3-focus", "triptych", "three-mid",
+      "strips-3-uneven", "strips-3-focus", "three-mid",
       "casual-toss-3", "casual-pile-4", "casual-strip-3", "casual-note-2",
       "quote",
     ]);
