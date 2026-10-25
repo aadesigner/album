@@ -22,6 +22,7 @@ import {
   invalidateSecuritySettingsCache,
   type SecuritySettings,
 } from "../lib/securitySettings";
+import { OFFER_BAR_KEY_MAP, normalizeOfferBarWrite, readOfferBarSettings } from "../lib/offerBarSettings";
 import { invalidateIpBlocklistCache } from "../lib/ipBlocklist";
 import { queueProjectPdfGeneration, deleteProjectPdfFile } from "../lib/generateProjectPdf";
 import { logger } from "../lib/logger";
@@ -1168,6 +1169,7 @@ router.get(
       requireLoginForPdf: map["require_login_for_pdf"] === "true",
       pendingBooksLimitEnabled: map["pending_books_limit_enabled"] !== "false",
       pendingBooksLimit: parseInt(map["pending_books_limit"] || "10", 10),
+      ...readOfferBarSettings(map),
       ...readSecuritySettings(map),
     });
   },
@@ -1199,14 +1201,17 @@ router.patch(
       requireLoginForPdf: "require_login_for_pdf",
       pendingBooksLimitEnabled: "pending_books_limit_enabled",
       pendingBooksLimit: "pending_books_limit",
+      ...OFFER_BAR_KEY_MAP,
       ...SECURITY_SETTINGS_KEY_MAP,
     };
 
     for (const [jsKey, dbKey] of Object.entries(keyMap)) {
       if (req.body[jsKey] !== undefined) {
         const raw = req.body[jsKey];
+        const offerValue = normalizeOfferBarWrite(jsKey, raw);
         let value: string;
-        if (typeof raw === "string") value = raw;
+        if (offerValue !== null) value = offerValue;
+        else if (typeof raw === "string") value = raw;
         else if (Array.isArray(raw) || (raw && typeof raw === "object")) value = JSON.stringify(raw);
         else value = String(raw);
 
@@ -1324,6 +1329,7 @@ router.patch(
       requireLoginForPdf: map2["require_login_for_pdf"] === "true",
       pendingBooksLimitEnabled: map2["pending_books_limit_enabled"] !== "false",
       pendingBooksLimit: parseInt(map2["pending_books_limit"] || "10", 10),
+      ...readOfferBarSettings(map2),
       ...readSecuritySettings(map2),
     });
 

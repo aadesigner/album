@@ -66,6 +66,16 @@ const DEFAULT_SETTINGS: Array<{ key: string; value: string }> = [
   { key: "whatsapp_number", value: "+355688755833" },
   { key: "base_price_lek", value: "3100" },
   { key: "book_creation_enabled", value: "true" },
+  { key: "offer_bar_enabled", value: "true" },
+  { key: "offer_bar_text_al", value: "Çmime më të lira se më parë — oferto speciale për albumin tuaj." },
+  { key: "offer_bar_text_en", value: "Cheaper prices than before — a special offer on your album." },
+  { key: "offer_bar_button_al", value: "Fillo tani" },
+  { key: "offer_bar_button_en", value: "Start now" },
+  { key: "offer_bar_href", value: "/krijo" },
+  { key: "offer_bar_bg", value: "#8C3A2E" },
+  { key: "offer_bar_text_color", value: "#FFF8F2" },
+  { key: "offer_bar_button_bg", value: "#FFFFFF" },
+  { key: "offer_bar_button_text", value: "#8C3A2E" },
 ];
 
 export async function seedCatalog(): Promise<void> {

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   getCanvasHeight,
   scaleElementsToCanvas,
+  fitDesignToCanvas,
   elementsWithCoverWallpaper,
   wallpaperSrc,
   DESIGN_H,
@@ -9,6 +10,7 @@ import {
   normalizeOverride,
   designFrontElements,
   designBackElements,
+  designCatalogFace,
   buildDesignCatalog,
   parseCustomDesigns,
   applyDesignOverrides,
@@ -94,6 +96,37 @@ describe("scaleElementsToCanvas", () => {
     // Original object must be unchanged
     expect(original.y).toBe(200);
     expect(original.h).toBe(100);
+  });
+});
+
+describe("fitDesignToCanvas", () => {
+  it("is a no-op transform on 3:4 besides pinning the background", () => {
+    const els = [
+      { type: "background", x: 10, y: 10, w: 100, h: 100 },
+      { type: "text", x: 80, y: 200, w: 400, h: 60, fontSize: 32 },
+    ];
+    const out = fitDesignToCanvas(els, DESIGN_H);
+    expect(out[0]).toMatchObject({ x: 0, y: 0, w: DESIGN_W, h: DESIGN_H });
+    expect(out[1]).toMatchObject({ x: 80, y: 200, w: 400, h: 60, fontSize: 32 });
+  });
+
+  it("contain-fits a 3:4 cover onto the square album without cropping", () => {
+    const squareH = getCanvasHeight(21, 21);
+    expect(squareH).toBe(600);
+    const k = 600 / 800;
+    const els = [
+      { type: "background", x: 0, y: 0, w: DESIGN_W, h: DESIGN_H },
+      { type: "image", x: 0, y: 0, w: DESIGN_W, h: DESIGN_H },
+      { type: "text", x: 40, y: 720, w: 520, h: 50, fontSize: 40 },
+    ];
+    const out = fitDesignToCanvas(els, squareH);
+    expect(out[0]).toMatchObject({ x: 0, y: 0, w: DESIGN_W, h: squareH });
+    expect(out[1].w).toBeCloseTo(DESIGN_W * k);
+    expect(out[1].h).toBeCloseTo(DESIGN_H * k);
+    expect(out[1].x).toBeCloseTo((DESIGN_W - DESIGN_W * k) / 2);
+    expect(out[1].y).toBeCloseTo(0);
+    expect(out[2].y + out[2].h).toBeLessThanOrEqual(squareH + 0.01);
+    expect(out[2].fontSize).toBeCloseTo(40 * k);
   });
 });
 
@@ -204,5 +237,27 @@ describe("front/back design helpers", () => {
   it("rejects malformed custom designs", () => {
     expect(parseCustomDesigns([{ id: "nope" }])).toEqual([]);
     expect(parseCustomDesigns("x")).toEqual([]);
+  });
+});
+
+describe("designCatalogFace", () => {
+  it("uses the Barcelona mockup JPG instead of live layers", () => {
+    const d = DESIGNS.find((x) => x.id === "barcelona-red")!;
+    expect(d.thumbPhoto).toBe("/designs/barcelona-cover-thumb.jpg");
+    expect(designCatalogFace(d)).toEqual({
+      kind: "photo",
+      src: "/designs/barcelona-cover-thumb.jpg",
+    });
+    expect(designFrontElements(d).some((e) => e.src?.includes("sagrada-familia"))).toBe(true);
+  });
+
+  it("falls back to live elements when a design has no mockup", () => {
+    const d = DESIGNS.find((x) => !x.thumbPhoto);
+    expect(d).toBeTruthy();
+    const face = designCatalogFace(d!);
+    expect(face.kind).toBe("elements");
+    if (face.kind === "elements") {
+      expect(face.elements).toEqual(d!.elements);
+    }
   });
 });

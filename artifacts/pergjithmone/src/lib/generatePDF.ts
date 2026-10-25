@@ -1,3 +1,5 @@
+import { isStrokeOnlyShape, shapePathForElement } from './shapes';
+
 /**
  * PDF preview generator — renders each photobook page to an off-screen
  * Canvas 2D context (matching the Konva editor output), then assembles
@@ -69,25 +71,6 @@ function loadImg(src: string): Promise<HTMLImageElement> {
     img.onerror = () => reject(new Error(`Failed to load ${src}`));
     img.src = src;
   });
-}
-
-// ── Rounded-rect path helper ─────────────────────────────────────────────────
-function roundRect(
-  ctx: CanvasRenderingContext2D,
-  x: number, y: number, w: number, h: number, r: number,
-) {
-  const radius = Math.min(r, w / 2, h / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + radius, y);
-  ctx.lineTo(x + w - radius, y);
-  ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
-  ctx.lineTo(x + w, y + h - radius);
-  ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
-  ctx.lineTo(x + radius, y + h);
-  ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
-  ctx.lineTo(x, y + radius);
-  ctx.quadraticCurveTo(x, y, x + radius, y);
-  ctx.closePath();
 }
 
 // ── Simple word-wrap (letterSpacing-aware — matches Konva Text) ─────────────
@@ -227,27 +210,27 @@ async function renderPage(elements: PdfElement[], canvasH: number): Promise<stri
 
     // ── Shape ──────────────────────────────────────────────────────────────
     else if (el.type === 'shape') {
-      const cr = el.shapeKind === 'circle'
-        ? Math.min(el.w, el.h) / 2
-        : (el.cornerRadius ?? 0);
+      const d = shapePathForElement(el.shapeKind, el.w, el.h, el.cornerRadius);
+      const path = new Path2D(d);
+      ctx.translate(el.x, el.y);
+      const strokeOnly = isStrokeOnlyShape(el.shapeKind);
 
-      if (cr > 0) {
-        roundRect(ctx, el.x, el.y, el.w, el.h, cr);
-      } else {
-        ctx.beginPath();
-        ctx.rect(el.x, el.y, el.w, el.h);
-      }
-
-      if (el.fill && el.fill !== 'transparent') {
+      if (!strokeOnly && el.fill && el.fill !== 'transparent') {
         ctx.fillStyle = el.fill;
-        ctx.fill();
+        ctx.fill(path, 'evenodd');
       }
       if (el.strokeColor && (el.strokeWidth ?? 0) > 0) {
         ctx.strokeStyle = el.strokeColor;
         ctx.lineWidth   = el.strokeWidth!;
         if (el.strokeDash?.length) ctx.setLineDash(el.strokeDash);
-        ctx.stroke();
+        ctx.lineCap = 'round';
+        ctx.stroke(path);
         ctx.setLineDash([]);
+      } else if (strokeOnly) {
+        ctx.strokeStyle = el.strokeColor || '#1A1A1A';
+        ctx.lineWidth   = el.strokeWidth || 4;
+        ctx.lineCap = 'round';
+        ctx.stroke(path);
       }
     }
 

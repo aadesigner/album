@@ -7,12 +7,15 @@ import { useLocation } from 'wouter';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Link } from 'wouter';
-import { DB_CAT_TO_DESIGN_CAT, DESIGN_CATEGORY_LABELS, resolveDesignCategory } from '@/lib/designMeta';
+import {
+  DESIGN_CATEGORY_LABELS, resolveDesignCategory,
+  resolveDesignCategoryFromQuery, matchDbCategory,
+} from '@/lib/designMeta';
 import {
   BLANK_STARTER_ID, parseCustomDesigns, buildDesignCatalog,
   designFrontElements, type DesignDef, type DesignOverrides,
 } from '@/lib/designs';
-import { ResponsivePageThumb } from '@/components/PageThumb';
+import { ResponsiveDesignCatalogThumb } from '@/components/PageThumb';
 import { SEOMeta } from '@/components/SEOMeta';
 import { useToast } from '@/hooks/use-toast';
 import { getCategoryImage } from '@/lib/categoryImages';
@@ -135,11 +138,10 @@ export function SizeCard({ size, isSelected, onClick, lang, t }: any) {
   );
 }
 
-// ── Design card — real cover layout (same elements as Design Studio / Editor)
+// ── Design card — catalog mockup (thumbPhoto) or live layers
 function DesignCard({ design, isSelected, lang, onClick }: {
   design: DesignDef; isSelected: boolean; lang: 'sq' | 'en'; onClick: () => void;
 }) {
-  const els = useMemo(() => designFrontElements(design) as any, [design]);
   return (
     <button
       type="button"
@@ -147,14 +149,17 @@ function DesignCard({ design, isSelected, lang, onClick }: {
       className="relative flex flex-col items-center gap-2 group focus:outline-none w-full transition-transform duration-150 hover:-translate-y-0.5 active:scale-[0.97]"
     >
       <div
-        className={`relative w-full overflow-hidden rounded-2xl bg-white transition-shadow duration-150 ${
+        className={`relative w-full overflow-hidden rounded-2xl transition-shadow duration-150 ${
           isSelected
             ? 'ring-2 ring-neutral-900 shadow-xl'
             : 'ring-1 ring-neutral-200 hover:ring-neutral-400 hover:shadow-md'
         }`}
-        style={{ aspectRatio: '3/4' }}
+        style={{
+          aspectRatio: '3/4',
+          background: (design.thumb?.background as string) || '#F3EEE6',
+        }}
       >
-        <ResponsivePageThumb elements={els} className="absolute inset-0" />
+        <ResponsiveDesignCatalogThumb design={design} className="absolute inset-0" />
 
         {isSelected && (
           <div className="absolute inset-0 bg-black/10 flex items-center justify-center pointer-events-none">
@@ -231,33 +236,29 @@ export default function Wizard() {
   useEffect(() => {
     if (preselectDone || loadingCat || !categories?.length) return;
     const params = new URLSearchParams(window.location.search);
-    const slug = (params.get('category') || '').trim().toLowerCase();
+    const slug = (params.get('category') || '').trim();
     const designId = (params.get('design') || '').trim();
+    const designCat = resolveDesignCategoryFromQuery(slug, designId, designCatalog);
 
     if (designId && designCatalog.some(d => d.id === designId)) {
       setSelectedDesignId(designId);
-      const designCat = designCatalog.find(d => d.id === designId)?.category;
-      if (designCat) {
-        const match = (categories as any[]).find((c: any) =>
-          DB_CAT_TO_DESIGN_CAT[c.nameAl] === designCat
-          || DB_CAT_TO_DESIGN_CAT[c.nameEn] === designCat
-          || DB_CAT_TO_DESIGN_CAT[c.slug] === designCat
-        );
-        if (match?.id != null) setSelectedCategory(match.id);
-      }
+      const match = matchDbCategory(categories as any[], slug, designCat);
+      setSelectedCategory(match?.id != null ? match.id : null);
       setStep(2);
       setPreselectDone(true);
       return;
     }
 
     if (!slug) { setPreselectDone(true); return; }
-    const match = (categories as any[]).find((c: any) =>
-      String(c.slug || '').toLowerCase() === slug
-      || String(c.nameAl || '').toLowerCase() === slug
-      || String(c.nameEn || '').toLowerCase() === slug
-    );
+    const match = matchDbCategory(categories as any[], slug, designCat);
     if (match?.id != null) {
       setSelectedCategory(match.id);
+      setSelectedDesignId(null);
+      setStep(2);
+    } else if (designCat) {
+      // Slug maps to a catalog (e.g. dasme → Wedding) even if the DB row
+      // uses a different name — still open the style step.
+      setSelectedCategory(null);
       setSelectedDesignId(null);
       setStep(2);
     }
@@ -269,7 +270,16 @@ export default function Wizard() {
     if (selectedCategory === 'blank' || selectedCategory === null) return null;
     return (categories as any[])?.find((c: any) => c.id === selectedCategory) || null;
   }, [selectedCategory, categories]);
-  const designCategoryKey = resolveDesignCategory(selectedCat);
+  const queryCategoryKey = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    const params = new URLSearchParams(window.location.search);
+    return resolveDesignCategoryFromQuery(
+      params.get('category'),
+      params.get('design'),
+      designCatalog,
+    );
+  }, [designCatalog, preselectDone]);
+  const designCategoryKey = resolveDesignCategory(selectedCat) || queryCategoryKey;
   const shownDesigns = useMemo(() => {
     // Never fall back to ALL designs — that dumped travel cities into parties
     // whenever the DB category name didn't exact-match the map.
@@ -639,6 +649,13 @@ export default function Wizard() {
                     />
                   ))}
                 </div>
+                {shownDesigns.length === 0 && (
+                  <p className="text-center text-sm text-neutral-500 py-10">
+                    {lang === 'sq'
+                      ? 'Nuk ka stilet e gatshme për këtë kategori.'
+                      : 'No ready-made styles in this category yet.'}
+                  </p>
+                )}
 
                 <div className="mt-8 flex justify-center">
                   <button

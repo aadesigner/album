@@ -1,0 +1,83 @@
+export interface SecuritySettings {
+  rateLimitGeneralWindowMs: number;
+  rateLimitGeneralMax: number;
+  rateLimitAuthWindowMs: number;
+  rateLimitAuthMax: number;
+  rateLimitAnalyticsWindowMs: number;
+  rateLimitAnalyticsMax: number;
+  rateLimitUploadsWindowMs: number;
+  rateLimitUploadsMax: number;
+  loginLockoutThreshold: number;
+  loginLockoutMinutes: number;
+  maxAlbumsPerUser: number;
+  maxPhotosPerAlbum: number;
+  maxOrdersPerDay: number;
+  maxConcurrentPdfGenerations: number;
+  maxUploadFileSizeMb: number;
+  allowedUploadMimeTypes: string[];
+}
+
+export const SECURITY_SETTINGS_DEFAULTS: SecuritySettings = {
+  rateLimitGeneralWindowMs: 15 * 60 * 1000,
+  rateLimitGeneralMax: 8000,
+  rateLimitAuthWindowMs: 15 * 60 * 1000,
+  rateLimitAuthMax: 120,
+  rateLimitAnalyticsWindowMs: 60 * 1000,
+  rateLimitAnalyticsMax: 400,
+  rateLimitUploadsWindowMs: 60 * 1000,
+  rateLimitUploadsMax: 180,
+  loginLockoutThreshold: 10,
+  loginLockoutMinutes: 5,
+  maxAlbumsPerUser: 50,
+  maxPhotosPerAlbum: 500,
+  maxOrdersPerDay: 15,
+  maxConcurrentPdfGenerations: 6,
+  maxUploadFileSizeMb: 25,
+  allowedUploadMimeTypes: ["image/jpeg", "image/png", "image/webp", "image/gif"],
+};
+
+const SECURITY_NUMBER_FLOOR: Partial<Record<keyof SecuritySettings, number>> = {
+  rateLimitGeneralWindowMs: 60_000,
+  rateLimitGeneralMax: 200,
+  rateLimitAuthWindowMs: 60_000,
+  rateLimitAuthMax: 20,
+  rateLimitAnalyticsWindowMs: 10_000,
+  rateLimitAnalyticsMax: 60,
+  rateLimitUploadsWindowMs: 10_000,
+  rateLimitUploadsMax: 20,
+  loginLockoutThreshold: 5,
+  loginLockoutMinutes: 1,
+  maxAlbumsPerUser: 1,
+  maxPhotosPerAlbum: 10,
+  maxOrdersPerDay: 1,
+  maxConcurrentPdfGenerations: 1,
+  maxUploadFileSizeMb: 1,
+};
+
+/** Floors so a typo of 0 cannot 429 every visitor. */
+export function clampSecurityNumber(key: keyof SecuritySettings, n: number): number {
+  const fallback = SECURITY_SETTINGS_DEFAULTS[key];
+  if (typeof fallback !== "number" || !Number.isFinite(n)) return fallback as number;
+  const floor = SECURITY_NUMBER_FLOOR[key] ?? 1;
+  if (n < floor) return fallback;
+  return n;
+}
+
+export const SECURITY_SETTINGS_KEY_MAP: Record<keyof SecuritySettings, string> = {
+  rateLimitGeneralWindowMs: "rate_limit_general_window_ms",
+  rateLimitGeneralMax: "rate_limit_general_max",
+  rateLimitAuthWindowMs: "rate_limit_auth_window_ms",
+  rateLimitAuthMax: "rate_limit_auth_max",
+  rateLimitAnalyticsWindowMs: "rate_limit_analytics_window_ms",
+  rateLimitAnalyticsMax: "rate_limit_analytics_max",
+  rateLimitUploadsWindowMs: "rate_limit_uploads_window_ms",
+  rateLimitUploadsMax: "rate_limit_uploads_max",
+  loginLockoutThreshold: "login_lockout_threshold",
+  loginLockoutMinutes: "login_lockout_minutes",
+  maxAlbumsPerUser: "max_albums_per_user",
+  maxPhotosPerAlbum: "max_photos_per_album",
+  maxOrdersPerDay: "max_orders_per_day",
+  maxConcurrentPdfGenerations: "max_concurrent_pdf_generations",
+  maxUploadFileSizeMb: "max_upload_file_size_mb",
+  allowedUploadMimeTypes: "allowed_upload_mime_types",
+};

@@ -1,4 +1,5 @@
 ﻿import type { CSSProperties } from 'react';
+import type { ShapeKind } from './shapes';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared design & layout data — single source of truth for Editor.tsx,
@@ -52,6 +53,47 @@ export function scaleElementsToCanvas<T extends { y: number; h: number }>(
   return elements.map(el => ({ ...el, y: el.y * k, h: el.h * k }));
 }
 
+type FitDesignEl = {
+  type?: string;
+  x: number; y: number; w: number; h: number;
+  fontSize?: number;
+  strokeWidth?: number;
+  letterSpacing?: number;
+  cornerRadius?: number;
+};
+
+/**
+ * Place a 3:4 admin design onto any book canvas without cropping or squash.
+ * Backgrounds stay full-bleed. Everything else is uniformly contain-fitted
+ * and centered (square 21×21 gets side margins instead of a clipped cover).
+ */
+export function fitDesignToCanvas<T extends FitDesignEl>(
+  elements: T[],
+  canvasH: number,
+): T[] {
+  const targetH = Math.max(1, canvasH);
+  const k = Math.min(1, targetH / DESIGN_H);
+  const ox = (DESIGN_W - DESIGN_W * k) / 2;
+  const oy = (targetH - DESIGN_H * k) / 2;
+  return elements.map((el) => {
+    if (el.type === 'background') {
+      return { ...el, x: 0, y: 0, w: DESIGN_W, h: targetH };
+    }
+    const next: T = {
+      ...el,
+      x: ox + el.x * k,
+      y: oy + el.y * k,
+      w: el.w * k,
+      h: el.h * k,
+    };
+    if (el.fontSize != null) next.fontSize = el.fontSize * k;
+    if (el.strokeWidth != null) next.strokeWidth = el.strokeWidth * k;
+    if (el.letterSpacing != null) next.letterSpacing = el.letterSpacing * k;
+    if (el.cornerRadius != null) next.cornerRadius = el.cornerRadius * k;
+    return next;
+  });
+}
+
 /** Re-project absolute canvas elements between two heights (same DESIGN_W). */
 export function reprojectCanvasElements<T extends { y: number; h: number }>(
   elements: T[],
@@ -88,10 +130,11 @@ export interface EditorElement {
   mixBlendMode?: string;
   text?: string; fontSize?: number; fontFamily?: string;
   fill?: string; align?: 'left' | 'center' | 'right'; fontStyle?: string;
+  verticalAlign?: 'top' | 'middle' | 'bottom';
   lineHeight?: number; letterSpacing?: number;
   bgColor?: string;
   bgGradientFrom?: string; bgGradientTo?: string; bgGradientDir?: 'tb' | 'lr' | 'diag';
-  shapeKind?: 'rect' | 'circle';
+  shapeKind?: ShapeKind;
   strokeColor?: string; strokeWidth?: number; strokeDash?: number[]; cornerRadius?: number;
 }
 export type DE = Omit<EditorElement, 'id'>;
@@ -277,7 +320,7 @@ export interface DesignDef {
 }
 
 /** Shared rev for Travel builtins (Paris/Barcelona + city photo covers). */
-export const TRAVEL_LAYOUT_REV = 9;
+export const TRAVEL_LAYOUT_REV = 10;
 export interface LayoutZone { x:number; y:number; w:number; h:number; type:string; rotation?:number }
 export interface LayoutDef { id:string; category:string; label:{sq:string;en:string}; zones:LayoutZone[] }
 
@@ -373,7 +416,7 @@ export const CATEGORY_LABELS: Record<string, {sq: string; en: string}> = {
 export const BG = (color: string, grad?: { from: string; to: string; dir: 'tb'|'lr'|'diag' }): DE =>
   ({ type:'background', x:0, y:0, w:DESIGN_W, h:DESIGN_H, rotation:0, bgColor:color,
      ...(grad ? { bgGradientFrom:grad.from, bgGradientTo:grad.to, bgGradientDir:grad.dir } : {}) });
-export const SH = (k: 'rect'|'circle', x:number, y:number, w:number, h:number, fill:string, o:Partial<DE>={}): DE =>
+export const SH = (k: ShapeKind, x:number, y:number, w:number, h:number, fill:string, o:Partial<DE>={}): DE =>
   ({ type:'shape', shapeKind:k, x, y, w, h, rotation:0, fill, opacity:0.4, strokeWidth:0, ...o });
 export const PH = (x:number, y:number, w:number, h:number, rotation=0): DE => ({ type:'placeholder', x, y, w, h, rotation });
 export const TX = (text:string, x:number, y:number, w:number, h:number, o:Partial<DE>={}): DE =>
@@ -732,15 +775,17 @@ export const DESIGNS: DesignDef[] = [
     elements: [
       BG('#A83442'),
       // Title only at top — year belongs under the landmark (mockup).
-      TX('BARCELONA', 8, 36, DESIGN_W - 16, 70, {
-        fontSize: 58, fill: '#FCB426', align: 'center',
-        fontFamily: "'Londrina Solid', cursive", letterSpacing: 4, lineHeight: 0.92,
+      TX('BARCELONA', 8, 22, DESIGN_W - 16, 88, {
+        fontSize: 72, fill: '#FCB426', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 2, lineHeight: 0.9,
       }),
-      IMG('/designs/sagrada-familia.png', 40, 130, 520, 520, {
+      // PNG is a tall padded cutout — give it the full mid-page so the
+      // landmark reads at cover size, not a speck on a red plate.
+      IMG('/designs/sagrada-familia.png', 8, 96, DESIGN_W - 16, 560, {
         objectFit: 'contain',
       }),
-      TX('2026', 8, 670, DESIGN_W - 16, 40, {
-        fontSize: 30, fill: '#FCB426', align: 'center',
+      TX('2026', 8, 668, DESIGN_W - 16, 40, {
+        fontSize: 28, fill: '#FCB426', align: 'center',
         fontFamily: "'Londrina Solid', cursive", letterSpacing: 8,
       }),
     ],
@@ -1094,6 +1139,18 @@ export const DESIGNS: DesignDef[] = [
 /** Front cover elements for a design. */
 export function designFrontElements(d: DesignDef): DE[] {
   return Array.isArray(d.elements) ? d.elements : [];
+}
+
+/**
+ * Catalog / sidebar face. Landmark covers (Barcelona, Paris) keep a composed
+ * mockup in `thumbPhoto` because the live PNG+type layers collapse to a blank
+ * color plate at 72px. Prefer that mockup in pickers; fall back to elements.
+ */
+export function designCatalogFace(d: Pick<DesignDef, 'thumbPhoto' | 'elements'>):
+  | { kind: 'photo'; src: string }
+  | { kind: 'elements'; elements: DE[] } {
+  if (d.thumbPhoto) return { kind: 'photo', src: d.thumbPhoto };
+  return { kind: 'elements', elements: Array.isArray(d.elements) ? d.elements : [] };
 }
 
 /** Back cover elements — falls back to front when unset/empty. */

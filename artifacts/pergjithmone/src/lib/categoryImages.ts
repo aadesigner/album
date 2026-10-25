@@ -61,12 +61,12 @@ const CAT_SPINE: Record<string, string> = {
 };
 
 const CAT_SUBLABEL: Record<string, { sq: string; en: string }> = {
-  dasme: { sq: 'Kujtime të çmuara për gjithë jetën', en: 'Cherished memories for life' },
-  udhetime: { sq: 'Rrugët tuaja, të mbajtura afër', en: 'The roads you took, kept close' },
-  familje: { sq: 'Momentet e vogla, mëdha', en: 'Small moments, big meaning' },
-  ditelindje: { sq: 'Dhurata perfekte, e personalizuar', en: 'The perfect personalised gift' },
-  miqesi: { sq: 'Miqësia që mbetet në faqe', en: 'Friendship that lasts on the page' },
-  festash: { sq: 'Festat që nuk harrohen', en: 'Celebrations you will not forget' },
+  dasme: { sq: 'Dita juaj, e mbajtur përgjithmonë', en: 'Your day, kept forever' },
+  udhetime: { sq: 'Udhëtimet tuaja, në faqe', en: 'Your travels, on the page' },
+  familje: { sq: 'Momentet e vogla që bëhen të mëdha', en: 'Small moments that grow big' },
+  ditelindje: { sq: 'Dhurata më e ngrohtë, e personalizuar', en: 'The warmest personalised gift' },
+  miqesi: { sq: 'Miqësia që mbetet në libër', en: 'Friendship that stays in the book' },
+  festash: { sq: 'Festat që s’harrohen kurrë', en: 'Celebrations you never forget' },
 };
 
 export function getCategoryImage(

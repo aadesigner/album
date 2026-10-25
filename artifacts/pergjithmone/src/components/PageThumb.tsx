@@ -1,5 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { DESIGN_W, DESIGN_H, PAPER_COLOR, type EditorElement } from '@/lib/designs';
+import {
+  DESIGN_W, DESIGN_H, PAPER_COLOR,
+  designCatalogFace,
+  type DesignDef, type EditorElement,
+} from '@/lib/designs';
+import { isStrokeOnlyShape, shapePathForElement } from '@/lib/shapes';
 import { useEditorFontsReady, ensureEditorFonts } from '@/lib/editorFonts';
 
 function thumbFontFamily(ff?: string): string {
@@ -155,16 +160,33 @@ export const PageThumb = React.memo(function PageThumb({
           if (el.type === 'shape') {
             const fill = el.fill && el.fill !== 'transparent' ? el.fill : (el.bgColor && el.bgColor !== 'transparent' ? el.bgColor : undefined);
             const hasStroke = !!(el.strokeColor && (el.strokeWidth ?? 0) > 0);
-            return <div key={key} style={{
-              position: 'absolute', left: el.x, top: el.y, width: el.w, height: el.h,
-              background: fill || (hasStroke ? 'transparent' : '#ccc'),
-              borderRadius: el.shapeKind === 'circle' ? '50%' : (el.cornerRadius ?? 0),
-              border: hasStroke ? `${el.strokeWidth}px solid ${el.strokeColor}` : undefined,
-              boxSizing: 'border-box',
-              opacity: el.opacity ?? 1,
-              transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
-              transformOrigin: 'center',
-            }}/>;
+            const strokeOnly = isStrokeOnlyShape(el.shapeKind);
+            const d = shapePathForElement(el.shapeKind, el.w, el.h, el.cornerRadius);
+            return (
+              <svg
+                key={key}
+                width={el.w}
+                height={el.h}
+                viewBox={`0 0 ${Math.max(1, el.w)} ${Math.max(1, el.h)}`}
+                style={{
+                  position: 'absolute', left: el.x, top: el.y,
+                  overflow: 'visible',
+                  opacity: el.opacity ?? 1,
+                  transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
+                  transformOrigin: 'center',
+                  pointerEvents: 'none',
+                }}
+              >
+                <path
+                  d={d}
+                  fill={strokeOnly ? 'none' : (fill || (hasStroke ? 'none' : '#ccc'))}
+                  fillRule="evenodd"
+                  stroke={hasStroke || strokeOnly ? (el.strokeColor || '#1A1A1A') : 'none'}
+                  strokeWidth={el.strokeWidth || (strokeOnly ? 4 : 0)}
+                  strokeLinecap="round"
+                />
+              </svg>
+            );
           }
           return null;
         })}
@@ -188,9 +210,12 @@ export function ResponsivePageThumb({
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
+    const apply = (w: number) => {
+      if (w > 0) setWidth(Math.round(w));
+    };
+    apply(el.getBoundingClientRect().width || el.offsetWidth);
     const observer = new ResizeObserver((entries) => {
-      const w = entries[0]?.contentRect.width;
-      if (w) setWidth(w);
+      apply(entries[0]?.contentRect.width || el.getBoundingClientRect().width);
     });
     observer.observe(el);
     return () => observer.disconnect();
@@ -200,5 +225,83 @@ export function ResponsivePageThumb({
     <div ref={containerRef} className={className} style={{ width: '100%', aspectRatio: `${DESIGN_W} / ${canvasH}`, ...style }}>
       {width > 0 && <PageThumb elements={elements} width={width} height={width * (canvasH / DESIGN_W)} canvasH={canvasH} />}
     </div>
+  );
+}
+
+const MOCKUP_IMG: React.CSSProperties = {
+  width: '100%',
+  height: '100%',
+  objectFit: 'cover',
+  display: 'block',
+  pointerEvents: 'none',
+};
+
+/** Picker / sidebar face — uses the authored mockup JPG when one exists. */
+export function DesignCatalogThumb({
+  design,
+  width,
+  height,
+  preferMockup = true,
+}: {
+  design: Pick<DesignDef, 'thumbPhoto' | 'thumb' | 'elements'>;
+  width: number;
+  height: number;
+  /** False = always render live layers (Design Studio after an override). */
+  preferMockup?: boolean;
+}) {
+  const face = preferMockup ? designCatalogFace(design) : { kind: 'elements' as const, elements: design.elements || [] };
+  if (face.kind === 'photo') {
+    return (
+      <img
+        src={face.src}
+        alt=""
+        width={width}
+        height={height}
+        loading="lazy"
+        decoding="async"
+        style={{ width, height, objectFit: 'cover', display: 'block' }}
+      />
+    );
+  }
+  if (face.elements.length > 0) {
+    return <PageThumb elements={face.elements} width={width} height={height} />;
+  }
+  return (
+    <div style={{ width, height, background: (design.thumb?.background as string) || '#ECE7E1' }} />
+  );
+}
+
+export function ResponsiveDesignCatalogThumb({
+  design,
+  className,
+  style,
+  preferMockup = true,
+}: {
+  design: Pick<DesignDef, 'thumbPhoto' | 'thumb' | 'elements'>;
+  className?: string;
+  style?: React.CSSProperties;
+  preferMockup?: boolean;
+}) {
+  const face = preferMockup ? designCatalogFace(design) : { kind: 'elements' as const, elements: design.elements || [] };
+  if (face.kind === 'photo') {
+    return (
+      <img
+        src={face.src}
+        alt=""
+        className={className}
+        loading="lazy"
+        decoding="async"
+        style={{ ...MOCKUP_IMG, ...style }}
+      />
+    );
+  }
+  if (face.elements.length > 0) {
+    return <ResponsivePageThumb elements={face.elements} className={className} style={style} />;
+  }
+  return (
+    <div
+      className={className}
+      style={{ background: (design.thumb?.background as string) || '#ECE7E1', ...style }}
+    />
   );
 }

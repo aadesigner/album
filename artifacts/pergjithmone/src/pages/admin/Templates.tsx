@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { AdminLayout, ADMIN } from '@/components/layout/AdminLayout';
+import { AdminModal } from '@/components/admin/AdminModal';
 import {
   useListAdminTemplates, useListAdminCategories,
   useCreateAdminTemplate, useUpdateAdminTemplate, useDeleteAdminTemplate,
@@ -9,7 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ImageUploadInput } from '@/components/admin/ImageUploadInput';
-import { Plus, Edit2, Trash2, Sparkles, ExternalLink, ImageOff } from 'lucide-react';
+import { Plus, Edit2, Trash2, Sparkles, ExternalLink, ImageOff, Search } from 'lucide-react';
 import { useQueryClient, useQueries } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { Link } from 'wouter';
@@ -86,8 +87,8 @@ function TemplateFormModal({ template, onClose }: { template: Template | null; o
   const { toast } = useToast();
   const loading = createTemplate.isPending || updateTemplate.isPending;
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     setError('');
     if (!form.subcategoryId) {
       setError('Please select a subcategory to link this template to.');
@@ -122,95 +123,98 @@ function TemplateFormModal({ template, onClose }: { template: Template | null; o
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center gap-2 mb-5">
-          <div className="w-8 h-8 rounded-2xl flex items-center justify-center" style={{ background: ADMIN.blushSoft }}>
-            {isEdit ? <Edit2 size={16} style={{ color: ADMIN.blushDeep }} /> : <Plus size={16} style={{ color: ADMIN.blushDeep }} />}
+    <AdminModal
+      size="lg"
+      title={isEdit ? 'Edit template' : 'New template'}
+      subtitle="Showcase covers linked to a subcategory. Editable album covers live in Design Studio."
+      icon={isEdit ? <Edit2 size={16} style={{ color: ADMIN.blushDeep }} /> : <Plus size={16} style={{ color: ADMIN.blushDeep }} />}
+      onClose={onClose}
+      footer={
+        <>
+          {error && <p className="text-sm text-red-600 flex-1 min-w-0">{error}</p>}
+          <span className="flex-1" />
+          <Button type="button" variant="outline" onClick={onClose} className="rounded-xl min-w-[6rem]">Cancel</Button>
+          <Button type="button" disabled={loading} onClick={() => void submit()}
+            className="rounded-xl text-white min-w-[8rem] hover:opacity-90" style={{ background: ADMIN.blush }}>
+            {loading ? 'Saving…' : isEdit ? 'Save changes' : 'Create template'}
+          </Button>
+        </>
+      }
+    >
+      <form onSubmit={submit} className="space-y-4 px-5 py-4">
+        <div>
+          <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Subcategory *</label>
+          <select
+            value={form.subcategoryId}
+            onChange={e => setForm(f => ({ ...f, subcategoryId: Number(e.target.value) }))}
+            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"
+            disabled={subsLoading}
+          >
+            <option value={0} disabled>{subsLoading ? 'Loading…' : 'Select a subcategory'}</option>
+            {groups.map(g => (
+              <optgroup key={g.category.id} label={`${g.category.iconEmoji} ${g.category.nameEn}`}>
+                {g.subcategories.length === 0 ? (
+                  <option value="" disabled>No subcategories — add one under Categories</option>
+                ) : (
+                  g.subcategories.map((sub: any) => (
+                    <option key={sub.id} value={sub.id}>{sub.nameEn} ({sub.nameAl})</option>
+                  ))
+                )}
+              </optgroup>
+            ))}
+          </select>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Name (Albanian) *</label>
+            <Input value={form.nameAl} onChange={e => setForm(f => ({ ...f, nameAl: e.target.value }))} required />
           </div>
           <div>
-            <h3 className="font-serif text-lg font-semibold">{isEdit ? 'Edit Template' : 'New Template'}</h3>
-            <p className="text-[11px]" style={{ color: ADMIN.muted }}>Showcase cover images linked to a subcategory.</p>
+            <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Name (English) *</label>
+            <Input value={form.nameEn} onChange={e => setForm(f => ({ ...f, nameEn: e.target.value }))} required />
           </div>
         </div>
-        <form onSubmit={submit} className="space-y-4">
-          <div>
-            <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Subcategory *</label>
-            <select
-              value={form.subcategoryId}
-              onChange={e => setForm(f => ({ ...f, subcategoryId: Number(e.target.value) }))}
-              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"
-              disabled={subsLoading}
-            >
-              <option value={0} disabled>{subsLoading ? 'Loading…' : 'Select a subcategory'}</option>
-              {groups.map(g => (
-                <optgroup key={g.category.id} label={`${g.category.iconEmoji} ${g.category.nameEn}`}>
-                  {g.subcategories.length === 0 ? (
-                    <option value="" disabled>No subcategories — add one under Categories</option>
-                  ) : (
-                    g.subcategories.map((sub: any) => (
-                      <option key={sub.id} value={sub.id}>{sub.nameEn} ({sub.nameAl})</option>
-                    ))
-                  )}
-                </optgroup>
-              ))}
-            </select>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Name (Albanian) *</label>
-              <Input value={form.nameAl} onChange={e => setForm(f => ({ ...f, nameAl: e.target.value }))} required />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Name (English) *</label>
-              <Input value={form.nameEn} onChange={e => setForm(f => ({ ...f, nameEn: e.target.value }))} required />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <ImageUploadInput value={form.coverImageUrl} onChange={url => setForm(f => ({ ...f, coverImageUrl: url }))} label="Front cover *" />
-            <ImageUploadInput value={form.backCoverImageUrl} onChange={url => setForm(f => ({ ...f, backCoverImageUrl: url }))} label="Back cover" />
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Theme Colors (comma-separated hex)</label>
-            <Input value={form.themeColors} onChange={e => setForm(f => ({ ...f, themeColors: e.target.value }))} placeholder="#E85A6B, #FCE8EB" />
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Fonts (comma-separated)</label>
-            <Input value={form.fonts} onChange={e => setForm(f => ({ ...f, fonts: e.target.value }))} placeholder="Playfair Display, Inter" />
-          </div>
-          <label className="flex items-center gap-2 text-sm font-medium text-neutral-600 cursor-pointer">
-            <input type="checkbox" checked={form.isActive} onChange={e => setForm(f => ({ ...f, isActive: e.target.checked }))} className="rounded border-input" />
-            Active
-          </label>
-          {error && <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
-          <div className="flex gap-3 pt-1">
-            <Button type="button" variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
-            <Button type="submit" disabled={loading} className="flex-1 text-white hover:opacity-90 rounded-2xl" style={{ background: ADMIN.blush }}>
-              {loading ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Template'}
-            </Button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <ImageUploadInput value={form.coverImageUrl} onChange={url => setForm(f => ({ ...f, coverImageUrl: url }))} label="Front cover *" />
+          <ImageUploadInput value={form.backCoverImageUrl} onChange={url => setForm(f => ({ ...f, backCoverImageUrl: url }))} label="Back cover" />
+        </div>
+        <div>
+          <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Theme Colors (comma-separated hex)</label>
+          <Input value={form.themeColors} onChange={e => setForm(f => ({ ...f, themeColors: e.target.value }))} placeholder="#E85A6B, #FCE8EB" />
+        </div>
+        <div>
+          <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Fonts (comma-separated)</label>
+          <Input value={form.fonts} onChange={e => setForm(f => ({ ...f, fonts: e.target.value }))} placeholder="Playfair Display, Inter" />
+        </div>
+        <label className="flex items-center gap-2 text-sm font-medium text-neutral-600 cursor-pointer">
+          <input type="checkbox" checked={form.isActive} onChange={e => setForm(f => ({ ...f, isActive: e.target.checked }))} className="rounded border-input" />
+          Active
+        </label>
+      </form>
+    </AdminModal>
   );
 }
 
 function DeleteConfirm({ name, onConfirm, onCancel, loading }: { name: string; onConfirm: () => void; onCancel: () => void; loading: boolean }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={e => e.target === e.currentTarget && onCancel()}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xs p-6 text-center">
-        <h3 className="font-serif text-lg font-semibold mb-2">Delete Template?</h3>
-        <p className="text-sm text-neutral-500 mb-5">
-          Permanently delete <strong>{name}</strong>? This cannot be undone.
-        </p>
-        <div className="flex gap-3">
-          <Button variant="outline" onClick={onCancel} className="flex-1">Cancel</Button>
-          <Button onClick={onConfirm} disabled={loading} className="flex-1 bg-red-500 hover:bg-red-600 text-white">
+    <AdminModal
+      size="sm"
+      title="Delete template?"
+      subtitle={`Permanently delete ${name}. This cannot be undone.`}
+      onClose={onCancel}
+      footer={
+        <>
+          <Button variant="outline" onClick={onCancel} className="flex-1 rounded-xl">Cancel</Button>
+          <Button onClick={onConfirm} disabled={loading} className="flex-1 rounded-xl bg-red-500 hover:bg-red-600 text-white">
             {loading ? 'Deleting…' : 'Delete'}
           </Button>
-        </div>
+        </>
+      }
+    >
+      <div className="px-5 py-4 text-sm" style={{ color: ADMIN.muted }}>
+        Showcase cards for this template will disappear from the catalog.
       </div>
-    </div>
+    </AdminModal>
   );
 }
 
@@ -224,6 +228,19 @@ export default function AdminTemplates() {
   const [formTarget, setFormTarget] = useState<{ open: boolean; template: Template | null }>({ open: false, template: null });
   const [deleteTarget, setDeleteTarget] = useState<Template | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [query, setQuery] = useState('');
+  const [visFilter, setVisFilter] = useState<'all' | 'active' | 'hidden'>('all');
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return (templates || []).filter(t => {
+      if (visFilter === 'active' && !t.isActive) return false;
+      if (visFilter === 'hidden' && t.isActive) return false;
+      if (!q) return true;
+      const sub = subNameById.get(t.subcategoryId) || '';
+      return [t.nameEn, t.nameAl, sub].some(s => s.toLowerCase().includes(q));
+    });
+  }, [templates, query, visFilter, subNameById]);
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -293,6 +310,22 @@ export default function AdminTemplates() {
           </Link>
         </div>
 
+        <div className="mb-5 flex flex-col sm:flex-row gap-2.5">
+          <div className="relative flex-1 min-w-0">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: ADMIN.muted }} />
+            <Input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search templates…" className="pl-8 h-10 rounded-xl" />
+          </div>
+          <div className="flex gap-1.5">
+            {(['all', 'active', 'hidden'] as const).map(v => (
+              <button key={v} type="button" onClick={() => setVisFilter(v)}
+                className="px-3 h-10 rounded-xl text-[11px] font-semibold capitalize"
+                style={visFilter === v ? { background: ADMIN.ink, color: '#fff' } : { background: ADMIN.card, color: ADMIN.ink, border: `1px solid ${ADMIN.line}` }}>
+                {v}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
           {isLoading ? (
             [1, 2, 3, 4].map(i => <div key={i} className="aspect-[4/5] animate-pulse rounded-2xl" style={{ background: ADMIN.blushSoft }} />)
@@ -313,8 +346,12 @@ export default function AdminTemplates() {
                 </Link>
               </div>
             </div>
+          ) : filtered.length === 0 ? (
+            <div className="col-span-full py-12 text-center rounded-2xl" style={{ background: ADMIN.card, border: `1px solid ${ADMIN.line}` }}>
+              <p className="text-sm" style={{ color: ADMIN.muted }}>No templates match this filter.</p>
+            </div>
           ) : (
-            templates.map(template => (
+            filtered.map(template => (
               <div key={template.id} className="rounded-2xl overflow-hidden group shadow-sm" style={{ background: ADMIN.card, border: `1px solid ${ADMIN.line}` }}>
                 <div className="grid grid-cols-2 gap-px bg-neutral-200">
                   <div className="aspect-[3/4] relative bg-white">

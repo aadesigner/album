@@ -77,6 +77,52 @@ export function resolveDesignCategory(cat: {
   return '';
 }
 
+/** Homepage / wizard query — `?category=dasme` or `?design=cream-names`. */
+export function resolveDesignCategoryFromQuery(
+  slug: string | null | undefined,
+  designId: string | null | undefined,
+  designs: Array<{ id: string; category: string }> = [],
+): string {
+  const id = String(designId || '').trim();
+  if (id) {
+    const hit = designs.find((d) => d.id === id);
+    if (hit?.category) return hit.category;
+  }
+  const key = String(slug || '').trim();
+  if (!key) return '';
+  return DB_CAT_TO_DESIGN_CAT[key] || DB_CAT_TO_DESIGN_CAT[normalizeCatKey(key)] || '';
+}
+
+type DbCategoryRow = {
+  id?: number | null;
+  nameAl?: string | null;
+  nameEn?: string | null;
+  slug?: string | null;
+};
+
+/** Find the DB category row for a homepage slug and/or a design catalog key. */
+export function matchDbCategory(
+  categories: DbCategoryRow[] | null | undefined,
+  slug?: string | null,
+  designCat?: string | null,
+): DbCategoryRow | undefined {
+  const list = Array.isArray(categories) ? categories : [];
+  const slugNorm = normalizeCatKey(slug);
+  const slugKey = slugNorm
+    ? (DB_CAT_TO_DESIGN_CAT[slug] || DB_CAT_TO_DESIGN_CAT[slugNorm] || '')
+    : '';
+  return list.find((c) => {
+    if (slugNorm) {
+      if (normalizeCatKey(c.slug) === slugNorm) return true;
+      if (normalizeCatKey(c.nameAl) === slugNorm) return true;
+      if (normalizeCatKey(c.nameEn) === slugNorm) return true;
+      if (slugKey && resolveDesignCategory(c) === slugKey) return true;
+    }
+    if (designCat && resolveDesignCategory(c) === designCat) return true;
+    return false;
+  });
+}
+
 const cityAccent: CSSProperties[] = [
   { position: 'absolute', bottom: 0, left: 0, right: 0, height: '32%', background: 'linear-gradient(to top,rgba(0,0,0,0.55) 0%,transparent 100%)' },
 ];

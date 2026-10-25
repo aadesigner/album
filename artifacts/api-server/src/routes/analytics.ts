@@ -3,6 +3,7 @@ import { db } from "@workspace/db-tsconfig";
 import { siteAnalyticsTable } from "@workspace/db-tsconfig";
 import { sql } from "drizzle-orm";
 import { requireAdmin } from "../lib/auth";
+import { getClientIp } from "../lib/clientIp";
 
 const router: IRouter = Router();
 
@@ -10,12 +11,7 @@ const router: IRouter = Router();
 router.post("/analytics/track", async (req, res): Promise<void> => {
   const { event = "page_view", path = "/" } = req.body || {};
 
-  const rawIp =
-    (req.headers["cf-connecting-ip"] as string) ||
-    (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
-    req.ip ||
-    "unknown";
-  const ip = rawIp.replace(/^::ffff:/, "");
+  const ip = getClientIp(req) || "unknown";
   const country = (req.headers["cf-ipcountry"] as string)?.toUpperCase() || null;
 
   // Fire-and-forget — don't block the response

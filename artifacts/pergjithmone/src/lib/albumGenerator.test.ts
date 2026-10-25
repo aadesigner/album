@@ -95,4 +95,28 @@ describe("generateAlbum", () => {
         .join("::");
     expect(sig(a) === sig(b) && a.meta.frontDesignId === b.meta.frontDesignId).toBe(false);
   });
+
+  it("keeps upload order and uses first/last photos as covers", () => {
+    const ordered = Array.from({ length: 12 }, (_, i) => `https://cdn.example/seq-${i}.jpg`);
+    const album = generateAlbum("Wedding", ordered, 8, "en", { widthCm: 21, heightCm: 28 });
+
+    const coverSrcs = (page: typeof album.frontCover) =>
+      page.filter((e) => (e.type === "image" || e.type === "background") && e.src).map((e) => e.src as string);
+
+    expect(coverSrcs(album.frontCover).some((src) => src.includes("seq-0.jpg"))).toBe(true);
+    expect(coverSrcs(album.backCover).some((src) => src.includes("seq-11.jpg"))).toBe(true);
+
+    const innerSrcs = album.innerPages.flatMap((page) =>
+      page.filter((e) => e.type === "image" && e.src).map((e) => e.src as string),
+    );
+    const indexes = innerSrcs.map((src) => ordered.indexOf(src));
+    expect(indexes.every((i) => i > 0 && i < ordered.length - 1)).toBe(true);
+    expect(indexes).toEqual([...indexes].sort((a, b) => a - b));
+  });
+
+  it("opens on a single-photo page when photos remain", () => {
+    const album = generateAlbum("Wedding", PHOTOS, 10, "en", { widthCm: 21, heightCm: 28 });
+    const firstImages = album.innerPages[0].filter((e) => e.type === "image");
+    expect(firstImages).toHaveLength(1);
+  });
 });

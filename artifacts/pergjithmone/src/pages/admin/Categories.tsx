@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { AdminLayout, ADMIN } from '@/components/layout/AdminLayout';
+import { AdminModal } from '@/components/admin/AdminModal';
 import {
   useListAdminCategories, useCreateAdminCategory, useUpdateAdminCategory, useDeleteAdminCategory,
   useListSubcategories, useCreateAdminSubcategory, useUpdateAdminSubcategory, useDeleteAdminSubcategory,
@@ -8,7 +9,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ImageUploadInput } from '@/components/admin/ImageUploadInput';
-import { Plus, Edit2, Trash2, ChevronDown, ChevronRight, FolderTree } from 'lucide-react';
+import { Plus, Edit2, Trash2, ChevronDown, ChevronRight, FolderTree, Search } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { getCategoryImage } from '@/lib/categoryImages';
@@ -88,8 +89,8 @@ function CategoryFormModal({ category, onClose }: { category: Category | null; o
   const { toast } = useToast();
   const loading = createCategory.isPending || updateCategory.isPending;
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     setError('');
     if (!form.slug.trim() || !form.nameAl.trim() || !form.nameEn.trim() || !form.iconEmoji.trim()) {
       setError('Slug, icon, and both names (AL/EN) are required.');
@@ -119,68 +120,70 @@ function CategoryFormModal({ category, onClose }: { category: Category | null; o
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center gap-2 mb-5">
-          <div className="w-8 h-8 rounded-2xl flex items-center justify-center" style={{ background: ADMIN.blushSoft }}>
-            {isEdit ? <Edit2 size={16} style={{ color: ADMIN.blushDeep }} /> : <Plus size={16} style={{ color: ADMIN.blushDeep }} />}
+    <AdminModal
+      size="md"
+      title={isEdit ? 'Edit category' : 'New category'}
+      subtitle="Shown on Home and in the create-album flow."
+      icon={isEdit ? <Edit2 size={16} style={{ color: ADMIN.blushDeep }} /> : <Plus size={16} style={{ color: ADMIN.blushDeep }} />}
+      onClose={onClose}
+      footer={
+        <>
+          {error && <p className="text-sm text-red-600 flex-1 min-w-0">{error}</p>}
+          <span className="flex-1" />
+          <Button type="button" variant="outline" onClick={onClose} className="rounded-xl min-w-[6rem]">Cancel</Button>
+          <Button type="button" disabled={loading} onClick={() => void submit()}
+            className="rounded-xl text-white min-w-[8rem] hover:opacity-90" style={{ background: ADMIN.blush }}>
+            {loading ? 'Saving…' : isEdit ? 'Save changes' : 'Create category'}
+          </Button>
+        </>
+      }
+    >
+      <form onSubmit={submit} className="space-y-4 px-5 py-4">
+        <div className="grid grid-cols-3 gap-3">
+          <div className="col-span-1">
+            <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Icon *</label>
+            <Input value={form.iconEmoji} onChange={e => setForm(f => ({ ...f, iconEmoji: e.target.value }))} placeholder="📷" required />
           </div>
-          <h3 className="font-serif text-lg font-semibold">{isEdit ? 'Edit Category' : 'New Category'}</h3>
+          <div className="col-span-2">
+            <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Slug *</label>
+            <Input value={form.slug} onChange={e => setForm(f => ({ ...f, slug: e.target.value }))} placeholder="wedding" required />
+          </div>
         </div>
-        <form onSubmit={submit} className="space-y-4">
-          <div className="grid grid-cols-3 gap-3">
-            <div className="col-span-1">
-              <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Icon *</label>
-              <Input value={form.iconEmoji} onChange={e => setForm(f => ({ ...f, iconEmoji: e.target.value }))} placeholder="📷" required />
-            </div>
-            <div className="col-span-2">
-              <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Slug *</label>
-              <Input value={form.slug} onChange={e => setForm(f => ({ ...f, slug: e.target.value }))} placeholder="wedding" required />
-            </div>
-          </div>
+        <div>
+          <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Name (Albanian) *</label>
+          <Input value={form.nameAl} onChange={e => setForm(f => ({ ...f, nameAl: e.target.value }))} placeholder="Dasma" required />
+        </div>
+        <div>
+          <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Name (English) *</label>
+          <Input value={form.nameEn} onChange={e => setForm(f => ({ ...f, nameEn: e.target.value }))} placeholder="Wedding" required />
+        </div>
+        <ImageUploadInput
+          value={form.coverImage}
+          onChange={url => setForm(f => ({ ...f, coverImage: url }))}
+          label="Cover Image"
+          fallbackPreview={
+            isEdit
+              ? getCategoryImage(form.nameAl || category!.nameAl, null, form.slug || category!.slug)
+              : (form.slug || form.nameAl
+                  ? getCategoryImage(form.nameAl, null, form.slug)
+                  : undefined)
+          }
+          fallbackHint="This is what customers see on Home / Create. Upload to replace it."
+        />
+        <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Name (Albanian) *</label>
-            <Input value={form.nameAl} onChange={e => setForm(f => ({ ...f, nameAl: e.target.value }))} placeholder="Dasma" required />
+            <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Sort Order</label>
+            <Input type="number" value={form.sortOrder} onChange={e => setForm(f => ({ ...f, sortOrder: Number(e.target.value) }))} />
           </div>
-          <div>
-            <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Name (English) *</label>
-            <Input value={form.nameEn} onChange={e => setForm(f => ({ ...f, nameEn: e.target.value }))} placeholder="Wedding" required />
+          <div className="flex items-end">
+            <label className="flex items-center gap-2 text-sm font-medium text-neutral-600 pb-2 cursor-pointer">
+              <input type="checkbox" checked={form.isActive} onChange={e => setForm(f => ({ ...f, isActive: e.target.checked }))} className="rounded border-input" />
+              Active
+            </label>
           </div>
-          <ImageUploadInput
-            value={form.coverImage}
-            onChange={url => setForm(f => ({ ...f, coverImage: url }))}
-            label="Cover Image"
-            fallbackPreview={
-              isEdit
-                ? getCategoryImage(form.nameAl || category!.nameAl, null, form.slug || category!.slug)
-                : (form.slug || form.nameAl
-                    ? getCategoryImage(form.nameAl, null, form.slug)
-                    : undefined)
-            }
-            fallbackHint="This is what customers see on Home / Create. Upload to replace it."
-          />
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Sort Order</label>
-              <Input type="number" value={form.sortOrder} onChange={e => setForm(f => ({ ...f, sortOrder: Number(e.target.value) }))} />
-            </div>
-            <div className="flex items-end">
-              <label className="flex items-center gap-2 text-sm font-medium text-neutral-600 pb-2 cursor-pointer">
-                <input type="checkbox" checked={form.isActive} onChange={e => setForm(f => ({ ...f, isActive: e.target.checked }))} className="rounded border-input" />
-                Active
-              </label>
-            </div>
-          </div>
-          {error && <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
-          <div className="flex gap-3 pt-1">
-            <Button type="button" variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
-            <Button type="submit" disabled={loading} className="flex-1 text-white hover:opacity-90 rounded-2xl" style={{ background: ADMIN.blush }}>
-              {loading ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Category'}
-            </Button>
-          </div>
-        </form>
-      </div>
-    </div>
+        </div>
+      </form>
+    </AdminModal>
   );
 }
 
@@ -204,8 +207,8 @@ function SubcategoryFormModal({ categoryId, subcategory, onClose }: {
   const { toast } = useToast();
   const loading = createSub.isPending || updateSub.isPending;
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     setError('');
     if (!form.slug.trim() || !form.nameAl.trim() || !form.nameEn.trim()) {
       setError('Slug and both names (AL/EN) are required.');
@@ -235,50 +238,52 @@ function SubcategoryFormModal({ categoryId, subcategory, onClose }: {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center gap-2 mb-5">
-          <div className="w-8 h-8 rounded-2xl flex items-center justify-center" style={{ background: ADMIN.blushSoft }}>
-            {isEdit ? <Edit2 size={16} style={{ color: ADMIN.blushDeep }} /> : <Plus size={16} style={{ color: ADMIN.blushDeep }} />}
-          </div>
-          <h3 className="font-serif text-lg font-semibold">{isEdit ? 'Edit Subcategory' : 'New Subcategory'}</h3>
+    <AdminModal
+      size="md"
+      title={isEdit ? 'Edit subcategory' : 'New subcategory'}
+      subtitle="Templates link to a subcategory, not the parent category."
+      icon={isEdit ? <Edit2 size={16} style={{ color: ADMIN.blushDeep }} /> : <Plus size={16} style={{ color: ADMIN.blushDeep }} />}
+      onClose={onClose}
+      footer={
+        <>
+          {error && <p className="text-sm text-red-600 flex-1 min-w-0">{error}</p>}
+          <span className="flex-1" />
+          <Button type="button" variant="outline" onClick={onClose} className="rounded-xl min-w-[6rem]">Cancel</Button>
+          <Button type="button" disabled={loading} onClick={() => void submit()}
+            className="rounded-xl text-white min-w-[8rem] hover:opacity-90" style={{ background: ADMIN.blush }}>
+            {loading ? 'Saving…' : isEdit ? 'Save changes' : 'Create subcategory'}
+          </Button>
+        </>
+      }
+    >
+      <form onSubmit={submit} className="space-y-4 px-5 py-4">
+        <div>
+          <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Slug *</label>
+          <Input value={form.slug} onChange={e => setForm(f => ({ ...f, slug: e.target.value }))} placeholder="beach-wedding" required />
         </div>
-        <form onSubmit={submit} className="space-y-4">
+        <div>
+          <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Name (Albanian) *</label>
+          <Input value={form.nameAl} onChange={e => setForm(f => ({ ...f, nameAl: e.target.value }))} required />
+        </div>
+        <div>
+          <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Name (English) *</label>
+          <Input value={form.nameEn} onChange={e => setForm(f => ({ ...f, nameEn: e.target.value }))} required />
+        </div>
+        <ImageUploadInput value={form.previewImage} onChange={url => setForm(f => ({ ...f, previewImage: url }))} label="Preview Image" />
+        <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Slug *</label>
-            <Input value={form.slug} onChange={e => setForm(f => ({ ...f, slug: e.target.value }))} placeholder="beach-wedding" required />
+            <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Sort Order</label>
+            <Input type="number" value={form.sortOrder} onChange={e => setForm(f => ({ ...f, sortOrder: Number(e.target.value) }))} />
           </div>
-          <div>
-            <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Name (Albanian) *</label>
-            <Input value={form.nameAl} onChange={e => setForm(f => ({ ...f, nameAl: e.target.value }))} required />
+          <div className="flex items-end">
+            <label className="flex items-center gap-2 text-sm font-medium text-neutral-600 pb-2 cursor-pointer">
+              <input type="checkbox" checked={form.isActive} onChange={e => setForm(f => ({ ...f, isActive: e.target.checked }))} className="rounded border-input" />
+              Active
+            </label>
           </div>
-          <div>
-            <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Name (English) *</label>
-            <Input value={form.nameEn} onChange={e => setForm(f => ({ ...f, nameEn: e.target.value }))} required />
-          </div>
-          <ImageUploadInput value={form.previewImage} onChange={url => setForm(f => ({ ...f, previewImage: url }))} label="Preview Image" />
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Sort Order</label>
-              <Input type="number" value={form.sortOrder} onChange={e => setForm(f => ({ ...f, sortOrder: Number(e.target.value) }))} />
-            </div>
-            <div className="flex items-end">
-              <label className="flex items-center gap-2 text-sm font-medium text-neutral-600 pb-2 cursor-pointer">
-                <input type="checkbox" checked={form.isActive} onChange={e => setForm(f => ({ ...f, isActive: e.target.checked }))} className="rounded border-input" />
-                Active
-              </label>
-            </div>
-          </div>
-          {error && <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
-          <div className="flex gap-3 pt-1">
-            <Button type="button" variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
-            <Button type="submit" disabled={loading} className="flex-1 text-white hover:opacity-90 rounded-2xl" style={{ background: ADMIN.blush }}>
-              {loading ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Subcategory'}
-            </Button>
-          </div>
-        </form>
-      </div>
-    </div>
+        </div>
+      </form>
+    </AdminModal>
   );
 }
 
@@ -287,19 +292,24 @@ function DeleteConfirm({ title, description, onConfirm, onCancel, loading }: {
   title: string; description: string; onConfirm: () => void; onCancel: () => void; loading: boolean;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={e => e.target === e.currentTarget && onCancel()}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xs p-6 text-center">
-        <div className="text-4xl mb-3">⚠️</div>
-        <h3 className="font-serif text-lg font-semibold mb-2">{title}</h3>
-        <p className="text-sm text-neutral-500 mb-5">{description}</p>
-        <div className="flex gap-3">
-          <Button variant="outline" onClick={onCancel} className="flex-1">Cancel</Button>
-          <Button onClick={onConfirm} disabled={loading} className="flex-1 bg-red-500 hover:bg-red-600 text-white">
+    <AdminModal
+      size="sm"
+      title={title}
+      subtitle={description}
+      onClose={onCancel}
+      footer={
+        <>
+          <Button variant="outline" onClick={onCancel} className="flex-1 rounded-xl">Cancel</Button>
+          <Button onClick={onConfirm} disabled={loading} className="flex-1 rounded-xl bg-red-500 hover:bg-red-600 text-white">
             {loading ? 'Deleting…' : 'Delete'}
           </Button>
-        </div>
+        </>
+      }
+    >
+      <div className="px-5 py-4 text-sm" style={{ color: ADMIN.muted }}>
+        This cannot be undone.
       </div>
-    </div>
+    </AdminModal>
   );
 }
 
@@ -388,6 +398,18 @@ export default function AdminCategories() {
   const [deleteTarget, setDeleteTarget] = useState<Category | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [expanded, setExpanded] = useState<number | null>(null);
+  const [query, setQuery] = useState('');
+  const [visFilter, setVisFilter] = useState<'all' | 'active' | 'hidden'>('all');
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return (categories || []).filter(cat => {
+      if (visFilter === 'active' && !cat.isActive) return false;
+      if (visFilter === 'hidden' && cat.isActive) return false;
+      if (!q) return true;
+      return [cat.nameAl, cat.nameEn, cat.slug].some(s => s.toLowerCase().includes(q));
+    });
+  }, [categories, query, visFilter]);
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -424,12 +446,28 @@ export default function AdminCategories() {
           <div>
             <p className="text-[10px] font-semibold tracking-[0.18em] uppercase mb-1.5" style={{ color: ADMIN.blush }}>Catalog</p>
             <h1 className="text-3xl font-serif font-semibold mb-1" style={{ color: ADMIN.ink }}>Categories</h1>
-            <p className="text-sm" style={{ color: ADMIN.muted }}>Book categories, subcategories, and visibility.</p>
+            <p className="text-sm" style={{ color: ADMIN.muted }}>Book categories, subcategories, and visibility on Home and Create.</p>
           </div>
           <Button className="gap-2 rounded-2xl text-white hover:opacity-90 shrink-0" style={{ background: ADMIN.blush }}
             onClick={() => setFormTarget({ open: true, cat: null })}>
             <Plus size={16} /> New Category
           </Button>
+        </div>
+
+        <div className="mb-5 flex flex-col sm:flex-row gap-2.5">
+          <div className="relative flex-1 min-w-0">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: ADMIN.muted }} />
+            <Input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search categories…" className="pl-8 h-10 rounded-xl" />
+          </div>
+          <div className="flex gap-1.5">
+            {(['all', 'active', 'hidden'] as const).map(v => (
+              <button key={v} type="button" onClick={() => setVisFilter(v)}
+                className="px-3 h-10 rounded-xl text-[11px] font-semibold capitalize"
+                style={visFilter === v ? { background: ADMIN.ink, color: '#fff' } : { background: ADMIN.card, color: ADMIN.ink, border: `1px solid ${ADMIN.line}` }}>
+                {v}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="rounded-2xl shadow-sm overflow-hidden" style={{ background: ADMIN.card, border: `1px solid ${ADMIN.line}` }}>
@@ -448,10 +486,12 @@ export default function AdminCategories() {
               <tbody>
                 {isLoading ? (
                   <tr><td colSpan={6} className="px-6 py-8 text-center text-sm" style={{ color: ADMIN.muted }}>Loading…</td></tr>
-                ) : categories?.length === 0 ? (
-                  <tr><td colSpan={6} className="px-6 py-8 text-center text-sm" style={{ color: ADMIN.muted }}>No categories found.</td></tr>
+                ) : filtered.length === 0 ? (
+                  <tr><td colSpan={6} className="px-6 py-8 text-center text-sm" style={{ color: ADMIN.muted }}>
+                    {categories?.length ? 'No categories match this filter.' : 'No categories found.'}
+                  </td></tr>
                 ) : (
-                  categories?.map(cat => {
+                  filtered.map(cat => {
                     const coverSrc = getCategoryImage(cat.nameAl, cat.coverImage, cat.slug);
                     const isCustomCover = !!cat.coverImage;
                     return (

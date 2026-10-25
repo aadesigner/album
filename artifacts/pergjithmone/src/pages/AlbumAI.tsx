@@ -14,9 +14,10 @@ import {
 import { useLocation } from 'wouter';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { resolveDesignCategory } from '@/lib/designMeta';
+import { resolveDesignCategory, resolveDesignCategoryFromQuery } from '@/lib/designMeta';
+import { DESIGNS } from '@/lib/designs';
 import { generateAlbum, suggestInnerPageCount } from '@/lib/albumGenerator';
-import { compressImageFile } from '@/lib/imageCompression';
+import { uploadImageToApi } from '@/lib/uploadImage';
 import { pendingBooksLimitMessage } from '@/lib/projectErrors';
 import { SizeCard } from './Wizard';
 import { getCategoryImage } from '@/lib/categoryImages';
@@ -113,19 +114,8 @@ export default function AlbumAI() {
     if (!item.file) return;
     setPhotos(prev => prev.map(p => p.id === item.id ? { ...p, status: 'uploading' } : p));
     try {
-      const compressed = await compressImageFile(item.file);
-      const token = getToken();
-      const fd = new FormData();
-      fd.append('file', compressed);
-      const r = await fetch('/api/uploads/image', {
-        method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        body: fd,
-      });
-      if (!r.ok) throw new Error(await r.text());
-      const data = await r.json();
-      if (!data.url) throw new Error('No URL returned');
-      setPhotos(prev => prev.map(p => p.id === item.id ? { ...p, status: 'done', url: data.url } : p));
+      const url = await uploadImageToApi(item.file, getToken());
+      setPhotos(prev => prev.map(p => p.id === item.id ? { ...p, status: 'done', url } : p));
     } catch (e) {
       console.error('Photo upload failed', e);
       setPhotos(prev => prev.map(p => p.id === item.id ? { ...p, status: 'error' } : p));
@@ -177,6 +167,17 @@ export default function AlbumAI() {
     });
   }, []);
 
+  const movePhoto = useCallback((from: number, to: number) => {
+    setPhotos((prev) => {
+      if (from === to || from < 0 || to < 0 || from >= prev.length || to >= prev.length) return prev;
+      const next = [...prev];
+      const [item] = next.splice(from, 1);
+      next.splice(to, 0, item);
+      return next;
+    });
+  }, []);
+  const dragPhotoIndex = useRef<number | null>(null);
+
   const retryPhoto = useCallback((id: string) => {
     setPhotos(prev => {
       const item = prev.find(p => p.id === id);
@@ -207,7 +208,10 @@ export default function AlbumAI() {
     setGenError(null);
     try {
       const cat = (categories as any[])?.find((c: any) => c.id === catId);
-      const designCategoryKey = resolveDesignCategory(cat);
+      const designCategoryKey =
+        resolveDesignCategory(cat)
+        || resolveDesignCategoryFromQuery(cat?.slug, null, DESIGNS)
+        || 'Modern';
 
       if (!photoUrls.length) {
         throw new Error('NO_PHOTOS');
@@ -216,8 +220,8 @@ export default function AlbumAI() {
       setGenStageIndex(0); // project
       const chosenSize = ((bookSizes as any[]) || []).find(s => s.id === sizeId);
       if (!chosenSize) throw new Error('No book sizes available');
-      // ~1.75 photos/page so the planner can use clean 1–2 photo layouts
-      // without wrapping the same image across pages.
+      // Opening + closing heroes, then ~1.55 photos/page so spreads stay airy
+      // and each image is used once.
       const desiredInner = suggestInnerPageCount(photoUrls.length, 4);
       const finalInner = Math.max(desiredInner, chosenSize.minPages);
 
@@ -857,40 +861,74 @@ export default function AlbumAI() {
                   />
                 </div>
 
-                {/* Thumbnails */}
+                {/* Thumbnails — order is the album story */}
                 {photos.length > 0 && (
-                  <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-2 mb-8">
-                    {photos.map(p => (
-                      <div key={p.id} className="relative rounded-lg overflow-hidden" style={{ aspectRatio: '1/1' }}>
-                        <img src={p.previewUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
-                        {p.status === 'uploading' && (
-                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                            <Loader2 size={16} className="text-white animate-spin" />
-                          </div>
-                        )}
-                        {p.status === 'error' && (
-                          <button
-                            onClick={() => retryPhoto(p.id)}
-                            className="absolute inset-0 bg-red-900/60 flex flex-col items-center justify-center text-white"
-                            title={lang === 'sq' ? 'Kliko për të riprovuar' : 'Click to retry'}
+                  <>
+                    <p className="text-[11px] text-neutral-500 mb-3">
+                      {lang === 'sq'
+                        ? 'E para është kopertina, e fundit kapaku i pasëm. Tërhiq fotot për t\'i rregulluar.'
+                        : 'The first photo is the cover, the last is the back. Drag to reorder.'}
+                    </p>
+                    <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-2 mb-8">
+                      {photos.map((p, index) => {
+                        const isCover = index === 0;
+                        const isBack = photos.length >= 3 && index === photos.length - 1;
+                        return (
+                          <div
+                            key={p.id}
+                            draggable
+                            onDragStart={() => { dragPhotoIndex.current = index; }}
+                            onDragOver={(e) => { e.preventDefault(); }}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              if (dragPhotoIndex.current != null) movePhoto(dragPhotoIndex.current, index);
+                              dragPhotoIndex.current = null;
+                            }}
+                            onDragEnd={() => { dragPhotoIndex.current = null; }}
+                            className="relative rounded-lg overflow-hidden cursor-grab active:cursor-grabbing"
+                            style={{ aspectRatio: '1/1' }}
+                            title={
+                              isCover
+                                ? (lang === 'sq' ? 'Kopertina' : 'Cover')
+                                : isBack
+                                  ? (lang === 'sq' ? 'Kapaku i pasëm' : 'Back cover')
+                                  : undefined
+                            }
                           >
-                            <ImageOff size={14} />
-                          </button>
-                        )}
-                        {p.status === 'done' && (
-                          <div className="absolute top-1 left-1 w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center">
-                            <Check size={9} className="text-white" />
+                            <img src={p.previewUrl} alt="" className="absolute inset-0 w-full h-full object-cover pointer-events-none" />
+                            {p.status === 'uploading' && (
+                              <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                                <Loader2 size={16} className="text-white animate-spin" />
+                              </div>
+                            )}
+                            {p.status === 'error' && (
+                              <button
+                                onClick={() => retryPhoto(p.id)}
+                                className="absolute inset-0 bg-red-900/60 flex flex-col items-center justify-center text-white"
+                                title={lang === 'sq' ? 'Kliko për të riprovuar' : 'Click to retry'}
+                              >
+                                <ImageOff size={14} />
+                              </button>
+                            )}
+                            <span className="absolute bottom-1 left-1 px-1.5 h-4 rounded bg-black/65 text-white text-[9px] font-semibold leading-4">
+                              {isCover ? (lang === 'sq' ? 'Kopertinë' : 'Cover') : isBack ? (lang === 'sq' ? 'Pas' : 'Back') : index + 1}
+                            </span>
+                            {p.status === 'done' && (
+                              <div className="absolute top-1 left-1 w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center">
+                                <Check size={9} className="text-white" />
+                              </div>
+                            )}
+                            <button
+                              onClick={() => removePhoto(p.id)}
+                              className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 hover:bg-black/80 flex items-center justify-center text-white transition-colors"
+                            >
+                              <X size={11} />
+                            </button>
                           </div>
-                        )}
-                        <button
-                          onClick={() => removePhoto(p.id)}
-                          className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 hover:bg-black/80 flex items-center justify-center text-white transition-colors"
-                        >
-                          <X size={11} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
+                        );
+                      })}
+                    </div>
+                  </>
                 )}
 
                 <div className="flex justify-center">
@@ -1001,8 +1039,8 @@ export default function AlbumAI() {
                       icon: UploadCloud,
                       title: { sq: 'Ngarko fotot e tua', en: 'Upload your photos' },
                       desc: {
-                        sq: `Të paktën ${MIN_PHOTOS}, deri në ${MAX_PHOTOS} foto. Ngarkohen direkt nga telefoni ose kompjuteri, pa asnjë rregullim manual.`,
-                        en: `At least ${MIN_PHOTOS}, up to ${MAX_PHOTOS} photos. Upload straight from your phone or computer — no manual sorting needed.`,
+                        sq: `Të paktën ${MIN_PHOTOS}, deri në ${MAX_PHOTOS} foto. Ngarko në rendin e historisë — e para bëhet kopertina, e fundit e mbyll albumin.`,
+                        en: `At least ${MIN_PHOTOS}, up to ${MAX_PHOTOS} photos. Upload in story order — the first becomes the cover, the last closes the book.`,
                       },
                     },
                     {

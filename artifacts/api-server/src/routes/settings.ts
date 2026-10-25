@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db-tsconfig";
 import { bookSizesTable, layoutsTable, appSettingsTable } from "@workspace/db-tsconfig";
 import { eq } from "drizzle-orm";
+import { readOfferBarSettings } from "../lib/offerBarSettings";
 
 const router: IRouter = Router();
 
@@ -64,6 +65,7 @@ router.get("/settings", async (_req, res): Promise<void> => {
     requireLoginForPdf: map["require_login_for_pdf"] === "true",
     pendingBooksLimitEnabled: map["pending_books_limit_enabled"] !== "false",
     pendingBooksLimit: parseInt(map["pending_books_limit"] || "10", 10),
+    ...readOfferBarSettings(map),
   });
 });
 

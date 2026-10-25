@@ -16,8 +16,17 @@
 // could compound artifacts — this is the single source of truth for "how
 // large does a photo ever need to be in this app".
 const MAX_DIMENSION = 2600;
-const HARD_LIMIT_BYTES = 3 * 1024 * 1024; // 3MB per photo, per product requirement
+const HARD_LIMIT_BYTES = 3 * 1024 * 1024; // 3MB per photo after we can re-encode
+/** Phone HEIC/AVIF we cannot decode locally still goes to the server for conversion. */
+const PASSTHROUGH_LIMIT_BYTES = 20 * 1024 * 1024;
 const QUALITY_STEPS = [0.92, 0.85, 0.78, 0.7, 0.6, 0.5];
+
+function isLikelyImageFile(file: File): boolean {
+  const type = String(file.type || '').toLowerCase();
+  if (type.startsWith('image/')) return true;
+  if (!type || type === 'application/octet-stream') return true;
+  return /\.(jpe?g|png|webp|gif|heic|heif|avif|tiff?)$/i.test(file.name || '');
+}
 
 export class ImageTooLargeError extends Error {
   constructor(public sizeBytes: number) {
@@ -29,7 +38,9 @@ export class ImageTooLargeError extends Error {
 async function decodeToBitmap(file: File): Promise<ImageBitmap | HTMLImageElement> {
   if ('createImageBitmap' in window) {
     try {
-      return await createImageBitmap(file);
+      const bmp = await createImageBitmap(file);
+      if (bmp && bmp.width > 0 && bmp.height > 0) return bmp;
+      if (bmp && 'close' in bmp) bmp.close();
     } catch {
       // Fall through to the <img> path below (some formats/browsers reject createImageBitmap).
     }
@@ -70,7 +81,7 @@ function canvasToBlob(canvas: HTMLCanvasElement, mime: string, quality?: number)
 export async function compressImageFile(file: File): Promise<File> {
   // Animated GIFs would be flattened to a single frame by a canvas re-encode —
   // leave them alone and let the size-limit check below gate them instead.
-  if (!file.type.startsWith('image/') || file.type === 'image/gif') {
+  if (!isLikelyImageFile(file) || file.type === 'image/gif') {
     if (file.size > HARD_LIMIT_BYTES) throw new ImageTooLargeError(file.size);
     return file;
   }
@@ -79,14 +90,17 @@ export async function compressImageFile(file: File): Promise<File> {
   try {
     source = await decodeToBitmap(file);
   } catch {
-    // Couldn't decode client-side (e.g. an unsupported format) — fall back to
-    // just enforcing the size limit and let the server have a go at it.
-    if (file.size > HARD_LIMIT_BYTES) throw new ImageTooLargeError(file.size);
+    // Couldn't decode client-side (HEIC on desktop, empty MIME, etc.) —
+    // send the original through so the server can convert it.
+    if (file.size > PASSTHROUGH_LIMIT_BYTES) throw new ImageTooLargeError(file.size);
     return file;
   }
 
   const { w, h } = getSize(source);
-  if (!w || !h) return file;
+  if (!w || !h) {
+    if (file.size > PASSTHROUGH_LIMIT_BYTES) throw new ImageTooLargeError(file.size);
+    return file;
+  }
 
   const scale = Math.min(1, MAX_DIMENSION / Math.max(w, h));
   const targetW = Math.max(1, Math.round(w * scale));

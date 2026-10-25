@@ -1,5 +1,5 @@
 import type { EditorElement } from './designs';
-import { DESIGN_W } from './designs';
+import { DESIGN_W, PHOTO_CORNER_ZOOM } from './designs';
 
 export type CoverBgMode = 'color' | 'gradient' | 'photo';
 
@@ -62,7 +62,7 @@ export function applyCoverBackground(
         ? {
             cropFocusX: samePhoto ? (existing?.cropFocusX ?? 0.5) : 0.5,
             cropFocusY: samePhoto ? (existing?.cropFocusY ?? 0.5) : 0.5,
-            cropZoom: samePhoto ? (existing?.cropZoom ?? 1) : 1,
+            cropZoom: samePhoto ? (existing?.cropZoom ?? PHOTO_CORNER_ZOOM) : PHOTO_CORNER_ZOOM,
           }
         : {}),
     };

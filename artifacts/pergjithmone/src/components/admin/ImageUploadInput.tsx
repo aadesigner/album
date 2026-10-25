@@ -1,9 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Upload, X, Loader2 } from 'lucide-react';
-import { compressImageFile } from '@/lib/imageCompression';
-
-const BASE = (import.meta as any).env?.BASE_URL?.replace(/\/$/, '') || '';
+import { uploadErrorMessage, uploadImageToApi } from '@/lib/uploadImage';
 
 /**
  * Cover-image uploader for admin forms.
@@ -37,24 +35,10 @@ export function ImageUploadInput({
     setError('');
     setBroken(false);
     try {
-      const compressed = await compressImageFile(file);
-      const token = getToken();
-      const fd = new FormData();
-      fd.append('file', compressed);
-      const r = await fetch(`${BASE}/api/uploads/image`, {
-        method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        credentials: 'include',
-        body: fd,
-      });
-      if (!r.ok) {
-        const msg = await r.text().catch(() => '');
-        throw new Error(msg || 'Upload failed');
-      }
-      const data = await r.json();
-      if (data.url) onChange(data.url);
+      const url = await uploadImageToApi(file, getToken());
+      onChange(url);
     } catch (e: any) {
-      setError(e?.message || 'Upload failed');
+      setError(uploadErrorMessage(e, 'en'));
     } finally {
       setUploading(false);
     }
@@ -78,7 +62,7 @@ export function ImageUploadInput({
       <input
         ref={inputRef}
         type="file"
-        accept="image/jpeg,image/png,image/webp,image/gif"
+        accept="image/*,.heic,.heif,.avif"
         className="hidden"
         onChange={e => {
           const file = e.target.files?.[0];

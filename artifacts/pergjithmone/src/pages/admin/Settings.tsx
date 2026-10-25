@@ -9,10 +9,11 @@ import { Input } from '@/components/ui/input';
 import { useForm } from 'react-hook-form';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormDescription } from '@/components/ui/form';
 import { DESIGN_CATEGORY_LABELS } from '@/lib/designMeta';
-import { parseCustomDesigns, buildDesignCatalog, designFrontElements } from '@/lib/designs';
-import { ResponsivePageThumb } from '@/components/PageThumb';
-import { Eye, EyeOff, Check, AlertTriangle, BookX, BookHeart, Settings, Wrench, DollarSign, Palette, ShieldAlert, FileLock2 } from 'lucide-react';
+import { parseCustomDesigns, buildDesignCatalog } from '@/lib/designs';
+import { ResponsiveDesignCatalogThumb } from '@/components/PageThumb';
+import { Eye, EyeOff, Check, AlertTriangle, BookX, BookHeart, Settings, Wrench, DollarSign, Palette, ShieldAlert, FileLock2, Megaphone } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
+import { OFFER_BAR_DEFAULTS, parseOfferBar, safeOfferHref, sanitizeHexColor } from '@/lib/offerBar';
 
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -30,6 +31,38 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
         }`}
       />
     </button>
+  );
+}
+
+function ColorField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const hex = sanitizeHexColor(value, '#000000');
+  return (
+    <div>
+      <p className="text-sm font-medium mb-1.5" style={{ color: ADMIN.ink }}>{label}</p>
+      <div className="flex items-center gap-2">
+        <input
+          type="color"
+          value={hex}
+          onChange={(e) => onChange(e.target.value)}
+          className="h-10 w-11 cursor-pointer rounded-lg border bg-white p-0.5"
+          style={{ borderColor: ADMIN.line }}
+        />
+        <Input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="font-mono text-[13px]"
+          placeholder="#8C3A2E"
+        />
+      </div>
+    </div>
   );
 }
 
@@ -92,6 +125,16 @@ export default function AdminSettings() {
       maxConcurrentPdfGenerations: s?.maxConcurrentPdfGenerations || 6,
       maxUploadFileSizeMb:         s?.maxUploadFileSizeMb         || 25,
       allowedUploadMimeTypes:      (s?.allowedUploadMimeTypes || ['image/jpeg','image/png','image/webp','image/gif']).join(', '),
+      offerBarEnabled:    s?.offerBarEnabled    ?? OFFER_BAR_DEFAULTS.enabled,
+      offerBarTextAl:     s?.offerBarTextAl     || OFFER_BAR_DEFAULTS.textAl,
+      offerBarTextEn:     s?.offerBarTextEn     || OFFER_BAR_DEFAULTS.textEn,
+      offerBarButtonAl:   s?.offerBarButtonAl   || OFFER_BAR_DEFAULTS.buttonAl,
+      offerBarButtonEn:   s?.offerBarButtonEn   || OFFER_BAR_DEFAULTS.buttonEn,
+      offerBarHref:       s?.offerBarHref       || OFFER_BAR_DEFAULTS.href,
+      offerBarBg:         s?.offerBarBg         || OFFER_BAR_DEFAULTS.bg,
+      offerBarTextColor:  s?.offerBarTextColor  || OFFER_BAR_DEFAULTS.textColor,
+      offerBarButtonBg:   s?.offerBarButtonBg   || OFFER_BAR_DEFAULTS.buttonBg,
+      offerBarButtonText: s?.offerBarButtonText || OFFER_BAR_DEFAULTS.buttonText,
     },
   });
 
@@ -171,6 +214,16 @@ export default function AdminSettings() {
         allowedUploadMimeTypes:      String(values.allowedUploadMimeTypes || '')
           .split(',').map((t: string) => t.trim()).filter(Boolean),
         hiddenDesignIds: Array.from(hiddenIds),
+        offerBarEnabled:    Boolean(values.offerBarEnabled),
+        offerBarTextAl:     String(values.offerBarTextAl || ''),
+        offerBarTextEn:     String(values.offerBarTextEn || ''),
+        offerBarButtonAl:   String(values.offerBarButtonAl || ''),
+        offerBarButtonEn:   String(values.offerBarButtonEn || ''),
+        offerBarHref:       safeOfferHref(values.offerBarHref),
+        offerBarBg:         sanitizeHexColor(values.offerBarBg, OFFER_BAR_DEFAULTS.bg),
+        offerBarTextColor:  sanitizeHexColor(values.offerBarTextColor, OFFER_BAR_DEFAULTS.textColor),
+        offerBarButtonBg:   sanitizeHexColor(values.offerBarButtonBg, OFFER_BAR_DEFAULTS.buttonBg),
+        offerBarButtonText: sanitizeHexColor(values.offerBarButtonText, OFFER_BAR_DEFAULTS.buttonText),
       }});
       await invalidateSettings();
       setSaved(true);
@@ -207,6 +260,18 @@ export default function AdminSettings() {
   const maintenanceOn  = form.watch('maintenanceMode');
   const bookEnabled    = form.watch('bookCreationEnabled');
   const pendingLimitOn = form.watch('pendingBooksLimitEnabled');
+  const offerPreview = parseOfferBar({
+    offerBarEnabled: form.watch('offerBarEnabled'),
+    offerBarTextAl: form.watch('offerBarTextAl'),
+    offerBarTextEn: form.watch('offerBarTextEn'),
+    offerBarButtonAl: form.watch('offerBarButtonAl'),
+    offerBarButtonEn: form.watch('offerBarButtonEn'),
+    offerBarHref: form.watch('offerBarHref'),
+    offerBarBg: form.watch('offerBarBg'),
+    offerBarTextColor: form.watch('offerBarTextColor'),
+    offerBarButtonBg: form.watch('offerBarButtonBg'),
+    offerBarButtonText: form.watch('offerBarButtonText'),
+  });
 
   const cardClass = 'rounded-2xl p-5 sm:p-6 shadow-sm';
   const cardStyle = { background: ADMIN.card, border: `1px solid ${ADMIN.line}` };
@@ -271,6 +336,129 @@ export default function AdminSettings() {
                     <FormItem>
                       <FormLabel>Tagline — English (EN)</FormLabel>
                       <FormControl><Input {...field} /></FormControl>
+                    </FormItem>
+                  )} />
+                </div>
+              </div>
+
+              <div className={cardClass} style={cardStyle}>
+                <SectionHeader
+                  icon={Megaphone}
+                  title="Offer bar"
+                  desc="Notification strip above Fast Delivery / 30-day guarantee. SQ + EN, with a button into the album builder."
+                />
+                <FormField control={form.control} name="offerBarEnabled" render={({ field }) => (
+                  <FormItem>
+                    <div className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-white mb-5" style={{ border: `1px solid ${ADMIN.line}` }}>
+                      <div className="min-w-0">
+                        <FormLabel className="text-base cursor-pointer">Show offer bar</FormLabel>
+                        <FormDescription>When ON, the bar appears on every public page above the delivery strip.</FormDescription>
+                      </div>
+                      <FormControl>
+                        <Toggle checked={!!field.value} onChange={field.onChange} />
+                      </FormControl>
+                    </div>
+                  </FormItem>
+                )} />
+
+                <div
+                  className="mb-5 rounded-2xl overflow-hidden"
+                  style={{ border: `1px solid ${ADMIN.line}` }}
+                >
+                  <p className="text-[10px] font-semibold tracking-[0.14em] uppercase px-4 py-2" style={{ color: ADMIN.muted, background: ADMIN.bg }}>
+                    Live preview
+                  </p>
+                  {offerPreview.enabled ? (
+                    <div className="space-y-0">
+                      {([
+                        { label: 'SQ', text: offerPreview.textAl, button: offerPreview.buttonAl },
+                        { label: 'EN', text: offerPreview.textEn, button: offerPreview.buttonEn },
+                      ] as const).map((row) => (
+                        <div key={row.label} style={{ background: offerPreview.bg, color: offerPreview.textColor }}>
+                          <div className="px-4 py-2.5 flex items-center justify-center gap-3 flex-wrap text-center">
+                            <span className="text-[10px] font-semibold opacity-70">{row.label}</span>
+                            <span className="text-[13px] font-medium">{row.text}</span>
+                            {row.button && (
+                              <span
+                                className="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-semibold uppercase tracking-[0.12em]"
+                                style={{ background: offerPreview.buttonBg, color: offerPreview.buttonText }}
+                              >
+                                {row.button}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="px-4 py-3 text-sm" style={{ color: ADMIN.muted }}>Hidden — turn the toggle on to show it.</p>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
+                  <FormField control={form.control} name="offerBarTextAl" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Message — Albanian (SQ)</FormLabel>
+                      <FormControl>
+                        <textarea {...field} rows={2} className="w-full rounded-xl border bg-white px-3 py-2 text-sm resize-none focus:outline-none" style={{ borderColor: ADMIN.line }} />
+                      </FormControl>
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="offerBarTextEn" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Message — English (EN)</FormLabel>
+                      <FormControl>
+                        <textarea {...field} rows={2} className="w-full rounded-xl border bg-white px-3 py-2 text-sm resize-none focus:outline-none" style={{ borderColor: ADMIN.line }} />
+                      </FormControl>
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="offerBarButtonAl" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Button — Albanian (SQ)</FormLabel>
+                      <FormControl><Input {...field} placeholder="Fillo tani" /></FormControl>
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="offerBarButtonEn" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Button — English (EN)</FormLabel>
+                      <FormControl><Input {...field} placeholder="Start now" /></FormControl>
+                    </FormItem>
+                  )} />
+                </div>
+                <FormField control={form.control} name="offerBarHref" render={({ field }) => (
+                  <FormItem className="mb-5">
+                    <FormLabel>Button link</FormLabel>
+                    <FormControl><Input {...field} placeholder="/krijo" /></FormControl>
+                    <FormDescription>Site path only. Default `/krijo` opens the builder on category selection. Example: `/krijo?category=dasme`.</FormDescription>
+                  </FormItem>
+                )} />
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <FormField control={form.control} name="offerBarBg" render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <ColorField label="Bar color" value={field.value} onChange={field.onChange} />
+                      </FormControl>
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="offerBarTextColor" render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <ColorField label="Text color" value={field.value} onChange={field.onChange} />
+                      </FormControl>
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="offerBarButtonBg" render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <ColorField label="Button color" value={field.value} onChange={field.onChange} />
+                      </FormControl>
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="offerBarButtonText" render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <ColorField label="Button text" value={field.value} onChange={field.onChange} />
+                      </FormControl>
                     </FormItem>
                   )} />
                 </div>
@@ -462,8 +650,8 @@ export default function AdminSettings() {
               </div>
 
               <div className={cardClass} style={cardStyle}>
-                <SectionHeader icon={ShieldAlert} title="Security & Limits" desc="Rate limits, lockout, and abuse caps. Admins are exempt." />
-                <p className="text-[10px] font-semibold tracking-[0.14em] uppercase mb-3" style={{ color: ADMIN.muted }}>Rate limits (per IP)</p>
+                <SectionHeader icon={ShieldAlert} title="Security & Limits" desc="Write/auth caps. Logged-in clients are counted per account (not a shared office IP). Admins and catalog GETs are exempt. Values below the safety floor fall back to defaults so a typo cannot lock the shop." />
+                <p className="text-[10px] font-semibold tracking-[0.14em] uppercase mb-3" style={{ color: ADMIN.muted }}>Rate limits</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                   {([
                     ['rateLimitGeneralWindowMs', 'General window (ms)'],
@@ -564,16 +752,7 @@ export default function AdminSettings() {
                             style={{ aspectRatio: '3/4', borderColor: hidden ? ADMIN.line : 'transparent' }}
                             title={hidden ? `Show "${d.name.en}"` : `Hide "${d.name.en}"`}
                           >
-                            {(() => {
-                              const els = designFrontElements(d);
-                              return els.length > 0 ? (
-                                <div className="absolute inset-0">
-                                  <ResponsivePageThumb elements={els} className="absolute inset-0" />
-                                </div>
-                              ) : (
-                                <div className="absolute inset-0" style={d.thumb} />
-                              );
-                            })()}
+                            <ResponsiveDesignCatalogThumb design={d} className="absolute inset-0" />
                             <div className={`absolute top-1.5 right-1.5 w-5 h-5 rounded-full flex items-center justify-center ${
                               hidden ? 'bg-neutral-700/80' : 'bg-black/40 opacity-0 group-hover:opacity-100'
                             }`}>

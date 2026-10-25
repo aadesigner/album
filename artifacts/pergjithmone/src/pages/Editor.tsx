@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo, useDeferredValue, startTransition } from 'react';
-import { Stage, Layer, Rect, Text as KonvaText, Image as KonvaImage, Transformer, Line, Group } from 'react-konva';
+import { Stage, Layer, Rect, Text as KonvaText, Image as KonvaImage, Transformer, Line, Group, Path as KonvaPath } from 'react-konva';
 import { useGetProject, useCreateOrder, useListBookSizes, useGetAppSettings, useListLayouts, getGetProjectQueryKey, getListProjectsQueryKey } from '@workspace/api-client-react-tsconfig';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -66,16 +66,17 @@ export {
 } from '@/lib/designs';
 import {
   DESIGN_W, DESIGN_H, LAYOUTS, DESIGNS, CATEGORY_LABELS, LAYOUT_CATEGORY_LABELS,
-  getCanvasHeight, scaleElementsToCanvas, elementsWithCoverWallpaper,
+  getCanvasHeight, scaleElementsToCanvas, fitDesignToCanvas, elementsWithCoverWallpaper,
   BLANK_STARTER_ID, blankFrontCoverElements, blankBackCoverElements,
   coverCropRect, imageFrameCoverFit, imageFrameContainFit, imageFrameFocusFromOffset, PHOTO_CORNER_ZOOM, minPhotoAdjustZoom,
   RETIRED_LAYOUT_IDS,
   designFrontElements, designBackElements, buildDesignCatalog, parseCustomDesigns,
   type EditorElement, type DE, type DesignDef, type LayoutZone, type LayoutDef, type DesignOverrides,
 } from '@/lib/designs';
+import { isStrokeOnlyShape, shapePathForElement } from '@/lib/shapes';
 import { getEmptyInnerPageNumbers } from '@/lib/pageContent';
-import { PageThumb } from '@/components/PageThumb';
-import { compressImageFile, ImageTooLargeError } from '@/lib/imageCompression';
+import { PageThumb, DesignCatalogThumb } from '@/components/PageThumb';
+import { uploadErrorMessage, uploadImageToApi } from '@/lib/uploadImage';
 import { applyCoverBackground, coverBgMode, type CoverBgMode } from '@/lib/coverBackground';
 import { useEditorFontsReady, ensureEditorFonts } from '@/lib/editorFonts';
 
@@ -435,56 +436,69 @@ function KShapeEl({el,isSelected,onSelect,onChange,onGestureStart,onDragActive,o
   onDragActive?:(active:boolean, opts?: { keepTransformer?: boolean })=>void; onGuides?:(g:GuideState)=>void;
   shapeRefs:React.MutableRefObject<Record<string,any>>; canvasH:number;
 }) {
-  const cr = el.shapeKind==='circle' ? Math.min(el.w,el.h)/2 : (el.cornerRadius??0);
+  const kind = el.shapeKind || 'rect';
+  const strokeOnly = isStrokeOnlyShape(kind);
+  const path = shapePathForElement(kind, el.w, el.h, el.cornerRadius);
   const transformStartRef = useRef({ w: el.w, h: el.h });
   // Soft scrims / overlays (city cover vignettes) — visible but not selectable.
   const decorative = (el.opacity ?? 1) < 0.5 && !(el.strokeWidth);
   // Transparent fills must still hit-test — otherwise clicks fall through to the cover bg.
   const visualFill = el.fill && el.fill !== 'transparent' ? el.fill : undefined;
   const hitFill = visualFill || 'rgba(0,0,0,0.001)';
-  return <Rect ref={(n:any)=>{if(n && !decorative) shapeRefs.current[el.id]=n;}}
-    x={el.x} y={el.y} width={el.w} height={el.h} fill={hitFill}
-    stroke={el.strokeColor} strokeWidth={el.strokeWidth||0} dash={el.strokeDash}
-    cornerRadius={cr} rotation={el.rotation} opacity={el.opacity??1}
-    perfectDrawEnabled={false}
-    listening={!decorative}
-    onMouseDown={(e:any)=>{ if (decorative) return; e.cancelBubble=true; onSelect(); }}
-    onTouchStart={(e:any)=>{ if (decorative) return; e.cancelBubble=true; onSelect(); }}
-    onClick={(e:any)=>{ if (decorative) return; e.cancelBubble=true; onSelect(); }}
-    onTap={(e:any)=>{ if (decorative) return; e.cancelBubble=true; onSelect(); }}
-    draggable={isSelected && !decorative}
-    dragDistance={4}
-    dragBoundFunc={(pos:any)=>{
-      const b=dragBoundWithGuides(pos,el.w,el.h,canvasH);
-      onGuides?.({v:b.guideV,h:b.guideH});
-      return {x:b.x,y:b.y};
-    }}
-    onDragStart={()=>{onGestureStart?.();onDragActive?.(true,{keepTransformer:true});}}
-    onDragEnd={(e:any)=>{
-      const b=dragBoundWithGuides({x:e.target.x(),y:e.target.y()},el.w,el.h,canvasH);
-      e.target.position({x:b.x,y:b.y}); onChange({x:b.x,y:b.y}); onDragActive?.(false); onGuides?.(null);
-    }}
-    onTransformStart={()=>{
-      transformStartRef.current={w:el.w,h:el.h};
-      onGestureStart?.();onDragActive?.(true,{keepTransformer:true});
-    }}
-    onTransform={(e:any)=>{
-      const n=e.target;
-      const nw=Math.max(10, transformStartRef.current.w * n.scaleX());
-      const nh=Math.max(10, transformStartRef.current.h * n.scaleY());
-      n.scaleX(1); n.scaleY(1);
-      n.width(nw); n.height(nh);
-    }}
-    onTransformEnd={(e:any)=>{
-      const n=e.target;
-      n.scaleX(1); n.scaleY(1);
-      const nw=Math.max(10,n.width()||transformStartRef.current.w);
-      const nh=Math.max(10,n.height()||transformStartRef.current.h);
-      const b=dragBoundBox({x:n.x(),y:n.y()},nw,nh,canvasH);
-      n.position(b); n.width(nw); n.height(nh);
-      onChange({...b,w:nw,h:nh,rotation:n.rotation()});
-      onDragActive?.(false); onGuides?.(null);
-    }}/>;
+  return (
+    <Group
+      ref={(n:any)=>{if(n && !decorative) shapeRefs.current[el.id]=n;}}
+      x={el.x} y={el.y} width={el.w} height={el.h}
+      rotation={el.rotation} opacity={el.opacity??1}
+      perfectDrawEnabled={false}
+      listening={!decorative}
+      onMouseDown={(e:any)=>{ if (decorative) return; e.cancelBubble=true; onSelect(); }}
+      onTouchStart={(e:any)=>{ if (decorative) return; e.cancelBubble=true; onSelect(); }}
+      onClick={(e:any)=>{ if (decorative) return; e.cancelBubble=true; onSelect(); }}
+      onTap={(e:any)=>{ if (decorative) return; e.cancelBubble=true; onSelect(); }}
+      draggable={isSelected && !decorative}
+      dragDistance={4}
+      dragBoundFunc={(pos:any)=>{
+        const b=dragBoundWithGuides(pos,el.w,el.h,canvasH);
+        onGuides?.({v:b.guideV,h:b.guideH});
+        return {x:b.x,y:b.y};
+      }}
+      onDragStart={()=>{onGestureStart?.();onDragActive?.(true,{keepTransformer:true});}}
+      onDragEnd={(e:any)=>{
+        const b=dragBoundWithGuides({x:e.target.x(),y:e.target.y()},el.w,el.h,canvasH);
+        e.target.position({x:b.x,y:b.y}); onChange({x:b.x,y:b.y}); onDragActive?.(false); onGuides?.(null);
+      }}
+      onTransformStart={()=>{
+        transformStartRef.current={w:el.w,h:el.h};
+        onGestureStart?.();onDragActive?.(true,{keepTransformer:true});
+      }}
+      onTransformEnd={(e:any)=>{
+        const n=e.target;
+        const sx = Math.abs(n.scaleX()) || 1;
+        const sy = Math.abs(n.scaleY()) || 1;
+        n.scaleX(1); n.scaleY(1);
+        const nw=Math.max(10, transformStartRef.current.w * sx);
+        const nh=Math.max(10, transformStartRef.current.h * sy);
+        const b=dragBoundBox({x:n.x(),y:n.y()},nw,nh,canvasH);
+        n.position(b); n.width(nw); n.height(nh);
+        onChange({...b,w:nw,h:nh,rotation:n.rotation()});
+        onDragActive?.(false); onGuides?.(null);
+      }}
+    >
+      <Rect width={el.w} height={el.h} fill="rgba(0,0,0,0.001)" listening={!decorative} perfectDrawEnabled={false}/>
+      <KonvaPath
+        data={path}
+        fill={strokeOnly ? undefined : hitFill}
+        fillRule="evenodd"
+        stroke={el.strokeColor}
+        strokeWidth={el.strokeWidth||0}
+        dash={el.strokeDash}
+        lineCap="round"
+        listening={false}
+        perfectDrawEnabled={false}
+      />
+    </Group>
+  );
 }
 
 function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onDragActive,onGuides,shapeRefs,canvasH,photoAdjust,onTogglePhotoAdjust,onExitPhotoAdjust,onCanPanChange}: {
@@ -2319,7 +2333,6 @@ function LayoutThumb({ zones }: { zones: LayoutZone[] }) {
 }
 
 function DesignThumb({design,lang,onApply}: {design:DesignDef;lang:'sq'|'en';onApply:()=>void}) {
-  const previewEls = designFrontElements(design);
   return (
     <button onClick={onApply}
       className="flex flex-col items-center gap-1.5 group transition-transform hover:scale-105 active:scale-95 outline-none">
@@ -2327,13 +2340,7 @@ function DesignThumb({design,lang,onApply}: {design:DesignDef;lang:'sq'|'en';onA
         className="relative overflow-hidden rounded-md border border-neutral-200 group-hover:border-neutral-700 shadow-sm transition-all group-hover:shadow-md bg-[#FEFDF9]"
         style={{ width: 72, height: 96 }}
       >
-        {previewEls.length > 0 ? (
-          <div className="absolute inset-0">
-            <PageThumb elements={previewEls} width={72} height={96} />
-          </div>
-        ) : (
-          <div className="absolute inset-0" style={{ background: (design.thumb?.background as string) || '#ECE7E1' }} />
-        )}
+        <DesignCatalogThumb design={design} width={72} height={96} />
       </div>
       <span className="text-[9px] text-neutral-500 group-hover:text-neutral-800 transition-colors text-center leading-tight w-full truncate px-1">
         {design.name[lang]}
@@ -2495,7 +2502,7 @@ function CoverBackgroundPanel({
 
       {uiMode === 'photo' && (
         <div className="space-y-2">
-          <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
+          <input ref={fileRef} type="file" accept="image/*,.heic,.heif,.avif" className="hidden"
             onChange={e => {
               const f = e.target.files?.[0];
               if (f) onUploadPhoto(f);
@@ -2764,7 +2771,7 @@ function Sidebar({tab,onTab,photos,onUpload,uploading,onAddPhoto,onAddText,onLay
         )}
         {tab==='photos' && (
           <div className="overflow-y-auto flex-1 p-3 space-y-3">
-            <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" multiple className="hidden"
+            <input ref={fileRef} type="file" accept="image/*,.heic,.heif,.avif" multiple className="hidden"
               onChange={e=>{Array.from(e.target.files||[]).forEach(f=>onUpload(f));e.target.value='';}}/>
             <button onClick={()=>fileRef.current?.click()} disabled={uploading}
               className="w-full py-2.5 border-2 border-dashed border-neutral-300 rounded-xl text-xs text-neutral-500 hover:border-neutral-600 flex items-center justify-center gap-1.5 transition-colors disabled:opacity-60">
@@ -2903,7 +2910,7 @@ function MobileSheet({tab,show,onClose,photos,onUpload,uploading,onAddPhoto,onLa
             )}
             {tab==='photos' && (
               <div className="space-y-3">
-                <input ref={fileRef} type="file" accept="image/*" multiple className="hidden"
+                <input ref={fileRef} type="file" accept="image/*,.heic,.heif,.avif" multiple className="hidden"
                   onChange={e=>{Array.from(e.target.files||[]).forEach(f=>onUpload(f));e.target.value='';}}/>
                 <button onClick={()=>fileRef.current?.click()} disabled={uploading}
                   className="w-full py-3 border-2 border-dashed border-neutral-300 rounded-xl text-sm flex items-center justify-center gap-2 text-neutral-500 disabled:opacity-60">
@@ -3257,7 +3264,13 @@ export default function Editor() {
         const byW = Math.floor(avail - 24); // 12px padding each side
         setPageW(Math.max(160, Math.min(byH, byW, 520)));
       }
-      else { const half=Math.floor((avail-SPINE_W-64)/2); setPageW(Math.max(Math.min(half,580),260)); }
+      else {
+        const areaH = area.clientHeight;
+        const half = Math.floor((avail - SPINE_W - 64) / 2);
+        const byW = Math.min(half, 580);
+        const byH = Math.floor((Math.max(160, areaH) - 28) * (DESIGN_W / canvasH));
+        setPageW(Math.max(160, Math.min(byW, byH, 580)));
+      }
     };
     measure();
     let rafId=0;
@@ -3548,14 +3561,11 @@ export default function Editor() {
     if (isOrdered) return;
     setUploading(true);
     try {
-      const compressed=await compressImageFile(file);
-      const token=getToken(); const fd=new FormData(); fd.append('file',compressed);
-      const r=await fetch('/api/uploads/image',{method:'POST',headers:token?{Authorization:`Bearer ${token}`}:{},body:fd});
-      if (!r.ok) throw new Error(await r.text());
-      const data=await r.json(); if (data.url) setPhotos(prev=>[data.url,...prev]);
+      const url=await uploadImageToApi(file, getToken());
+      setPhotos(prev=>[url,...prev]);
     } catch(e){
       console.error('Upload failed',e);
-      alert(e instanceof ImageTooLargeError?e.message:(lang==='sq'?'Ngarkimi dështoi.':'Upload failed.'));
+      alert(uploadErrorMessage(e, lang==='sq'?'sq':'en'));
     } finally{setUploading(false);}
   },[getToken,lang,isOrdered]);
 
@@ -3649,49 +3659,32 @@ export default function Editor() {
   }, [activePageId, applyCoverPatch]);
 
   const uploadCoverPhoto = useCallback(async (file: File) => {
+    if (isOrdered) return;
     setUploading(true);
     try {
-      const compressed = await compressImageFile(file);
-      const token = getToken();
-      const fd = new FormData();
-      fd.append('file', compressed);
-      const r = await fetch('/api/uploads/image', {
-        method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        body: fd,
-      });
-      if (!r.ok) throw new Error(await r.text());
-      const data = await r.json();
-      if (data.url) {
-        setPhotos(prev => [data.url, ...prev]);
-        setCoverPhoto(data.url);
-      }
+      const url = await uploadImageToApi(file, getToken());
+      setPhotos(prev => [url, ...prev]);
+      setCoverPhoto(url);
     } catch (e) {
       console.error('Cover bg upload failed', e);
-      alert(e instanceof ImageTooLargeError ? e.message : (lang === 'sq' ? 'Ngarkimi dështoi.' : 'Upload failed.'));
+      alert(uploadErrorMessage(e, lang === 'sq' ? 'sq' : 'en'));
     } finally {
       setUploading(false);
     }
-  }, [getToken, setCoverPhoto, lang]);
+  }, [getToken, setCoverPhoto, lang, isOrdered]);
 
   // Upload a file and immediately place it on the active page (used by InlinePhotoPicker)
   const uploadAndPlace=useCallback(async(file:File)=>{
     if (isOrdered) return;
     setUploading(true);
     try {
-      const compressed=await compressImageFile(file);
-      const token=getToken(); const fd=new FormData(); fd.append('file',compressed);
-      const r=await fetch('/api/uploads/image',{method:'POST',headers:token?{Authorization:`Bearer ${token}`}:{},body:fd});
-      if (!r.ok) throw new Error(await r.text());
-      const data=await r.json();
-      if (data.url) {
-        setPhotos(prev=>[data.url,...prev]);
-        addPhoto(data.url);
-        setPickerOpen(false);
-      }
+      const url=await uploadImageToApi(file, getToken());
+      setPhotos(prev=>[url,...prev]);
+      addPhoto(url);
+      setPickerOpen(false);
     } catch(e){
       console.error('Upload failed',e);
-      alert(e instanceof ImageTooLargeError?e.message:(lang==='sq'?'Ngarkimi dështoi.':'Upload failed.'));
+      alert(uploadErrorMessage(e, lang==='sq'?'sq':'en'));
     } finally{setUploading(false);}
   },[getToken,addPhoto,lang,isOrdered]);
 
@@ -3876,7 +3869,7 @@ export default function Editor() {
         !hasCoverArt && design.thumbPhoto
           ? elementsWithCoverWallpaper(sideEls, design.thumbPhoto)
           : sideEls;
-      return scaleElementsToCanvas(coverSource, canvasH);
+      return fitDesignToCanvas(coverSource, canvasH);
     };
 
     const frontProjected = projectSide(designFrontElements(design));
@@ -3940,8 +3933,8 @@ export default function Editor() {
     const whiteBg: DE = {
       type: "background", x: 0, y: 0, w: DESIGN_W, h: canvasH, rotation: 0, bgColor: "#FFFFFF",
     };
-    const front = scaleElementsToCanvas(blankFrontCoverElements(lang as 'sq'|'en'), canvasH);
-    const back = scaleElementsToCanvas(blankBackCoverElements(lang as 'sq'|'en'), canvasH);
+    const front = fitDesignToCanvas(blankFrontCoverElements(lang as 'sq'|'en'), canvasH);
+    const back = fitDesignToCanvas(blankBackCoverElements(lang as 'sq'|'en'), canvasH);
 
     for (const page of allPages) {
       if (page.role === "front_cover") {
@@ -3966,6 +3959,7 @@ export default function Editor() {
     if (isOrdered) return;
     if (pagesLoadedOnce.current||autoAppliedRef.current) return;
     if (Object.keys(pagesContent).length===0) return;
+    if (!bookSize) return;
     pagesLoadedOnce.current=true;
     // Key by project only — if we include designId, a remount after clearing
     // sessionStorage becomes `${id}:none` and can wrongly apply the blank starter.
@@ -3987,7 +3981,7 @@ export default function Editor() {
     const design=designsCatalog.find(d=>d.id===designId);
     if (design) applyDesign(design);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[Object.keys(pagesContent).length,projectId]);
+  },[Object.keys(pagesContent).length,projectId,bookSize]);
 
   // Stable callback for MobileSheet — avoids an inline arrow in JSX that would
   // defeat React.memo on MobileSheet and recreate it on every render.

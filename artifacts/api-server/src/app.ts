@@ -12,14 +12,15 @@ import { logger } from "./lib/logger";
 import { isIpBlocked } from "./lib/ipBlocklist";
 import { logSecurityEvent } from "./lib/securityEvents";
 import { createDynamicLimiter } from "./lib/dynamicRateLimit";
+import { getClientIp } from "./lib/clientIp";
 
 const app: Express = express();
 
-// Trust the reverse proxy so express-rate-limit reads the real client IP
-// from X-Forwarded-For instead of the proxy's IP. Set to `true` when the
-// app sits behind a load-balancer/CDN that you fully control; set to a hop
-// count (e.g. 1) if you only trust a fixed number of proxy hops.
-app.set("trust proxy", true);
+// Trust a fixed number of proxy hops (Railway = 1). `true` made req.ip
+// follow a spoofable/leftmost X-Forwarded-For and sometimes collapsed every
+// visitor onto one address. Override with TRUST_PROXY_HOPS if CF sits in front.
+const proxyHops = Number(process.env.TRUST_PROXY_HOPS);
+app.set("trust proxy", Number.isFinite(proxyHops) && proxyHops >= 0 ? proxyHops : 1);
 
 // ── Security headers (CSP disabled — handled by frontend CDN) ──────────────
 app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
@@ -102,8 +103,8 @@ app.use(cookieParser());
 // reach anything, not even endpoints that would otherwise be public.
 app.use(async (req, res, next) => {
   try {
-    const ip = (req.ip || "unknown").replace(/^::ffff:/, "");
-    if (await isIpBlocked(ip)) {
+    const ip = getClientIp(req);
+    if (ip && await isIpBlocked(ip)) {
       logSecurityEvent("blocked_ip", ip, req.path);
       res.status(403).json({ error: "Access denied." });
       return;
@@ -126,21 +127,29 @@ const generalLimiter = createDynamicLimiter({
   windowMsKey: "rateLimitGeneralWindowMs",
   maxKey: "rateLimitGeneralMax",
   message: "Too many requests, please try again later.",
+  skipSafeMethods: true,
+  keyByUser: true,
 });
 const authLimiter = createDynamicLimiter({
   windowMsKey: "rateLimitAuthWindowMs",
   maxKey: "rateLimitAuthMax",
   message: "Too many auth requests, please try again later.",
+  skipSafeMethods: false,
+  keyByUser: false,
 });
 const analyticsLimiter = createDynamicLimiter({
   windowMsKey: "rateLimitAnalyticsWindowMs",
   maxKey: "rateLimitAnalyticsMax",
   message: "Too many requests.",
+  skipSafeMethods: false,
+  keyByUser: true,
 });
 const uploadsLimiter = createDynamicLimiter({
   windowMsKey: "rateLimitUploadsWindowMs",
   maxKey: "rateLimitUploadsMax",
   message: "Too many uploads, please slow down.",
+  skipSafeMethods: false,
+  keyByUser: true,
 });
 
 // Paths that already have a dedicated limiter must not also burn the general
@@ -156,6 +165,8 @@ const GENERAL_EXEMPT_PREFIXES = [
   "/api/auth/register",
   "/api/auth/refresh",
   "/api/healthz",
+  "/api/geo",
+  "/api/config",
 ];
 app.use("/api", (req, res, next) => {
   const path = (req.originalUrl || req.url || "").split("?")[0];

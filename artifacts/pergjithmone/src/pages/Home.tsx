@@ -126,7 +126,11 @@ function heroBgUrl(src: string): string {
   }
 }
 
-const HERO_CYCLE_MS = 2600;
+const HERO_CYCLE_MS = 3800;
+
+function createAlbumCta(lang: 'sq' | 'en', label: string): string {
+  return lang === 'sq' ? `Krijo Album ${label}` : `Create ${label} album`;
+}
 
 function usePrefersReducedMotion() {
   const [reduced, setReduced] = useState(false);
@@ -157,8 +161,8 @@ function LivingAlbumBook({
   const my = useMotionValue(0);
 
   // Base pose faces left so the spine + page edge read as a real book.
-  const baseYaw = size === 'hero' ? -30 : -18;
-  const basePitch = size === 'hero' ? 8 : 5;
+  const baseYaw = size === 'hero' ? -36 : -18;
+  const basePitch = size === 'hero' ? 10 : 5;
   const rotY = useSpring(
     useTransform(mx, [-1, 1], [baseYaw - 10, baseYaw + 20]),
     { stiffness: 130, damping: 22, mass: 0.4 },
@@ -203,9 +207,9 @@ function LivingAlbumBook({
     }
   }, [coverEls]);
 
-  const spineD = size === 'hero' ? 15 : 12;
-  const pageBlock = size === 'hero' ? 8 : 7;
-  const maxW = size === 'hero' ? 268 : 220;
+  const spineD = size === 'hero' ? 18 : 12;
+  const pageBlock = size === 'hero' ? 10 : 7;
+  const maxW = size === 'hero' ? 380 : 220;
 
   const onMove = (e: React.MouseEvent) => {
     if (!interactive || reduced || !wrapRef.current) return;
@@ -232,10 +236,10 @@ function LivingAlbumBook({
       className={`relative mx-auto ${!reduced ? 'book-float' : ''}`}
       style={{
         // Exact catalog aspect — stops paper letterboxing under the cover art
-        width: `min(${size === 'hero' ? '58vw' : '48vw'}, ${maxW}px)`,
+        width: `min(${size === 'hero' ? '70vw' : '48vw'}, ${maxW}px)`,
         aspectRatio: `${DESIGN_W} / ${DESIGN_H}`,
         maxWidth: maxW,
-        perspective: size === 'hero' ? 1500 : 1100,
+        perspective: size === 'hero' ? 1800 : 1100,
         perspectiveOrigin: '42% 45%',
         touchAction: 'manipulation',
         paddingLeft: spineD * 0.55,
@@ -338,7 +342,7 @@ function LivingAlbumBook({
               borderRadius: '0 5px 5px 0',
               overflow: 'hidden',
               boxShadow:
-                '12px 22px 40px rgba(0,0,0,0.38), 4px 8px 16px rgba(0,0,0,0.22), inset 0 0 0 1px rgba(255,255,255,0.1)',
+                '18px 28px 56px rgba(0,0,0,0.5), 6px 12px 22px rgba(0,0,0,0.28), inset 0 0 0 1px rgba(255,255,255,0.14)',
               background: coverBg,
               transform: 'translateZ(1px)',
               backfaceVisibility: 'hidden',
@@ -347,11 +351,11 @@ function LivingAlbumBook({
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
                 key={style.designId}
-                initial={reduced ? { opacity: 1 } : { opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.25 }}
-                style={{ position: 'absolute', inset: 0 }}
+                initial={reduced ? { opacity: 1 } : { opacity: 0, rotateY: 16, scale: 1.04 }}
+                animate={{ opacity: 1, rotateY: 0, scale: 1 }}
+                exit={reduced ? { opacity: 0 } : { opacity: 0, rotateY: -12, scale: 0.98 }}
+                transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                style={{ position: 'absolute', inset: 0, transformOrigin: 'left center' }}
               >
                 {coverEls.length > 0 && coverSize.w > 0 ? (
                   <PageThumb
@@ -460,7 +464,7 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
     <section
       className="relative w-full overflow-hidden"
       style={{
-        minHeight: 'min(100svh, 880px)',
+        minHeight: 'min(100svh, 960px)',
         background: style.wash,
         transition: 'background-color 0.7s ease',
       }}
@@ -494,12 +498,11 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
             alt=""
             decoding="async"
             fetchPriority="high"
-            className="absolute inset-0 h-full w-full object-cover"
+            className={`absolute inset-0 h-full w-full object-cover ${reduced ? '' : 'hero-kenburns'}`}
             style={{
-              objectPosition: '72% center',
-              opacity: 0.62,
-              filter: 'saturate(0.72) brightness(0.88) contrast(1.04)',
-              transform: reduced ? undefined : 'scale(1.05)',
+              objectPosition: '68% 35%',
+              opacity: 0.7,
+              filter: 'saturate(0.82) brightness(0.78) contrast(1.08)',
             }}
           />
         </motion.div>
@@ -532,20 +535,44 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
         <>
           <div
             aria-hidden
-            className="pointer-events-none absolute top-[8%] right-[-4%] w-[52%] h-[70%] rounded-full opacity-35 blur-3xl"
+            className="hero-orb-a pointer-events-none absolute top-[4%] right-[-8%] w-[58%] h-[74%] rounded-full opacity-45 blur-3xl"
             style={{
-              background: `radial-gradient(circle, ${style.paper}32 0%, ${style.spine}14 40%, transparent 70%)`,
+              background: `radial-gradient(circle, ${style.paper}40 0%, ${style.spine}22 38%, transparent 70%)`,
               transition: 'background 0.7s ease',
             }}
           />
           <div
             aria-hidden
-            className="pointer-events-none absolute bottom-[-18%] left-[-10%] w-[48%] h-[48%] rounded-full opacity-50 blur-3xl"
+            className="hero-orb-b pointer-events-none absolute bottom-[-20%] left-[-12%] w-[52%] h-[52%] rounded-full opacity-55 blur-3xl"
             style={{
-              background: `radial-gradient(circle, ${style.spine}28 0%, transparent 68%)`,
+              background: `radial-gradient(circle, ${style.spine}36 0%, transparent 68%)`,
               transition: 'background 0.7s ease',
             }}
           />
+          {[
+            { t: '18%', l: '22%', d: '0s', s: 2 },
+            { t: '28%', l: '68%', d: '1.4s', s: 3 },
+            { t: '46%', l: '14%', d: '2.1s', s: 2 },
+            { t: '62%', l: '78%', d: '0.7s', s: 2 },
+            { t: '34%', l: '48%', d: '2.8s', s: 1 },
+            { t: '72%', l: '36%', d: '1.1s', s: 2 },
+            { t: '22%', l: '86%', d: '3.2s', s: 3 },
+          ].map((p, i) => (
+            <span
+              key={i}
+              aria-hidden
+              className="hero-dust pointer-events-none absolute rounded-full"
+              style={{
+                top: p.t,
+                left: p.l,
+                width: p.s,
+                height: p.s,
+                background: style.paper,
+                animationDelay: p.d,
+                boxShadow: `0 0 ${p.s * 4}px ${style.paper}`,
+              }}
+            />
+          ))}
         </>
       )}
 
@@ -558,39 +585,67 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
         }}
       />
 
-      <div className="relative z-10 max-w-7xl mx-auto px-5 md:px-10 pt-6 pb-10 md:pt-14 md:pb-16 min-h-[inherit] flex flex-col justify-center">
-        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] gap-5 md:gap-10 md:items-center">
+      <div className="relative z-10 max-w-7xl mx-auto px-5 md:px-10 pt-6 pb-16 md:pt-16 md:pb-20 min-h-[inherit] flex flex-col justify-center">
+        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] gap-6 md:gap-8 lg:gap-12 md:items-center">
           {/* Copy — headline first, brand second */}
           <div className="order-2 md:order-1 md:col-start-1 text-center md:text-left">
-            <motion.h1
-              initial={{ opacity: 0, y: 14 }}
+            <motion.p
+              initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-              className="font-serif text-[clamp(1.85rem,5.4vw,3.65rem)] text-[#F7F2EC] leading-[1.08] tracking-[-0.02em] font-medium mb-1.5 md:mb-2"
+              transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+              className="mb-4 md:mb-5 text-[10px] md:text-[11px] tracking-[0.34em] uppercase"
+              style={{ color: `${style.paper}88` }}
             >
-              {lang === 'sq' ? 'Ruaj kujtimet' : 'Keep the memories'}
-            </motion.h1>
+              ✦ {lang === 'sq' ? 'Album fotografie' : 'Photobook atelier'}
+            </motion.p>
+
+            <h1 className="font-serif text-[clamp(2.15rem,6.4vw,4.35rem)] text-[#F7F2EC] leading-[0.98] tracking-[-0.03em] font-medium mb-2 md:mb-3">
+              {(lang === 'sq' ? 'Ruaj kujtimet' : 'Keep the memories').split(' ').map((word, i, words) => (
+                <motion.span
+                  key={`${word}-${i}`}
+                  initial={{ opacity: 0, y: 22, filter: 'blur(8px)' }}
+                  animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                  transition={{ duration: 0.7, delay: 0.08 + i * 0.12, ease: [0.16, 1, 0.3, 1] }}
+                  className={`inline-block${i < words.length - 1 ? ' mr-[0.22em]' : ''}`}
+                >
+                  {word}
+                </motion.span>
+              ))}
+            </h1>
 
             <motion.p
-              initial={{ opacity: 0, y: 8 }}
+              initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.65, delay: 0.05, ease: [0.22, 1, 0.36, 1] }}
-              className="font-serif text-[clamp(1.15rem,2.6vw,1.85rem)] leading-none tracking-[-0.01em] mb-3 md:mb-4"
-              style={{ color: `${style.paper}99` }}
+              transition={{ duration: 0.75, delay: 0.28, ease: [0.22, 1, 0.36, 1] }}
+              className={`font-serif text-[clamp(1.35rem,3.1vw,2.15rem)] leading-none tracking-[-0.01em] mb-3 md:mb-4 ${reduced ? '' : 'hero-word-shine'}`}
+              style={{
+                backgroundImage: `linear-gradient(90deg, ${style.paper}66, ${style.paper}, ${style.paper}66)`,
+                WebkitBackgroundClip: 'text',
+                backgroundClip: 'text',
+                color: 'transparent',
+              }}
             >
               Përgjithmonë
             </motion.p>
 
-            <div className="relative mb-4 md:mb-6 min-h-[1.4em]">
+            <motion.div
+              initial={{ opacity: 0, scaleX: 0.4 }}
+              animate={{ opacity: 1, scaleX: 1 }}
+              transition={{ duration: 0.7, delay: 0.36, ease: [0.22, 1, 0.36, 1] }}
+              className="mx-auto md:mx-0 mb-4 md:mb-5 h-px w-16 origin-center md:origin-left"
+              style={{ background: `linear-gradient(90deg, ${style.paper}00, ${style.paper}aa, ${style.paper}00)` }}
+            />
+
+            <div className="relative mb-4 md:mb-6 min-h-[1.5em]">
               <AnimatePresence mode="wait" initial={false}>
                 <motion.p
                   key={style.key}
-                  initial={{ opacity: 0, y: 8 }}
+                  initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -6 }}
-                  transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-                  className="text-[13px] md:text-[14px] leading-snug"
-                  style={{ color: `${style.paper}70` }}
+                  transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+                  className="text-[14px] md:text-[16px] leading-snug font-serif italic"
+                  style={{ color: `${style.paper}88` }}
                 >
                   {style.line[lang]}
                 </motion.p>
@@ -598,38 +653,53 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
             </div>
 
             <p
-              className="hidden md:block text-[14px] max-w-sm mx-auto md:mx-0 leading-relaxed mb-8"
-              style={{ color: `${style.paper}66` }}
+              className="hidden md:block text-[15px] max-w-sm mx-auto md:mx-0 leading-relaxed mb-8"
+              style={{ color: `${style.paper}70` }}
             >
               {lang === 'sq'
-                ? 'Dizajnoni online. Printohen me cilësi galerie.'
+                ? 'Krijojeni online. Printohen me cilësi galerie.'
                 : 'Design online. Printed at gallery quality.'}
             </p>
 
             <div className="flex flex-wrap items-center justify-center md:justify-start gap-2.5 md:gap-3">
               <Link href={`/krijo?category=${encodeURIComponent(style.key)}&design=${encodeURIComponent(style.designId)}`}>
                 <motion.button
+                  whileHover={reduced ? undefined : { scale: 1.04 }}
                   whileTap={{ scale: 0.97 }}
-                  className="px-7 md:px-8 py-3 md:py-3.5 rounded-full text-[12px] md:text-[12.5px] font-semibold shadow-xl shadow-black/30"
-                  style={{ background: style.paper, color: style.ink }}
+                  className="relative overflow-hidden px-8 md:px-9 py-3.5 md:py-4 rounded-full text-[12.5px] md:text-[13px] font-semibold tracking-[0.04em]"
+                  style={{
+                    background: style.paper,
+                    color: style.ink,
+                    boxShadow: `0 14px 40px ${style.paper}38, 0 0 0 1px ${style.paper}55, 0 0 28px ${style.paper}22`,
+                  }}
                 >
-                  {lang === 'sq' ? 'krijo albumin' : 'create your book'}
+                  {!reduced && (
+                    <span
+                      aria-hidden
+                      className="hero-sheen pointer-events-none absolute inset-y-0 w-[42%] opacity-0"
+                      style={{
+                        background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent)',
+                      }}
+                    />
+                  )}
+                  {lang === 'sq' ? 'Krijo albumin' : 'Create your book'}
                 </motion.button>
               </Link>
               <Link href="/shembuj">
                 <button
-                  className="px-6 py-3.5 text-[12.5px] border rounded-full transition-colors"
+                  className="px-6 py-3.5 text-[12.5px] border rounded-full transition-colors backdrop-blur-sm"
                   style={{
-                    color: `${style.paper}b8`,
-                    borderColor: `${style.paper}33`,
+                    color: `${style.paper}c8`,
+                    borderColor: `${style.paper}40`,
+                    background: `${style.paper}0a`,
                   }}
                 >
-                  {lang === 'sq' ? 'shiko shembuj' : 'see examples'}
+                  {lang === 'sq' ? 'Shiko shembujt' : 'See examples'}
                 </button>
               </Link>
             </div>
 
-            <div className="mt-6 md:mt-10 flex flex-wrap items-center justify-center md:justify-start gap-x-0.5 gap-y-0.5 max-w-md mx-auto md:mx-0">
+            <div className="mt-7 md:mt-11 flex flex-wrap items-center justify-center md:justify-start gap-x-0.5 gap-y-0.5 max-w-md mx-auto md:mx-0">
               {ALBUM_STYLES.map((s, i) => (
                 <button
                   key={s.key}
@@ -656,8 +726,23 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
           </div>
 
           {/* 3D book — first on mobile so the hero reads as one composition */}
-          <div className="order-1 md:order-2 md:col-start-2 md:row-start-1 flex flex-col items-center justify-center pt-1 pb-1 md:py-0 md:pl-4">
-            <LivingAlbumBook style={style} size="hero" />
+          <div className="order-1 md:order-2 md:col-start-2 md:row-start-1 flex flex-col items-center justify-center pt-2 pb-2 md:py-0 md:pl-2">
+            <motion.div
+              initial={reduced ? false : { opacity: 0, y: 56, scale: 0.84, rotate: 4 }}
+              animate={{ opacity: 1, y: 0, scale: 1, rotate: 0 }}
+              transition={{ duration: 1.15, ease: [0.16, 1, 0.3, 1] }}
+              className="relative"
+            >
+              <div
+                aria-hidden
+                className="pointer-events-none absolute left-1/2 top-1/2 -z-10 h-[78%] w-[88%] -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl"
+                style={{
+                  background: `radial-gradient(circle, ${style.paper}28 0%, ${style.spine}33 40%, transparent 72%)`,
+                  transition: 'background 0.7s ease',
+                }}
+              />
+              <LivingAlbumBook style={style} size="hero" />
+            </motion.div>
             <div className="mt-3 flex items-center gap-4 md:hidden">
               <button
                 type="button"
@@ -682,6 +767,24 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
             </div>
           </div>
         </div>
+      </div>
+
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-[1]"
+        style={{
+          background: 'radial-gradient(120% 80% at 50% 42%, transparent 42%, rgba(0,0,0,0.42) 100%)',
+        }}
+      />
+
+      <div
+        className={`pointer-events-none absolute bottom-5 left-1/2 z-20 -translate-x-1/2 flex flex-col items-center gap-1.5 ${reduced ? '' : 'hero-scroll-cue'}`}
+        style={{ color: `${style.paper}88` }}
+      >
+        <span className="text-[9px] tracking-[0.32em] uppercase">
+          {lang === 'sq' ? 'Eksploro' : 'Explore'}
+        </span>
+        <span aria-hidden className="block h-7 w-px" style={{ background: `${style.paper}66` }} />
       </div>
     </section>
   );
@@ -824,7 +927,7 @@ function AlbumStarter({ lang }: { lang: 'sq' | 'en' }) {
                     boxShadow: `0 12px 28px ${style.spine}35`,
                   }}
                 >
-                  {lang === 'sq' ? `Fillo — ${style.label.sq}` : `Start — ${style.label.en}`}
+                  {createAlbumCta(lang, style.label[lang])}
                 </motion.button>
               </Link>
               <Link
@@ -832,7 +935,7 @@ function AlbumStarter({ lang }: { lang: 'sq' | 'en' }) {
                 className="text-[13px] text-center md:text-left underline underline-offset-4 decoration-black/15 hover:decoration-black/40 self-center md:self-start"
                 style={{ color: `${style.ink}75` }}
               >
-                {lang === 'sq' ? 'shiko të gjitha stilet' : 'browse all styles'}
+                {lang === 'sq' ? 'Shiko të gjitha stilet' : 'Browse all styles'}
               </Link>
             </div>
           </div>
@@ -915,8 +1018,8 @@ const MATERIALS = [
         <path d="M5 13h9M19 13h4"/>
       </svg>
     ),
-    title: { sq: 'Lidhje layflat', en: 'Lay-flat binding' },
-    desc: { sq: 'Hapje e plotë, pa humbje imazhi', en: 'Full open, no image loss' },
+    title: { sq: 'Lidhje e sheshtë', en: 'Lay-flat binding' },
+    desc: { sq: 'Hapet fare, pa humbje të fotos', en: 'Full open, no image loss' },
   },
   {
     icon: (
@@ -1128,10 +1231,10 @@ function CategoryCard({
               {/* CTA row */}
               <div className="mt-4 flex items-center justify-between">
                 <span className="text-white/80 text-[11px] font-medium uppercase tracking-widest group-hover:text-white transition-colors">
-                  {lang === 'sq' ? 'Krijo →' : 'Create →'}
+                  {lang === 'sq' ? `Krijo Album ${cat.label.sq}` : `Create ${cat.label.en}`}
                 </span>
                 <div className="bg-white/10 backdrop-blur-sm rounded-full px-3 py-1 border border-white/20">
-                  <span className="text-white text-[11px] font-semibold">nga 3,100 LEK</span>
+                  <span className="text-white text-[11px] font-semibold">{lang === 'sq' ? 'nga 3.100 LEK' : 'from 3,100 LEK'}</span>
                 </div>
               </div>
             </div>
@@ -1183,12 +1286,12 @@ function AIAlbumPromo({ lang }: { lang: 'sq' | 'en' }) {
             </div>
             <h2 className="text-2xl md:text-[32px] font-serif font-medium text-white leading-tight mb-3">
               {lang === 'sq'
-                ? <>Ngarko fotot, dhe le AI-në<br className="hidden md:block" /> të krijojë albumin</>
+                ? <>Ngarkoni fotot — AI-ja<br className="hidden md:block" /> e krijon albumin</>
                 : <>Upload your photos, let AI<br className="hidden md:block" /> build the album</>}
             </h2>
             <p className="text-white/50 text-[13.5px] leading-relaxed">
               {lang === 'sq'
-                ? 'Zgjidh një kategori, ngarko 25+ foto — sistemi zgjedh vetë strukturën, ngjyrat dhe dizajnin e çdo faqeje. Redakto lirshëm më pas.'
+                ? 'Zgjidhni një kategori, ngarkoni 25+ foto — sistemi zgjedh vetë paraqitjen, ngjyrat dhe dizajnin e çdo faqeje. Më pas e rregulloni si të doni.'
                 : 'Pick a category, upload 25+ photos — our system automatically chooses the layout, colors, and design of every page. Fine-tune anything afterwards.'}
             </p>
           </div>
@@ -1196,11 +1299,11 @@ function AIAlbumPromo({ lang }: { lang: 'sq' | 'en' }) {
           <div className="flex flex-col items-center md:items-end justify-center gap-3 shrink-0">
             <Link href="/album-ai">
               <button className="px-8 py-3.5 bg-white text-[#141311] rounded-full text-[12.5px] font-semibold hover:bg-neutral-100 active:scale-[0.97] transition-all shadow-xl shadow-black/30">
-                {lang === 'sq' ? 'provo albumin me AI' : 'try the AI album maker'}
+                {lang === 'sq' ? 'Provo albumin me AI' : 'Try the AI album maker'}
               </button>
             </Link>
             <p className="text-white/30 text-[11px]">
-              {lang === 'sq' ? 'Gati për sekonda' : 'Ready in seconds'}
+              {lang === 'sq' ? 'Gati brenda sekondave' : 'Ready in seconds'}
             </p>
           </div>
         </motion.div>
@@ -1231,7 +1334,7 @@ export default function Home() {
       sublabel: getCategorySublabel(cat.slug),
       img: getCategoryImage(cat.nameAl, cat.coverImage, cat.slug),
       spine: getCategorySpine(cat.slug),
-      badge: i === 0 ? { sq: 'bestseller', en: 'bestseller' } : null,
+      badge: i === 0 ? { sq: 'më i shituri', en: 'bestseller' } : null,
       pages: { sq: '30–80 faqe', en: '30–80 pages' },
     }));
   }, [apiCategories]);
@@ -1250,27 +1353,27 @@ export default function Home() {
     {
       n: '01',
       title: { sq: 'Zgjidhni stilin', en: 'Choose a style' },
-      desc: { sq: 'Zgjidhni madhësinë dhe temën vizuale. 5 stile të ndryshme me ngjyra dhe shkronja të gatshme.', en: 'Pick your size and visual theme. 5 styles with ready-made colours and fonts.' },
+      desc: { sq: 'Zgjidhni madhësinë dhe temën. 5 stile, secili me ngjyrat dhe shkronjat e veta.', en: 'Pick your size and visual theme. 5 styles with ready-made colours and fonts.' },
       detail: {
-        sq: 'Nga dasmë deri te udhëtim, kemi stile për çdo moment. Çdo stil ka 4–6 variante ngjyrash dhe 3 madhësi albumesh (20×20, 30×30, A4).',
+        sq: 'Nga dasma te udhëtimi, kemi një stil për çdo moment. Çdo stil ka 4–6 variante ngjyrash dhe 3 madhësi albumesh (20×20, 30×30, A4).',
         en: 'From weddings to travel, we have styles for every occasion. Each style has 4–6 colour variants and 3 book sizes (20×20, 30×30, A4).',
       },
     },
     {
       n: '02',
       title: { sq: 'Ngarkoni fotot', en: 'Upload your photos' },
-      desc: { sq: 'Dizajnoni çdo faqe me editorin tonë intuitiv. Tërhiqni fotot dhe rregulloni si dëshironi.', en: 'Design every page with our editor. Drag photos and arrange freely.' },
+      desc: { sq: 'Dizajnoni çdo faqe me editorin tonë. Tërhiqni fotot dhe i vendosni si të doni.', en: 'Design every page with our editor. Drag photos and arrange freely.' },
       detail: {
-        sq: 'Ngarko direktamente nga telefoni ose kompjuteri. Editoni tekstin, zgjidhni paraqitjet dhe shto dekorime. Punoni në çdo pajisje.',
+        sq: 'Ngarkoni drejtpërdrejt nga telefoni ose kompjuteri. Ndryshoni tekstin, zgjidhni paraqitjet dhe shtoni dekorime. Funksionon në çdo pajisje.',
         en: 'Upload directly from your phone or computer. Edit text, choose layouts and add decorations. Works on any device.',
       },
     },
     {
       n: '03',
       title: { sq: 'Porositni dhe merrni', en: 'Order and receive' },
-      desc: { sq: 'Printuar dhe dërguar direkt në derën tuaj brenda 10–16 ditësh pune.', en: 'Printed and delivered straight to your door within 10–16 working days.' },
+      desc: { sq: 'Printuar dhe dërguar te dera juaj brenda 10–16 ditëve pune.', en: 'Printed and delivered straight to your door within 10–16 working days.' },
       detail: {
-        sq: 'Printim me cilësi galerie, letër mat 200g, lidhje layflat. Dërgim i sigurt me kuti mbrojtëse. Garanci 30 ditë kthim.',
+        sq: 'Printim me cilësi galerie, letër mat 200g, lidhje e sheshtë. Dërgesë e sigurt me kuti mbrojtëse. Garanci kthimi 30 ditë.',
         en: 'Gallery-quality printing, matte 200g paper, lay-flat binding. Safe delivery with protective box. 30-day return guarantee.',
       },
     },
@@ -1279,9 +1382,9 @@ export default function Home() {
   return (
     <MarketingLayout>
       <SEOMeta
-        title={{ sq: 'Libra Foto Premium', en: 'Premium Photo Books' }}
+        title={{ sq: 'Albume Foto Premium', en: 'Premium Photo Books' }}
         description={{
-          sq: 'Ktheni kujtimet tuaja në libra foto të bukur, të shtypur me cilësi galerie. Dizajnoni vetë online. Dërgesa në të gjithë Shqipërinë.',
+          sq: 'Kthejini kujtimet tuaja në albume foto të bukura, të shtypura me cilësi galerie. Dizajnoni vetë online. Dërgesa në të gjithë Shqipërinë.',
           en: 'Turn your memories into beautiful, gallery-quality photo books. Design online, printed and delivered across Albania.',
         }}
         path="/"
@@ -1395,16 +1498,16 @@ export default function Home() {
               </h2>
               <p className="text-neutral-500 text-[14px] leading-relaxed mb-8 max-w-sm">
                 {lang === 'sq'
-                  ? 'Dizajnoni çdo faqe dyshe si dëshironi — dy faqe krah e krah, si një libër i vërtetë. Zgjidhni paraqitjen, shtoni fotot dhe tekstin tuaj.'
+                  ? 'Dizajnoni çdo faqe dyshe si të doni — dy faqe krah për krah, si një libër i vërtetë. Zgjidhni paraqitjen, shtoni fotot dhe tekstin.'
                   : 'Design each spread exactly as you want — two pages side by side, like a real book. Pick a layout, add your photos and text.'}
               </p>
 
               <div className="grid grid-cols-2 gap-3 max-w-xs">
                 {[
-                  { num: '9+', label: lang === 'sq' ? 'paraqitje faqesh' : 'page layouts' },
+                  { num: '9+', label: lang === 'sq' ? 'modele faqesh' : 'page layouts' },
                   { num: '20+', label: lang === 'sq' ? 'dizajne të gatshme' : 'premade designs' },
-                  { num: '∞', label: lang === 'sq' ? 'foto për faqe' : 'photos per page' },
-                  { num: '3', label: lang === 'sq' ? 'madhësi albumesh' : 'book sizes' },
+                  { num: '∞', label: lang === 'sq' ? 'foto në faqe' : 'photos per page' },
+                  { num: '3', label: lang === 'sq' ? 'madhësi albumi' : 'book sizes' },
                 ].map((stat, i) => (
                   <div key={i} className="bg-[#f7f4f0] rounded-xl p-4 border border-neutral-100">
                     <p className="text-2xl font-serif font-medium text-neutral-900">{stat.num}</p>
@@ -1473,7 +1576,7 @@ export default function Home() {
               {/* Floating tag */}
               <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 bg-white rounded-full px-5 py-2 shadow-lg border border-neutral-100 whitespace-nowrap">
                 <p className="text-xs font-medium text-neutral-600">
-                  {lang === 'sq' ? 'Faqja 6–7 · pamje e plotë' : 'Page 6–7 · full spread view'}
+                  {lang === 'sq' ? 'Faqja 6–7 · pamja e plotë' : 'Page 6–7 · full spread view'}
                 </p>
               </div>
             </motion.div>
@@ -1517,7 +1620,7 @@ export default function Home() {
               {lang === 'sq' ? 'procesi' : 'the process'}
             </p>
             <h2 className="text-4xl md:text-5xl font-serif font-medium text-neutral-900">
-              {lang === 'sq' ? 'Tre hapa deri tek albumi juaj' : 'Three steps to your photobook'}
+              {lang === 'sq' ? 'Tre hapa deri te albumi juaj' : 'Three steps to your photobook'}
             </h2>
           </div>
 
@@ -1572,7 +1675,7 @@ export default function Home() {
           <div className="mt-12 flex items-center gap-4">
             <Link href="/krijo">
               <button className="px-8 py-3.5 bg-[#1a1a1a] text-white rounded-full text-[13px] font-medium hover:bg-neutral-800 transition-colors shadow-sm">
-                {lang === 'sq' ? 'fillo tani — falas' : 'start now — free'}
+                {lang === 'sq' ? 'Krijo tani — falas' : 'Start now — free'}
               </button>
             </Link>
             <span className="text-[12px] text-neutral-400">
@@ -1618,7 +1721,7 @@ export default function Home() {
 
         <div className="max-w-xl mx-auto px-5 text-center relative z-10">
           <p className="text-[10px] uppercase tracking-[0.3em] text-neutral-400 mb-5">
-            {lang === 'sq' ? '— fillo sot' : '— start today'}
+            {lang === 'sq' ? '— filloni sot' : '— start today'}
           </p>
           <h2 className="text-4xl md:text-5xl font-serif font-medium text-neutral-900 leading-tight mb-5">
             {lang === 'sq' ? (
@@ -1638,11 +1741,11 @@ export default function Home() {
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
             >
-              {lang === 'sq' ? 'krijo albumin tënd falas →' : 'create your photobook free →'}
+              {lang === 'sq' ? 'Krijo albumin tënd falas →' : 'Create your photobook free →'}
             </motion.button>
           </Link>
           <p className="mt-5 text-[11px] text-neutral-400">
-            {lang === 'sq' ? 'Nga 3,100 LEK · Dërgim falas mbi 5,000 LEK' : 'From 3,100 LEK · Free delivery over 5,000 LEK'}
+            {lang === 'sq' ? 'Nga 3.100 LEK · Dërgesë falas mbi 5.000 LEK' : 'From 3,100 LEK · Free delivery over 5,000 LEK'}
           </p>
         </div>
       </section>

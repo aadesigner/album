@@ -1,4 +1,4 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type NextFunction, type Request, type Response } from "express";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -35,12 +35,16 @@ const upload = multer({
   storage,
   limits: { fileSize: HARD_MAX_UPLOAD_BYTES },
   fileFilter: (_req, file, cb) => {
-    // Cheap first-pass filter on the client-supplied MIME type, purely to
-    // avoid writing obviously-wrong uploads to disk. This is NOT the real
-    // security check — file.mimetype is attacker-controlled. The
-    // authoritative check is the sharp-based content sniff below, which
-    // inspects the actual bytes once the file is saved.
-    if (file.mimetype.startsWith("image/")) {
+    // Cheap first-pass filter. Phone pickers often send an empty MIME, HEIC,
+    // or application/octet-stream — sharp inspects the real bytes later.
+    const mime = String(file.mimetype || "").toLowerCase();
+    const ext = path.extname(file.originalname || "").toLowerCase();
+    const okMime = !mime || mime === "application/octet-stream" || mime.startsWith("image/");
+    const okExt = [
+      "", ".jpg", ".jpeg", ".png", ".webp", ".gif",
+      ".heic", ".heif", ".avif", ".tif", ".tiff",
+    ].includes(ext);
+    if (okMime || okExt) {
       cb(null, true);
     } else {
       cb(new Error("Only image files are allowed"));
@@ -48,14 +52,35 @@ const upload = multer({
   },
 });
 
-// Maps the format sharp actually detected from file bytes to a MIME type,
-// so it can be compared against the admin-editable allowlist.
+function receiveImage(req: Request, res: Response, next: NextFunction) {
+  upload.single("file")(req, res, (err: unknown) => {
+    if (!err) {
+      next();
+      return;
+    }
+    const code = (err as { code?: string }).code;
+    if (code === "LIMIT_FILE_SIZE") {
+      res.status(400).json({ error: "File exceeds the maximum allowed size of 50MB." });
+      return;
+    }
+    const message = err instanceof Error ? err.message : "Upload failed";
+    res.status(400).json({ error: message });
+  });
+}
+
+// Maps the format sharp actually detected from file bytes to a MIME type.
 const SHARP_FORMAT_TO_MIME: Record<string, string> = {
   jpeg: "image/jpeg",
   png: "image/png",
   webp: "image/webp",
   gif: "image/gif",
+  heif: "image/heic",
+  avif: "image/avif",
+  tiff: "image/tiff",
 };
+
+/** Source formats we convert to JPEG/PNG for the editor and print PDF. */
+const CONVERTIBLE_FORMATS = new Set(Object.keys(SHARP_FORMAT_TO_MIME));
 
 // Uploaded photos only need to look good on screen while editing and be
 // sharp enough to print later; nothing in this app needs the original
@@ -112,7 +137,7 @@ async function compressUpload(
 // attached to a project, at which point that project itself is auth-gated.
 router.post(
   "/uploads/image",
-  upload.single("file"),
+  receiveImage,
   async (req, res): Promise<void> => {
     if (!req.file) {
       res.status(400).json({ error: "No file uploaded" });
@@ -132,14 +157,32 @@ router.post(
     // Real content-type sniffing: trust what sharp reads from the file's
     // actual bytes, not the client-supplied MIME header, which is trivially
     // spoofable (e.g. a renamed .exe sent with a Content-Type of image/png).
+    let detectedFormat: string | undefined;
     let detectedMime: string | undefined;
     try {
       const metadata = await sharp(req.file.path, { failOn: "none" }).metadata();
-      detectedMime = metadata.format ? SHARP_FORMAT_TO_MIME[metadata.format] : undefined;
+      detectedFormat = metadata.format;
+      detectedMime = detectedFormat ? SHARP_FORMAT_TO_MIME[detectedFormat] : undefined;
     } catch {
+      detectedFormat = undefined;
       detectedMime = undefined;
     }
-    if (!detectedMime || !settings.allowedUploadMimeTypes.includes(detectedMime)) {
+    if (!detectedFormat || !CONVERTIBLE_FORMATS.has(detectedFormat) || !detectedMime) {
+      fs.unlink(req.file.path, () => {});
+      res.status(400).json({ error: "This file is not a valid or allowed image type." });
+      return;
+    }
+
+    // Admin allowlist applies to common web formats. Phone HEIC/AVIF/TIFF
+    // are converted to JPEG/PNG so they still get through.
+    const convertedOutput = detectedFormat === "png" || detectedFormat === "gif"
+      ? "image/png"
+      : "image/jpeg";
+    const allow = settings.allowedUploadMimeTypes || [];
+    const sourceAllowed = allow.includes(detectedMime)
+      || (allow.includes("image/jpg") && detectedMime === "image/jpeg");
+    const outputAllowed = allow.includes(convertedOutput) || allow.includes("image/jpg");
+    if (!sourceAllowed && !outputAllowed && !["heif", "avif", "tiff"].includes(detectedFormat)) {
       fs.unlink(req.file.path, () => {});
       res.status(400).json({ error: "This file is not a valid or allowed image type." });
       return;
@@ -158,7 +201,14 @@ router.post(
         height,
       });
     } catch (err) {
-      logger.error({ err }, "Image compression failed, serving original upload");
+      logger.error({ err, format: detectedFormat }, "Image compression failed");
+      if (detectedFormat === "heif" || detectedFormat === "avif") {
+        fs.unlink(req.file.path, () => {});
+        res.status(400).json({
+          error: "This photo format needs conversion. Please try JPG or PNG.",
+        });
+        return;
+      }
       // Fall back to the untouched original rather than losing the upload.
       res.json({
         url: `/api/uploads/files/${req.file.filename}`,
