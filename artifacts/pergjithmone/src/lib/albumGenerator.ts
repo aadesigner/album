@@ -70,13 +70,10 @@ const AI_CATEGORY_EXPAND: Record<string, string[]> = {
 
 /** Layouts that look good with object-fit cover photos (no harsh crop strips). */
 const AI_LAYOUT_ALLOW = new Set([
-  'full', 'bordered-single', 'portrait-center',
-  'photo-cap', 'cap-top',
-  'two-h', 'two-v', 'two-h-6040', 'two-h-4060', 'two-v-7030', 'two-v-3070',
+  'full', 'bordered-single',
+  'two-h', 'two-v', 'two-h-6040', 'two-h-4060', 'two-h-pad', 'two-v-pad',
   'land-2port', 'port-2land', 'hero-l', 'hero-r', 'tall-l-2r',
-  'grid4', 'grid4-topheavy', 'hero-3r', 'hero-3l', 'top-3below',
-  'gallery-5',
-  'mag', 'text-2photos',
+  'grid4',
 ]);
 
 /** Soft category bias — favors breathing room over dense grids. */

@@ -1,7 +1,7 @@
 /** Backgrounds keyed by API slug (preferred) and nameAl (legacy). */
 export const CAT_IMG_BY_SLUG: Record<string, string> = {
   dasme: 'https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=700&q=88&fit=crop&crop=top',
-  udhetime: 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=700&q=88&fit=crop&crop=center',
+  udhetime: 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=700&q=88&fit=crop&crop=center',
   familje: 'https://images.unsplash.com/photo-1581952976147-5a2d15560349?w=700&q=88&fit=crop&crop=top',
   ditelindje: 'https://images.unsplash.com/photo-1530103862676-de8c9debad1d?w=700&q=88&fit=crop',
   miqesi: 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=700&q=88&fit=crop&crop=top',
@@ -62,7 +62,7 @@ const CAT_SPINE: Record<string, string> = {
 
 const CAT_SUBLABEL: Record<string, { sq: string; en: string }> = {
   dasme: { sq: 'Kujtime të çmuara për gjithë jetën', en: 'Cherished memories for life' },
-  udhetime: { sq: 'Aventurat tuaja, të fiksuara', en: 'Your adventures, captured' },
+  udhetime: { sq: 'Rrugët tuaja, të mbajtura afër', en: 'The roads you took, kept close' },
   familje: { sq: 'Momentet e vogla, mëdha', en: 'Small moments, big meaning' },
   ditelindje: { sq: 'Dhurata perfekte, e personalizuar', en: 'The perfect personalised gift' },
   miqesi: { sq: 'Miqësia që mbetet në faqe', en: 'Friendship that lasts on the page' },

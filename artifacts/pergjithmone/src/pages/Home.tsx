@@ -562,30 +562,40 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
         <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] gap-5 md:gap-10 md:items-center">
           {/* Copy — headline first, brand second */}
           <div className="order-2 md:order-1 md:col-start-1 text-center md:text-left">
-            <div className="relative mb-2.5 md:mb-4 min-h-[2.4em] md:min-h-[2.8em]">
-              <AnimatePresence mode="wait" initial={false}>
-                <motion.h1
-                  key={style.key}
-                  initial={{ opacity: 0, y: 14 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-                  className="font-serif text-[clamp(1.75rem,5.2vw,3.55rem)] text-[#F7F2EC] leading-[1.1] tracking-[-0.02em] font-medium"
-                >
-                  {style.line[lang]}
-                </motion.h1>
-              </AnimatePresence>
-            </div>
+            <motion.h1
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+              className="font-serif text-[clamp(1.85rem,5.4vw,3.65rem)] text-[#F7F2EC] leading-[1.08] tracking-[-0.02em] font-medium mb-1.5 md:mb-2"
+            >
+              {lang === 'sq' ? 'Ruaj kujtimet' : 'Keep the memories'}
+            </motion.h1>
 
             <motion.p
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.65, delay: 0.05, ease: [0.22, 1, 0.36, 1] }}
-              className="font-serif text-[clamp(1.05rem,2.4vw,1.65rem)] leading-none tracking-[-0.01em] mb-4 md:mb-6"
+              className="font-serif text-[clamp(1.15rem,2.6vw,1.85rem)] leading-none tracking-[-0.01em] mb-3 md:mb-4"
               style={{ color: `${style.paper}99` }}
             >
               Përgjithmonë
             </motion.p>
+
+            <div className="relative mb-4 md:mb-6 min-h-[1.4em]">
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.p
+                  key={style.key}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                  className="text-[13px] md:text-[14px] leading-snug"
+                  style={{ color: `${style.paper}70` }}
+                >
+                  {style.line[lang]}
+                </motion.p>
+              </AnimatePresence>
+            </div>
 
             <p
               className="hidden md:block text-[14px] max-w-sm mx-auto md:mx-0 leading-relaxed mb-8"
@@ -719,15 +729,15 @@ function AlbumStarter({ lang }: { lang: 'sq' | 'en' }) {
             className="font-serif text-[clamp(1.9rem,4.2vw,2.75rem)] font-medium leading-[1.12] tracking-[-0.02em] mb-3"
             style={{ color: style.ink }}
           >
-            {lang === 'sq' ? 'Çfarë po krijoni sot?' : 'What are you creating today?'}
+            {lang === 'sq' ? 'Cilat kujtime do t’i lini në një album?' : 'Which memories belong in an album?'}
           </h2>
           <p
             className="text-[14px] md:text-[15px] leading-relaxed max-w-md mx-auto"
             style={{ color: `${style.ink}90` }}
           >
             {lang === 'sq'
-              ? 'Zgjidhni stilin. Editori hapet me atë kopertinë.'
-              : 'Pick a style. The editor opens with that cover.'}
+              ? 'Zgjidhni stilin. Editori hapet me atë kopertinë, gati për fotot tuaja.'
+              : 'Pick a style. The editor opens with that cover, ready for your photos.'}
           </p>
         </div>
 
@@ -1378,9 +1388,9 @@ export default function Home() {
               </p>
               <h2 className="text-4xl font-serif font-medium text-neutral-900 leading-tight mb-5">
                 {lang === 'sq' ? (
-                  <>Çdo faqe, një histori<br />e treguar me kujdes</>
+                  <>Faqet që tregojnë<br />historinë tuaj</>
                 ) : (
-                  <>Every page, a story<br />told with care</>
+                  <>Pages that tell<br />your story</>
                 )}
               </h2>
               <p className="text-neutral-500 text-[14px] leading-relaxed mb-8 max-w-sm">
@@ -1448,7 +1458,7 @@ export default function Home() {
                 {/* Right page */}
                 <div className="absolute inset-y-0 right-0 w-1/2 bg-white flex flex-col p-5 md:p-7">
                   <img
-                    src="https://images.unsplash.com/photo-1503220317375-aaad61436b1b?w=600&q=80&fit=crop"
+                    src="https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=600&q=80&fit=crop"
                     className="w-full flex-1 object-cover rounded-sm"
                     alt=""
                   />
@@ -1612,9 +1622,9 @@ export default function Home() {
           </p>
           <h2 className="text-4xl md:text-5xl font-serif font-medium text-neutral-900 leading-tight mb-5">
             {lang === 'sq' ? (
-              <>Fotot tuaja meritojnë<br />të jenë kujtim</>
+              <>Fotot meritojnë<br />të jenë kujtim</>
             ) : (
-              <>Your photos deserve<br />to become a memory</>
+              <>Photos deserve<br />to become a memory</>
             )}
           </h2>
           <p className="text-neutral-500 text-[14px] leading-relaxed mb-10 max-w-sm mx-auto">

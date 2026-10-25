@@ -69,6 +69,7 @@ import {
   getCanvasHeight, scaleElementsToCanvas, elementsWithCoverWallpaper,
   BLANK_STARTER_ID, blankFrontCoverElements, blankBackCoverElements,
   coverCropRect, imageFrameCoverFit, imageFrameContainFit, imageFrameFocusFromOffset, PHOTO_CORNER_ZOOM, minPhotoAdjustZoom,
+  RETIRED_LAYOUT_IDS,
   designFrontElements, designBackElements, buildDesignCatalog, parseCustomDesigns,
   type EditorElement, type DE, type DesignDef, type LayoutZone, type LayoutDef, type DesignOverrides,
 } from '@/lib/designs';
@@ -114,7 +115,7 @@ function parseAdminLayoutZones(json: string): LayoutZone[] {
 function mergeEditorLayouts(dbLayouts: { slug: string; nameAl: string; nameEn: string; gridDefinitionJson: string; isActive: boolean }[] | undefined): LayoutDef[] {
   const byId = new Map<string, LayoutDef>(LAYOUTS.map(l => [l.id, l]));
   for (const row of dbLayouts || []) {
-    if (!row.isActive) continue;
+    if (!row.isActive || RETIRED_LAYOUT_IDS.has(row.slug)) continue;
     const zones = parseAdminLayoutZones(row.gridDefinitionJson);
     if (!zones.length) continue;
     const photoCount = zones.filter(z => z.type === 'photo').length;
@@ -133,7 +134,9 @@ function mergeEditorLayouts(dbLayouts: { slug: string; nameAl: string; nameEn: s
       zones,
     });
   }
-  return [...byId.values()];
+  return [...byId.values()].filter(l =>
+    !RETIRED_LAYOUT_IDS.has(l.id) && !!LAYOUT_CATEGORY_LABELS[l.category],
+  );
 }
 
 /** No canvas clamp — frames can sit outside the page; guides still snap to midlines. */

@@ -281,87 +281,77 @@ export const TRAVEL_LAYOUT_REV = 9;
 export interface LayoutZone { x:number; y:number; w:number; h:number; type:string; rotation?:number }
 export interface LayoutDef { id:string; category:string; label:{sq:string;en:string}; zones:LayoutZone[] }
 
+/**
+ * Client screenshot (Canva editor brief): keep only marked 1–4 photo templates.
+ * Everything else is hidden even if it still exists in the admin DB.
+ */
+export const RETIRED_LAYOUT_IDS = new Set([
+  // 1 foto — small centered frames marked X
+  'portrait-center',
+  // 2 foto — thin strips marked X
+  'two-v-7030',
+  'two-v-3070',
+  // 3 foto — not on the keep sheet
+  'triptych',
+  'strips-3-uneven',
+  'strips-3-focus',
+  'land-2port-pad',
+  'strips-3-pad',
+  // 4 foto — 1+3, 2-large+2, hero+3 marked X
+  'grid4-topheavy',
+  'top-3below',
+  'hero-3r',
+  'hero-3l',
+  'grid4-pad',
+  'strips-4-pad',
+  // Categories not on the brief
+  'photo-cap',
+  'cap-top',
+  'photo-text-r',
+  'quote',
+  'gallery-5',
+  'filmstrip-5',
+  'grid-6',
+  'mag',
+  'text-2photos',
+  'casual-toss-3',
+  'casual-pile-4',
+  'casual-strip-3',
+  'casual-note-2',
+]);
+
 export const LAYOUTS: LayoutDef[] = [
-  // ── 1-photo ───────────────────────────────────────────────────────────────
+  // LAYOUT 1 FOTO — full page + bordered (X = small centered)
   { id:'full',           category:'1 Photo', label:{sq:'Foto e plotë',      en:'Full bleed'},        zones:[{x:0,y:0,w:1,h:1,type:'photo'}] },
   { id:'bordered-single',category:'1 Photo', label:{sq:'Me kufi',           en:'Bordered'},          zones:[{x:0.06,y:0.05,w:0.88,h:0.90,type:'photo'}] },
-  { id:'portrait-center',category:'1 Photo', label:{sq:'Portret qendror',   en:'Portrait center'},   zones:[{x:0.12,y:0.08,w:0.76,h:0.84,type:'photo'}] },
 
-  // ── Photo + text ──────────────────────────────────────────────────────────
-  { id:'photo-cap',      category:'Photo + Text', label:{sq:'Foto + Titull',     en:'Photo + Caption'},   zones:[{x:0,y:0,w:1,h:0.74,type:'photo'},{x:0.06,y:0.77,w:0.88,h:0.18,type:'text'}] },
-  { id:'cap-top',        category:'Photo + Text', label:{sq:'Titull + Foto',     en:'Title + Photo'},     zones:[{x:0.06,y:0.05,w:0.88,h:0.18,type:'text'},{x:0,y:0.26,w:1,h:0.74,type:'photo'}] },
-  { id:'photo-text-r',   category:'Photo + Text', label:{sq:'Foto + Tekst →',   en:'Photo + Text →'},   zones:[{x:0,y:0,w:0.60,h:1,type:'photo'},{x:0.62,y:0.06,w:0.35,h:0.88,type:'text'}] },
-
-  // ── text only ─────────────────────────────────────────────────────────────
-  { id:'quote',          category:'Text', label:{sq:'Faqe citimi',       en:'Quote page'},        zones:[{x:0.08,y:0.10,w:0.84,h:0.80,type:'text'}] },
-
-  // ── 2-photo ───────────────────────────────────────────────────────────────
+  // LAYOUT 2 FOTO — side-by-side / stacked (equal + 60/40 + padded)
   { id:'two-h',          category:'2 Photos', label:{sq:'2 Kolona',         en:'2 Columns'},         zones:[{x:0,y:0,w:0.487,h:1,type:'photo'},{x:0.513,y:0,w:0.487,h:1,type:'photo'}] },
   { id:'two-v',          category:'2 Photos', label:{sq:'2 Shtresa',        en:'2 Stacked'},         zones:[{x:0,y:0,w:1,h:0.487,type:'photo'},{x:0,y:0.513,w:1,h:0.487,type:'photo'}] },
   { id:'two-h-6040',     category:'2 Photos', label:{sq:'Gjerë + Ngushtë',  en:'Wide + Narrow'},     zones:[{x:0,y:0,w:0.60,h:1,type:'photo'},{x:0.62,y:0,w:0.38,h:1,type:'photo'}] },
   { id:'two-h-4060',     category:'2 Photos', label:{sq:'Ngushtë + Gjerë',  en:'Narrow + Wide'},     zones:[{x:0,y:0,w:0.38,h:1,type:'photo'},{x:0.40,y:0,w:0.60,h:1,type:'photo'}] },
-  { id:'two-v-7030',     category:'2 Photos', label:{sq:'Madhe + Holle',    en:'Tall + Thin'},       zones:[{x:0,y:0,w:1,h:0.68,type:'photo'},{x:0,y:0.70,w:1,h:0.30,type:'photo'}] },
-  { id:'two-v-3070',     category:'2 Photos', label:{sq:'Holle + Madhe',    en:'Thin + Tall'},       zones:[{x:0,y:0,w:1,h:0.30,type:'photo'},{x:0,y:0.32,w:1,h:0.68,type:'photo'}] },
-  // Padded (corner margin) — same idea as 1-photo “Me kufi”
   { id:'two-h-pad',      category:'2 Photos', label:{sq:'2 Kolona me kufi', en:'2 Columns padded'},  zones:[{x:0.06,y:0.05,w:0.42,h:0.90,type:'photo'},{x:0.52,y:0.05,w:0.42,h:0.90,type:'photo'}] },
   { id:'two-v-pad',      category:'2 Photos', label:{sq:'2 Shtresa me kufi',en:'2 Stacked padded'},  zones:[{x:0.06,y:0.05,w:0.88,h:0.43,type:'photo'},{x:0.06,y:0.52,w:0.88,h:0.43,type:'photo'}] },
 
-  // ── 3-photo ───────────────────────────────────────────────────────────────
+  // LAYOUT 3 FOTO — strips, 1+2, hero+2, 3 columns
+  { id:'three-mid',      category:'3 Photos', label:{sq:'3 Qendrore',        en:'3 Centered'},        zones:[{x:0,y:0.13,w:0.316,h:0.74,type:'photo'},{x:0.342,y:0.13,w:0.316,h:0.74,type:'photo'},{x:0.684,y:0.13,w:0.316,h:0.74,type:'photo'}] },
   { id:'strips-3',       category:'3 Photos', label:{sq:'3 Shtresa',         en:'3 Strips'},          zones:[{x:0,y:0,w:1,h:0.316,type:'photo'},{x:0,y:0.342,w:1,h:0.316,type:'photo'},{x:0,y:0.684,w:1,h:0.316,type:'photo'}] },
   { id:'land-2port',     category:'3 Photos', label:{sq:'Sipër + 2',         en:'Top + 2 below'},     zones:[{x:0,y:0,w:1,h:0.487,type:'photo'},{x:0,y:0.513,w:0.487,h:0.487,type:'photo'},{x:0.513,y:0.513,w:0.487,h:0.487,type:'photo'}] },
   { id:'port-2land',     category:'3 Photos', label:{sq:'2 + Poshtë',        en:'2 top + Bottom'},    zones:[{x:0,y:0,w:0.487,h:0.487,type:'photo'},{x:0.513,y:0,w:0.487,h:0.487,type:'photo'},{x:0,y:0.513,w:1,h:0.487,type:'photo'}] },
   { id:'hero-l',         category:'3 Photos', label:{sq:'2 + Kryesore',      en:'2 left + Hero'},     zones:[{x:0,y:0,w:0.35,h:0.487,type:'photo'},{x:0,y:0.513,w:0.35,h:0.487,type:'photo'},{x:0.37,y:0,w:0.63,h:1,type:'photo'}] },
   { id:'hero-r',         category:'3 Photos', label:{sq:'Kryesore + 2',      en:'Hero + 2 right'},    zones:[{x:0,y:0,w:0.63,h:1,type:'photo'},{x:0.65,y:0,w:0.35,h:0.487,type:'photo'},{x:0.65,y:0.513,w:0.35,h:0.487,type:'photo'}] },
   { id:'tall-l-2r',      category:'3 Photos', label:{sq:'E gjatë + 2',       en:'Tall + 2 right'},    zones:[{x:0,y:0,w:0.55,h:1,type:'photo'},{x:0.57,y:0,w:0.43,h:0.487,type:'photo'},{x:0.57,y:0.513,w:0.43,h:0.487,type:'photo'}] },
-  { id:'strips-3-uneven',category:'3 Photos', label:{sq:'3 Shtresa ≠',       en:'3 Uneven strips'},   zones:[{x:0,y:0,w:1,h:0.38,type:'photo'},{x:0,y:0.40,w:1,h:0.20,type:'photo'},{x:0,y:0.62,w:1,h:0.38,type:'photo'}] },
-  { id:'strips-3-focus', category:'3 Photos', label:{sq:'3 Fokus mes',       en:'3 Mid focus'},       zones:[{x:0,y:0,w:1,h:0.22,type:'photo'},{x:0,y:0.24,w:1,h:0.52,type:'photo'},{x:0,y:0.78,w:1,h:0.22,type:'photo'}] },
-  { id:'three-mid',      category:'3 Photos', label:{sq:'3 Qendrore',        en:'3 Centered'},        zones:[{x:0,y:0.13,w:0.316,h:0.74,type:'photo'},{x:0.342,y:0.13,w:0.316,h:0.74,type:'photo'},{x:0.684,y:0.13,w:0.316,h:0.74,type:'photo'}] },
-  // Padded
-  { id:'land-2port-pad', category:'3 Photos', label:{sq:'Sipër + 2 me kufi', en:'Top + 2 padded'},    zones:[{x:0.06,y:0.05,w:0.88,h:0.42,type:'photo'},{x:0.06,y:0.50,w:0.42,h:0.45,type:'photo'},{x:0.52,y:0.50,w:0.42,h:0.45,type:'photo'}] },
-  { id:'strips-3-pad',   category:'3 Photos', label:{sq:'3 Shtresa me kufi', en:'3 Strips padded'},   zones:[{x:0.06,y:0.05,w:0.88,h:0.28,type:'photo'},{x:0.06,y:0.36,w:0.88,h:0.28,type:'photo'},{x:0.06,y:0.67,w:0.88,h:0.28,type:'photo'}] },
 
-  // ── 4-photo ───────────────────────────────────────────────────────────────
-  { id:'strips-4',       category:'4 Photos', label:{sq:'4 Shtresa',         en:'4 Strips'},          zones:[{x:0,y:0,w:1,h:0.235,type:'photo'},{x:0,y:0.255,w:1,h:0.235,type:'photo'},{x:0,y:0.510,w:1,h:0.235,type:'photo'},{x:0,y:0.765,w:1,h:0.235,type:'photo'}] },
-  { id:'grid4-topheavy', category:'4 Photos', label:{sq:'2 Madhe + 2',       en:'2 Large + 2'},       zones:[{x:0,y:0,w:0.487,h:0.55,type:'photo'},{x:0.513,y:0,w:0.487,h:0.55,type:'photo'},{x:0,y:0.57,w:0.487,h:0.43,type:'photo'},{x:0.513,y:0.57,w:0.487,h:0.43,type:'photo'}] },
+  // LAYOUT 4 FOTO — 2×2 + 4 strips (X = 1+3 / 2-large+2 / hero+3)
   { id:'grid4',          category:'4 Photos', label:{sq:'Rrjetë 4',          en:'4 Grid'},            zones:[{x:0,y:0,w:0.487,h:0.487,type:'photo'},{x:0.513,y:0,w:0.487,h:0.487,type:'photo'},{x:0,y:0.513,w:0.487,h:0.487,type:'photo'},{x:0.513,y:0.513,w:0.487,h:0.487,type:'photo'}] },
-  { id:'top-3below',     category:'4 Photos', label:{sq:'Sipër + 3',         en:'Top + 3 below'},     zones:[{x:0,y:0,w:1,h:0.55,type:'photo'},{x:0,y:0.57,w:0.316,h:0.43,type:'photo'},{x:0.342,y:0.57,w:0.316,h:0.43,type:'photo'},{x:0.684,y:0.57,w:0.316,h:0.43,type:'photo'}] },
-  { id:'hero-3r',        category:'4 Photos', label:{sq:'Kryesore + 3',      en:'Hero + 3 right'},    zones:[{x:0,y:0,w:0.63,h:1,type:'photo'},{x:0.65,y:0,w:0.35,h:0.316,type:'photo'},{x:0.65,y:0.342,w:0.35,h:0.316,type:'photo'},{x:0.65,y:0.684,w:0.35,h:0.316,type:'photo'}] },
-  { id:'hero-3l',        category:'4 Photos', label:{sq:'3 + Kryesore',      en:'3 left + Hero'},     zones:[{x:0,y:0,w:0.35,h:0.316,type:'photo'},{x:0,y:0.342,w:0.35,h:0.316,type:'photo'},{x:0,y:0.684,w:0.35,h:0.316,type:'photo'},{x:0.37,y:0,w:0.63,h:1,type:'photo'}] },
-  // Padded
-  { id:'grid4-pad',      category:'4 Photos', label:{sq:'Rrjetë 4 me kufi',  en:'4 Grid padded'},     zones:[{x:0.06,y:0.05,w:0.42,h:0.43,type:'photo'},{x:0.52,y:0.05,w:0.42,h:0.43,type:'photo'},{x:0.06,y:0.52,w:0.42,h:0.43,type:'photo'},{x:0.52,y:0.52,w:0.42,h:0.43,type:'photo'}] },
-  { id:'strips-4-pad',   category:'4 Photos', label:{sq:'4 Shtresa me kufi', en:'4 Strips padded'},   zones:[{x:0.06,y:0.04,w:0.88,h:0.20,type:'photo'},{x:0.06,y:0.28,w:0.88,h:0.20,type:'photo'},{x:0.06,y:0.52,w:0.88,h:0.20,type:'photo'},{x:0.06,y:0.76,w:0.88,h:0.20,type:'photo'}] },
-
-  // ── 5-6 photo ─────────────────────────────────────────────────────────────
-  { id:'gallery-5',      category:'5-6 Photos', label:{sq:'Galeri 5',          en:'Gallery 5'},         zones:[{x:0,y:0,w:0.487,h:0.45,type:'photo'},{x:0.513,y:0,w:0.487,h:0.45,type:'photo'},{x:0,y:0.47,w:0.316,h:0.53,type:'photo'},{x:0.342,y:0.47,w:0.316,h:0.53,type:'photo'},{x:0.684,y:0.47,w:0.316,h:0.53,type:'photo'}] },
-
-  // ── magazine / editorial ──────────────────────────────────────────────────
-  { id:'mag',            category:'Magazine', label:{sq:'Revistë',           en:'Magazine'},          zones:[{x:0,y:0,w:0.55,h:0.62,type:'photo'},{x:0.57,y:0,w:0.43,h:1,type:'photo'},{x:0,y:0.64,w:0.55,h:0.36,type:'text'}] },
-  { id:'text-2photos',   category:'Magazine', label:{sq:'Tekst + 2 Foto',    en:'Text + 2 Photos'},   zones:[{x:0.06,y:0.05,w:0.88,h:0.22,type:'text'},{x:0,y:0.30,w:0.487,h:0.70,type:'photo'},{x:0.513,y:0.30,w:0.487,h:0.70,type:'photo'}] },
-
-  // ── casual / scattered ────────────────────────────────────────────────────
-  { id:'casual-pile-4',  category:'Casual', label:{sq:'Grumbull 4',        en:'Photo pile 4'},      zones:[
-    {x:0.10,y:0.06,w:0.46,h:0.40,type:'photo',rotation:5},
-    {x:0.42,y:0.10,w:0.48,h:0.40,type:'photo',rotation:-4},
-    {x:0.06,y:0.50,w:0.46,h:0.40,type:'photo',rotation:-6},
-    {x:0.44,y:0.54,w:0.46,h:0.38,type:'photo',rotation:3},
-  ]},
-  { id:'casual-note-2',  category:'Casual', label:{sq:'Shënim + 2',        en:'Note + 2 tossed'},   zones:[
-    {x:0.08,y:0.06,w:0.46,h:0.38,type:'photo',rotation:-5},
-    {x:0.44,y:0.14,w:0.44,h:0.34,type:'photo',rotation:6},
-    {x:0.14,y:0.56,w:0.72,h:0.30,type:'text',rotation:-1},
-  ]},
+  { id:'strips-4',       category:'4 Photos', label:{sq:'4 Shtresa',         en:'4 Strips'},          zones:[{x:0,y:0,w:1,h:0.235,type:'photo'},{x:0,y:0.255,w:1,h:0.235,type:'photo'},{x:0,y:0.510,w:1,h:0.235,type:'photo'},{x:0,y:0.765,w:1,h:0.235,type:'photo'}] },
 ];
 
 export const LAYOUT_CATEGORY_LABELS: Record<string, {sq: string; en: string}> = {
   '1 Photo':      { sq: '1 Foto',           en: '1 Photo'      },
-  'Photo + Text': { sq: 'Foto + Tekst',      en: 'Photo + Text' },
-  'Text':         { sq: 'Tekst',             en: 'Text'         },
   '2 Photos':     { sq: '2 Foto',            en: '2 Photos'     },
   '3 Photos':     { sq: '3 Foto',            en: '3 Photos'     },
   '4 Photos':     { sq: '4 Foto',            en: '4 Photos'     },
-  '5-6 Photos':   { sq: '5-6 Foto',          en: '5-6 Photos'   },
-  'Magazine':     { sq: 'Revistë',           en: 'Magazine'     },
-  'Casual':       { sq: 'Rastësor',          en: 'Casual'       },
 };
 
 export const CATEGORY_LABELS: Record<string, {sq: string; en: string}> = {
