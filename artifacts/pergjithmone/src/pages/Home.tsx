@@ -13,7 +13,8 @@ import {
   getCategorySublabel,
 } from '@/lib/categoryImages';
 import { DESIGNS, DESIGN_W, DESIGN_H, designFrontElements } from '@/lib/designs';
-import { PageThumb } from '@/components/PageThumb';
+import { PageThumb, ResponsivePageThumb } from '@/components/PageThumb';
+import { CategoryCoverImg } from '@/components/CategoryCoverImg';
 import { ensureEditorFonts } from '@/lib/editorFonts';
 
 // ── Hero + album starter (CSS 3D book — no WebGL) ─────────────────────────────
@@ -183,17 +184,31 @@ function LivingAlbumBook({
   useEffect(() => {
     const el = coverFaceRef.current;
     if (!el) return;
+    let tries = 0;
     const measure = () => {
       const r = el.getBoundingClientRect();
       // Use untransformed layout size (offset*) so thumbs aren't skewed by 3D rotate.
       const w = Math.round(el.offsetWidth || r.width);
       const h = Math.round(el.offsetHeight || r.height);
-      if (w > 0 && h > 0) setCoverSize({ w, h });
+      if (w > 0 && h > 0) {
+        setCoverSize({ w, h });
+        return;
+      }
+      if (tries++ < 24) requestAnimationFrame(measure);
     };
     measure();
-    const ro = new ResizeObserver(measure);
+    const ro = new ResizeObserver(() => {
+      tries = 0;
+      measure();
+    });
     ro.observe(el);
-    return () => ro.disconnect();
+    window.addEventListener('resize', measure);
+    window.addEventListener('orientationchange', measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', measure);
+      window.removeEventListener('orientationchange', measure);
+    };
   }, [style.designId, size]);
 
   useEffect(() => { void ensureEditorFonts(); }, []);
@@ -365,20 +380,21 @@ function LivingAlbumBook({
                     fit="cover"
                     background={coverBg}
                   />
-                ) : coverEls.length === 0 ? (
+                ) : (
                   <img
                     src={style.img}
                     alt=""
                     draggable={false}
                     loading="eager"
                     decoding="async"
+                    referrerPolicy="no-referrer"
                     style={{
                       position: 'absolute', inset: 0,
                       width: '100%', height: '100%',
                       objectFit: 'cover', display: 'block',
                     }}
                   />
-                ) : null}
+                )}
               </motion.div>
             </AnimatePresence>
 
@@ -885,9 +901,8 @@ function AlbumStarter({ lang }: { lang: 'sq' | 'en' }) {
                     style={{ ['--tw-ring-color' as string]: style.ink }}
                   >
                     <div
-                      className="relative overflow-hidden w-full"
+                      className="relative overflow-hidden w-[108px] h-[144px] md:w-full md:h-auto md:aspect-[3/4]"
                       style={{
-                        aspectRatio: `${DESIGN_W} / ${DESIGN_H}`,
                         borderRadius: 5,
                         boxShadow: active
                           ? `0 14px 32px ${s.spine}45, 0 0 0 2px ${style.ink}`
@@ -898,7 +913,11 @@ function AlbumStarter({ lang }: { lang: 'sq' | 'en' }) {
                       }}
                     >
                       {els.length > 0 ? (
-                        <AlbumStarterThumb elements={els} bg={String(s.spine)} />
+                        <ResponsivePageThumb
+                          elements={els}
+                          className="absolute inset-0"
+                          style={{ background: String(s.spine) }}
+                        />
                       ) : (
                         <div className="absolute inset-0" style={{ background: s.spine }} />
                       )}
@@ -945,46 +964,6 @@ function AlbumStarter({ lang }: { lang: 'sq' | 'en' }) {
   );
 }
 
-/** Fills the parent box with a live cover thumb (measures itself). */
-function AlbumStarterThumb({
-  elements,
-  bg,
-}: {
-  elements: ReturnType<typeof designFrontElements>;
-  bg: string;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState({ w: 0, h: 0 });
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const measure = () => {
-      const r = el.getBoundingClientRect();
-      const w = Math.round(r.width);
-      const h = Math.round(r.height);
-      if (w > 0 && h > 0) setSize({ w, h });
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  return (
-    <div ref={ref} className="absolute inset-0">
-      {size.w > 0 && (
-        <PageThumb
-          elements={elements}
-          width={size.w}
-          height={size.h}
-          fit="cover"
-          background={bg}
-        />
-      )}
-    </div>
-  );
-}
 // ── Data ───────────────────────────────────────────────────────────────────────
 
 type HomeCategoryCard = {
@@ -1167,8 +1146,18 @@ function CategoryCard({
   const y = useMotionValue(0);
   const rotateY = useSpring(useTransform(x, [-1, 1], [-3, 3]), { stiffness: 280, damping: 28 });
   const rotateX = useSpring(useTransform(y, [-1, 1], [2.5, -2.5]), { stiffness: 280, damping: 28 });
+  const [canTilt, setCanTilt] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(hover: hover) and (pointer: fine)');
+    const apply = () => setCanTilt(mq.matches);
+    apply();
+    mq.addEventListener?.('change', apply);
+    return () => mq.removeEventListener?.('change', apply);
+  }, []);
 
   const handleMouseMove = (e: React.MouseEvent) => {
+    if (!canTilt) return;
     const rect = ref.current?.getBoundingClientRect();
     if (!rect) return;
     x.set(((e.clientX - rect.left) / rect.width - 0.5) * 2);
@@ -1183,23 +1172,25 @@ function CategoryCard({
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
         className="cursor-pointer select-none"
-        style={{ perspective: '900px' }}
+        style={canTilt ? { perspective: '900px' } : undefined}
       >
         <motion.div
-          style={{ rotateY, rotateX, transformStyle: 'preserve-3d' }}
-          whileHover={{ scale: 1.015 }}
+          style={canTilt ? { rotateY, rotateX, transformStyle: 'preserve-3d' } : undefined}
+          whileHover={canTilt ? { scale: 1.015 } : undefined}
           transition={{ duration: 0.3, ease: 'easeOut' }}
           className="group relative rounded-2xl overflow-hidden"
         >
           {/* Image */}
           <div
             className={`relative overflow-hidden ${featured ? 'aspect-[3/4] md:aspect-auto md:h-full' : 'aspect-[3/4]'}`}
-            style={featured ? { minHeight: 360 } : {}}
+            style={featured ? { minHeight: 360 } : { minHeight: 220 }}
           >
-            <img
-              src={cat.img}
+            <CategoryCoverImg
+              nameAl={cat.label.sq}
+              coverImage={cat.img}
+              slug={cat.key}
               alt={cat.label[lang]}
-              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+              className="absolute inset-0 transition-transform duration-700 group-hover:scale-105"
             />
             {/* gradient overlay */}
             <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />

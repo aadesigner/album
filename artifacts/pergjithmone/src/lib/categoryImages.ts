@@ -69,12 +69,32 @@ const CAT_SUBLABEL: Record<string, { sq: string; en: string }> = {
   festash: { sq: 'Festat që s’harrohen kurrë', en: 'Celebrations you never forget' },
 };
 
+/** Make stored cover URLs load on phones (relative /api path, not localhost). */
+export function resolvePublicImageSrc(src?: string | null): string {
+  const raw = String(src || '').trim();
+  if (!raw) return '';
+  try {
+    if (/^https?:\/\//i.test(raw)) {
+      const u = new URL(raw);
+      if (u.hostname === 'localhost' || u.hostname === '127.0.0.1') {
+        return `${u.pathname}${u.search}`;
+      }
+      return raw;
+    }
+  } catch {
+    /* keep raw */
+  }
+  if (raw.startsWith('/uploads/')) return `/api${raw}`;
+  return raw;
+}
+
 export function getCategoryImage(
   nameAl: string,
   coverImage?: string | null,
   slug?: string | null,
 ): string {
-  if (coverImage) return coverImage;
+  const custom = resolvePublicImageSrc(coverImage);
+  if (custom) return custom;
   if (slug && CAT_IMG_BY_SLUG[slug]) return CAT_IMG_BY_SLUG[slug];
   return CAT_IMG[nameAl] || CAT_IMG_DEFAULT;
 }

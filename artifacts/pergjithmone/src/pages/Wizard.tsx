@@ -9,7 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Link } from 'wouter';
 import {
   DESIGN_CATEGORY_LABELS, resolveDesignCategory,
-  resolveDesignCategoryFromQuery, matchDbCategory,
+  resolveDesignCategoryFromQuery,
 } from '@/lib/designMeta';
 import {
   BLANK_STARTER_ID, parseCustomDesigns, buildDesignCatalog,
@@ -18,7 +18,8 @@ import {
 import { ResponsiveDesignCatalogThumb } from '@/components/PageThumb';
 import { SEOMeta } from '@/components/SEOMeta';
 import { useToast } from '@/hooks/use-toast';
-import { getCategoryImage } from '@/lib/categoryImages';
+import { CategoryCoverImg } from '@/components/CategoryCoverImg';
+import { wizardEntryFromSearch } from '@/lib/wizardEntry';
 import { createProjectErrorMessage } from '@/lib/projectErrors';
 import { ensureEditorFonts } from '@/lib/editorFonts';
 
@@ -156,6 +157,7 @@ function DesignCard({ design, isSelected, lang, onClick }: {
         }`}
         style={{
           aspectRatio: '3/4',
+          minHeight: 148,
           background: (design.thumb?.background as string) || '#F3EEE6',
         }}
       >
@@ -231,37 +233,20 @@ export default function Wizard() {
     };
   }, [designCatalog]);
 
-  // Home category cards deep-link to cover/style selection via ?category=slug
-  // Showcase albums also pass ?design=id so the cover is pre-highlighted.
+  // Home starter / category cards deep-link via ?category=slug&design=id
   useEffect(() => {
-    if (preselectDone || loadingCat || !categories?.length) return;
+    if (preselectDone || loadingCat) return;
     const params = new URLSearchParams(window.location.search);
-    const slug = (params.get('category') || '').trim();
-    const designId = (params.get('design') || '').trim();
-    const designCat = resolveDesignCategoryFromQuery(slug, designId, designCatalog);
-
-    if (designId && designCatalog.some(d => d.id === designId)) {
-      setSelectedDesignId(designId);
-      const match = matchDbCategory(categories as any[], slug, designCat);
-      setSelectedCategory(match?.id != null ? match.id : null);
-      setStep(2);
-      setPreselectDone(true);
-      return;
-    }
-
-    if (!slug) { setPreselectDone(true); return; }
-    const match = matchDbCategory(categories as any[], slug, designCat);
-    if (match?.id != null) {
-      setSelectedCategory(match.id);
-      setSelectedDesignId(null);
-      setStep(2);
-    } else if (designCat) {
-      // Slug maps to a catalog (e.g. dasme → Wedding) even if the DB row
-      // uses a different name — still open the style step.
-      setSelectedCategory(null);
-      setSelectedDesignId(null);
-      setStep(2);
-    }
+    const entry = wizardEntryFromSearch({
+      categorySlug: params.get('category'),
+      designId: params.get('design'),
+      categories: (categories as any[]) || [],
+      designs: designCatalog,
+    });
+    if (entry.designId) setSelectedDesignId(entry.designId);
+    if (entry.categoryId != null) setSelectedCategory(entry.categoryId);
+    else if (entry.step > 1) setSelectedCategory(null);
+    if (entry.step > 1) setStep(entry.step);
     setPreselectDone(true);
   }, [categories, loadingCat, preselectDone, designCatalog]);
 
@@ -544,23 +529,24 @@ export default function Wizard() {
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
                     {categories?.map((cat: any, idx: number) => {
-                      const imgSrc = getCategoryImage(cat.nameAl, cat.coverImage, cat.slug);
                       return (
                         <motion.button
                           key={cat.id}
                           onClick={() => handleCategorySelect(cat.id)}
                           className="group relative rounded-2xl overflow-hidden cursor-pointer focus:outline-none focus:ring-2 focus:ring-neutral-900"
-                          style={{ aspectRatio: '3/4' }}
+                          style={{ aspectRatio: '3/4', minHeight: 168 }}
                           initial={{ opacity: 0, y: 12 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: idx * 0.045, duration: 0.3 }}
                           whileHover={{ y: -4, transition: { duration: 0.2 } }}
                           whileTap={{ scale: 0.97 }}
                         >
-                          <img
-                            src={imgSrc}
+                          <CategoryCoverImg
+                            nameAl={cat.nameAl}
+                            coverImage={cat.coverImage}
+                            slug={cat.slug}
                             alt={cat.nameAl}
-                            className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
+                            className="absolute inset-0 transition-transform duration-500 ease-out group-hover:scale-105"
                           />
                           {/* Gradient */}
                           <div className="absolute inset-0 bg-gradient-to-t from-black/78 via-black/18 to-transparent transition-opacity duration-300" />
@@ -657,7 +643,17 @@ export default function Wizard() {
                   </p>
                 )}
 
-                <div className="mt-8 flex justify-center">
+                <div className="mt-8 flex flex-col items-center gap-3">
+                  {selectedDesignId && (
+                    <button
+                      type="button"
+                      onClick={() => setStep(3)}
+                      className="flex items-center gap-2 px-8 py-3 rounded-full bg-neutral-900 text-white text-[12px] font-semibold tracking-wide hover:bg-neutral-700"
+                    >
+                      {lang === 'sq' ? 'Vazhdo me këtë stil' : 'Continue with this style'}
+                      <ChevronRight size={14} className="opacity-70" />
+                    </button>
+                  )}
                   <button
                     onClick={() => handleDesignSelect(null)}
                     className="flex items-center gap-2 px-6 py-2.5 rounded-full border border-neutral-200 hover:border-neutral-400 text-[11px] uppercase tracking-[0.12em] text-neutral-400 hover:text-neutral-700 transition-all"

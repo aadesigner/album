@@ -66,7 +66,7 @@ export const PageThumb = React.memo(function PageThumb({
           const key = (el as EditorElement).id ?? i;
           if (el.type === 'background') {
             if (el.src) {
-              return <img key={key} src={el.src} alt="" loading="lazy" style={{
+              return <img key={key} src={el.src} alt="" loading="eager" decoding="async" style={{
                 position: 'absolute', inset: 0, width: '100%', height: '100%',
                 objectFit: 'cover',
                 objectPosition: `${(el.cropFocusX ?? 0.5) * 100}% ${(el.cropFocusY ?? 0.5) * 100}%`,
@@ -100,7 +100,8 @@ export const PageThumb = React.memo(function PageThumb({
                 <img
                   src={el.src}
                   alt=""
-                  loading="lazy"
+                  loading="eager"
+                  decoding="async"
                   style={{
                     width: '100%', height: '100%', display: 'block',
                     objectFit: el.objectFit === 'contain' ? 'contain' : 'cover',
@@ -198,20 +199,57 @@ export function ResponsivePageThumb({
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    const apply = (w: number) => {
-      if (w > 0) setWidth(Math.round(w));
+    let tries = 0;
+    const apply = () => {
+      const w = Math.round(el.offsetWidth || el.clientWidth || el.getBoundingClientRect().width);
+      if (w > 0) {
+        setWidth(w);
+        return;
+      }
+      if (tries++ < 24) requestAnimationFrame(apply);
     };
-    apply(el.getBoundingClientRect().width || el.offsetWidth);
-    const observer = new ResizeObserver((entries) => {
-      apply(entries[0]?.contentRect.width || el.getBoundingClientRect().width);
-    });
+    apply();
+    const observer = new ResizeObserver(() => apply());
     observer.observe(el);
-    return () => observer.disconnect();
+    window.addEventListener('resize', apply);
+    window.addEventListener('orientationchange', apply);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', apply);
+      window.removeEventListener('orientationchange', apply);
+    };
   }, []);
 
+  const scale = width > 0 ? width / DESIGN_W : undefined;
+
   return (
-    <div ref={containerRef} className={className} style={{ width: '100%', aspectRatio: `${DESIGN_W} / ${canvasH}`, ...style }}>
-      {width > 0 && <PageThumb elements={elements} width={width} height={width * (canvasH / DESIGN_W)} canvasH={canvasH} />}
+    <div
+      ref={containerRef}
+      className={className}
+      style={{
+        width: '100%',
+        height: '100%',
+        overflow: 'hidden',
+        position: 'relative',
+        containerType: 'inline-size',
+        ...style,
+      }}
+    >
+      <div
+        style={{
+          width: DESIGN_W,
+          height: canvasH,
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          transform: scale != null
+            ? `scale(${scale})`
+            : `scale(calc(100cqw / ${DESIGN_W}))`,
+          transformOrigin: 'top left',
+        }}
+      >
+        <PageThumb elements={elements} width={DESIGN_W} height={canvasH} canvasH={canvasH} />
+      </div>
     </div>
   );
 }
@@ -245,7 +283,7 @@ export function DesignCatalogThumb({
         alt=""
         width={width}
         height={height}
-        loading="lazy"
+        loading="eager"
         decoding="async"
         style={{ width, height, objectFit: 'cover', display: 'block' }}
       />
@@ -277,7 +315,7 @@ export function ResponsiveDesignCatalogThumb({
         src={face.src}
         alt=""
         className={className}
-        loading="lazy"
+        loading="eager"
         decoding="async"
         style={{ ...MOCKUP_IMG, ...style }}
       />

@@ -20,7 +20,7 @@ import { generateAlbum, suggestInnerPageCount } from '@/lib/albumGenerator';
 import { uploadImageToApi } from '@/lib/uploadImage';
 import { pendingBooksLimitMessage } from '@/lib/projectErrors';
 import { SizeCard } from './Wizard';
-import { getCategoryImage } from '@/lib/categoryImages';
+import { CategoryCoverImg } from '@/components/CategoryCoverImg';
 
 // Minimum photos required before generation is allowed. Kept as a single
 // named constant so the UI copy, validation, and progress bar all agree.
@@ -734,20 +734,25 @@ export default function AlbumAI() {
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {categories?.map((cat: any, i: number) => {
-                      const imgSrc = getCategoryImage(cat.nameAl, cat.coverImage, cat.slug);
                       return (
                         <motion.button
                           key={cat.id}
                           onClick={() => handleCategorySelect(cat.id)}
                           className="group relative rounded-2xl overflow-hidden cursor-pointer focus:outline-none focus:ring-2 focus:ring-neutral-900"
-                          style={{ aspectRatio: '3/4' }}
+                          style={{ aspectRatio: '3/4', minHeight: 168 }}
                           initial={{ opacity: 0, y: 16 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: i * 0.05, duration: 0.4 }}
                           whileHover={{ y: -3 }}
                           whileTap={{ scale: 0.97 }}
                         >
-                          <img src={imgSrc} alt={cat.nameAl} className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-105" />
+                          <CategoryCoverImg
+                            nameAl={cat.nameAl}
+                            coverImage={cat.coverImage}
+                            slug={cat.slug}
+                            alt={cat.nameAl}
+                            className="absolute inset-0 transition-transform duration-500 ease-out group-hover:scale-105"
+                          />
                           <div className="absolute inset-0 bg-gradient-to-t from-black/78 via-black/18 to-transparent" />
                           <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 ring-1 ring-inset ring-white/40 rounded-2xl" />
                           <div className="absolute bottom-0 left-0 right-0 p-3.5 text-left">
