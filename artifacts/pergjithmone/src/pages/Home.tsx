@@ -4,7 +4,7 @@ import { SEOMeta } from '@/components/SEOMeta';
 import { Link } from 'wouter';
 import { motion, useMotionValue, useSpring, useTransform, AnimatePresence } from 'framer-motion';
 import React, { useRef, useState, useEffect, useMemo } from 'react';
-import { useListCategories } from '@workspace/api-client-react-tsconfig';
+import { useListCategories, useGetAppSettings } from '@workspace/api-client-react-tsconfig';
 import {
   CAT_IMG_BY_SLUG,
   DEFAULT_CATEGORIES,
@@ -12,7 +12,10 @@ import {
   getCategorySpine,
   getCategorySublabel,
 } from '@/lib/categoryImages';
-import { DESIGNS, DESIGN_W, DESIGN_H, designFrontElements } from '@/lib/designs';
+import {
+  DESIGNS, DESIGN_W, DESIGN_H, designFrontElements,
+  buildDesignCatalog, parseCustomDesigns, type DesignDef,
+} from '@/lib/designs';
 import { PageThumb, ResponsivePageThumb } from '@/components/PageThumb';
 import { CategoryCoverImg } from '@/components/CategoryCoverImg';
 import { ensureEditorFonts } from '@/lib/editorFonts';
@@ -127,6 +130,17 @@ function heroBgUrl(src: string): string {
   }
 }
 
+function useLiveDesign(id: string): DesignDef | undefined {
+  const { data: settings } = useGetAppSettings();
+  return useMemo(() => {
+    const catalog = buildDesignCatalog(
+      (settings as any)?.designOverrides,
+      parseCustomDesigns((settings as any)?.customDesigns),
+    );
+    return catalog.find(d => d.id === id) ?? DESIGNS.find(d => d.id === id);
+  }, [id, settings]);
+}
+
 const HERO_CYCLE_MS = 3800;
 
 function createAlbumCta(lang: 'sq' | 'en', label: string): string {
@@ -173,10 +187,11 @@ function LivingAlbumBook({
     { stiffness: 130, damping: 22, mass: 0.4 },
   );
 
-  const coverEls = useMemo(() => {
-    const d = DESIGNS.find(x => x.id === style.designId);
-    return d ? designFrontElements(d) : [];
-  }, [style.designId]);
+  const liveDesign = useLiveDesign(style.designId);
+  const coverEls = useMemo(
+    () => (liveDesign ? designFrontElements(liveDesign) : []),
+    [liveDesign],
+  );
 
   const [coverSize, setCoverSize] = useState({ w: 0, h: 0 });
   const coverFaceRef = useRef<HTMLDivElement>(null);
@@ -238,7 +253,7 @@ function LivingAlbumBook({
     setHovering(false);
   };
 
-  const coverBg = (DESIGNS.find(x => x.id === style.designId)?.thumb?.background as string) || '#1a1410';
+  const coverBg = (liveDesign?.thumb?.background as string) || '#1a1410';
   const usePointerTilt = interactive && !reduced && hovering;
   const idleClass = size === 'hero' ? 'book-idle-yaw' : 'book-idle-yaw-starter';
 
@@ -257,6 +272,7 @@ function LivingAlbumBook({
         perspective: size === 'hero' ? 1800 : 1100,
         perspectiveOrigin: '42% 45%',
         touchAction: 'manipulation',
+        paddingTop: size === 'hero' ? 18 : 10,
         paddingLeft: spineD * 0.55,
         paddingRight: pageBlock * 0.7,
       }}
@@ -376,7 +392,7 @@ function LivingAlbumBook({
                     elements={coverEls}
                     width={coverSize.w}
                     height={coverSize.h}
-                    fit="cover"
+                    fit="width"
                     background={coverBg}
                   />
                 ) : (
@@ -456,6 +472,7 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
     bg.src = heroBgUrl(next.img);
     const d = DESIGNS.find(x => x.id === next.designId);
     const els = d ? designFrontElements(d) : [];
+    // Builtin prefetch only — live overrides load with the settings query.
     for (const el of els) {
       if ((el.type === 'image' || el.type === 'background') && el.src) {
         const img = new Image();
@@ -741,7 +758,7 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
           </div>
 
           {/* 3D book — first on mobile so the hero reads as one composition */}
-          <div className="order-1 md:order-2 md:col-start-2 md:row-start-1 flex flex-col items-center justify-center pt-2 pb-2 md:py-0 md:pl-2">
+          <div className="order-1 md:order-2 md:col-start-2 md:row-start-1 flex flex-col items-center justify-center pt-8 pb-3 md:py-0 md:pl-2">
             <motion.div
               initial={reduced ? false : { opacity: 0, y: 56, scale: 0.84, rotate: 4 }}
               animate={{ opacity: 1, y: 0, scale: 1, rotate: 0 }}
@@ -809,19 +826,24 @@ function AlbumStarter({ lang }: { lang: 'sq' | 'en' }) {
   const [idx, setIdx] = useState(0);
   const style = ALBUM_STYLES[idx];
   const href = `/krijo?category=${encodeURIComponent(style.key)}&design=${encodeURIComponent(style.designId)}`;
+  const { data: settings } = useGetAppSettings();
 
   const coverElsById = useMemo(() => {
+    const catalog = buildDesignCatalog(
+      (settings as any)?.designOverrides,
+      parseCustomDesigns((settings as any)?.customDesigns),
+    );
     const map: Record<string, ReturnType<typeof designFrontElements>> = {};
     for (const s of ALBUM_STYLES) {
-      const d = DESIGNS.find(x => x.id === s.designId);
+      const d = catalog.find(x => x.id === s.designId) ?? DESIGNS.find(x => x.id === s.designId);
       map[s.designId] = d ? designFrontElements(d) : [];
     }
     return map;
-  }, []);
+  }, [settings]);
 
   return (
     <section
-      className="relative overflow-hidden"
+      className="relative overflow-x-clip"
       style={{
         background: `linear-gradient(180deg, ${style.paper} 0%, #F7F4EF 52%, #F3EFE9 100%)`,
         transition: 'background 0.5s ease',
@@ -883,7 +905,7 @@ function AlbumStarter({ lang }: { lang: 'sq' | 'en' }) {
             <div
               role="listbox"
               aria-label={lang === 'sq' ? 'Lloji i albumit' : 'Album type'}
-              className="flex md:grid md:grid-cols-5 gap-3.5 md:gap-3 overflow-x-auto md:overflow-visible snap-x snap-mandatory pb-2 md:pb-0 -mx-1 px-1 scrollbar-thin"
+              className="flex md:grid md:grid-cols-5 gap-3.5 md:gap-3 overflow-x-auto md:overflow-visible snap-x snap-mandatory pt-2 pb-3 md:pt-0 md:pb-0 -mx-1 px-1 scrollbar-thin"
               style={{ WebkitOverflowScrolling: 'touch' }}
             >
               {ALBUM_STYLES.map((s, i) => {
@@ -902,11 +924,11 @@ function AlbumStarter({ lang }: { lang: 'sq' | 'en' }) {
                         setIdx(i);
                       }
                     }}
-                    className="group flex flex-col items-center gap-2.5 shrink-0 snap-center focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 rounded-md w-[108px] md:w-auto cursor-pointer"
+                    className="group flex flex-col items-center gap-2.5 shrink-0 snap-center focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 rounded-md w-[132px] md:w-auto cursor-pointer"
                     style={{ ['--tw-ring-color' as string]: style.ink }}
                   >
                     <div
-                      className="relative overflow-hidden w-[108px] h-[144px] md:w-full md:h-auto md:aspect-[3/4]"
+                      className="relative overflow-hidden w-[132px] h-[176px] md:w-full md:h-auto md:aspect-[3/4]"
                       style={{
                         borderRadius: 5,
                         boxShadow: active

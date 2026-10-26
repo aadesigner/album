@@ -66,7 +66,7 @@ export {
 } from '@/lib/designs';
 import {
   DESIGN_W, DESIGN_H, LAYOUTS, DESIGNS, CATEGORY_LABELS, LAYOUT_CATEGORY_LABELS,
-  getCanvasHeight, scaleElementsToCanvas, fitDesignToCanvas, elementsWithCoverWallpaper,
+  getCanvasHeight, scaleElementsToCanvas, fitDesignToCanvas,
   BLANK_STARTER_ID, blankFrontCoverElements, blankBackCoverElements,
   coverCropRect, imageFrameCoverFit, imageFrameContainFit, imageFrameFocusFromOffset, PHOTO_CORNER_ZOOM, minPhotoAdjustZoom,
   RETIRED_LAYOUT_IDS,
@@ -3812,14 +3812,9 @@ export default function Editor() {
     const ts=Date.now();
     const updates:Record<number,EditorElement[]>={};
 
-    const projectSide = (sideEls: typeof design.elements) => {
-      const hasCoverArt = sideEls.some((e) => e.type === "image" && !!e.src);
-      const coverSource =
-        !hasCoverArt && design.thumbPhoto
-          ? elementsWithCoverWallpaper(sideEls, design.thumbPhoto)
-          : sideEls;
-      return fitDesignToCanvas(coverSource, canvasH);
-    };
+    const projectSide = (sideEls: typeof design.elements) =>
+      // Live Design Studio layers only — never swap in the catalog mockup JPG.
+      fitDesignToCanvas(sideEls, canvasH);
 
     const frontProjected = projectSide(designFrontElements(design));
     const backProjected = projectSide(designBackElements(design));

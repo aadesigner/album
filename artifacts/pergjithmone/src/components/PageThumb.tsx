@@ -262,17 +262,17 @@ const MOCKUP_IMG: React.CSSProperties = {
   pointerEvents: 'none',
 };
 
-/** Picker / sidebar face — uses the authored mockup JPG when one exists. */
+/** Picker / sidebar face — live layers so it matches Design Studio. */
 export function DesignCatalogThumb({
   design,
   width,
   height,
-  preferMockup = true,
+  preferMockup = false,
 }: {
   design: Pick<DesignDef, 'thumbPhoto' | 'thumb' | 'elements'>;
   width: number;
   height: number;
-  /** False = always render live layers (Design Studio after an override). */
+  /** True = allow a baked mockup JPG when a design has no live layers. */
   preferMockup?: boolean;
 }) {
   const face = preferMockup ? designCatalogFace(design) : { kind: 'elements' as const, elements: design.elements || [] };
@@ -301,7 +301,7 @@ export function ResponsiveDesignCatalogThumb({
   design,
   className,
   style,
-  preferMockup = true,
+  preferMockup = false,
 }: {
   design: Pick<DesignDef, 'thumbPhoto' | 'thumb' | 'elements'>;
   className?: string;

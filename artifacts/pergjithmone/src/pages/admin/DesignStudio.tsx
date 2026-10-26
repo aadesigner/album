@@ -2020,7 +2020,7 @@ export default function AdminDesignStudio() {
                             design={d}
                             width={CATALOG_THUMB_W}
                             height={CATALOG_THUMB_H}
-                            preferMockup={!overridden}
+                            preferMockup={false}
                           />
                         </div>
                         <div className="min-w-0 flex-1">

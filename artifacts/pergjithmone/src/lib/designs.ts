@@ -346,8 +346,8 @@ export interface DesignDef {
   /** Admin-created design (persisted in app settings). */
   isCustom?: boolean;
   /**
-   * Bump when the builtin layout changes. Stale `design_overrides` without a
-   * matching rev are ignored so the guide/editor show the current catalog.
+   * Builtin layout generation. Stored on Design Studio saves for history only —
+   * a newer built-in rev must never discard a shop's saved covers.
    */
   layoutRev?: number;
 }
@@ -1183,15 +1183,17 @@ export function designFrontElements(d: DesignDef): DE[] {
 }
 
 /**
- * Catalog / sidebar face. Landmark covers (Barcelona, Paris) keep a composed
- * mockup in `thumbPhoto` because the live PNG+type layers collapse to a blank
- * color plate at 72px. Prefer that mockup in pickers; fall back to elements.
+ * Catalog / sidebar face. Always prefer the live cover layers so the wizard,
+ * editor sidebar, and Design Studio show the same book. `thumbPhoto` is only
+ * a last-resort fallback when a design has no elements yet.
  */
 export function designCatalogFace(d: Pick<DesignDef, 'thumbPhoto' | 'elements'>):
   | { kind: 'photo'; src: string }
   | { kind: 'elements'; elements: DE[] } {
+  const els = Array.isArray(d.elements) ? d.elements : [];
+  if (els.length) return { kind: 'elements', elements: els };
   if (d.thumbPhoto) return { kind: 'photo', src: d.thumbPhoto };
-  return { kind: 'elements', elements: Array.isArray(d.elements) ? d.elements : [] };
+  return { kind: 'elements', elements: [] };
 }
 
 /** Back cover elements — falls back to front when unset/empty. */
@@ -1204,7 +1206,7 @@ export function designBackElements(d: DesignDef): DE[] {
 export type DesignSideOverride = {
   frontElements?: DE[];
   backElements?: DE[];
-  /** Must match DesignDef.layoutRev or the override is treated as stale. */
+  /** Snapshot of the builtin rev at save time (not used to drop overrides). */
   layoutRev?: number;
 };
 
@@ -1246,12 +1248,6 @@ export function normalizeOverride(raw: unknown): DesignSideOverride | null {
   };
 }
 
-function overrideLayoutRev(raw: unknown): number | undefined {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
-  const rev = (raw as Record<string, unknown>).layoutRev;
-  return typeof rev === 'number' && Number.isFinite(rev) ? rev : undefined;
-}
-
 /** Merge persisted admin overrides onto a design list. */
 export function applyDesignOverrides(
   designs: DesignDef[] = DESIGNS,
@@ -1263,14 +1259,12 @@ export function applyDesignOverrides(
     const norm = normalizeOverride(raw);
     if (!norm) return d;
 
-    // Drop stale Design Studio saves that still pin old typography-only /
-    // pre-photo Travel covers (or older Paris/Barcelona sizes).
-    if (d.layoutRev != null && overrideLayoutRev(raw) !== d.layoutRev) {
-      return d;
-    }
-
+    // Design Studio is the source of truth. A new deploy must not throw away
+    // a shop's saved covers just because built-in layoutRev was bumped.
+    // Drop the baked catalog mockup so pickers show the saved layers.
     return {
       ...d,
+      thumbPhoto: undefined,
       elements: norm.frontElements?.length ? norm.frontElements : d.elements,
       backElements: norm.backElements?.length
         ? norm.backElements

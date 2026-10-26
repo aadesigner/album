@@ -139,24 +139,23 @@ export function SizeCard({ size, isSelected, onClick, lang, t }: any) {
   );
 }
 
-// ── Design card — catalog mockup (thumbPhoto) or live layers
+// ── Design card — live Design Studio layers
 function DesignCard({ design, isSelected, lang, onClick }: {
   design: DesignDef; isSelected: boolean; lang: 'sq' | 'en'; onClick: () => void;
 }) {
   return (
     <div
       {...coverPressable(onClick, design.name[lang])}
-      className="relative flex flex-col items-center gap-2 group focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 w-full transition-transform duration-150 hover:-translate-y-0.5 active:scale-[0.97] cursor-pointer"
+      className="relative flex flex-col items-center gap-2 group focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 w-full md:hover:-translate-y-0.5 active:scale-[0.98] cursor-pointer"
     >
       <div
-        className={`relative w-full overflow-hidden rounded-2xl transition-shadow duration-150 ${
+        className={`relative w-full overflow-hidden rounded-xl md:rounded-2xl transition-shadow duration-150 ${
           isSelected
             ? 'ring-2 ring-neutral-900 shadow-xl'
             : 'ring-1 ring-neutral-200 hover:ring-neutral-400 hover:shadow-md'
         }`}
         style={{
-          aspectRatio: '3/4',
-          minHeight: 148,
+          aspectRatio: '3 / 4',
           background: (design.thumb?.background as string) || '#F3EEE6',
         }}
       >
@@ -170,7 +169,7 @@ function DesignCard({ design, isSelected, lang, onClick }: {
           </div>
         )}
       </div>
-      <span className={`text-[10px] text-center leading-tight truncate w-full px-0.5 transition-colors ${
+      <span className={`text-[11px] md:text-[10px] text-center leading-tight line-clamp-2 w-full px-0.5 transition-colors ${
         isSelected ? 'text-neutral-900 font-semibold' : 'text-neutral-400 group-hover:text-neutral-700'
       }`}>
         {design.name[lang]}
@@ -413,11 +412,11 @@ export default function Wizard() {
           </p>
         </div>
       )}
-      <div style={{ background: '#f7f5f2' }} className="flex flex-col min-h-[calc(100dvh-48px)] md:min-h-[calc(100dvh-54px)]">
+      <div style={{ background: '#f7f5f2' }} className="flex flex-col min-h-[calc(100dvh-64px)] md:min-h-[calc(100dvh-72px)]">
 
         {/* ── Progress header ── */}
-        <div className="sticky top-[48px] md:top-[54px] z-10 bg-white/90 backdrop-blur-md border-b border-neutral-100">
-          <div className="max-w-5xl mx-auto px-4 md:px-8 py-3 flex items-center gap-0">
+        <div className="sticky top-16 md:top-[72px] z-10 bg-white/90 backdrop-blur-md border-b border-neutral-100">
+          <div className="max-w-5xl mx-auto px-4 md:px-8 py-2.5 md:py-3 flex items-center gap-0">
             {progressSteps.map((p, i) => {
               const isActive = step === p.activeWhen;
               const isDone = p.doneWhen(step);
@@ -454,7 +453,7 @@ export default function Wizard() {
         </div>
 
         {/* ── Content ── */}
-        <div className="flex-1 max-w-5xl mx-auto w-full px-4 md:px-8 py-6 md:py-10">
+        <div className="flex-1 max-w-5xl mx-auto w-full px-4 md:px-8 pt-5 pb-10 md:py-10">
 
           {/* Book creation disabled notice */}
           {!bookCreationEnabled && (
@@ -623,7 +622,7 @@ export default function Wizard() {
                   </p>
                 </div>
 
-                <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 md:gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3.5 md:gap-4">
                   {shownDesigns.map((design) => (
                     <DesignCard
                       key={design.id}

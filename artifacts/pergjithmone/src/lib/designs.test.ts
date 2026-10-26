@@ -218,19 +218,19 @@ describe("front/back design helpers", () => {
     expect(designBackElements(patched)[1].text).toBe("OV-B");
   });
 
-  it("ignores stale travel overrides without matching layoutRev", () => {
+  it("keeps Design Studio saves even when layoutRev is older or missing", () => {
     const rome = DESIGNS.find((d) => d.id === "rome")!;
     expect(rome.layoutRev).toBe(TRAVEL_LAYOUT_REV);
-    const stale = [
+    const saved = [
       { type: "background" as const, x: 0, y: 0, w: DESIGN_W, h: DESIGN_H, rotation: 0, bgColor: "#111" },
-      { type: "text" as const, x: 0, y: 0, w: 100, h: 40, rotation: 0, text: "ROME" },
+      { type: "text" as const, x: 0, y: 0, w: 100, h: 40, rotation: 0, text: "CUSTOM ROME" },
     ];
     const [patched] = applyDesignOverrides(
       [rome],
-      { rome: { frontElements: stale, backElements: stale } },
+      { rome: { frontElements: saved, backElements: saved } },
     );
-    expect(designFrontElements(patched)).toEqual(rome.elements);
-    expect(designFrontElements(patched).some((e) => e.type === "image")).toBe(true);
+    expect(designFrontElements(patched)[1].text).toBe("CUSTOM ROME");
+    expect(patched.thumbPhoto).toBeUndefined();
   });
 
   it("applies travel overrides that carry the current layoutRev", () => {
@@ -255,23 +255,29 @@ describe("front/back design helpers", () => {
 });
 
 describe("designCatalogFace", () => {
-  it("uses the Barcelona mockup JPG instead of live layers", () => {
+  it("uses live layers for Vienna so pickers match Design Studio", () => {
+    const d = DESIGNS.find((x) => x.id === "vienna")!;
+    expect(d.thumbPhoto).toBe("/designs/vienna-cover-thumb.jpg");
+    const face = designCatalogFace(d);
+    expect(face).toEqual({ kind: "elements", elements: d.elements });
+    expect(face.kind === "elements" && face.elements.some((e) => e.text === "VIENNA")).toBe(true);
+  });
+
+  it("uses live Barcelona layers instead of the baked mockup JPG", () => {
     const d = DESIGNS.find((x) => x.id === "barcelona-red")!;
     expect(d.thumbPhoto).toBe("/designs/barcelona-cover-thumb.jpg");
-    expect(designCatalogFace(d)).toEqual({
-      kind: "photo",
-      src: "/designs/barcelona-cover-thumb.jpg",
-    });
+    expect(designCatalogFace(d)).toEqual({ kind: "elements", elements: d.elements });
     expect(designFrontElements(d).some((e) => e.src?.includes("sagrada-familia"))).toBe(true);
   });
 
-  it("falls back to live elements when a design has no mockup", () => {
-    const d = DESIGNS.find((x) => !x.thumbPhoto);
-    expect(d).toBeTruthy();
-    const face = designCatalogFace(d!);
-    expect(face.kind).toBe("elements");
-    if (face.kind === "elements") {
-      expect(face.elements).toEqual(d!.elements);
-    }
+  it("falls back to the mockup only when a design has no layers", () => {
+    const face = designCatalogFace({
+      thumbPhoto: "/designs/vienna-cover-thumb.jpg",
+      elements: [],
+    });
+    expect(face).toEqual({
+      kind: "photo",
+      src: "/designs/vienna-cover-thumb.jpg",
+    });
   });
 });
