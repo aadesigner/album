@@ -12,7 +12,7 @@ import { BookHeart, Plus, Trash2, Pencil, Check, Loader2, Instagram } from 'luci
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { ResponsivePageThumb } from '@/components/PageThumb';
-import type { EditorElement } from '@/lib/designs';
+import { DESIGN_H, DESIGN_W, type EditorElement } from '@/lib/designs';
 
 const INSTAGRAM_URL = 'https://www.instagram.com/pergjithmone.al/';
 
@@ -20,29 +20,44 @@ const INSTAGRAM_URL = 'https://www.instagram.com/pergjithmone.al/';
 // Same renderer as the editor / wizard (PageThumb) so dashboard cards match
 // the real front cover — including photos, landmark art, and wallpaper.
 
-function CoverThumb({ frontCoverJson }: { frontCoverJson?: string | null }) {
-  const elements = useMemo(() => {
-    if (!frontCoverJson) return [] as EditorElement[];
+function parseCoverElements(raw: unknown): EditorElement[] {
+  if (raw == null || raw === '') return [];
+  let parsed: unknown = raw;
+  if (typeof raw === 'string') {
     try {
-      const parsed = JSON.parse(frontCoverJson);
-      return Array.isArray(parsed) ? (parsed as EditorElement[]) : [];
+      parsed = JSON.parse(raw);
     } catch {
       return [];
     }
-  }, [frontCoverJson]);
-
-  if (elements.length === 0) {
-    return (
-      <div className="w-2/3 max-w-[168px] aspect-[3/4] bg-white shadow-md border border-gray-100 rounded-r-md flex items-center justify-center relative group-hover:scale-105 transition-transform duration-500">
-        <div className="w-4 h-full bg-gray-100 absolute left-0 border-r border-gray-200" />
-        <span className="font-serif text-xs text-muted-foreground rotate-90 opacity-30">PËRGJITHMONË</span>
-      </div>
-    );
   }
+  if (Array.isArray(parsed)) return parsed as EditorElement[];
+  if (parsed && typeof parsed === 'object') {
+    const rec = parsed as { elements?: unknown };
+    if (Array.isArray(rec.elements)) return rec.elements as EditorElement[];
+  }
+  return [];
+}
+
+function CoverThumb({ frontCoverJson }: { frontCoverJson?: string | null }) {
+  const elements = useMemo(() => parseCoverElements(frontCoverJson), [frontCoverJson]);
+  const canvasH = useMemo(() => {
+    const bg = elements.find(e => e.type === 'background' && e.h > 0);
+    return bg ? Math.round(bg.h) : DESIGN_H;
+  }, [elements]);
 
   return (
-    <div className="w-2/3 max-w-[168px] shadow-md border border-gray-100 rounded-r-md overflow-hidden relative group-hover:scale-105 transition-transform duration-500 bg-white">
-      <ResponsivePageThumb elements={elements} />
+    <div
+      className="w-2/3 max-w-[168px] shadow-md border border-gray-100 rounded-r-md overflow-hidden relative group-hover:scale-105 transition-transform duration-500 bg-white"
+      style={{ aspectRatio: `${DESIGN_W} / ${canvasH}` }}
+    >
+      {elements.length > 0 ? (
+        <ResponsivePageThumb elements={elements} canvasH={canvasH} className="absolute inset-0" />
+      ) : (
+        <>
+          <div className="w-4 h-full bg-gray-100 absolute left-0 border-r border-gray-200" />
+          <span className="font-serif text-xs text-muted-foreground rotate-90 opacity-30">PËRGJITHMONË</span>
+        </>
+      )}
     </div>
   );
 }

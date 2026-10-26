@@ -228,7 +228,7 @@ export function ResponsivePageThumb({
       className={className}
       style={{
         width: '100%',
-        height: '100%',
+        aspectRatio: `${DESIGN_W} / ${canvasH}`,
         overflow: 'hidden',
         position: 'relative',
         containerType: 'inline-size',
