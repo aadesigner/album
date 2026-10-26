@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 
-type Language = 'sq' | 'en';
+export type Language = 'sq' | 'en';
 
 interface Translations {
   [key: string]: {
@@ -112,6 +112,12 @@ interface LanguageContextType {
 }
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
+const PreviewLangContext = createContext<Language | null>(null);
+
+/** Override the public language inside the marketing-page editor preview only. */
+export function PreviewLanguageProvider({ lang, children }: { lang: Language; children: React.ReactNode }) {
+  return <PreviewLangContext.Provider value={lang}>{children}</PreviewLangContext.Provider>;
+}
 
 // Only Albania + Kosovo auto-select Albanian. Everyone else gets English.
 const ALBANIAN_COUNTRIES = new Set(['AL', 'XK']);
@@ -173,8 +179,19 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
 
 export function useLanguage() {
   const context = useContext(LanguageContext);
+  const preview = useContext(PreviewLangContext);
   if (context === undefined) {
     throw new Error('useLanguage must be used within a LanguageProvider');
+  }
+  if (preview && preview !== context.lang) {
+    return {
+      ...context,
+      lang: preview,
+      t: (key: string) => {
+        if (!translations[key]) return key;
+        return translations[key][preview];
+      },
+    };
   }
   return context;
 }

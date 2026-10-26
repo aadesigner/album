@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, createContext, useContext } from 'react';
 import { ensureEditorFonts } from '@/lib/editorFonts';
 import { MarketingLayout } from '@/components/layout/MarketingLayout';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -6,6 +6,9 @@ import { SEOMeta } from '@/components/SEOMeta';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'wouter';
 import { ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react';
+import { PageContentProvider, usePageFields } from '@/components/marketing/PageContent';
+import { Editable, EditableSection } from '@/components/marketing/Editable';
+import { usePageEditorOptional } from '@/components/marketing/PageEditorContext';
 
 // ─── Design constants ─────────────────────────────────────────────────────────
 const DW = 600;
@@ -129,6 +132,38 @@ const DEMO: Record<number, DE[]> = {
 };
 
 // ─── Demo spread definitions ──────────────────────────────────────────────────
+const DemoPagesContext = createContext<Record<number, DE[]>>(DEMO);
+
+function overlayDemo(p: ReturnType<typeof usePageFields>): Record<number, DE[]> {
+  const clone = JSON.parse(JSON.stringify(DEMO)) as Record<number, DE[]>;
+  const setImg = (page: number, id: string, path: string) => {
+    const el = clone[page]?.find((e) => e.id === id);
+    if (el && el.type === 'image') el.src = p.img(path, el.src || '');
+  };
+  const setText = (page: number, id: string, path: string) => {
+    const el = clone[page]?.find((e) => e.id === id);
+    if (el && el.type === 'text') el.text = p.txt(path) || el.text;
+  };
+  setImg(1, 'i1', 'photos.cover');
+  setText(1, 't1', 'demo.coverTitle');
+  setText(1, 't2', 'demo.coverSub');
+  setImg(2, 'i1', 'photos.p2a');
+  setImg(2, 'i2', 'photos.p2b');
+  setImg(2, 'i3', 'photos.p2c');
+  setImg(3, 'i1', 'photos.p3');
+  setText(4, 't1', 'demo.quote');
+  setText(4, 't2', 'demo.quoteBy');
+  setImg(5, 'i1', 'photos.p5a');
+  setImg(5, 'i2', 'photos.p5b');
+  setImg(6, 'i1', 'photos.p6');
+  setImg(7, 'i1', 'photos.p7');
+  return clone;
+}
+
+function useDemoPages() {
+  return useContext(DemoPagesContext);
+}
+
 const DEMO_SPREADS = [
   { id: 'cover',      isSolo: true,  left: null,            right: { dbId: 1, role: 'cover'      } },
   { id: 'sp1',        isSolo: false, left: { dbId: 2 },     right: { dbId: 3 }                    },
@@ -227,10 +262,12 @@ function DemoBook3D({ lang }: { lang: 'sq' | 'en' }) {
   const isDragging = useRef(false);
   const lastPos = useRef({ x: 0, y: 0 });
   const pauseTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const pages = useDemoPages();
+  const p = usePageFields();
 
   // Slim hardcover — few leaves, not a brick of pages
   const W = 240, H = Math.round(240 * (DH / DW)), D = 7;
-  const coverBgColor = (DEMO[1].find(e => e.type === 'background') as any)?.bgColor ?? '#1a1209';
+  const coverBgColor = (pages[1].find(e => e.type === 'background') as any)?.bgColor ?? '#1a1209';
 
   useEffect(() => {
     const tick = () => {
@@ -253,7 +290,7 @@ function DemoBook3D({ lang }: { lang: 'sq' | 'en' }) {
     pauseTimer.current = setTimeout(() => { isDragging.current = false; }, 3000);
   }, []);
 
-  const coverEls = DEMO[1];
+  const coverEls = pages[1];
 
   return (
     <div
@@ -306,7 +343,7 @@ function DemoBook3D({ lang }: { lang: 'sq' | 'en' }) {
           transform: `rotateY(180deg) translateZ(${D}px)`,
           borderRadius: '4px 1px 1px 4px', overflow: 'hidden',
           backfaceVisibility: 'hidden', boxShadow: '0 0 0 1px rgba(0,0,0,0.4)' }}>
-          <MiniPage elements={DEMO[8]} w={W} h={H} />
+          <MiniPage elements={pages[8]} w={W} h={H} />
           <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
             background: 'linear-gradient(118deg, rgba(255,255,255,0.08) 0%, transparent 50%, rgba(0,0,0,0.06) 100%)' }} />
         </div>
@@ -346,7 +383,7 @@ function DemoBook3D({ lang }: { lang: 'sq' | 'en' }) {
       <p style={{ position: 'absolute', bottom: 6, left: 0, right: 0, textAlign: 'center',
         fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase',
         color: 'rgba(0,0,0,0.22)', pointerEvents: 'none' }}>
-        {lang === 'sq' ? 'tërhiqni për të rrotulluar' : 'drag to rotate'}
+        <Editable path="demo.rotate">{p.txt('demo.rotate')}</Editable>
       </p>
     </div>
   );
@@ -367,6 +404,7 @@ const BROWSE_ENTRIES: BrowseEntry[] = [
 ];
 
 function SpreadBrowserDemo({ lang }: { lang: 'sq' | 'en' }) {
+  const pages = useDemoPages();
   const [idx, setIdx] = useState(0);
   const [dir, setDir] = useState(1);
   const entry = BROWSE_ENTRIES[idx];
@@ -402,7 +440,7 @@ function SpreadBrowserDemo({ lang }: { lang: 'sq' | 'en' }) {
         <div style={{ width: pgW, height: pgH, position: 'relative', flexShrink: 0,
           borderRadius: 4, overflow: 'hidden',
           filter: 'drop-shadow(0 18px 44px rgba(0,0,0,0.65))' }}>
-          <MiniPage elements={DEMO[e.pageId]} w={pgW} h={pgH} />
+          <MiniPage elements={pages[e.pageId]} w={pgW} h={pgH} />
           <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
             background: 'linear-gradient(to right, rgba(0,0,0,0.30) 0%, rgba(0,0,0,0.06) 12%, transparent 26%)' }} />
           <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
@@ -415,7 +453,7 @@ function SpreadBrowserDemo({ lang }: { lang: 'sq' | 'en' }) {
         <div style={{ width: pgW, height: pgH, position: 'relative', flexShrink: 0,
           borderRadius: 4, overflow: 'hidden',
           filter: 'drop-shadow(0 18px 44px rgba(0,0,0,0.65))' }}>
-          <MiniPage elements={DEMO[e.pageId]} w={pgW} h={pgH} />
+          <MiniPage elements={pages[e.pageId]} w={pgW} h={pgH} />
           <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
             background: 'linear-gradient(to left, rgba(0,0,0,0.30) 0%, rgba(0,0,0,0.06) 12%, transparent 26%)' }} />
         </div>
@@ -427,7 +465,7 @@ function SpreadBrowserDemo({ lang }: { lang: 'sq' | 'en' }) {
         filter: 'drop-shadow(0 18px 44px rgba(0,0,0,0.65))' }}>
         <div style={{ width: pgW, height: pgH, position: 'relative', flexShrink: 0,
           borderRadius: '4px 0 0 4px', overflow: 'hidden' }}>
-          {e.leftId ? <MiniPage elements={DEMO[e.leftId]} w={pgW} h={pgH} /> :
+          {e.leftId ? <MiniPage elements={pages[e.leftId]} w={pgW} h={pgH} /> :
             <div style={{ position: 'absolute', inset: 0, background: '#F2EDE5' }} />}
           <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
             background: 'linear-gradient(to left, rgba(0,0,0,0.20) 0%, rgba(0,0,0,0.05) 14%, transparent 30%)' }} />
@@ -435,7 +473,7 @@ function SpreadBrowserDemo({ lang }: { lang: 'sq' | 'en' }) {
         <div style={{ width: 2, flexShrink: 0, background: 'rgba(0,0,0,0.14)' }} />
         <div style={{ width: pgW, height: pgH, position: 'relative', flexShrink: 0,
           borderRadius: '0 4px 4px 0', overflow: 'hidden' }}>
-          {e.rightId ? <MiniPage elements={DEMO[e.rightId]} w={pgW} h={pgH} /> :
+          {e.rightId ? <MiniPage elements={pages[e.rightId]} w={pgW} h={pgH} /> :
             <div style={{ position: 'absolute', inset: 0, background: '#F2EDE5' }} />}
           <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
             background: 'linear-gradient(to right, rgba(0,0,0,0.20) 0%, rgba(0,0,0,0.05) 14%, transparent 30%)' }} />
@@ -551,7 +589,9 @@ const ALBUMS = [
   },
 ];
 
-function AlbumCard({ album, lang }: { album: typeof ALBUMS[0]; lang: 'sq' | 'en' }) {
+function AlbumCard({ album, lang, index }: { album: typeof ALBUMS[0]; lang: 'sq' | 'en'; index: number }) {
+  const pages = useDemoPages();
+  const p = usePageFields();
   const pgW = 130;
   const pgH = Math.round(pgW * (DH / DW));
 
@@ -569,7 +609,7 @@ function AlbumCard({ album, lang }: { album: typeof ALBUMS[0]; lang: 'sq' | 'en'
           <div style={{ width: pgW, height: pgH, position: 'relative', flexShrink: 0,
             borderRadius: '3px 0 0 3px', overflow: 'hidden',
             outline: '1px solid rgba(0,0,0,0.10)' }}>
-            <MiniPage elements={DEMO[album.leftId]} w={pgW} h={pgH} />
+            <MiniPage elements={pages[album.leftId]} w={pgW} h={pgH} />
             <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
               background: 'linear-gradient(to left, rgba(0,0,0,0.22) 0%, rgba(0,0,0,0.05) 18%, transparent 36%)' }} />
           </div>
@@ -580,7 +620,7 @@ function AlbumCard({ album, lang }: { album: typeof ALBUMS[0]; lang: 'sq' | 'en'
           <div style={{ width: pgW, height: pgH, position: 'relative', flexShrink: 0,
             borderRadius: '0 3px 3px 0', overflow: 'hidden',
             outline: '1px solid rgba(0,0,0,0.10)' }}>
-            <MiniPage elements={DEMO[album.rightId]} w={pgW} h={pgH} />
+            <MiniPage elements={pages[album.rightId]} w={pgW} h={pgH} />
             <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
               background: 'linear-gradient(to right, rgba(0,0,0,0.22) 0%, rgba(0,0,0,0.05) 18%, transparent 36%)' }} />
           </div>
@@ -590,11 +630,11 @@ function AlbumCard({ album, lang }: { album: typeof ALBUMS[0]; lang: 'sq' | 'en'
         <div>
           <p style={{ fontSize: 10, color: '#B0A898', textTransform: 'uppercase',
             letterSpacing: '0.12em', marginBottom: 3 }}>
-            {album.category[lang]}
+            <Editable path={`gallery.albums.${index}.category`}>{p.txt(`gallery.albums.${index}.category`) || album.category[lang]}</Editable>
           </p>
           <p style={{ fontSize: 14, fontWeight: 500, color: '#1a1a1a',
             fontFamily: 'Georgia, serif', marginBottom: 2, lineHeight: 1.3 }}>
-            {album.title[lang]}
+            <Editable path={`gallery.albums.${index}.title`}>{p.txt(`gallery.albums.${index}.title`) || album.title[lang]}</Editable>
           </p>
           <p style={{ fontSize: 11, color: '#C0B8B0' }}>
             {album.pages} {lang === 'sq' ? 'faqe' : 'pages'}
@@ -605,96 +645,104 @@ function AlbumCard({ album, lang }: { album: typeof ALBUMS[0]; lang: 'sq' | 'en'
   );
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
-const STATS = [
-  { value: '1,000+', label: { sq: 'albume të printuara', en: 'albums printed' } },
-  { value: '99%',    label: { sq: 'klientë të kënaqur',  en: 'happy customers' } },
-  { value: '200g',   label: { sq: 'letër premium mat',   en: 'premium paper'   } },
-];
-
 export default function Examples() {
+  return (
+    <PageContentProvider slug="examples">
+      <ExamplesView />
+    </PageContentProvider>
+  );
+}
+
+function ExamplesView() {
   const { lang } = useLanguage();
+  const p = usePageFields();
+  const pages = useMemo(() => overlayDemo(p), [p]);
+  const editor = usePageEditorOptional();
   useEffect(() => { void ensureEditorFonts(); }, []);
+  const photoKeys = ['cover', 'p2a', 'p2b', 'p2c', 'p3', 'p5a', 'p5b', 'p6', 'p7', 'back'] as const;
 
   return (
+    <DemoPagesContext.Provider value={pages}>
     <MarketingLayout>
       <SEOMeta
-        title={{ sq: 'Shembuj Librash Foto', en: 'Photo Book Examples' }}
-        description={{
-          sq: 'Shikoni koleksionin e librave foto të realizuara me Përgjithmonë — dasma, udhëtime, familje dhe shumë më tepër.',
-          en: 'Browse our collection of photo books made with Përgjithmonë — weddings, travel, family and much more.',
-        }}
+        title={p.txtAll('seo.title')}
+        description={p.txtAll('seo.description')}
         path="/shembuj"
       />
       <div>
 
-        {/* ── Header ── */}
-        <div className="bg-white border-b border-neutral-100">
+        <EditableSection path="hero" className="bg-white border-b border-neutral-100">
           <div className="max-w-6xl mx-auto px-5 pt-10 pb-8 md:pt-14 md:pb-10">
             <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6">
               <div className="max-w-lg">
                 <p className="text-[10px] uppercase tracking-[0.3em] text-neutral-400 mb-3">
-                  {lang === 'sq' ? 'shembuj · demonstrim' : 'examples · live demo'}
+                  <Editable path="hero.kicker">{p.txt('hero.kicker')}</Editable>
                 </p>
                 <h1 className="text-3xl md:text-4xl font-serif font-medium text-neutral-900 leading-[1.1] mb-3">
-                  {lang === 'sq' ? 'Shikoni çfarë mund të krijoni' : 'See what you can create'}
+                  <Editable path="hero.title">{p.txt('hero.title')}</Editable>
                 </h1>
                 <p className="text-neutral-400 text-[13px] leading-relaxed">
-                  {lang === 'sq'
-                    ? 'Eksploroni librin 3D dhe shfletoni faqe reale — rrotulloni, sodisni, frymëzohuni.'
-                    : 'Explore the 3D demo book and browse real page layouts — spin it, page through it, get inspired.'}
+                  <Editable path="hero.body">{p.txt('hero.body')}</Editable>
                 </p>
               </div>
-              {/* Stats — scroll horizontally on very small screens */}
               <div className="flex gap-6 md:gap-8 shrink-0 overflow-x-auto pb-1 md:pb-0">
-                {STATS.map((s, i) => (
+                {p.list('stats').map((_, i) => (
                   <div key={i} className="flex flex-col items-start md:items-end shrink-0">
-                    <div className="text-2xl md:text-3xl font-serif font-semibold text-neutral-900">{s.value}</div>
-                    <div className="text-[10px] text-neutral-400 mt-0.5 whitespace-nowrap">{s.label[lang]}</div>
+                    <div className="text-2xl md:text-3xl font-serif font-semibold text-neutral-900">
+                      <Editable path={`stats.${i}.value`}>{p.txt(`stats.${i}.value`)}</Editable>
+                    </div>
+                    <div className="text-[10px] text-neutral-400 mt-0.5 whitespace-nowrap">
+                      <Editable path={`stats.${i}.label`}>{p.txt(`stats.${i}.label`)}</Editable>
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
           </div>
-        </div>
+        </EditableSection>
 
-        {/* ── 3D Demo section — warm off-white ── */}
-        <div style={{ background: 'linear-gradient(160deg, #faf9f6 0%, #f3f1ec 55%, #f8f6f2 100%)', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+        <EditableSection path="demo" style={{ background: 'linear-gradient(160deg, #faf9f6 0%, #f3f1ec 55%, #f8f6f2 100%)', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
           <div style={{ position: 'relative' }}>
-            {/* Subtle centre glow */}
             <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
               background: 'radial-gradient(ellipse 70% 50% at 50% 40%, rgba(255,220,150,0.07) 0%, transparent 70%)' }} />
 
             <div className="max-w-6xl mx-auto px-5 py-10 md:py-16">
 
-              {/* Album byline */}
               <p className="text-center mb-8 md:mb-10" style={{ fontSize: 10, letterSpacing: '0.28em',
                 textTransform: 'uppercase', color: 'rgba(0,0,0,0.28)', fontFamily: 'Georgia, serif' }}>
-                {lang === 'sq' ? 'Ana & Erjon · Dasmë 2023' : 'Ana & Erjon · Wedding 2023'}
+                <Editable path="demo.byline">{p.txt('demo.byline')}</Editable>
               </p>
 
               <div className="flex flex-col lg:flex-row items-center gap-8 lg:gap-14">
 
-                {/* 3D Book */}
                 <div className="flex-shrink-0 flex flex-col items-center">
-                  <DemoBook3D lang={lang} />
+                  <Editable path="photos.cover" kind="image" as="div">
+                    <DemoBook3D lang={lang} />
+                  </Editable>
                 </div>
 
-                {/* Divider */}
                 <div className="hidden lg:block w-px self-stretch" style={{ background: 'rgba(0,0,0,0.08)' }} />
                 <div className="block lg:hidden w-16 h-px" style={{ background: 'rgba(0,0,0,0.10)' }} />
 
-                {/* Spread browser */}
                 <div className="flex-1 w-full max-w-xl">
                   <p className="text-center mb-5" style={{ fontSize: 10,
                     letterSpacing: '0.28em', textTransform: 'uppercase', color: 'rgba(0,0,0,0.30)' }}>
-                    {lang === 'sq' ? 'shfletoni faqet' : 'browse the pages'}
+                    <Editable path="demo.browse">{p.txt('demo.browse')}</Editable>
                   </p>
                   <SpreadBrowserDemo lang={lang} />
                 </div>
               </div>
 
-              {/* CTA */}
+              {editor && (
+              <div className="flex flex-wrap justify-center gap-2 mt-8">
+                {photoKeys.map((key) => (
+                  <Editable key={key} path={`photos.${key}`} kind="image" as="div" className="w-12 h-12 overflow-hidden rounded">
+                    <img src={p.img(`photos.${key}`)} alt="" className="w-full h-full object-cover" />
+                  </Editable>
+                ))}
+              </div>
+              )}
+
               <div className="flex justify-center mt-10 md:mt-12">
                 <Link href="/krijo">
                   <button
@@ -703,103 +751,99 @@ export default function Examples() {
                     onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#333'; }}
                     onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = '#1a1a1a'; }}
                   >
-                    {lang === 'sq' ? 'krijoni albumin tuaj' : 'create your own album'}
+                    <Editable path="demo.cta">{p.txt('demo.cta')}</Editable>
                     <ArrowRight size={14} />
                   </button>
                 </Link>
               </div>
             </div>
           </div>
-        </div>
+        </EditableSection>
 
-        {/* ── Spread gallery ── */}
-        <div className="bg-white border-t border-neutral-100 py-12 md:py-16">
+        <EditableSection path="gallery" className="bg-white border-t border-neutral-100 py-12 md:py-16">
           <div className="max-w-6xl mx-auto px-5">
             <div className="mb-10 md:mb-12 flex flex-col md:flex-row md:items-end md:justify-between gap-4">
               <div>
                 <p className="text-[10px] uppercase tracking-[0.3em] text-neutral-400 mb-2">
-                  {lang === 'sq' ? 'paraqitje reale' : 'real layouts'}
+                  <Editable path="gallery.kicker">{p.txt('gallery.kicker')}</Editable>
                 </p>
                 <h2 className="text-2xl md:text-3xl font-serif font-medium text-neutral-900">
-                  {lang === 'sq' ? 'Faqe të dizajnuara me kujdes' : 'Pages designed with care'}
+                  <Editable path="gallery.title">{p.txt('gallery.title')}</Editable>
                 </h2>
               </div>
               <Link href="/krijo" className="shrink-0">
                 <span className="text-[12px] text-neutral-500 hover:text-neutral-900 transition-colors underline underline-offset-4">
-                  {lang === 'sq' ? 'fillo albumin tënd →' : 'start your album →'}
+                  <Editable path="gallery.link">{p.txt('gallery.link')}</Editable>
                 </span>
               </Link>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-10 md:gap-12">
               {ALBUMS.map((album, i) => (
-                <AlbumCard key={i} album={album} lang={lang} />
+                <AlbumCard key={i} album={album} lang={lang} index={i} />
               ))}
             </div>
 
             <p className="text-center text-[12px] text-neutral-400 mt-10 leading-relaxed max-w-sm mx-auto">
-              {lang === 'sq'
-                ? 'Çdo album është unik — i dizajnuar plotësisht nga ju me editorin tonë online.'
-                : 'Every album is unique — designed entirely by you with our online editor.'}
+              <Editable path="gallery.note">{p.txt('gallery.note')}</Editable>
             </p>
           </div>
-        </div>
+        </EditableSection>
 
-        {/* ── Testimonials ── */}
-        <div className="bg-[#f8f7f4] border-t border-neutral-100 py-12 md:py-16">
+        <EditableSection path="quotes" className="bg-[#f8f7f4] border-t border-neutral-100 py-12 md:py-16">
           <div className="max-w-4xl mx-auto px-5">
             <p className="text-center text-[10px] uppercase tracking-[0.3em] text-neutral-400 mb-10">
-              {lang === 'sq' ? 'çfarë thonë klientët' : 'what customers say'}
+              <Editable path="quotes.kicker">{p.txt('quotes.kicker')}</Editable>
             </p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-5">
-              {[
-                { text: { sq: '"Albumi doli saktësisht ashtu si e imagjinova. Cilësia e letrës është e mahnitshme."', en: '"The album turned out exactly as I imagined. The paper quality is stunning."' }, name: 'Ana M.', occasion: { sq: 'Dasmë', en: 'Wedding' } },
-                { text: { sq: '"Procesi ishte shumë i lehtë. E rekomandoj me zemër të plotë."', en: '"The process was so easy. I wholeheartedly recommend it for any occasion."' }, name: 'Erjon B.', occasion: { sq: 'Udhëtim', en: 'Travel' } },
-                { text: { sq: '"Dhurata më e bukur që mund t\'i bësh dikujt. Mbeti pa fjalë."', en: '"The most beautiful gift you can give. They were absolutely speechless."' }, name: 'Mirela K.', occasion: { sq: 'Ditëlindje', en: 'Birthday' } },
-              ].map((t, i) => (
+              {p.list('quotes.items').map((_, i) => (
                 <div key={i} className="bg-white rounded-2xl p-5 md:p-6 border border-neutral-100 shadow-sm">
                   <div className="flex gap-0.5 mb-3">
                     {[...Array(5)].map((_, s) => (
                       <span key={s} style={{ color: '#D4A853', fontSize: 11 }}>★</span>
                     ))}
                   </div>
-                  <p className="text-[13px] text-neutral-600 leading-relaxed mb-5 italic">{t.text[lang]}</p>
+                  <p className="text-[13px] text-neutral-600 leading-relaxed mb-5 italic">
+                    <Editable path={`quotes.items.${i}.text`}>{p.txt(`quotes.items.${i}.text`)}</Editable>
+                  </p>
                   <div className="flex items-center gap-2.5">
                     <div className="w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center text-[12px] font-semibold text-neutral-500 shrink-0">
-                      {t.name[0]}
+                      {(p.txt(`quotes.items.${i}.name`) || '?')[0]}
                     </div>
                     <div>
-                      <p className="text-[13px] font-medium text-neutral-800 leading-tight">{t.name}</p>
-                      <p className="text-[11px] text-neutral-400 mt-0.5">{t.occasion[lang]}</p>
+                      <p className="text-[13px] font-medium text-neutral-800 leading-tight">
+                        <Editable path={`quotes.items.${i}.name`}>{p.txt(`quotes.items.${i}.name`)}</Editable>
+                      </p>
+                      <p className="text-[11px] text-neutral-400 mt-0.5">
+                        <Editable path={`quotes.items.${i}.occasion`}>{p.txt(`quotes.items.${i}.occasion`)}</Editable>
+                      </p>
                     </div>
                   </div>
                 </div>
               ))}
             </div>
           </div>
-        </div>
+        </EditableSection>
 
-        {/* ── CTA ── */}
-        <div className="bg-[#1a1a1a] py-14 md:py-20 text-center">
+        <EditableSection path="cta" className="bg-[#1a1a1a] py-14 md:py-20 text-center">
           <div className="max-w-md mx-auto px-5">
             <h2 className="text-2xl md:text-3xl font-serif font-medium text-white mb-4">
-              {lang === 'sq' ? 'Krijoni albumin tuaj sot' : 'Create your album today'}
+              <Editable path="cta.title">{p.txt('cta.title')}</Editable>
             </h2>
             <p className="text-white/50 text-[14px] mb-8">
-              {lang === 'sq'
-                ? 'Filloni falas. Paguani vetëm kur jeni plotësisht të kënaqur.'
-                : 'Start free. Pay only when you\'re completely satisfied.'}
+              <Editable path="cta.body">{p.txt('cta.body')}</Editable>
             </p>
             <Link href="/krijo">
               <button className="inline-flex items-center gap-2 px-8 py-4 bg-white text-[#1a1a1a] rounded-full text-[15px] font-medium hover:bg-neutral-100 transition-colors">
-                {lang === 'sq' ? 'fillo tani' : 'start now'}
+                <Editable path="cta.button">{p.txt('cta.button')}</Editable>
                 <ArrowRight size={16} />
               </button>
             </Link>
           </div>
-        </div>
+        </EditableSection>
 
       </div>
     </MarketingLayout>
+    </DemoPagesContext.Provider>
   );
 }

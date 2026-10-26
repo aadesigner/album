@@ -4,6 +4,7 @@ import { Link, useLocation } from 'wouter';
 import {
   LayoutDashboard, Users, ShoppingBag, FolderOpen, Image,
   Grid, Ruler, Settings, LogOut, X, Sparkles, ExternalLink, ShieldAlert, Check, Palette,
+  FileText,
 } from 'lucide-react';
 import {
   ADMIN_PALETTES,
@@ -42,6 +43,7 @@ const navItems = [
   { href: '/heyadmin/porosi',    label: 'Orders',        Icon: ShoppingBag,     group: 'Overview' },
   { href: '/heyadmin/perdorues', label: 'Users',         Icon: Users,           group: 'Overview' },
   { href: '/heyadmin/dizajne',   label: 'Design Studio', Icon: Sparkles,        group: 'Catalog' },
+  { href: '/heyadmin/site',      label: 'Site pages',    Icon: FileText,        group: 'Catalog' },
   { href: '/heyadmin/kategori',  label: 'Categories',    Icon: FolderOpen,      group: 'Catalog' },
   { href: '/heyadmin/template',  label: 'Templates',     Icon: Image,           group: 'Catalog' },
   { href: '/heyadmin/layout',    label: 'Layouts',       Icon: Grid,            group: 'Catalog' },
@@ -632,7 +634,8 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   }, [location]);
 
   const hideThemeSwitcher =
-    location === '/heyadmin/dizajne' || location.startsWith('/heyadmin/dizajne/');
+    location === '/heyadmin/dizajne' || location.startsWith('/heyadmin/dizajne/')
+    || location === '/heyadmin/site' || location.startsWith('/heyadmin/site/');
 
   if (isLoading) {
     return (

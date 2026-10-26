@@ -9,6 +9,7 @@ import projectsRouter from "./projects";
 import ordersRouter from "./orders";
 import uploadsRouter from "./uploads";
 import adminRouter from "./admin";
+import marketingPagesRouter from "./marketingPages";
 import geoRouter from "./geo";
 import analyticsRouter from "./analytics";
 
@@ -24,6 +25,7 @@ router.use(projectsRouter);
 router.use(ordersRouter);
 router.use(uploadsRouter);
 router.use(adminRouter);
+router.use(marketingPagesRouter);
 router.use(geoRouter);
 router.use(analyticsRouter);
 

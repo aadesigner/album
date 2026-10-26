@@ -19,6 +19,8 @@ import {
 import { PageThumb, ResponsivePageThumb } from '@/components/PageThumb';
 import { CategoryCoverImg } from '@/components/CategoryCoverImg';
 import { ensureEditorFonts } from '@/lib/editorFonts';
+import { PageContentProvider, usePageFields } from '@/components/marketing/PageContent';
+import { Editable, EditableSection } from '@/components/marketing/Editable';
 
 // ── Hero + album starter (CSS 3D book — no WebGL) ─────────────────────────────
 
@@ -454,7 +456,11 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
   const reduced = usePrefersReducedMotion();
   const [idx, setIdx] = useState(0);
   const [paused, setPaused] = useState(false);
+  const p = usePageFields();
   const style = ALBUM_STYLES[idx];
+  const liveLabel = (i: number) => p.txt(`styles.${i}.label`) || ALBUM_STYLES[i].label[lang];
+  const liveLine = (i: number) => p.txt(`styles.${i}.line`) || ALBUM_STYLES[i].line[lang];
+  const wallpaper = p.img(`styles.${idx}.wallpaper`, style.img);
   const swipeRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
@@ -469,7 +475,7 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
   useEffect(() => {
     const next = ALBUM_STYLES[(idx + 1) % ALBUM_STYLES.length];
     const bg = new Image();
-    bg.src = heroBgUrl(next.img);
+    bg.src = heroBgUrl(p.img(`styles.${(idx + 1) % ALBUM_STYLES.length}.wallpaper`, next.img));
     const d = DESIGNS.find(x => x.id === next.designId);
     const els = d ? designFrontElements(d) : [];
     // Builtin prefetch only — live overrides load with the settings query.
@@ -525,8 +531,9 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
           exit={{ opacity: 0 }}
           transition={{ duration: reduced ? 0 : 0.7, ease: [0.22, 1, 0.36, 1] }}
         >
+          <Editable path={`styles.${idx}.wallpaper`} kind="image" as="div" className="absolute inset-0">
           <img
-            src={heroBgUrl(style.img)}
+            src={heroBgUrl(wallpaper)}
             alt=""
             decoding="async"
             fetchPriority="high"
@@ -537,6 +544,7 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
               filter: 'saturate(0.82) brightness(0.78) contrast(1.08)',
             }}
           />
+          </Editable>
         </motion.div>
       </AnimatePresence>
 
@@ -589,19 +597,19 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
             { t: '34%', l: '48%', d: '2.8s', s: 1 },
             { t: '72%', l: '36%', d: '1.1s', s: 2 },
             { t: '22%', l: '86%', d: '3.2s', s: 3 },
-          ].map((p, i) => (
+            ].map((spark, i) => (
             <span
               key={i}
               aria-hidden
               className="hero-dust pointer-events-none absolute rounded-full"
               style={{
-                top: p.t,
-                left: p.l,
-                width: p.s,
-                height: p.s,
+                top: spark.t,
+                left: spark.l,
+                width: spark.s,
+                height: spark.s,
                 background: style.paper,
-                animationDelay: p.d,
-                boxShadow: `0 0 ${p.s * 4}px ${style.paper}`,
+                animationDelay: spark.d,
+                boxShadow: `0 0 ${spark.s * 4}px ${style.paper}`,
               }}
             />
           ))}
@@ -628,11 +636,12 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
               className="mb-4 md:mb-5 text-[10px] md:text-[11px] tracking-[0.34em] uppercase"
               style={{ color: `${style.paper}88` }}
             >
-              ✦ {lang === 'sq' ? 'Album fotografie' : 'Photobook atelier'}
+              ✦ <Editable path="hero.eyebrow">{p.txt('hero.eyebrow')}</Editable>
             </motion.p>
 
             <h1 className="font-serif text-[clamp(2.15rem,6.4vw,4.35rem)] text-[#F7F2EC] leading-[0.98] tracking-[-0.03em] font-medium mb-2 md:mb-3">
-              {(lang === 'sq' ? 'Ruaj kujtimet' : 'Keep the memories').split(' ').map((word, i, words) => (
+              <Editable path="hero.headline">
+              {p.txt('hero.headline').split(' ').map((word, i, words) => (
                 <motion.span
                   key={`${word}-${i}`}
                   initial={{ opacity: 0, y: 22, filter: 'blur(8px)' }}
@@ -643,6 +652,7 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
                   {word}
                 </motion.span>
               ))}
+              </Editable>
             </h1>
 
             <motion.p
@@ -657,7 +667,7 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
                 color: 'transparent',
               }}
             >
-              Përgjithmonë
+              <Editable path="hero.brand">{p.txt('hero.brand')}</Editable>
             </motion.p>
 
             <motion.div
@@ -679,7 +689,7 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
                   className="text-[14px] md:text-[16px] leading-snug font-serif italic"
                   style={{ color: `${style.paper}88` }}
                 >
-                  {style.line[lang]}
+                  <Editable path={`styles.${idx}.line`}>{liveLine(idx)}</Editable>
                 </motion.p>
               </AnimatePresence>
             </div>
@@ -688,9 +698,7 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
               className="hidden md:block text-[15px] max-w-sm mx-auto md:mx-0 leading-relaxed mb-8"
               style={{ color: `${style.paper}70` }}
             >
-              {lang === 'sq'
-                ? 'Krijojeni online. Printohen me cilësi galerie.'
-                : 'Design online. Printed at gallery quality.'}
+              <Editable path="hero.sub">{p.txt('hero.sub')}</Editable>
             </p>
 
             <div className="flex flex-wrap items-center justify-center md:justify-start gap-2.5 md:gap-3">
@@ -714,7 +722,7 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
                       }}
                     />
                   )}
-                  {lang === 'sq' ? 'Krijo albumin' : 'Create your book'}
+                  <Editable path="hero.cta">{p.txt('hero.cta')}</Editable>
                 </motion.button>
               </Link>
               <Link href="/shembuj">
@@ -726,7 +734,7 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
                     background: `${style.paper}0a`,
                   }}
                 >
-                  {lang === 'sq' ? 'Shiko shembujt' : 'See examples'}
+                  <Editable path="hero.secondaryCta">{p.txt('hero.secondaryCta')}</Editable>
                 </button>
               </Link>
             </div>
@@ -737,14 +745,14 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
                   key={s.key}
                   type="button"
                   onClick={() => setIdx(i)}
-                  aria-label={s.label[lang]}
+                  aria-label={liveLabel(i)}
                   aria-current={i === idx}
                   className="relative h-7 md:h-8 px-2 md:px-2.5 text-[9px] md:text-[10px] tracking-[0.12em] uppercase transition-colors"
                   style={{
                     color: i === idx ? style.paper : `${style.paper}55`,
                   }}
                 >
-                  {s.label[lang]}
+                  <Editable path={`styles.${i}.label`}>{liveLabel(i)}</Editable>
                   {i === idx && (
                     <motion.span
                       layoutId="hero-style-underline"
@@ -814,7 +822,7 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
         style={{ color: `${style.paper}88` }}
       >
         <span className="text-[9px] tracking-[0.32em] uppercase">
-          {lang === 'sq' ? 'Eksploro' : 'Explore'}
+          <Editable path="hero.explore">{p.txt('hero.explore')}</Editable>
         </span>
         <span aria-hidden className="block h-7 w-px" style={{ background: `${style.paper}66` }} />
       </div>
@@ -824,9 +832,12 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
 
 function AlbumStarter({ lang }: { lang: 'sq' | 'en' }) {
   const [idx, setIdx] = useState(0);
+  const p = usePageFields();
   const style = ALBUM_STYLES[idx];
   const href = `/krijo?category=${encodeURIComponent(style.key)}&design=${encodeURIComponent(style.designId)}`;
   const { data: settings } = useGetAppSettings();
+  const liveLabel = (i: number) => p.txt(`styles.${i}.label`) || ALBUM_STYLES[i].label[lang];
+  const liveLine = (i: number) => p.txt(`styles.${i}.line`) || ALBUM_STYLES[i].line[lang];
 
   const coverElsById = useMemo(() => {
     const catalog = buildDesignCatalog(
@@ -869,15 +880,13 @@ function AlbumStarter({ lang }: { lang: 'sq' | 'en' }) {
             className="font-serif text-[clamp(1.9rem,4.2vw,2.75rem)] font-medium leading-[1.12] tracking-[-0.02em] mb-3"
             style={{ color: style.ink }}
           >
-            {lang === 'sq' ? 'Cilat kujtime do t’i lini në një album?' : 'Which memories belong in an album?'}
+            <Editable path="starter.title">{p.txt('starter.title')}</Editable>
           </h2>
           <p
             className="text-[14px] md:text-[15px] leading-relaxed max-w-md mx-auto"
             style={{ color: `${style.ink}90` }}
           >
-            {lang === 'sq'
-              ? 'Zgjidhni stilin. Editori hapet me atë kopertinë, gati për fotot tuaja.'
-              : 'Pick a style. The editor opens with that cover, ready for your photos.'}
+            <Editable path="starter.sub">{p.txt('starter.sub')}</Editable>
           </p>
         </div>
 
@@ -895,7 +904,7 @@ function AlbumStarter({ lang }: { lang: 'sq' | 'en' }) {
                 className="mt-5 text-[13px] md:text-[14px] text-center max-w-[16rem] leading-snug"
                 style={{ color: `${style.ink}88` }}
               >
-                {style.line[lang]}
+                <Editable path={`styles.${idx}.line`}>{liveLine(idx)}</Editable>
               </motion.p>
             </AnimatePresence>
           </div>
@@ -904,7 +913,7 @@ function AlbumStarter({ lang }: { lang: 'sq' | 'en' }) {
           <div className="order-1 md:order-2">
             <div
               role="listbox"
-              aria-label={lang === 'sq' ? 'Lloji i albumit' : 'Album type'}
+              aria-label={p.txt('starter.title')}
               className="flex md:grid md:grid-cols-5 gap-3.5 md:gap-3 overflow-x-auto md:overflow-visible snap-x snap-mandatory pt-2 pb-3 md:pt-0 md:pb-0 -mx-1 px-1 scrollbar-thin"
               style={{ WebkitOverflowScrolling: 'touch' }}
             >
@@ -956,7 +965,7 @@ function AlbumStarter({ lang }: { lang: 'sq' | 'en' }) {
                         fontWeight: active ? 600 : 500,
                       }}
                     >
-                      {s.label[lang]}
+                      <Editable path={`styles.${i}.label`}>{liveLabel(i)}</Editable>
                     </span>
                   </div>
                 );
@@ -973,7 +982,7 @@ function AlbumStarter({ lang }: { lang: 'sq' | 'en' }) {
                     boxShadow: `0 12px 28px ${style.spine}35`,
                   }}
                 >
-                  {createAlbumCta(lang, style.label[lang])}
+                  {createAlbumCta(lang, liveLabel(idx))}
                 </motion.button>
               </Link>
               <Link
@@ -981,7 +990,7 @@ function AlbumStarter({ lang }: { lang: 'sq' | 'en' }) {
                 className="text-[13px] text-center md:text-left underline underline-offset-4 decoration-black/15 hover:decoration-black/40 self-center md:self-start"
                 style={{ color: `${style.ink}75` }}
               >
-                {lang === 'sq' ? 'Shiko të gjitha stilet' : 'Browse all styles'}
+                <Editable path="starter.browse">{p.txt('starter.browse')}</Editable>
               </Link>
             </div>
           </div>
@@ -1267,7 +1276,8 @@ function CategoryCard({
 
 // ── AI Album promo banner ────────────────────────────────────────────────────
 
-function AIAlbumPromo({ lang }: { lang: 'sq' | 'en' }) {
+function AIAlbumPromo() {
+  const p = usePageFields();
   return (
     <section className="relative overflow-hidden bg-[#141311] py-16 md:py-20">
       {/* Ambient sparkle field */}
@@ -1300,28 +1310,24 @@ function AIAlbumPromo({ lang }: { lang: 'sq' | 'en' }) {
         >
           <div className="text-center md:text-left max-w-lg">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-white/85 text-[10px] uppercase tracking-[0.2em] font-semibold mb-4">
-              ✦ {lang === 'sq' ? 'E re · me AI' : 'New · powered by AI'}
+              ✦ <Editable path="ai.badge">{p.txt('ai.badge')}</Editable>
             </div>
             <h2 className="text-2xl md:text-[32px] font-serif font-medium text-white leading-tight mb-3">
-              {lang === 'sq'
-                ? <>Ngarkoni fotot — AI-ja<br className="hidden md:block" /> e krijon albumin</>
-                : <>Upload your photos, let AI<br className="hidden md:block" /> build the album</>}
+              <Editable path="ai.title">{p.txt('ai.title')}</Editable>
             </h2>
             <p className="text-white/50 text-[13.5px] leading-relaxed">
-              {lang === 'sq'
-                ? 'Zgjidhni një kategori, ngarkoni 25+ foto — sistemi zgjedh vetë paraqitjen, ngjyrat dhe dizajnin e çdo faqeje. Më pas e rregulloni si të doni.'
-                : 'Pick a category, upload 25+ photos — our system automatically chooses the layout, colors, and design of every page. Fine-tune anything afterwards.'}
+              <Editable path="ai.body">{p.txt('ai.body')}</Editable>
             </p>
           </div>
 
           <div className="flex flex-col items-center md:items-end justify-center gap-3 shrink-0">
             <Link href="/album-ai">
               <button className="px-8 py-3.5 bg-white text-[#141311] rounded-full text-[12.5px] font-semibold hover:bg-neutral-100 active:scale-[0.97] transition-all shadow-xl shadow-black/30">
-                {lang === 'sq' ? 'Provo albumin me AI' : 'Try the AI album maker'}
+                <Editable path="ai.cta">{p.txt('ai.cta')}</Editable>
               </button>
             </Link>
             <p className="text-white/30 text-[11px]">
-              {lang === 'sq' ? 'Gati brenda sekondave' : 'Ready in seconds'}
+              <Editable path="ai.note">{p.txt('ai.note')}</Editable>
             </p>
           </div>
         </motion.div>
@@ -1331,7 +1337,16 @@ function AIAlbumPromo({ lang }: { lang: 'sq' | 'en' }) {
 }
 
 export default function Home() {
+  return (
+    <PageContentProvider slug="home">
+      <HomeView />
+    </PageContentProvider>
+  );
+}
+
+function HomeView() {
   const { lang } = useLanguage();
+  const p = usePageFields();
   const [activeStep, setActiveStep] = useState<number | null>(null);
   const { data: apiCategories } = useListCategories();
 
@@ -1358,74 +1373,49 @@ export default function Home() {
   }, [apiCategories]);
 
   const tickerItems = [
-    lang === 'sq' ? 'letër mat 200g' : 'matte 200g paper',
-    lang === 'sq' ? 'hapje e sheshtë' : 'lay-flat binding',
-    lang === 'sq' ? 'printim premium' : 'premium printing',
-    lang === 'sq' ? 'dërgim në 10–16 ditë' : '10–16 day delivery',
-    lang === 'sq' ? 'dizajn profesional' : 'professional design',
-    lang === 'sq' ? 'garanci 30 ditë' : '30-day guarantee',
+    ...p.list('ticker').map((_, i) => p.txt(`ticker.${i}`)),
     '✦',
   ];
 
-  const steps = [
-    {
-      n: '01',
-      title: { sq: 'Zgjidhni stilin', en: 'Choose a style' },
-      desc: { sq: 'Zgjidhni madhësinë dhe temën. 5 stile, secili me ngjyrat dhe shkronjat e veta.', en: 'Pick your size and visual theme. 5 styles with ready-made colours and fonts.' },
-      detail: {
-        sq: 'Nga dasma te udhëtimi, kemi një stil për çdo moment. Çdo stil ka 4–6 variante ngjyrash dhe 3 madhësi albumesh (20×20, 30×30, A4).',
-        en: 'From weddings to travel, we have styles for every occasion. Each style has 4–6 colour variants and 3 book sizes (20×20, 30×30, A4).',
-      },
-    },
-    {
-      n: '02',
-      title: { sq: 'Ngarkoni fotot', en: 'Upload your photos' },
-      desc: { sq: 'Dizajnoni çdo faqe me editorin tonë. Tërhiqni fotot dhe i vendosni si të doni.', en: 'Design every page with our editor. Drag photos and arrange freely.' },
-      detail: {
-        sq: 'Ngarkoni drejtpërdrejt nga telefoni ose kompjuteri. Ndryshoni tekstin, zgjidhni paraqitjet dhe shtoni dekorime. Funksionon në çdo pajisje.',
-        en: 'Upload directly from your phone or computer. Edit text, choose layouts and add decorations. Works on any device.',
-      },
-    },
-    {
-      n: '03',
-      title: { sq: 'Porositni dhe merrni', en: 'Order and receive' },
-      desc: { sq: 'Printuar dhe dërguar te dera juaj brenda 10–16 ditëve pune.', en: 'Printed and delivered straight to your door within 10–16 working days.' },
-      detail: {
-        sq: 'Printim me cilësi galerie, letër mat 200g, lidhje e sheshtë. Dërgesë e sigurt me kuti mbrojtëse. Garanci kthimi 30 ditë.',
-        en: 'Gallery-quality printing, matte 200g paper, lay-flat binding. Safe delivery with protective box. 30-day return guarantee.',
-      },
-    },
-  ];
+  const steps = p.list('process.steps').map((_, i) => ({
+    n: String(i + 1).padStart(2, '0'),
+    titlePath: `process.steps.${i}.title`,
+    descPath: `process.steps.${i}.desc`,
+    detailPath: `process.steps.${i}.detail`,
+  }));
 
   return (
     <MarketingLayout>
       <SEOMeta
-        title={{ sq: 'Albume Foto Premium', en: 'Premium Photo Books' }}
-        description={{
-          sq: 'Kthejini kujtimet tuaja në albume foto të bukura, të shtypura me cilësi galerie. Dizajnoni vetë online. Dërgesa në të gjithë Shqipërinë.',
-          en: 'Turn your memories into beautiful, gallery-quality photo books. Design online, printed and delivered across Albania.',
-        }}
+        title={p.txtAll('seo.title')}
+        description={p.txtAll('seo.description')}
         path="/"
         ogImage={{ sq: '/og-home-sq.jpg', en: '/og-home-en.jpg' }}
         schemaType="WebSite"
       />
 
       {/* ── HERO ─────────────────────────────────────────────────────── */}
-      <HeroAlbum lang={lang} />
+      <EditableSection path="hero">
+        <HeroAlbum lang={lang} />
+      </EditableSection>
 
       {/* ── 3D BOOK SHOWCASE ─────────────────────────────────────────── */}
-      <AlbumStarter lang={lang} />
+      <EditableSection path="starter">
+        <AlbumStarter lang={lang} />
+      </EditableSection>
 
       {/* ── TICKER ───────────────────────────────────────────────────── */}
-      <div className="bg-[#f7f4f0] border-y border-neutral-200/70 py-3.5 overflow-hidden">
+      <Editable path="ticker" kind="slider" as="div" className="bg-[#f7f4f0] border-y border-neutral-200/70 py-3.5 overflow-hidden">
         <Ticker items={tickerItems} />
-      </div>
+      </Editable>
 
       {/* ── AI ALBUM PROMO ───────────────────────────────────────────── */}
-      <AIAlbumPromo lang={lang} />
+      <EditableSection path="ai">
+        <AIAlbumPromo />
+      </EditableSection>
 
       {/* ── CATEGORY SECTION ─────────────────────────────────────────── */}
-      <section className="py-20 md:py-28 bg-[#f7f4f0]">
+      <EditableSection path="categories" className="py-20 md:py-28 bg-[#f7f4f0]">
         <div className="max-w-7xl mx-auto px-5 md:px-10">
 
           {/* Section header with illustration */}
@@ -1438,21 +1428,17 @@ export default function Home() {
             <div className="flex items-end justify-between">
               <div>
                 <p className="text-[10px] uppercase tracking-[0.32em] text-neutral-400 mb-3">
-                  {lang === 'sq' ? 'koleksionet tona' : 'our collections'}
+                  <Editable path="categories.kicker">{p.txt('categories.kicker')}</Editable>
                 </p>
                 <h2 className="text-4xl md:text-5xl font-serif font-medium text-neutral-900 leading-tight">
-                  {lang === 'sq' ? (
-                    <>Albume për çdo<br />moment të veçantë</>
-                  ) : (
-                    <>A book for every<br />special moment</>
-                  )}
+                  <Editable path="categories.title">{p.txt('categories.title')}</Editable>
                 </h2>
               </div>
               <Link
                 href="/krijo"
                 className="hidden md:flex items-center gap-2 text-[11px] uppercase tracking-[0.2em] text-neutral-400 hover:text-neutral-900 transition-colors group shrink-0 mb-2"
               >
-                <span>{lang === 'sq' ? 'të gjitha' : 'all collections'}</span>
+                <span><Editable path="categories.all">{p.txt('categories.all')}</Editable></span>
                 <svg width="16" height="8" viewBox="0 0 16 8" className="transition-transform group-hover:translate-x-1">
                   <path d="M0 4h14M11 1l3 3-3 3" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
@@ -1491,10 +1477,10 @@ export default function Home() {
             ))}
           </div>
         </div>
-      </section>
+      </EditableSection>
 
       {/* ── SPREAD PREVIEW ───────────────────────────────────────────── */}
-      <section className="py-20 md:py-28 bg-white border-t border-neutral-100 overflow-hidden">
+      <EditableSection path="spread" className="py-20 md:py-28 bg-white border-t border-neutral-100 overflow-hidden">
         <div className="max-w-7xl mx-auto px-5 md:px-10">
           <div className="grid md:grid-cols-2 gap-14 md:gap-20 items-center">
             {/* Text side */}
@@ -1505,31 +1491,24 @@ export default function Home() {
               transition={{ duration: 0.7 }}
             >
               <p className="text-[10px] uppercase tracking-[0.3em] text-neutral-400 mb-4">
-                {lang === 'sq' ? 'si duket brenda' : "what's inside"}
+                <Editable path="spread.kicker">{p.txt('spread.kicker')}</Editable>
               </p>
               <h2 className="text-4xl font-serif font-medium text-neutral-900 leading-tight mb-5">
-                {lang === 'sq' ? (
-                  <>Faqet që tregojnë<br />historinë tuaj</>
-                ) : (
-                  <>Pages that tell<br />your story</>
-                )}
+                <Editable path="spread.title">{p.txt('spread.title')}</Editable>
               </h2>
               <p className="text-neutral-500 text-[14px] leading-relaxed mb-8 max-w-sm">
-                {lang === 'sq'
-                  ? 'Dizajnoni çdo faqe dyshe si të doni — dy faqe krah për krah, si një libër i vërtetë. Zgjidhni paraqitjen, shtoni fotot dhe tekstin.'
-                  : 'Design each spread exactly as you want — two pages side by side, like a real book. Pick a layout, add your photos and text.'}
+                <Editable path="spread.body">{p.txt('spread.body')}</Editable>
               </p>
 
               <div className="grid grid-cols-2 gap-3 max-w-xs">
-                {[
-                  { num: '9+', label: lang === 'sq' ? 'modele faqesh' : 'page layouts' },
-                  { num: '20+', label: lang === 'sq' ? 'dizajne të gatshme' : 'premade designs' },
-                  { num: '∞', label: lang === 'sq' ? 'foto në faqe' : 'photos per page' },
-                  { num: '3', label: lang === 'sq' ? 'madhësi albumi' : 'book sizes' },
-                ].map((stat, i) => (
+                {p.list('spread.stats').map((_, i) => (
                   <div key={i} className="bg-[#f7f4f0] rounded-xl p-4 border border-neutral-100">
-                    <p className="text-2xl font-serif font-medium text-neutral-900">{stat.num}</p>
-                    <p className="text-[11px] text-neutral-400 mt-0.5">{stat.label}</p>
+                    <p className="text-2xl font-serif font-medium text-neutral-900">
+                      <Editable path={`spread.stats.${i}.num`}>{p.txt(`spread.stats.${i}.num`)}</Editable>
+                    </p>
+                    <p className="text-[11px] text-neutral-400 mt-0.5">
+                      <Editable path={`spread.stats.${i}.label`}>{p.txt(`spread.stats.${i}.label`)}</Editable>
+                    </p>
                   </div>
                 ))}
               </div>
@@ -1550,22 +1529,28 @@ export default function Home() {
                 {/* Left page */}
                 <div className="absolute inset-y-0 left-0 w-1/2 bg-[#f9f6f1] flex flex-col p-5 md:p-7">
                   <div className="flex-1 grid grid-cols-2 gap-2">
+                    <Editable path="spread.photos.a" kind="image" as="div" className="w-full h-full col-span-1">
                     <img
-                      src="https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=400&q=80&fit=crop"
-                      className="w-full h-full object-cover rounded-sm col-span-1"
+                      src={p.img('spread.photos.a', 'https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=400&q=80&fit=crop')}
+                      className="w-full h-full object-cover rounded-sm"
                       alt=""
                     />
+                    </Editable>
                     <div className="flex flex-col gap-2">
+                      <Editable path="spread.photos.b" kind="image" as="div" className="w-full flex-1">
                       <img
-                        src="https://images.unsplash.com/photo-1606800052052-a08af7148866?w=300&q=80&fit=crop"
-                        className="w-full flex-1 object-cover rounded-sm"
+                        src={p.img('spread.photos.b', 'https://images.unsplash.com/photo-1606800052052-a08af7148866?w=300&q=80&fit=crop')}
+                        className="w-full h-full object-cover rounded-sm"
                         alt=""
                       />
+                      </Editable>
+                      <Editable path="spread.photos.c" kind="image" as="div" className="w-full flex-1">
                       <img
-                        src="https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=300&q=80&fit=crop"
-                        className="w-full flex-1 object-cover rounded-sm"
+                        src={p.img('spread.photos.c', 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=300&q=80&fit=crop')}
+                        className="w-full h-full object-cover rounded-sm"
                         alt=""
                       />
+                      </Editable>
                     </div>
                   </div>
                   <p className="text-[8px] text-neutral-300 mt-3 uppercase tracking-widest text-center">6</p>
@@ -1578,11 +1563,13 @@ export default function Home() {
 
                 {/* Right page */}
                 <div className="absolute inset-y-0 right-0 w-1/2 bg-white flex flex-col p-5 md:p-7">
+                  <Editable path="spread.photos.d" kind="image" as="div" className="w-full flex-1">
                   <img
-                    src="https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=600&q=80&fit=crop"
-                    className="w-full flex-1 object-cover rounded-sm"
+                    src={p.img('spread.photos.d', 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=600&q=80&fit=crop')}
+                    className="w-full h-full object-cover rounded-sm"
                     alt=""
                   />
+                  </Editable>
                   <div className="mt-3">
                     <div className="h-1.5 bg-neutral-100 rounded-full w-3/4 mb-1.5" />
                     <div className="h-1 bg-neutral-100 rounded-full w-1/2" />
@@ -1594,20 +1581,20 @@ export default function Home() {
               {/* Floating tag */}
               <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 bg-white rounded-full px-5 py-2 shadow-lg border border-neutral-100 whitespace-nowrap">
                 <p className="text-xs font-medium text-neutral-600">
-                  {lang === 'sq' ? 'Faqja 6–7 · pamja e plotë' : 'Page 6–7 · full spread view'}
+                  <Editable path="spread.tag">{p.txt('spread.tag')}</Editable>
                 </p>
               </div>
             </motion.div>
           </div>
         </div>
-      </section>
+      </EditableSection>
 
       {/* ── MATERIALS ────────────────────────────────────────────────── */}
-      <section className="py-20 bg-[#f7f4f0] border-t border-neutral-200/70">
+      <EditableSection path="materials" className="py-20 bg-[#f7f4f0] border-t border-neutral-200/70">
         <div className="max-w-7xl mx-auto px-5 md:px-10">
           <div className="flex items-center justify-between mb-10">
             <p className="text-[10px] uppercase tracking-[0.3em] text-neutral-400">
-              {lang === 'sq' ? 'çfarë e bën të veçantë' : 'what makes it special'}
+              <Editable path="materials.kicker">{p.txt('materials.kicker')}</Editable>
             </p>
             <div className="h-px flex-1 bg-neutral-200 ml-8 hidden md:block" />
           </div>
@@ -1622,27 +1609,30 @@ export default function Home() {
                 className="bg-white rounded-2xl p-6 border border-neutral-100 hover:shadow-md transition-shadow group"
               >
                 <div className="mb-5 opacity-75 group-hover:opacity-100 transition-opacity">{m.icon}</div>
-                <h4 className="font-medium text-[13px] text-neutral-900 mb-1">{m.title[lang]}</h4>
-                <p className="text-[12px] text-neutral-400 leading-relaxed">{m.desc[lang]}</p>
+                <h4 className="font-medium text-[13px] text-neutral-900 mb-1">
+                  <Editable path={`materials.items.${i}.title`}>{p.txt(`materials.items.${i}.title`) || m.title[lang]}</Editable>
+                </h4>
+                <p className="text-[12px] text-neutral-400 leading-relaxed">
+                  <Editable path={`materials.items.${i}.desc`}>{p.txt(`materials.items.${i}.desc`) || m.desc[lang]}</Editable>
+                </p>
               </motion.div>
             ))}
           </div>
         </div>
-      </section>
+      </EditableSection>
 
       {/* ── HOW IT WORKS ─────────────────────────────────────────────── */}
-      <section className="py-20 md:py-28 bg-white border-t border-neutral-100">
+      <EditableSection path="process" className="py-20 md:py-28 bg-white border-t border-neutral-100">
         <div className="max-w-5xl mx-auto px-5 md:px-10">
           <div className="text-center mb-14">
             <p className="text-[10px] uppercase tracking-[0.3em] text-neutral-400 mb-4">
-              {lang === 'sq' ? 'procesi' : 'the process'}
+              <Editable path="process.kicker">{p.txt('process.kicker')}</Editable>
             </p>
             <h2 className="text-4xl md:text-5xl font-serif font-medium text-neutral-900">
-              {lang === 'sq' ? 'Tre hapa deri te albumi juaj' : 'Three steps to your photobook'}
+              <Editable path="process.title">{p.txt('process.title')}</Editable>
             </h2>
           </div>
 
-          {/* Accordion-style steps */}
           <div className="divide-y divide-neutral-100 border-y border-neutral-100">
             {steps.map((step, i) => (
               <motion.div
@@ -1660,7 +1650,7 @@ export default function Home() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-4">
                       <h3 className="font-serif text-xl font-medium text-neutral-900 group-hover:text-neutral-600 transition-colors">
-                        {step.title[lang]}
+                        <Editable path={step.titlePath}>{p.txt(step.titlePath)}</Editable>
                       </h3>
                       <svg
                         width="16" height="16" viewBox="0 0 16 16"
@@ -1670,7 +1660,9 @@ export default function Home() {
                         <path d="M8 3v10M3 8h10"/>
                       </svg>
                     </div>
-                    <p className="text-neutral-400 text-[13px] mt-1.5">{step.desc[lang]}</p>
+                    <p className="text-neutral-400 text-[13px] mt-1.5">
+                      <Editable path={step.descPath}>{p.txt(step.descPath)}</Editable>
+                    </p>
                     <AnimatePresence>
                       {activeStep === i && (
                         <motion.p
@@ -1680,7 +1672,7 @@ export default function Home() {
                           transition={{ duration: 0.25 }}
                           className="overflow-hidden text-[13px] text-neutral-600 leading-relaxed mt-3 max-w-xl"
                         >
-                          {step.detail[lang]}
+                          <Editable path={step.detailPath}>{p.txt(step.detailPath)}</Editable>
                         </motion.p>
                       )}
                     </AnimatePresence>
@@ -1693,18 +1685,18 @@ export default function Home() {
           <div className="mt-12 flex items-center gap-4">
             <Link href="/krijo">
               <button className="px-8 py-3.5 bg-[#1a1a1a] text-white rounded-full text-[13px] font-medium hover:bg-neutral-800 transition-colors shadow-sm">
-                {lang === 'sq' ? 'Krijo tani — falas' : 'Start now — free'}
+                <Editable path="process.cta">{p.txt('process.cta')}</Editable>
               </button>
             </Link>
             <span className="text-[12px] text-neutral-400">
-              {lang === 'sq' ? 'Pa kartë krediti' : 'No credit card required'}
+              <Editable path="process.note">{p.txt('process.note')}</Editable>
             </span>
           </div>
         </div>
-      </section>
+      </EditableSection>
 
       {/* ── TESTIMONIAL ──────────────────────────────────────────────── */}
-      <section className="py-24 md:py-32 bg-[#1a1a1a] text-white relative overflow-hidden">
+      <EditableSection path="testimonial" className="py-24 md:py-32 bg-[#1a1a1a] text-white relative overflow-hidden">
         <div className="absolute top-0 right-0 w-[400px] h-[400px] rounded-full bg-white/[0.02] -translate-y-1/2 translate-x-1/2 pointer-events-none" />
         <div className="absolute bottom-0 left-0 w-[300px] h-[300px] rounded-full bg-white/[0.02] translate-y-1/2 -translate-x-1/2 pointer-events-none" />
 
@@ -1713,45 +1705,43 @@ export default function Home() {
             <span className="text-white/20 font-serif text-5xl leading-none">"</span>
           </div>
           <blockquote className="text-2xl md:text-[32px] font-serif font-light leading-snug text-white/88 mb-10">
-            {lang === 'sq'
-              ? '"Cilësia e letrës dhe printimit është thjesht fantastike. Është vërtet një libër që do të qëndrojë përgjithmonë në familjen tonë."'
-              : '"The paper and print quality is simply fantastic. Truly a book that will stay in our family forever."'}
+            <Editable path="testimonial.quote" as="span">{p.txt('testimonial.quote')}</Editable>
           </blockquote>
           <div className="flex items-center justify-center gap-3">
+            <Editable path="testimonial.photo" kind="image" as="div">
             <img
-              src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=80&q=80&fit=crop&crop=face"
+              src={p.img('testimonial.photo', 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=80&q=80&fit=crop&crop=face')}
               className="w-10 h-10 rounded-full object-cover opacity-70"
               alt=""
             />
+            </Editable>
             <div className="text-left">
-              <p className="text-white/65 text-[13px] font-medium">Era M.</p>
-              <p className="text-white/28 text-[11px] mt-0.5">Tiranë, Shqipëri</p>
+              <p className="text-white/65 text-[13px] font-medium">
+                <Editable path="testimonial.name">{p.txt('testimonial.name')}</Editable>
+              </p>
+              <p className="text-white/28 text-[11px] mt-0.5">
+                <Editable path="testimonial.place">{p.txt('testimonial.place')}</Editable>
+              </p>
             </div>
           </div>
         </div>
-      </section>
+      </EditableSection>
 
       {/* ── FINAL CTA ────────────────────────────────────────────────── */}
-      <section className="py-24 md:py-32 bg-[#f7f4f0] border-t border-neutral-200 relative overflow-hidden">
+      <EditableSection path="cta" className="py-24 md:py-32 bg-[#f7f4f0] border-t border-neutral-200 relative overflow-hidden">
         <div className="absolute inset-0 flex items-center justify-center opacity-[0.04] pointer-events-none select-none">
           <span className="font-serif text-[320px] font-medium text-neutral-900 leading-none">P</span>
         </div>
 
         <div className="max-w-xl mx-auto px-5 text-center relative z-10">
           <p className="text-[10px] uppercase tracking-[0.3em] text-neutral-400 mb-5">
-            {lang === 'sq' ? '— filloni sot' : '— start today'}
+            <Editable path="cta.kicker">{p.txt('cta.kicker')}</Editable>
           </p>
           <h2 className="text-4xl md:text-5xl font-serif font-medium text-neutral-900 leading-tight mb-5">
-            {lang === 'sq' ? (
-              <>Fotot meritojnë<br />të jenë kujtim</>
-            ) : (
-              <>Photos deserve<br />to become a memory</>
-            )}
+            <Editable path="cta.title">{p.txt('cta.title')}</Editable>
           </h2>
           <p className="text-neutral-500 text-[14px] leading-relaxed mb-10 max-w-sm mx-auto">
-            {lang === 'sq'
-              ? 'Pa regjistrim. Pa kartë krediti. Filloni falas dhe porositni vetëm kur jeni gati.'
-              : "No registration. No credit card. Start free and only order when you're ready."}
+            <Editable path="cta.body">{p.txt('cta.body')}</Editable>
           </p>
           <Link href="/krijo">
             <motion.button
@@ -1759,14 +1749,14 @@ export default function Home() {
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
             >
-              {lang === 'sq' ? 'Krijo albumin tënd falas →' : 'Create your photobook free →'}
+              <Editable path="cta.button">{p.txt('cta.button')}</Editable>
             </motion.button>
           </Link>
           <p className="mt-5 text-[11px] text-neutral-400">
-            {lang === 'sq' ? 'Nga 3.100 LEK · Dërgesë falas mbi 5.000 LEK' : 'From 3,100 LEK · Free delivery over 5,000 LEK'}
+            <Editable path="cta.note">{p.txt('cta.note')}</Editable>
           </p>
         </div>
-      </section>
+      </EditableSection>
 
     </MarketingLayout>
   );
