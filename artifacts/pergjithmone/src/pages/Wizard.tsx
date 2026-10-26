@@ -18,7 +18,7 @@ import {
 import { ResponsiveDesignCatalogThumb } from '@/components/PageThumb';
 import { SEOMeta } from '@/components/SEOMeta';
 import { useToast } from '@/hooks/use-toast';
-import { CategoryCoverImg } from '@/components/CategoryCoverImg';
+import { CategoryCoverImg, coverPressable } from '@/components/CategoryCoverImg';
 import { wizardEntryFromSearch } from '@/lib/wizardEntry';
 import { createProjectErrorMessage } from '@/lib/projectErrors';
 import { ensureEditorFonts } from '@/lib/editorFonts';
@@ -144,10 +144,9 @@ function DesignCard({ design, isSelected, lang, onClick }: {
   design: DesignDef; isSelected: boolean; lang: 'sq' | 'en'; onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="relative flex flex-col items-center gap-2 group focus:outline-none w-full transition-transform duration-150 hover:-translate-y-0.5 active:scale-[0.97]"
+    <div
+      {...coverPressable(onClick, design.name[lang])}
+      className="relative flex flex-col items-center gap-2 group focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 w-full transition-transform duration-150 hover:-translate-y-0.5 active:scale-[0.97] cursor-pointer"
     >
       <div
         className={`relative w-full overflow-hidden rounded-2xl transition-shadow duration-150 ${
@@ -176,7 +175,7 @@ function DesignCard({ design, isSelected, lang, onClick }: {
       }`}>
         {design.name[lang]}
       </span>
-    </button>
+    </div>
   );
 }
 
@@ -530,11 +529,11 @@ export default function Wizard() {
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
                     {categories?.map((cat: any, idx: number) => {
                       return (
-                        <motion.button
+                        <motion.div
                           key={cat.id}
-                          onClick={() => handleCategorySelect(cat.id)}
-                          className="group relative rounded-2xl overflow-hidden cursor-pointer focus:outline-none focus:ring-2 focus:ring-neutral-900"
-                          style={{ aspectRatio: '3/4', minHeight: 168 }}
+                          {...coverPressable(() => handleCategorySelect(cat.id), lang === 'en' ? (cat.nameEn || cat.nameAl) : cat.nameAl)}
+                          className="group relative w-full rounded-2xl overflow-hidden cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900"
+                          style={{ aspectRatio: '3/4', minHeight: 168, WebkitTransform: 'translateZ(0)' }}
                           initial={{ opacity: 0, y: 12 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: idx * 0.045, duration: 0.3 }}
@@ -568,7 +567,7 @@ export default function Wizard() {
                               <ChevronRight size={13} className="text-white" />
                             </div>
                           </div>
-                        </motion.button>
+                        </motion.div>
                       );
                     })}
 

@@ -1,7 +1,23 @@
 import React, { useEffect, useState } from 'react';
 import { CAT_IMG_DEFAULT, getCategoryImage, resolvePublicImageSrc } from '@/lib/categoryImages';
 
-/** Category photo that still paints on iOS (bg + img) and falls back if the upload URL is dead. */
+/** Keyboard + click handlers for photo tiles — iOS will not paint <img> inside <button>. */
+export function coverPressable(onClick: () => void, label?: string) {
+  return {
+    role: 'button' as const,
+    tabIndex: 0,
+    'aria-label': label,
+    onClick,
+    onKeyDown: (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        onClick();
+      }
+    },
+  };
+}
+
+/** Category photo that still paints on iOS (no native <button> parent). */
 export function CategoryCoverImg({
   nameAl,
   coverImage,
@@ -26,14 +42,20 @@ export function CategoryCoverImg({
   const safeBg = src.replace(/"/g, '');
 
   return (
-    <span
+    <div
       className={className}
+      aria-hidden={!alt}
       style={{
-        display: 'block',
+        position: 'absolute',
+        inset: 0,
+        overflow: 'hidden',
         backgroundColor: '#d4cfc8',
         backgroundImage: safeBg ? `url("${safeBg}")` : undefined,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
+        // Force a compositing layer so Safari actually paints the photo.
+        WebkitTransform: 'translateZ(0)',
+        transform: 'translateZ(0)',
       }}
     >
       {src ? (
@@ -44,13 +66,24 @@ export function CategoryCoverImg({
           decoding="async"
           loading="eager"
           draggable={false}
-          className="absolute inset-0 h-full w-full object-cover"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            display: 'block',
+            border: 0,
+            pointerEvents: 'none',
+            WebkitUserSelect: 'none',
+            userSelect: 'none',
+          }}
           onError={() => {
             if (src !== fallback) setSrc(fallback);
             else if (src !== CAT_IMG_DEFAULT) setSrc(CAT_IMG_DEFAULT);
           }}
         />
       ) : null}
-    </span>
+    </div>
   );
 }

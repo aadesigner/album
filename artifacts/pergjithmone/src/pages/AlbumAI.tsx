@@ -20,7 +20,7 @@ import { generateAlbum, suggestInnerPageCount } from '@/lib/albumGenerator';
 import { uploadImageToApi } from '@/lib/uploadImage';
 import { pendingBooksLimitMessage } from '@/lib/projectErrors';
 import { SizeCard } from './Wizard';
-import { CategoryCoverImg } from '@/components/CategoryCoverImg';
+import { CategoryCoverImg, coverPressable } from '@/components/CategoryCoverImg';
 
 // Minimum photos required before generation is allowed. Kept as a single
 // named constant so the UI copy, validation, and progress bar all agree.
@@ -735,11 +735,11 @@ export default function AlbumAI() {
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {categories?.map((cat: any, i: number) => {
                       return (
-                        <motion.button
+                        <motion.div
                           key={cat.id}
-                          onClick={() => handleCategorySelect(cat.id)}
-                          className="group relative rounded-2xl overflow-hidden cursor-pointer focus:outline-none focus:ring-2 focus:ring-neutral-900"
-                          style={{ aspectRatio: '3/4', minHeight: 168 }}
+                          {...coverPressable(() => handleCategorySelect(cat.id), lang === 'en' ? (cat.nameEn || cat.nameAl) : cat.nameAl)}
+                          className="group relative w-full rounded-2xl overflow-hidden cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900"
+                          style={{ aspectRatio: '3/4', minHeight: 168, WebkitTransform: 'translateZ(0)' }}
                           initial={{ opacity: 0, y: 16 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: i * 0.05, duration: 0.4 }}
@@ -764,7 +764,7 @@ export default function AlbumAI() {
                           <div className="absolute top-2.5 right-2.5 w-6 h-6 rounded-full bg-white/15 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                             <ChevronRight size={13} className="text-white" />
                           </div>
-                        </motion.button>
+                        </motion.div>
                       );
                     })}
                   </div>

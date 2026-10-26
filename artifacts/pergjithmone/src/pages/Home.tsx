@@ -360,7 +360,6 @@ function LivingAlbumBook({
                 '18px 28px 56px rgba(0,0,0,0.5), 6px 12px 22px rgba(0,0,0,0.28), inset 0 0 0 1px rgba(255,255,255,0.14)',
               background: coverBg,
               transform: 'translateZ(1px)',
-              backfaceVisibility: 'hidden',
             }}
           >
             <AnimatePresence mode="wait" initial={false}>
@@ -891,13 +890,19 @@ function AlbumStarter({ lang }: { lang: 'sq' | 'en' }) {
                 const active = i === idx;
                 const els = coverElsById[s.designId] || [];
                 return (
-                  <button
+                  <div
                     key={s.key}
-                    type="button"
                     role="option"
                     aria-selected={active}
+                    tabIndex={0}
                     onClick={() => setIdx(i)}
-                    className="group flex flex-col items-center gap-2.5 shrink-0 snap-center focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 rounded-md w-[108px] md:w-auto"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setIdx(i);
+                      }
+                    }}
+                    className="group flex flex-col items-center gap-2.5 shrink-0 snap-center focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 rounded-md w-[108px] md:w-auto cursor-pointer"
                     style={{ ['--tw-ring-color' as string]: style.ink }}
                   >
                     <div
@@ -931,7 +936,7 @@ function AlbumStarter({ lang }: { lang: 'sq' | 'en' }) {
                     >
                       {s.label[lang]}
                     </span>
-                  </button>
+                  </div>
                 );
               })}
             </div>
@@ -1166,12 +1171,12 @@ function CategoryCard({
   const handleMouseLeave = () => { x.set(0); y.set(0); };
 
   return (
-    <Link href={`/krijo?category=${encodeURIComponent(cat.key)}`}>
+    <Link href={`/krijo?category=${encodeURIComponent(cat.key)}`} className="block w-full">
       <div
         ref={ref}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
-        className="cursor-pointer select-none"
+        className="cursor-pointer select-none w-full"
         style={canTilt ? { perspective: '900px' } : undefined}
       >
         <motion.div
@@ -1441,8 +1446,8 @@ export default function Home() {
             {categories.map((cat) => (
               <div
                 key={cat.key}
-                className="snap-center shrink-0"
-                style={{ width: 'min(72vw, 260px)', touchAction: 'pan-x' }}
+                className="snap-center shrink-0 w-[72vw] max-w-[260px]"
+                style={{ touchAction: 'pan-x' }}
               >
                 <CategoryCard cat={cat} lang={lang} />
               </div>
