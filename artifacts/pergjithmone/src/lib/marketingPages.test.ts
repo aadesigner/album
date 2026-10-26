@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
-  bi, getAt, setAt, mergePageContent, txt, sanitizePageContent,
-  isPageSlug, pageSettingKey, stringifyPageContent,
+  bi, img, getAt, setAt, mergePageContent, txt, imgSrc, sanitizePageContent,
+  isPageSlug, pageSettingKey, stringifyPageContent, preparePageContentForSave,
+  MAX_PAGE_JSON_CHARS,
 } from './marketingPages';
 import { PAGE_DEFAULTS } from './marketingPages.defaults';
 
@@ -52,5 +53,56 @@ describe('marketingPages helpers', () => {
 
   it('stringify rejects oversized payloads', () => {
     expect(() => stringifyPageContent('x'.repeat(500_000))).toThrow(/too large/i);
+  });
+
+  it('merge does not blank bilingual copy when both languages are empty', () => {
+    const defaults = PAGE_DEFAULTS.home;
+    const merged = mergePageContent(defaults, {
+      hero: { headline: { sq: '', en: '   ' } },
+    });
+    expect(txt(merged, 'hero.headline', 'sq')).toBe('Ruaj kujtimet');
+    expect(txt(merged, 'hero.headline', 'en')).toBe('Keep the memories');
+    expect(txt(merged, 'hero.cta', 'en')).toBe('Create your book');
+  });
+
+  it('merge keeps a one-language edit and does not blank images', () => {
+    const defaults = {
+      title: bi('A', 'B'),
+      photo: img('https://example.com/a.jpg'),
+    };
+    const merged = mergePageContent(defaults, {
+      title: { sq: 'New', en: '' },
+      photo: { src: '   ' },
+    });
+    expect(txt(merged, 'title', 'sq')).toBe('New');
+    expect(txt(merged, 'title', 'en')).toBe('New');
+    expect(imgSrc(merged, 'photo', 'fallback')).toBe('https://example.com/a.jpg');
+  });
+
+  it('setAt patches nested array items without mutating the original', () => {
+    const tree = { styles: [{ line: bi('old', 'old-en') }, { line: bi('b', 'b-en') }] };
+    const next = setAt(tree, 'styles.0.line', bi('new', 'new-en'));
+    expect(txt(next, 'styles.0.line', 'sq')).toBe('new');
+    expect(txt(tree, 'styles.0.line', 'sq')).toBe('old');
+    expect(txt(next, 'styles.1.line', 'en')).toBe('b-en');
+  });
+
+  it('preparePageContentForSave restores defaults around a single edit', () => {
+    const prepared = preparePageContentForSave(PAGE_DEFAULTS.home, {
+      hero: { headline: { sq: 'X', en: 'Y' } },
+    });
+    expect(txt(prepared, 'hero.headline', 'en')).toBe('Y');
+    expect(txt(prepared, 'hero.cta', 'en')).toBe('Create your book');
+    expect(txt(prepared, 'process.steps.0.title', 'sq')).toBe('Zgjidhni stilin');
+    const json = stringifyPageContent(prepared);
+    expect(json.length).toBeLessThan(MAX_PAGE_JSON_CHARS);
+  });
+
+  it('every page default document is within the save size cap', () => {
+    for (const [slug, doc] of Object.entries(PAGE_DEFAULTS)) {
+      expect(() => stringifyPageContent(doc)).not.toThrow();
+      expect(stringifyPageContent(doc).length).toBeLessThan(MAX_PAGE_JSON_CHARS);
+      expect(slug).toBeTruthy();
+    }
   });
 });

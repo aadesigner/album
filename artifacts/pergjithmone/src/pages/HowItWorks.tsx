@@ -64,11 +64,12 @@ function HowItWorksView() {
             <div className="hidden md:block absolute left-[27px] top-12 bottom-12 w-px bg-neutral-100" aria-hidden/>
 
             <div className="space-y-6 md:space-y-4">
-              {STEP_META.map((step, idx) => {
+              {p.list('steps').map((_, idx) => {
+                const step = STEP_META[idx] ?? STEP_META[0];
                 const Icon = step.icon;
                 return (
                   <motion.div
-                    key={step.num}
+                    key={`${step.num}-${idx}`}
                     variants={fadeUp}
                     initial="hidden"
                     whileInView="show"

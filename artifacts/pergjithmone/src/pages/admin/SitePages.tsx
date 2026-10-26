@@ -10,8 +10,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { PreviewLanguageProvider } from '@/contexts/LanguageContext';
 import {
   PAGE_META, isPageSlug, type PageSlug, type BiText, type ImgRef,
-  getAt, isBiText, isImgRef,
+  getAt, isBiText, isImgRef, preparePageContentForSave,
 } from '@/lib/marketingPages';
+import { PAGE_DEFAULTS } from '@/lib/marketingPages.defaults';
 import { PageEditorProvider, usePageEditor } from '@/components/marketing/PageEditorContext';
 import { FontPicker } from '@/components/FontPicker';
 import { uploadErrorMessage, uploadImageToApi } from '@/lib/uploadImage';
@@ -143,6 +144,7 @@ function EditorShell({ slug }: { slug: PageSlug }) {
     setSaving(true);
     setSaveError(null);
     try {
+      const content = preparePageContentForSave(PAGE_DEFAULTS[slug], editor.content);
       const token = getToken();
       const r = await fetch(`/api/admin/pages/${slug}`, {
         method: 'PATCH',
@@ -151,11 +153,11 @@ function EditorShell({ slug }: { slug: PageSlug }) {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         credentials: 'include',
-        body: JSON.stringify({ content: editor.content }),
+        body: JSON.stringify({ content }),
       });
       const body = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(body.error || 'Save failed');
-      editor.markSaved();
+      editor.replace((body.content || content) as Record<string, unknown>);
       queryClient.invalidateQueries({ queryKey: ['marketing-page', slug] });
       queryClient.invalidateQueries({ queryKey: ['admin-marketing-page', slug] });
       setSavedFlash(true);
@@ -359,8 +361,14 @@ function BiTextFields({ path }: { path: string }) {
   const raw = getAt(editor.content, path);
   const value: BiText = isBiText(raw) ? raw : { sq: '', en: '' };
   const set = (patch: Partial<BiText>) => editor.patch(path, { ...value, ...patch });
+  const blankPair = !value.sq.trim() && !value.en.trim();
   return (
     <div className="space-y-3">
+      {blankPair && (
+        <p className="text-[12px] leading-relaxed" style={{ color: ADMIN.blush }}>
+          Both languages are empty. Save will keep the current live text so the page cannot go blank.
+        </p>
+      )}
       <label className="block text-[11px] font-semibold uppercase tracking-wide" style={{ color: ADMIN.muted }}>Albanian</label>
       <textarea
         value={value.sq}
@@ -429,9 +437,14 @@ function ImageFields({
       {src && <img src={src} alt="" className="w-full rounded-lg object-cover max-h-40" />}
       <Input
         value={src}
-        onChange={(e) => editor.patch(path, { src: e.target.value })}
+        onChange={(e) => editor.patch(path, { src: e.target.value.trim() })}
         placeholder="https://… or /api/uploads/files/…"
       />
+      {!src.trim() && (
+        <p className="text-[12px] leading-relaxed" style={{ color: ADMIN.blush }}>
+          Empty image URL. Save will keep the current live image so the page cannot lose it.
+        </p>
+      )}
       <label className="inline-flex items-center gap-1.5 text-[12px] font-semibold cursor-pointer" style={{ color: ADMIN.blushDeep }}>
         <Upload size={13} /> {uploading ? 'Uploading…' : 'Upload image'}
         <input

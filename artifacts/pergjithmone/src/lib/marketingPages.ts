@@ -83,14 +83,17 @@ export function setAt<T>(obj: T, path: string, value: unknown): T {
     ? [...base]
     : { ...(base as Record<string, unknown> || {}) };
   if (!rest.length) {
-    (clone as Record<string, unknown>)[head] = value;
+    if (Array.isArray(clone) && /^\d+$/.test(head)) clone[Number(head)] = value;
+    else (clone as Record<string, unknown>)[head] = value;
     return clone as T;
   }
   const nextDefault = Array.isArray(base)
     ? (base as unknown[])[Number(head)]
     : (base as Record<string, unknown>)?.[head];
   const childSeed = nextDefault ?? (/^\d+$/.test(rest[0]) ? [] : {});
-  (clone as Record<string, unknown>)[head] = setAt(childSeed, rest.join('.'), value);
+  const child = setAt(childSeed, rest.join('.'), value);
+  if (Array.isArray(clone) && /^\d+$/.test(head)) clone[Number(head)] = child;
+  else (clone as Record<string, unknown>)[head] = child;
   return clone as T;
 }
 
@@ -176,8 +179,13 @@ export function mergePageContent<T>(defaults: T, saved: unknown): T {
     if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return defaults;
     const s = saved as Record<string, unknown>;
     const out: BiText = { ...defaults };
-    if (typeof s.sq === 'string') out.sq = s.sq;
-    if (typeof s.en === 'string') out.en = s.en;
+    const sq = typeof s.sq === 'string' ? s.sq : out.sq;
+    const en = typeof s.en === 'string' ? s.en : out.en;
+    // Both empty = treat as "not set" so a bad/blank save cannot wipe copy.
+    if (sq.trim() || en.trim()) {
+      if (typeof s.sq === 'string') out.sq = s.sq;
+      if (typeof s.en === 'string') out.en = s.en;
+    }
     for (const k of STYLE_KEYS) {
       if (typeof s[k] === 'string' && s[k]) (out as Record<string, string>)[k] = s[k] as string;
     }
@@ -187,7 +195,7 @@ export function mergePageContent<T>(defaults: T, saved: unknown): T {
   if (isImgRef(defaults)) {
     if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return defaults;
     const src = (saved as ImgRef).src;
-    return { src: typeof src === 'string' ? src : defaults.src } as T;
+    return { src: typeof src === 'string' && src.trim() ? src : defaults.src } as T;
   }
 
   if (defaults && typeof defaults === 'object') {
@@ -243,4 +251,15 @@ export function stringifyPageContent(content: unknown): string {
     throw new Error('Page content is too large to save.');
   }
   return json;
+}
+
+/** Sanitize + merge with defaults so a save never persists a blanked page. */
+export function preparePageContentForSave(
+  defaults: Record<string, unknown>,
+  draft: unknown,
+): Record<string, unknown> {
+  const clean = sanitizePageContent(draft);
+  const merged = mergePageContent(defaults, clean);
+  stringifyPageContent(merged);
+  return merged as Record<string, unknown>;
 }
