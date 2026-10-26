@@ -3,14 +3,15 @@ import { MarketingLayout } from '@/components/layout/MarketingLayout';
 import { SEOMeta } from '@/components/SEOMeta';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Helmet } from 'react-helmet-async';
-import { PageContentProvider, usePageFields } from '@/components/marketing/PageContent';
+import { usePageFields } from '@/components/marketing/PageContent';
+import { LivePageRoot } from '@/components/marketing/LivePageRoot';
 import { Editable, EditableSection } from '@/components/marketing/Editable';
 
 export default function FAQ() {
   return (
-    <PageContentProvider slug="faq">
+    <LivePageRoot slug="faq">
       <FaqView />
-    </PageContentProvider>
+    </LivePageRoot>
   );
 }
 

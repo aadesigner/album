@@ -30,9 +30,10 @@ export function PageContentProvider({ slug, children }: { slug: PageSlug; childr
   const { data } = useQuery({
     queryKey: ['marketing-page', slug],
     queryFn: async () => {
-      const r = await fetch(`/api/pages/${slug}`);
+      const r = await fetch(`/api/pages/${slug}`, { credentials: 'include' });
       if (!r.ok) return { content: {} };
-      return r.json() as Promise<{ content?: unknown }>;
+      const body = await r.json().catch(() => ({}));
+      return { content: body.content ?? {} };
     },
     enabled: !editor || editor.slug !== slug,
     staleTime: 5 * 60_000,

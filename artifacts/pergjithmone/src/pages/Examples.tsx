@@ -6,7 +6,8 @@ import { SEOMeta } from '@/components/SEOMeta';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'wouter';
 import { ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react';
-import { PageContentProvider, usePageFields } from '@/components/marketing/PageContent';
+import { usePageFields } from '@/components/marketing/PageContent';
+import { LivePageRoot } from '@/components/marketing/LivePageRoot';
 import { Editable, EditableSection } from '@/components/marketing/Editable';
 import { usePageEditorOptional } from '@/components/marketing/PageEditorContext';
 
@@ -647,9 +648,9 @@ function AlbumCard({ album, lang, index }: { album: typeof ALBUMS[0]; lang: 'sq'
 
 export default function Examples() {
   return (
-    <PageContentProvider slug="examples">
+    <LivePageRoot slug="examples">
       <ExamplesView />
-    </PageContentProvider>
+    </LivePageRoot>
   );
 }
 

@@ -19,7 +19,8 @@ import {
 import { PageThumb, ResponsivePageThumb } from '@/components/PageThumb';
 import { CategoryCoverImg } from '@/components/CategoryCoverImg';
 import { ensureEditorFonts } from '@/lib/editorFonts';
-import { PageContentProvider, usePageFields } from '@/components/marketing/PageContent';
+import { usePageFields } from '@/components/marketing/PageContent';
+import { LivePageRoot } from '@/components/marketing/LivePageRoot';
 import { Editable, EditableSection } from '@/components/marketing/Editable';
 
 // ── Hero + album starter (CSS 3D book — no WebGL) ─────────────────────────────
@@ -1338,9 +1339,9 @@ function AIAlbumPromo() {
 
 export default function Home() {
   return (
-    <PageContentProvider slug="home">
+    <LivePageRoot slug="home">
       <HomeView />
-    </PageContentProvider>
+    </LivePageRoot>
   );
 }
 

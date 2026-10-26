@@ -36,6 +36,7 @@ import {
   resolveStatsRange,
   type AdminStatsRange,
 } from "../lib/adminStatsCache";
+import { attachAdminMarketingPageRoutes } from "./marketingPages";
 
 const router: IRouter = Router();
 
@@ -1601,5 +1602,7 @@ router.get(
     res.json({ data: projects, total: total.count, page, limit });
   },
 );
+
+attachAdminMarketingPageRoutes(router);
 
 export default router;

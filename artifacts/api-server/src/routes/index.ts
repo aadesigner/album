@@ -24,8 +24,8 @@ router.use(settingsRouter);
 router.use(projectsRouter);
 router.use(ordersRouter);
 router.use(uploadsRouter);
-router.use(adminRouter);
 router.use(marketingPagesRouter);
+router.use(adminRouter);
 router.use(geoRouter);
 router.use(analyticsRouter);
 

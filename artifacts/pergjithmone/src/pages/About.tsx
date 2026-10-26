@@ -1,14 +1,15 @@
 import React from 'react';
 import { MarketingLayout } from '@/components/layout/MarketingLayout';
 import { SEOMeta } from '@/components/SEOMeta';
-import { PageContentProvider, usePageFields } from '@/components/marketing/PageContent';
+import { usePageFields } from '@/components/marketing/PageContent';
+import { LivePageRoot } from '@/components/marketing/LivePageRoot';
 import { Editable, EditableSection } from '@/components/marketing/Editable';
 
 export default function About() {
   return (
-    <PageContentProvider slug="about">
+    <LivePageRoot slug="about">
       <AboutView />
-    </PageContentProvider>
+    </LivePageRoot>
   );
 }
 

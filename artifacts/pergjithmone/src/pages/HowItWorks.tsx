@@ -4,7 +4,8 @@ import { SEOMeta } from '@/components/SEOMeta';
 import { Link } from 'wouter';
 import { motion } from 'framer-motion';
 import { Upload, Palette, Package, ArrowRight, Star, Shield, Clock } from 'lucide-react';
-import { PageContentProvider, usePageFields } from '@/components/marketing/PageContent';
+import { usePageFields } from '@/components/marketing/PageContent';
+import { LivePageRoot } from '@/components/marketing/LivePageRoot';
 import { Editable, EditableSection } from '@/components/marketing/Editable';
 
 const fadeUp = {
@@ -22,9 +23,9 @@ const WHY_ICONS = [Star, Shield, Clock];
 
 export default function HowItWorks() {
   return (
-    <PageContentProvider slug="how-it-works">
+    <LivePageRoot slug="how-it-works">
       <HowItWorksView />
-    </PageContentProvider>
+    </LivePageRoot>
   );
 }
 

@@ -5,14 +5,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Mail, MessageCircle, MapPin } from 'lucide-react';
-import { PageContentProvider, usePageFields } from '@/components/marketing/PageContent';
+import { usePageFields } from '@/components/marketing/PageContent';
+import { LivePageRoot } from '@/components/marketing/LivePageRoot';
 import { Editable, EditableSection } from '@/components/marketing/Editable';
 
 export default function Contact() {
   return (
-    <PageContentProvider slug="contact">
+    <LivePageRoot slug="contact">
       <ContactView />
-    </PageContentProvider>
+    </LivePageRoot>
   );
 }
 

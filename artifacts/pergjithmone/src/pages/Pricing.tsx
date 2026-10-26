@@ -4,7 +4,8 @@ import { SEOMeta } from '@/components/SEOMeta';
 import { Link } from 'wouter';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, Plus, Truck, ArrowRight, ChevronDown } from 'lucide-react';
-import { PageContentProvider, usePageFields } from '@/components/marketing/PageContent';
+import { usePageFields } from '@/components/marketing/PageContent';
+import { LivePageRoot } from '@/components/marketing/LivePageRoot';
 import { Editable, EditableSection } from '@/components/marketing/Editable';
 
 const PLANS = [
@@ -81,9 +82,9 @@ function FaqItem({ q, a, qPath, aPath }: { q: string; a: string; qPath?: string;
 
 export default function Pricing() {
   return (
-    <PageContentProvider slug="pricing">
+    <LivePageRoot slug="pricing">
       <PricingView />
-    </PageContentProvider>
+    </LivePageRoot>
   );
 }
 
