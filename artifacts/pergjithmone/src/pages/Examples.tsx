@@ -6,6 +6,11 @@ import { SEOMeta } from '@/components/SEOMeta';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'wouter';
 import { ChevronLeft, ChevronRight, ArrowRight, BookOpen, Layers, Package, PenLine, Sparkles, Truck } from 'lucide-react';
+import {
+  PhotoRiver, OpenAlbumSpread, PhoneVsAlbum, PageMosaic, SpreadRiver,
+  DarkAtmosphere, PolaroidField, FilmMarquee, usePrefersReducedMotion,
+  LIFE_PHOTOS, type MosaicSlot,
+} from '@/components/marketing/PhotoStages';
 import { usePageFields } from '@/components/marketing/PageContent';
 import { LivePageRoot } from '@/components/marketing/LivePageRoot';
 import { Editable, EditableSection } from '@/components/marketing/Editable';
@@ -615,11 +620,21 @@ export default function Examples() {
   );
 }
 
+const EXAMPLES_MOSAIC: MosaicSlot[] = [
+  { src: LIFE_PHOTOS[0], label: { sq: 'Kopertina', en: 'Cover' }, className: 'col-span-2 row-span-2' },
+  { src: LIFE_PHOTOS[12], label: { sq: 'Dasma', en: 'Wedding' }, className: '' },
+  { src: LIFE_PHOTOS[6], label: { sq: 'Jugu', en: 'South' }, className: '' },
+  { src: LIFE_PHOTOS[7], label: { sq: 'Familja', en: 'Family' }, className: '' },
+  { src: LIFE_PHOTOS[1], label: { sq: 'Vallëzimi', en: 'Dance' }, className: '' },
+  { src: LIFE_PHOTOS[15], label: { sq: 'Mbrapa', en: 'Back' }, className: '' },
+];
+
 function ExamplesView() {
   const { lang } = useLanguage();
   const p = usePageFields();
   const pages = useMemo(() => overlayDemo(p), [p]);
   const editor = usePageEditorOptional();
+  const reduced = usePrefersReducedMotion();
   useEffect(() => { void ensureEditorFonts(); }, []);
   const photoKeys = ['cover', 'p2a', 'p2b', 'p2c', 'p3', 'p5a', 'p5b', 'p6', 'p7', 'back'] as const;
   const occasionCount = Math.max(p.list('occasions.items').length, OCCASION_META.length);
@@ -634,79 +649,57 @@ function ExamplesView() {
       />
       <div className="bg-[#f7f4f0]">
 
-        <EditableSection path="hero" className="relative overflow-hidden border-b border-neutral-200/70">
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0"
-            style={{ background: 'radial-gradient(70% 55% at 82% 12%, rgba(255,255,255,0.88) 0%, transparent 62%)' }}
-          />
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0 opacity-[0.55]"
-            style={{
-              backgroundImage: 'url(https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=1400&q=70&fit=crop)',
-              backgroundSize: 'cover',
-              backgroundPosition: '70% 30%',
-              filter: 'saturate(0.7) brightness(1.18)',
-              maskImage: 'linear-gradient(105deg, transparent 0%, transparent 28%, black 78%)',
-              WebkitMaskImage: 'linear-gradient(105deg, transparent 0%, transparent 28%, black 78%)',
-            }}
-          />
-          <div className="relative max-w-6xl mx-auto px-5 pt-12 pb-10 md:pt-16 md:pb-16">
-            <div className="grid lg:grid-cols-[1.05fr_0.95fr] gap-8 lg:gap-6 items-center">
-              <div className="order-2 lg:order-1 max-w-xl">
-                <p className="text-[11px] uppercase tracking-[0.3em] text-neutral-400 mb-5">
-                  <Editable path="hero.kicker">{p.txt('hero.kicker')}</Editable>
-                </p>
-                <h1 className="font-serif text-[clamp(2.1rem,5vw,3.55rem)] font-medium text-[#2A2218] leading-[1.1] mb-5 overflow-visible">
-                  <Editable path="hero.title">{p.txt('hero.title')}</Editable>
-                </h1>
-                <p className="text-neutral-500 text-[15px] md:text-[16px] leading-relaxed max-w-xl mb-8">
-                  <Editable path="hero.body">{p.txt('hero.body')}</Editable>
-                </p>
-                <div className="flex flex-wrap items-center gap-3 mb-10">
-                  <a
-                    href="#albumi-demo"
-                    className="inline-flex items-center gap-2 px-6 py-3 rounded-full text-[13px] font-semibold text-white"
-                    style={{ background: '#2A2218' }}
-                  >
-                    <Editable path="hero.cta">{p.txt('hero.cta')}</Editable>
-                  </a>
-                  <Link href="/krijo">
-                    <span className="inline-flex items-center gap-2 px-6 py-3 rounded-full text-[13px] font-semibold border border-neutral-300 bg-white/70 text-[#2A2218]">
-                      <Editable path="hero.secondaryCta">{p.txt('hero.secondaryCta')}</Editable>
-                      <ArrowRight size={14} />
-                    </span>
-                  </Link>
+        <EditableSection path="hero" className="relative overflow-hidden text-[#f3eee7]" style={{ background: '#1a1410' }}>
+          <DarkAtmosphere photo={LIFE_PHOTOS[0]} reduced={reduced} />
+          {!reduced && (
+            <div
+              aria-hidden
+              className="ai-develop-sweep pointer-events-none absolute inset-y-[8%] left-0 w-[38%] z-[2]"
+              style={{ background: 'linear-gradient(90deg, transparent, rgba(255,244,220,0.18), transparent)' }}
+            />
+          )}
+          <PolaroidField reduced={reduced} />
+          <div className="relative z-10 max-w-3xl mx-auto px-5 pt-16 pb-12 sm:pt-20 md:pt-24 md:pb-16 text-center">
+            <p className="text-[10px] sm:text-[11px] uppercase tracking-[0.38em] text-white/40 mb-6">
+              <Editable path="hero.kicker">{p.txt('hero.kicker')}</Editable>
+            </p>
+            <h1 className="font-serif text-[clamp(2.15rem,6.4vw,4.1rem)] font-medium leading-[1.08] mb-5">
+              <Editable path="hero.title">{p.txt('hero.title')}</Editable>
+            </h1>
+            <p className="text-white/55 text-[15px] md:text-[16px] leading-relaxed max-w-lg mx-auto mb-8">
+              <Editable path="hero.body">{p.txt('hero.body')}</Editable>
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-3 mb-8">
+              <a
+                href="#albumi-demo"
+                className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full text-[13px] font-semibold bg-white text-[#110e0c] hover:bg-[#f3eee7] transition-colors"
+              >
+                <Editable path="hero.cta">{p.txt('hero.cta')}</Editable>
+              </a>
+              <Link href="/krijo">
+                <span className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full text-[13px] font-semibold border border-white/20 text-white/80 hover:bg-white/5 transition-colors">
+                  <Editable path="hero.secondaryCta">{p.txt('hero.secondaryCta')}</Editable>
+                  <ArrowRight size={14} />
+                </span>
+              </Link>
+            </div>
+            <div className="grid grid-cols-3 gap-px max-w-lg mx-auto bg-white/10 overflow-hidden rounded-sm">
+              {p.list('stats').map((_, i) => (
+                <div key={i} className="bg-white/[0.04] px-3 py-4">
+                  <p className="font-serif text-lg md:text-xl text-[#f3eee7]">
+                    <Editable path={`stats.${i}.value`}>{p.txt(`stats.${i}.value`)}</Editable>
+                  </p>
+                  <p className="text-[10px] uppercase tracking-[0.12em] text-white/35 mt-1 leading-snug">
+                    <Editable path={`stats.${i}.label`}>{p.txt(`stats.${i}.label`)}</Editable>
+                  </p>
                 </div>
-                <div className="grid grid-cols-3 gap-px bg-neutral-200/80 rounded-2xl overflow-hidden">
-                  {p.list('stats').map((_, i) => (
-                    <div key={i} className="bg-white/70 px-3 py-4 md:px-5 md:py-5">
-                      <p className="font-serif text-xl md:text-[1.7rem] text-[#2A2218]">
-                        <Editable path={`stats.${i}.value`}>{p.txt(`stats.${i}.value`)}</Editable>
-                      </p>
-                      <p className="text-[10px] md:text-[11px] uppercase tracking-[0.12em] text-neutral-400 mt-1 leading-snug">
-                        <Editable path={`stats.${i}.label`}>{p.txt(`stats.${i}.label`)}</Editable>
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="order-1 lg:order-2 relative">
-                <motion.div
-                  initial={{ opacity: 0, y: 24 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-                  className="relative"
-                >
-                  <Editable path="photos.cover" kind="image" as="div">
-                    <DemoBook3D lang={lang} size={280} />
-                  </Editable>
-                </motion.div>
-              </div>
+              ))}
             </div>
           </div>
+          <FilmMarquee />
         </EditableSection>
+
+        <PhotoRiver />
 
         <div id="albumi-demo">
         <EditableSection path="demo" className="relative border-b border-neutral-200/70">
@@ -723,6 +716,12 @@ function ExamplesView() {
               <p className="text-[13px] text-neutral-500">
                 <Editable path="demo.caption">{p.txt('demo.caption')}</Editable>
               </p>
+            </div>
+
+            <div className="flex justify-center mb-10 md:mb-14">
+              <Editable path="photos.cover" kind="image" as="div">
+                <DemoBook3D lang={lang} size={280} />
+              </Editable>
             </div>
 
             <div className="w-full max-w-3xl mx-auto">
@@ -756,6 +755,40 @@ function ExamplesView() {
           </div>
         </EditableSection>
         </div>
+
+        <EditableSection path="spread">
+          <OpenAlbumSpread
+            lang={lang}
+            kicker={<Editable path="spread.kicker">{p.txt('spread.kicker')}</Editable>}
+            title={<Editable path="spread.title">{p.txt('spread.title')}</Editable>}
+          />
+        </EditableSection>
+
+        <EditableSection path="life">
+          <PhoneVsAlbum
+            kicker={<Editable path="life.kicker">{p.txt('life.kicker')}</Editable>}
+            title={<Editable path="life.title">{p.txt('life.title')}</Editable>}
+            body={<Editable path="life.body">{p.txt('life.body')}</Editable>}
+            pileLabel={p.txt('life.pile')}
+            albumLabel={p.txt('life.album')}
+          />
+        </EditableSection>
+
+        <EditableSection path="gallery">
+          <PageMosaic
+            lang={lang}
+            kicker={<Editable path="gallery.kicker">{p.txt('gallery.kicker')}</Editable>}
+            title={<Editable path="gallery.title">{p.txt('gallery.title')}</Editable>}
+            body={<Editable path="gallery.note">{p.txt('gallery.note')}</Editable>}
+            slots={EXAMPLES_MOSAIC}
+            cta={
+              <Link href="/krijo" className="inline-flex items-center gap-2 text-[13px] font-semibold" style={{ color: '#2A2218' }}>
+                <Editable path="gallery.link">{p.txt('gallery.link')}</Editable>
+                <ArrowRight size={14} />
+              </Link>
+            }
+          />
+        </EditableSection>
 
         <EditableSection path="occasions" className="bg-white py-16 md:py-24 border-b border-neutral-100">
           <div className="max-w-6xl mx-auto px-5">
@@ -861,6 +894,10 @@ function ExamplesView() {
           </div>
         </EditableSection>
 
+        <EditableSection path="pages">
+          <SpreadRiver kicker={<Editable path="pages.kicker">{p.txt('pages.kicker')}</Editable>} />
+        </EditableSection>
+
         <EditableSection path="quotes" className="py-16 md:py-24 border-b border-neutral-200/70">
           <div className="max-w-6xl mx-auto px-5">
             <p className="text-center text-[11px] uppercase tracking-[0.3em] text-neutral-400 mb-10 md:mb-14">
@@ -886,21 +923,22 @@ function ExamplesView() {
           </div>
         </EditableSection>
 
-        <EditableSection path="cta" className="bg-[#1a1714] py-16 md:py-24 text-center">
-          <div className="max-w-lg mx-auto px-5">
-            <h2 className="font-serif text-3xl md:text-4xl font-medium text-white mb-4 leading-tight">
+        <EditableSection path="cta" className="relative overflow-hidden py-20 md:py-28 text-center" style={{ background: '#1a1410' }}>
+          <DarkAtmosphere photo={LIFE_PHOTOS[4]} />
+          <div className="relative z-10 max-w-lg mx-auto px-5">
+            <h2 className="font-serif text-[clamp(1.85rem,3.4vw,2.8rem)] font-medium text-[#f3eee7] mb-4 leading-[1.12]">
               <Editable path="cta.title">{p.txt('cta.title')}</Editable>
             </h2>
             <p className="text-white/50 text-[15px] leading-relaxed mb-8">
               <Editable path="cta.body">{p.txt('cta.body')}</Editable>
             </p>
             <Link href="/krijo">
-              <button className="inline-flex items-center gap-2 px-8 py-4 bg-white text-[#1a1714] rounded-full text-[14px] font-semibold hover:bg-neutral-100 transition-colors">
+              <button className="inline-flex items-center gap-2 px-8 py-4 bg-white text-[#1a1410] rounded-full text-[14px] font-semibold hover:bg-[#f3eee7] transition-colors">
                 <Editable path="cta.button">{p.txt('cta.button')}</Editable>
                 <ArrowRight size={16} />
               </button>
             </Link>
-            <p className="text-white/35 text-[11px] uppercase tracking-[0.16em] mt-5">
+            <p className="text-white/30 text-[10px] uppercase tracking-[0.18em] mt-5">
               <Editable path="cta.note">{p.txt('cta.note')}</Editable>
             </p>
           </div>

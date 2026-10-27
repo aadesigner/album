@@ -44,6 +44,16 @@ export const PAGE_DEFAULTS: Record<PageSlug, Record<string, unknown>> = {
       title: bi('Albume për çdo moment të veçantë', 'An album for every special moment'),
       all: bi('të gjitha', 'all collections'),
     },
+    life: {
+      kicker: bi('nga telefoni, në tryezë', 'from the phone, onto the table'),
+      title: bi('Fotot rrinë në telefon. Albumi rri në shtëpi.', 'Photos live on the phone. The album lives at home.'),
+      body: bi('Zgjidhni ato që doni t’i prekni. I printojmë në letër mat, me kopertinë të fortë — që të rrinë në tryezë, jo në galeri.', 'Pick the ones you want to hold. We print them on matte paper, hardcover — so they live on the table, not in a gallery app.'),
+      pile: bi('në telefon', 'on the phone'),
+      album: bi('në album', 'in the album'),
+    },
+    pages: {
+      kicker: bi('faqet, si kur e mbani albumin në dorë', 'pages that move, like the album in your hands'),
+    },
     spread: {
       kicker: bi('si duket brenda', "what's inside"),
       title: bi('Faqet që tregojnë historinë tuaj', 'Pages that tell your story'),
@@ -72,8 +82,9 @@ export const PAGE_DEFAULTS: Record<PageSlug, Record<string, unknown>> = {
       ],
     },
     process: {
-      kicker: bi('procesi', 'the process'),
-      title: bi('Tre hapa deri te albumi juaj', 'Three steps to your album'),
+      kicker: bi('si bëhet', 'how it is made'),
+      title: bi('Zgjidhni stilin. Shtoni fotot. I mbani në dorë.', 'Pick a style. Add the photos. Hold it in your hands.'),
+      body: bi('E para bëhet kopertina. Të tjerat shkojnë në faqe. Ju i ndryshoni para se t’i printojmë — kudo në Shqipëri.', 'The first becomes the cover. The rest find a page. You change them before we print — anywhere in Albania.'),
       cta: bi('Krijo tani — falas', 'Start now — free'),
       note: bi('Pa kartë krediti', 'No credit card required'),
       steps: [
@@ -249,9 +260,23 @@ export const PAGE_DEFAULTS: Record<PageSlug, Record<string, unknown>> = {
       p7: img('https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=900&q=82&fit=crop'),
       back: img('https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=900&q=82&fit=crop&crop=center'),
     },
+    life: {
+      kicker: bi('para dhe pas', 'before and after'),
+      title: bi('Një grumbull fotosh. Pastaj një album i hapur.', 'A pile of photos. Then an open album.'),
+      body: bi('Këto janë albume që i kemi printuar. E njëjta letër, e njëjta kopertinë — për dasmë, udhëtim, familje.', 'These are albums we have printed. The same paper, the same cover — for weddings, travel, family.'),
+      pile: bi('fotot', 'the photos'),
+      album: bi('albumi', 'the album'),
+    },
+    pages: {
+      kicker: bi('faqe nga albume që i kemi hapur', 'pages from albums we have opened'),
+    },
+    spread: {
+      kicker: bi('albumi i hapur', 'the open album'),
+      title: bi('Shfletoni si në shtëpi. Pastaj bëjeni tuajin.', 'Turn them as at home. Then make yours.'),
+    },
     gallery: {
       kicker: bi('faqe reale', 'real layouts'),
-      title: bi('Faqe të dizajnuara me kujdes', 'Pages designed with care'),
+      title: bi('Çdo faqe, e vendosur me kujdes', 'Every page, placed with care'),
       link: bi('fillo albumin tuaj →', 'start your album →'),
       note: bi('Çdo album është unik — e bëni ju, faqe për faqe.', 'Every album is unique — designed entirely by you, page by page.'),
       albums: [

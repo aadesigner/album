@@ -22,6 +22,11 @@ import { ensureEditorFonts } from '@/lib/editorFonts';
 import { usePageFields } from '@/components/marketing/PageContent';
 import { LivePageRoot } from '@/components/marketing/LivePageRoot';
 import { Editable, EditableSection } from '@/components/marketing/Editable';
+import {
+  PhotoRiver, OpenAlbumSpread, PhoneVsAlbum, PageMosaic, SpreadRiver,
+  DarkAtmosphere, LIFE_PHOTOS, type MosaicSlot,
+} from '@/components/marketing/PhotoStages';
+import { ArrowRight } from 'lucide-react';
 
 // ── Hero + album starter (CSS 3D book — no WebGL) ─────────────────────────────
 
@@ -1380,10 +1385,18 @@ export default function Home() {
   );
 }
 
+const HOME_MOSAIC: MosaicSlot[] = [
+  { src: LIFE_PHOTOS[0], label: { sq: 'Dasmë', en: 'Wedding' }, className: 'col-span-2 row-span-2' },
+  { src: LIFE_PHOTOS[6], label: { sq: 'Udhëtim', en: 'Travel' }, className: '' },
+  { src: LIFE_PHOTOS[7], label: { sq: 'Familje', en: 'Family' }, className: '' },
+  { src: LIFE_PHOTOS[14], label: { sq: 'Miqësi', en: 'Friends' }, className: '' },
+  { src: LIFE_PHOTOS[8], label: { sq: 'Festë', en: 'Party' }, className: '' },
+  { src: LIFE_PHOTOS[10], label: { sq: 'Shtëpi', en: 'Home' }, className: '' },
+];
+
 function HomeView() {
   const { lang } = useLanguage();
   const p = usePageFields();
-  const [activeStep, setActiveStep] = useState<number | null>(null);
   const { data: apiCategories } = useListCategories();
 
   // Prefer live API list; fall back to seeded defaults so images always show.
@@ -1413,13 +1426,6 @@ function HomeView() {
     '✦',
   ];
 
-  const steps = p.list('process.steps').map((_, i) => ({
-    n: String(i + 1).padStart(2, '0'),
-    titlePath: `process.steps.${i}.title`,
-    descPath: `process.steps.${i}.desc`,
-    detailPath: `process.steps.${i}.detail`,
-  }));
-
   return (
     <MarketingLayout>
       <SEOMeta
@@ -1439,6 +1445,8 @@ function HomeView() {
       <EditableSection path="starter">
         <AlbumStarter lang={lang} />
       </EditableSection>
+
+      <PhotoRiver />
 
       {/* ── TICKER ───────────────────────────────────────────────────── */}
       <Editable path="ticker" kind="slider" as="div" className="bg-[#f7f4f0] border-y border-neutral-200/70 py-3.5 overflow-hidden">
@@ -1515,114 +1523,22 @@ function HomeView() {
         </div>
       </EditableSection>
 
-      {/* ── SPREAD PREVIEW ───────────────────────────────────────────── */}
-      <EditableSection path="spread" className="py-20 md:py-28 bg-white border-t border-neutral-100 overflow-hidden">
-        <div className="max-w-7xl mx-auto px-5 md:px-10">
-          <div className="grid md:grid-cols-2 gap-14 md:gap-20 items-center">
-            {/* Text side */}
-            <motion.div
-              initial={{ opacity: 0, x: -24 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.7 }}
-            >
-              <p className="text-[10px] uppercase tracking-[0.3em] text-neutral-400 mb-4">
-                <Editable path="spread.kicker">{p.txt('spread.kicker')}</Editable>
-              </p>
-              <h2 className="text-4xl font-serif font-medium text-neutral-900 leading-tight mb-5">
-                <Editable path="spread.title">{p.txt('spread.title')}</Editable>
-              </h2>
-              <p className="text-neutral-500 text-[14px] leading-relaxed mb-8 max-w-sm">
-                <Editable path="spread.body">{p.txt('spread.body')}</Editable>
-              </p>
+      <EditableSection path="spread">
+        <OpenAlbumSpread
+          lang={lang}
+          kicker={<Editable path="spread.kicker">{p.txt('spread.kicker')}</Editable>}
+          title={<Editable path="spread.title">{p.txt('spread.title')}</Editable>}
+        />
+      </EditableSection>
 
-              <div className="grid grid-cols-2 gap-3 max-w-xs">
-                {p.list('spread.stats').map((_, i) => (
-                  <div key={i} className="bg-[#f7f4f0] rounded-xl p-4 border border-neutral-100">
-                    <p className="text-2xl font-serif font-medium text-neutral-900">
-                      <Editable path={`spread.stats.${i}.num`}>{p.txt(`spread.stats.${i}.num`)}</Editable>
-                    </p>
-                    <p className="text-[11px] text-neutral-400 mt-0.5">
-                      <Editable path={`spread.stats.${i}.label`}>{p.txt(`spread.stats.${i}.label`)}</Editable>
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </motion.div>
-
-            {/* Visual spread mockup */}
-            <motion.div
-              initial={{ opacity: 0, x: 24 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.7, delay: 0.15 }}
-              className="relative"
-            >
-              <div
-                className="relative rounded-lg overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.18)]"
-                style={{ aspectRatio: '16/9' }}
-              >
-                {/* Left page */}
-                <div className="absolute inset-y-0 left-0 w-1/2 bg-[#f9f6f1] flex flex-col p-5 md:p-7">
-                  <div className="flex-1 grid grid-cols-2 gap-2">
-                    <Editable path="spread.photos.a" kind="image" as="div" className="w-full h-full col-span-1">
-                    <img
-                      src={p.img('spread.photos.a', 'https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=400&q=80&fit=crop')}
-                      className="w-full h-full object-cover rounded-sm"
-                      alt=""
-                    />
-                    </Editable>
-                    <div className="flex flex-col gap-2">
-                      <Editable path="spread.photos.b" kind="image" as="div" className="w-full flex-1">
-                      <img
-                        src={p.img('spread.photos.b', 'https://images.unsplash.com/photo-1606800052052-a08af7148866?w=300&q=80&fit=crop')}
-                        className="w-full h-full object-cover rounded-sm"
-                        alt=""
-                      />
-                      </Editable>
-                      <Editable path="spread.photos.c" kind="image" as="div" className="w-full flex-1">
-                      <img
-                        src={p.img('spread.photos.c', 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=300&q=80&fit=crop')}
-                        className="w-full h-full object-cover rounded-sm"
-                        alt=""
-                      />
-                      </Editable>
-                    </div>
-                  </div>
-                  <p className="text-[8px] text-neutral-300 mt-3 uppercase tracking-widest text-center">6</p>
-                </div>
-
-                {/* Spine */}
-                <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-3 z-10"
-                  style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.10), rgba(0,0,0,0.03), rgba(0,0,0,0.10))' }}
-                />
-
-                {/* Right page */}
-                <div className="absolute inset-y-0 right-0 w-1/2 bg-white flex flex-col p-5 md:p-7">
-                  <Editable path="spread.photos.d" kind="image" as="div" className="w-full flex-1">
-                  <img
-                    src={p.img('spread.photos.d', 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=600&q=80&fit=crop')}
-                    className="w-full h-full object-cover rounded-sm"
-                    alt=""
-                  />
-                  </Editable>
-                  <div className="mt-3">
-                    <div className="h-1.5 bg-neutral-100 rounded-full w-3/4 mb-1.5" />
-                    <div className="h-1 bg-neutral-100 rounded-full w-1/2" />
-                  </div>
-                  <p className="text-[8px] text-neutral-300 mt-3 uppercase tracking-widest text-center">7</p>
-                </div>
-              </div>
-
-              {/* Floating tag */}
-              <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 bg-white rounded-full px-5 py-2 shadow-lg border border-neutral-100 whitespace-nowrap">
-                <p className="text-xs font-medium text-neutral-600">
-                  <Editable path="spread.tag">{p.txt('spread.tag')}</Editable>
-                </p>
-              </div>
-            </motion.div>
-          </div>
-        </div>
+      <EditableSection path="life">
+        <PhoneVsAlbum
+          kicker={<Editable path="life.kicker">{p.txt('life.kicker')}</Editable>}
+          title={<Editable path="life.title">{p.txt('life.title')}</Editable>}
+          body={<Editable path="life.body">{p.txt('life.body')}</Editable>}
+          pileLabel={p.txt('life.pile')}
+          albumLabel={p.txt('life.album')}
+        />
       </EditableSection>
 
       {/* ── MATERIALS ────────────────────────────────────────────────── */}
@@ -1657,84 +1573,29 @@ function HomeView() {
         </div>
       </EditableSection>
 
-      {/* ── HOW IT WORKS ─────────────────────────────────────────────── */}
-      <EditableSection path="process" className="py-20 md:py-28 bg-white border-t border-neutral-100">
-        <div className="max-w-5xl mx-auto px-5 md:px-10">
-          <div className="text-center mb-14">
-            <p className="text-[10px] uppercase tracking-[0.3em] text-neutral-400 mb-4">
-              <Editable path="process.kicker">{p.txt('process.kicker')}</Editable>
-            </p>
-            <h2 className="text-4xl md:text-5xl font-serif font-medium text-neutral-900">
-              <Editable path="process.title">{p.txt('process.title')}</Editable>
-            </h2>
-          </div>
-
-          <div className="divide-y divide-neutral-100 border-y border-neutral-100">
-            {steps.map((step, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0 }}
-                whileInView={{ opacity: 1 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.1 }}
-              >
-                <button
-                  className="w-full text-left py-6 flex items-start gap-6 group"
-                  onClick={() => setActiveStep(activeStep === i ? null : i)}
-                >
-                  <span className="font-serif text-[13px] text-neutral-300 mt-0.5 shrink-0 w-7">{step.n}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-4">
-                      <h3 className="font-serif text-xl font-medium text-neutral-900 group-hover:text-neutral-600 transition-colors">
-                        <Editable path={step.titlePath}>{p.txt(step.titlePath)}</Editable>
-                      </h3>
-                      <svg
-                        width="16" height="16" viewBox="0 0 16 16"
-                        className={`shrink-0 transition-transform duration-200 text-neutral-400 ${activeStep === i ? 'rotate-45' : ''}`}
-                        fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"
-                      >
-                        <path d="M8 3v10M3 8h10"/>
-                      </svg>
-                    </div>
-                    <p className="text-neutral-400 text-[13px] mt-1.5">
-                      <Editable path={step.descPath}>{p.txt(step.descPath)}</Editable>
-                    </p>
-                    <AnimatePresence>
-                      {activeStep === i && (
-                        <motion.p
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: 'auto', opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          transition={{ duration: 0.25 }}
-                          className="overflow-hidden text-[13px] text-neutral-600 leading-relaxed mt-3 max-w-xl"
-                        >
-                          <Editable path={step.detailPath}>{p.txt(step.detailPath)}</Editable>
-                        </motion.p>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                </button>
-              </motion.div>
-            ))}
-          </div>
-
-          <div className="mt-12 flex items-center gap-4">
-            <Link href="/krijo">
-              <button className="px-8 py-3.5 bg-[#1a1a1a] text-white rounded-full text-[13px] font-medium hover:bg-neutral-800 transition-colors shadow-sm">
-                <Editable path="process.cta">{p.txt('process.cta')}</Editable>
-              </button>
+      <EditableSection path="process">
+        <PageMosaic
+          lang={lang}
+          kicker={<Editable path="process.kicker">{p.txt('process.kicker')}</Editable>}
+          title={<Editable path="process.title">{p.txt('process.title')}</Editable>}
+          body={<Editable path="process.body">{p.txt('process.body')}</Editable>}
+          slots={HOME_MOSAIC}
+          cta={
+            <Link href="/krijo" className="inline-flex items-center gap-2 text-[13px] font-semibold" style={{ color: '#2A2218' }}>
+              <Editable path="process.cta">{p.txt('process.cta')}</Editable>
+              <ArrowRight size={14} />
             </Link>
-            <span className="text-[12px] text-neutral-400">
-              <Editable path="process.note">{p.txt('process.note')}</Editable>
-            </span>
-          </div>
-        </div>
+          }
+        />
+      </EditableSection>
+
+      <EditableSection path="pages">
+        <SpreadRiver kicker={<Editable path="pages.kicker">{p.txt('pages.kicker')}</Editable>} />
       </EditableSection>
 
       {/* ── TESTIMONIAL ──────────────────────────────────────────────── */}
-      <EditableSection path="testimonial" className="py-24 md:py-32 bg-[#1a1a1a] text-white relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-[400px] h-[400px] rounded-full bg-white/[0.02] -translate-y-1/2 translate-x-1/2 pointer-events-none" />
-        <div className="absolute bottom-0 left-0 w-[300px] h-[300px] rounded-full bg-white/[0.02] translate-y-1/2 -translate-x-1/2 pointer-events-none" />
+      <EditableSection path="testimonial" className="py-24 md:py-32 text-white relative overflow-hidden" style={{ background: '#1a1410' }}>
+        <DarkAtmosphere photo={LIFE_PHOTOS[0]} />
 
         <div className="max-w-3xl mx-auto px-5 md:px-10 text-center relative z-10">
           <div className="flex justify-center mb-8">
@@ -1764,31 +1625,27 @@ function HomeView() {
       </EditableSection>
 
       {/* ── FINAL CTA ────────────────────────────────────────────────── */}
-      <EditableSection path="cta" className="py-24 md:py-32 bg-[#f7f4f0] border-t border-neutral-200 relative overflow-hidden">
-        <div className="absolute inset-0 flex items-center justify-center opacity-[0.04] pointer-events-none select-none">
-          <span className="font-serif text-[320px] font-medium text-neutral-900 leading-none">P</span>
-        </div>
-
-        <div className="max-w-xl mx-auto px-5 text-center relative z-10">
-          <p className="text-[10px] uppercase tracking-[0.3em] text-neutral-400 mb-5">
+      <EditableSection path="cta" className="relative overflow-hidden py-20 md:py-28" style={{ background: '#f7f4f0' }}>
+        <div className="relative max-w-xl mx-auto px-5 text-center">
+          <p className="text-[11px] uppercase tracking-[0.3em] text-neutral-400 mb-5">
             <Editable path="cta.kicker">{p.txt('cta.kicker')}</Editable>
           </p>
-          <h2 className="text-4xl md:text-5xl font-serif font-medium text-neutral-900 leading-tight mb-5">
+          <h2 className="font-serif text-[clamp(1.85rem,3.4vw,2.8rem)] font-medium leading-[1.12] text-[#2A2218] mb-5">
             <Editable path="cta.title">{p.txt('cta.title')}</Editable>
           </h2>
-          <p className="text-neutral-500 text-[14px] leading-relaxed mb-10 max-w-sm mx-auto">
+          <p className="text-neutral-500 text-[15px] leading-relaxed mb-8 max-w-sm mx-auto">
             <Editable path="cta.body">{p.txt('cta.body')}</Editable>
           </p>
           <Link href="/krijo">
             <motion.button
-              className="px-10 py-4 bg-[#1a1a1a] text-white rounded-full text-[13px] font-medium hover:bg-neutral-800 transition-colors shadow-lg"
+              className="inline-flex items-center gap-2 px-8 py-3.5 bg-[#2A2218] text-white rounded-full text-[13px] font-semibold hover:bg-[#1a1410] transition-colors"
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
             >
               <Editable path="cta.button">{p.txt('cta.button')}</Editable>
             </motion.button>
           </Link>
-          <p className="mt-5 text-[11px] text-neutral-400">
+          <p className="mt-5 text-[10px] uppercase tracking-[0.18em] text-neutral-400">
             <Editable path="cta.note">{p.txt('cta.note')}</Editable>
           </p>
         </div>
