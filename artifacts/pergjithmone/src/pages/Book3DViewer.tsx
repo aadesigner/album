@@ -363,8 +363,8 @@ export function Book3DViewer({
 
   useEffect(() => { void ensureEditorFonts(); }, []);
 
-  const rotYRef = useRef(-28);
-  const rotXRef = useRef(14);
+  const rotYRef = useRef(-14);
+  const rotXRef = useRef(4);
   const isDragging = useRef(false);
   const lastPos = useRef({ x: 0, y: 0 });
   const animRef = useRef<number>(0);
@@ -468,8 +468,8 @@ export function Book3DViewer({
   const onTouchEnd = useCallback(() => { isDragging.current = false; }, []);
 
   const resetView = useCallback(() => {
-    rotYRef.current = -28;
-    rotXRef.current = 14;
+    rotYRef.current = -14;
+    rotXRef.current = 4;
     applyBookTransform();
     setAutoRotate(true);
   }, [applyBookTransform]);
@@ -523,7 +523,7 @@ export function Book3DViewer({
     ...(backPage ? [{ kind: 'back' as const, page: backPage, label: lang === 'sq' ? 'Kopertina e Pasme' : 'Back Cover' }] : []),
   ], [coverPage, backPage, spreads, lang]);
 
-  const title = project?.title || (lang === 'sq' ? 'Fotolibri' : 'Photobook');
+  const title = project?.title || (lang === 'sq' ? 'Albumi' : 'Album');
   const pageCount = project?.pageCount ?? spreads.length * 2;
   const innerSpreadCount = useMemo(() => spreads.filter(s => !s.isSolo).length, [spreads]);
 
@@ -637,7 +637,7 @@ export function Book3DViewer({
           </motion.div>
         ) : (
           <motion.div key="3d" className="relative z-10 flex-1 flex items-center justify-center"
-            style={{ perspective: '1200px', perspectiveOrigin: '50% 46%' }}
+            style={{ perspective: '1800px', perspectiveOrigin: '50% 48%' }}
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             transition={{ duration: 0.18 }}>
 
@@ -646,10 +646,10 @@ export function Book3DViewer({
               position: 'absolute',
               left: '50%', top: '50%',
               transform: 'translateX(-50%)',
-              marginTop: H * 0.52 + D * 0.4,
-              width: W * 1.35,
-              height: 72,
-              background: `radial-gradient(ellipse, ${hexToRgba(themeColor, 0.28)} 0%, ${hexToRgba(themeColor, 0.08)} 45%, transparent 72%)`,
+              marginTop: H * 0.5 + D * 0.2,
+              width: W * 1.1,
+              height: 36,
+              background: `radial-gradient(ellipse, ${hexToRgba(themeColor, 0.12)} 0%, ${hexToRgba(themeColor, 0.04)} 50%, transparent 74%)`,
               pointerEvents: 'none',
             }} />
 
@@ -660,7 +660,7 @@ export function Book3DViewer({
                 position: 'relative',
                 width: W, height: H,
                 transformStyle: 'preserve-3d',
-                transform: 'rotateX(14deg) rotateY(-28deg)',
+                transform: 'rotateX(4deg) rotateY(-14deg)',
                 willChange: 'transform',
                 cursor: 'grab',
               }}

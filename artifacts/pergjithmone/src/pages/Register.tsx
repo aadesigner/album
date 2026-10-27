@@ -61,8 +61,8 @@ export default function Register() {
       <SEOMeta
         title={{ sq: 'Krijo Llogari', en: 'Create Account' }}
         description={{
-          sq: 'Regjistrohuni falas në Përgjithmonë dhe filloni të krijoni librin tuaj foto premium sot.',
-          en: 'Sign up for free at Përgjithmonë and start creating your premium photo book today.',
+          sq: 'Regjistrohuni falas në Përgjithmonë dhe filloni të krijoni albumin tuaj sot.',
+          en: 'Sign up for free at Përgjithmonë and start creating your premium photo album today.',
         }}
         path="/regjistrohu"
         noIndex

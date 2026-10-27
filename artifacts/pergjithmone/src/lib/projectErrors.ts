@@ -5,9 +5,9 @@ export function pendingBooksLimitMessage(
   limit: number = 3,
 ): string {
   if (lang === 'sq') {
-    return `Ke arritur limitin e ${limit} fotolibra në pritje. Përfundo ose porosite një ekzistues përpara se të fillosh një të ri.`;
+    return `Ke arritur kufirin e ${limit} albumeve në pritje. Përfundo ose porosite një, pastaj fillo tjetrin.`;
   }
-  return `You've reached the limit of ${limit} pending photobooks. Finish or order an existing one before starting a new one.`;
+  return `You've reached the limit of ${limit} albums in progress. Finish or order one before starting another.`;
 }
 
 /** Prefer a localized message when the API returns PENDING_BOOKS_LIMIT_REACHED. */

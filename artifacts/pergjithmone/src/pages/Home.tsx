@@ -45,8 +45,8 @@ const ALBUM_STYLES: AlbumStyle[] = [
     key: 'dasme',
     label: { sq: 'Dasmë', en: 'Wedding' },
     line: {
-      sq: 'Një ditë. Një libër. Për gjithmonë.',
-      en: 'One day. One book. Forever yours.',
+      sq: 'Një ditë. Një album. Për gjithmonë.',
+      en: 'One day. One album. Forever yours.',
     },
     designId: 'cream-names',
     spine: '#8B6F47',
@@ -75,8 +75,8 @@ const ALBUM_STYLES: AlbumStyle[] = [
     key: 'familje',
     label: { sq: 'Familje', en: 'Family' },
     line: {
-      sq: 'Vitet e vogla. Libër i madh.',
-      en: 'Little years. Big book.',
+      sq: 'Vitet e vogla. Album i madh.',
+      en: 'Little years. Big album.',
     },
     designId: 'baby-ador',
     spine: '#6A8490',
@@ -103,10 +103,10 @@ const ALBUM_STYLES: AlbumStyle[] = [
   },
   {
     key: 'festash',
-    label: { sq: 'Festash', en: 'Celebrate' },
+    label: { sq: 'Festash', en: 'Celebrations' },
     line: {
-      sq: 'Festa mbaron. Libri mbetet.',
-      en: 'The party ends. The book stays.',
+      sq: 'Festa mbaron. Albumi mbetet.',
+      en: 'The party ends. The album stays.',
     },
     designId: 'birthday-bloom',
     spine: '#C45A72',
@@ -178,15 +178,15 @@ function LivingAlbumBook({
   const mx = useMotionValue(0);
   const my = useMotionValue(0);
 
-  // Base pose faces left so the spine + page edge read as a real book.
-  const baseYaw = size === 'hero' ? -36 : -18;
-  const basePitch = size === 'hero' ? 10 : 5;
+  // Shallow pose — almost flat, spine still readable, no dramatic tilt.
+  const baseYaw = size === 'hero' ? -16 : -10;
+  const basePitch = size === 'hero' ? 3 : 2;
   const rotY = useSpring(
-    useTransform(mx, [-1, 1], [baseYaw - 10, baseYaw + 20]),
+    useTransform(mx, [-1, 1], [baseYaw - 5, baseYaw + 8]),
     { stiffness: 130, damping: 22, mass: 0.4 },
   );
   const rotX = useSpring(
-    useTransform(my, [-1, 1], [basePitch + 6, basePitch - 8]),
+    useTransform(my, [-1, 1], [basePitch + 3, basePitch - 3]),
     { stiffness: 130, damping: 22, mass: 0.4 },
   );
 
@@ -282,10 +282,10 @@ function LivingAlbumBook({
     >
       <div
         aria-hidden
-        className="absolute left-1/2 -translate-x-1/2 bottom-[-10%] w-[92%] h-[16%] rounded-[100%] blur-2xl opacity-60"
+        className="absolute left-1/2 -translate-x-1/2 bottom-[-8%] w-[80%] h-[12%] rounded-[100%] blur-2xl opacity-40"
         style={{ background: size === 'hero'
-          ? 'radial-gradient(ellipse, rgba(42, 34, 24, 0.16), transparent 72%)'
-          : 'radial-gradient(ellipse, rgba(0,0,0,0.7), transparent 72%)' }}
+          ? 'radial-gradient(ellipse, rgba(42, 34, 24, 0.10), transparent 72%)'
+          : 'radial-gradient(ellipse, rgba(42,34,24,0.18), transparent 72%)' }}
       />
 
       <div
@@ -320,13 +320,13 @@ function LivingAlbumBook({
               transform: 'rotateY(-90deg)',
               background: `linear-gradient(to right, ${style.spine}33, ${style.spine}, ${style.spine}aa)`,
               borderRadius: '3px 0 0 3px',
-              boxShadow: 'inset -2px 0 5px rgba(0,0,0,0.35)',
+              boxShadow: 'none',
               overflow: 'hidden',
             }}
           >
             <div style={{
               position: 'absolute', inset: 0,
-              background: 'linear-gradient(to right, rgba(0,0,0,0.55), rgba(0,0,0,0.05))',
+              background: 'linear-gradient(to right, rgba(0,0,0,0.18), rgba(0,0,0,0.02))',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
               <span style={{
@@ -352,7 +352,7 @@ function LivingAlbumBook({
               transformOrigin: 'left center',
               transform: 'rotateY(90deg)',
               background: 'linear-gradient(to left, #b0aaa0, #f7f3eb 55%, #ebe6dc)',
-              boxShadow: '2px 0 8px rgba(0,0,0,0.14)',
+              boxShadow: 'none',
               overflow: 'hidden',
             }}
           >
@@ -365,7 +365,7 @@ function LivingAlbumBook({
             ))}
             <div style={{
               position: 'absolute', inset: 0,
-              background: 'linear-gradient(to right, rgba(0,0,0,0.28), transparent 60%)',
+              background: 'linear-gradient(to right, rgba(0,0,0,0.06), transparent 70%)',
             }} />
           </div>
 
@@ -378,7 +378,7 @@ function LivingAlbumBook({
               borderRadius: '0 5px 5px 0',
               overflow: 'hidden',
               boxShadow:
-                '18px 28px 56px rgba(0,0,0,0.5), 6px 12px 22px rgba(0,0,0,0.28), inset 0 0 0 1px rgba(255,255,255,0.14)',
+                '0 16px 36px rgba(42,34,24,0.12), inset 0 0 0 1px rgba(255,255,255,0.18)',
               background: coverBg,
               transform: 'translateZ(1px)',
             }}
@@ -423,7 +423,7 @@ function LivingAlbumBook({
               className="pointer-events-none absolute inset-0"
               style={{
                 background:
-                  'linear-gradient(115deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.04) 26%, transparent 46%), linear-gradient(to left, rgba(0,0,0,0.22), transparent 14%)',
+                  'linear-gradient(115deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.03) 28%, transparent 50%)',
               }}
             />
             {!reduced && (
@@ -543,8 +543,8 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
             className={`absolute inset-0 h-full w-full object-cover ${reduced ? '' : 'hero-kenburns'}`}
             style={{
               objectPosition: '68% 35%',
-              opacity: 0.42,
-              filter: 'saturate(0.55) brightness(1.22) contrast(0.92)',
+              opacity: 0.62,
+              filter: 'saturate(0.78) brightness(1.1) contrast(0.96)',
             }}
           />
           </Editable>
@@ -558,15 +558,14 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
         style={{
           background: `
             linear-gradient(105deg,
-              ${style.wash} 0%,
-              ${style.wash}f5 22%,
-              ${style.wash}d8 40%,
-              ${style.wash}88 56%,
-              ${style.wash}33 74%,
-              transparent 100%
+              ${style.wash}e8 0%,
+              ${style.wash}b8 20%,
+              ${style.wash}66 42%,
+              ${style.wash}28 64%,
+              transparent 88%
             ),
-            linear-gradient(to top, ${style.wash} 0%, ${style.wash}aa 16%, transparent 40%),
-            radial-gradient(52% 48% at 82% 40%, ${style.ambient}66 0%, transparent 72%)
+            linear-gradient(to top, ${style.wash}cc 0%, ${style.wash}66 14%, transparent 36%),
+            radial-gradient(52% 48% at 82% 40%, ${style.ambient}44 0%, transparent 72%)
           `,
           transition: 'background 0.7s ease',
         }}
@@ -641,7 +640,7 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
               ✦ <Editable path="hero.eyebrow">{p.txt('hero.eyebrow')}</Editable>
             </motion.p>
 
-            <h1 className="font-serif text-[clamp(2.15rem,6.4vw,4.35rem)] leading-[0.98] tracking-[-0.03em] font-medium mb-2 md:mb-3" style={{ color: style.ink }}>
+            <h1 className="font-serif text-[clamp(2.15rem,6.4vw,4.35rem)] leading-[1.08] tracking-[-0.03em] font-medium mb-2 md:mb-3 overflow-visible" style={{ color: style.ink }}>
               <Editable path="hero.headline">
               {p.txt('hero.headline').split(' ').map((word, i, words) => (
                 <motion.span
@@ -661,7 +660,7 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.75, delay: 0.28, ease: [0.22, 1, 0.36, 1] }}
-              className={`font-serif text-[clamp(1.35rem,3.1vw,2.15rem)] leading-none tracking-[-0.01em] mb-3 md:mb-4 ${reduced ? '' : 'hero-word-shine'}`}
+              className={`font-serif text-[clamp(1.35rem,3.1vw,2.15rem)] leading-[1.22] tracking-[-0.01em] mb-3 md:mb-4 py-[0.2em] overflow-visible ${reduced ? '' : 'hero-word-shine'}`}
               style={{
                 backgroundImage: `linear-gradient(90deg, ${style.ink}55, ${style.spine}, ${style.ink}55)`,
                 WebkitBackgroundClip: 'text',

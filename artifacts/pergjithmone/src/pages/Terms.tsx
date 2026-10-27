@@ -54,7 +54,7 @@ export default function Terms() {
             <p>
               {sq
                 ? 'Përgjithmonë ofron një platformë online për krijimin, personalizimin dhe porosinë e albumeve fotografike të printuara me cilësi premium. Ne rezervojmë të drejtën të ndryshojmë, pezullojmë ose ndërpresim çdo aspekt të shërbimit në çdo kohë.'
-                : 'Përgjithmonë provides an online platform for creating, customising, and ordering premium-quality printed photo books. We reserve the right to modify, suspend, or discontinue any aspect of the service at any time.'}
+                : 'Përgjithmonë provides an online platform for creating, customising, and ordering premium-quality printed photo albums. We reserve the right to modify, suspend, or discontinue any aspect of the service at any time.'}
             </p>
           </section>
 

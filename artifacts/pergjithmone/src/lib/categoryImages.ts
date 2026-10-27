@@ -65,7 +65,7 @@ const CAT_SUBLABEL: Record<string, { sq: string; en: string }> = {
   udhetime: { sq: 'Udhëtimet tuaja, në faqe', en: 'Your travels, on the page' },
   familje: { sq: 'Momentet e vogla që bëhen të mëdha', en: 'Small moments that grow big' },
   ditelindje: { sq: 'Dhurata më e ngrohtë, e personalizuar', en: 'The warmest personalised gift' },
-  miqesi: { sq: 'Miqësia që mbetet në libër', en: 'Friendship that stays in the book' },
+  miqesi: { sq: 'Miqësia që mbetet në album', en: 'Friendship that stays in the album' },
   festash: { sq: 'Festat që s’harrohen kurrë', en: 'Celebrations you never forget' },
 };
 

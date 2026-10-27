@@ -68,40 +68,67 @@ function L(lang: 'sq' | 'en', sq: string, en: string) {
 }
 
 function HeroSpread({ lang }: { lang: 'sq' | 'en' }) {
+  const fly = [
+    { src: HERO_PHOTOS[0], x: -42, y: -38, r: -16, delay: 0.05 },
+    { src: HERO_PHOTOS[1], x: 46, y: -42, r: 12, delay: 0.18 },
+    { src: HERO_PHOTOS[2], x: -38, y: 36, r: 9, delay: 0.3 },
+    { src: HERO_PHOTOS[3], x: 44, y: 34, r: -11, delay: 0.42 },
+  ];
   return (
-    <div className="relative w-full max-w-[440px] mx-auto lg:ml-auto" aria-hidden>
-      <div
-        className="absolute -top-6 -right-4 w-28 h-36 rounded-md overflow-hidden rotate-[8deg] border border-white shadow-[0_12px_30px_rgba(42,34,24,0.16)] hidden sm:block"
+    <div className="relative w-full max-w-[520px] mx-auto h-[320px] sm:h-[400px] lg:h-[460px]" aria-hidden>
+      {fly.map((f) => (
+        <motion.img
+          key={f.src}
+          src={f.src}
+          alt=""
+          className="absolute z-0 w-[72px] h-[96px] sm:w-[88px] sm:h-[118px] object-cover rounded-sm border border-white"
+          initial={{ opacity: 0, scale: 0.7, x: `${f.x}%`, y: `${f.y}%`, rotate: f.r * 1.6, left: '50%', top: '50%' }}
+          animate={{
+            opacity: [0, 1, 1, 0.35],
+            scale: [0.7, 1, 1, 0.92],
+            x: [`${f.x}%`, `${f.x * 0.55}%`, `${f.x * 0.22}%`, `${f.x * 0.08}%`],
+            y: [`${f.y}%`, `${f.y * 0.55}%`, `${f.y * 0.18}%`, `${f.y * 0.05}%`],
+            rotate: [f.r * 1.6, f.r, f.r * 0.3, 0],
+          }}
+          transition={{ duration: 2.8, delay: f.delay, ease: [0.22, 1, 0.36, 1], times: [0, 0.28, 0.62, 1] }}
+          style={{ marginLeft: -44, marginTop: -56, boxShadow: '0 10px 24px rgba(42,34,24,0.12)' }}
+        />
+      ))}
+      <motion.div
+        className="absolute inset-0 z-10 flex items-center justify-center"
+        style={{ perspective: 1600 }}
+        initial={{ opacity: 0, y: 28, scale: 0.92 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.7, delay: 0.35, ease: [0.22, 1, 0.36, 1] }}
       >
-        <img src={HERO_PHOTOS[3]} alt="" className="w-full h-full object-cover" />
-      </div>
-      <div
-        className="absolute -bottom-5 -left-3 w-24 h-32 rounded-md overflow-hidden -rotate-[7deg] border border-white shadow-[0_12px_28px_rgba(42,34,24,0.14)] hidden sm:block"
-      >
-        <img src={HERO_PHOTOS[2]} alt="" className="w-full h-full object-cover" />
-      </div>
-      <div className="relative flex" style={{ filter: 'drop-shadow(0 24px 48px rgba(42,34,24,0.18))' }}>
-        <div className="relative w-[48%] aspect-[3/4] overflow-hidden rounded-l-[5px] bg-[#1a1209]">
-          <img src={HERO_PHOTOS[0]} alt="" className="absolute inset-0 w-full h-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-l from-black/25 via-transparent to-black/10" />
-          <p className="absolute bottom-4 left-3 right-3 font-serif italic text-white/90 text-[12px] text-center">
-            Ana & Erjon
-          </p>
-        </div>
-        <div className="w-[2px] bg-black/20 shrink-0" />
-        <div className="relative w-[52%] aspect-[3/4] overflow-hidden rounded-r-[5px] bg-[#faf8f4] p-[7%]">
-          <div className="grid grid-rows-[1.15fr_0.85fr] gap-[7%] h-full">
-            <img src={HERO_PHOTOS[1]} alt="" className="w-full h-full object-cover" />
-            <div className="grid grid-cols-2 gap-[8%]">
-              <img src={HERO_PHOTOS[2]} alt="" className="w-full h-full object-cover" />
-              <img src={HERO_PHOTOS[3]} alt="" className="w-full h-full object-cover" />
+        <motion.div
+          className="flex w-[86%] max-w-[420px]"
+          style={{ transformStyle: 'preserve-3d', transformOrigin: 'center center' }}
+          animate={{ rotateY: [-8, -4, -8], rotateX: [3, 2, 3] }}
+          transition={{ duration: 9, repeat: Infinity, ease: 'easeInOut' }}
+        >
+          <div className="relative w-[48%] aspect-[3/4] overflow-hidden rounded-l-[4px] bg-[#1a1209]"
+            style={{ boxShadow: '0 18px 40px rgba(42,34,24,0.14)', transform: 'rotateY(7deg)', transformOrigin: 'right center' }}>
+            <img src={HERO_PHOTOS[0]} alt="" className="absolute inset-0 w-full h-full object-cover" />
+            <p className="absolute bottom-3 left-2 right-2 font-serif italic text-white/90 text-[11px] text-center">
+              Ana & Erjon
+            </p>
+          </div>
+          <div className="w-px bg-black/10 shrink-0" />
+          <div className="relative w-[52%] aspect-[3/4] overflow-hidden rounded-r-[4px] bg-[#faf8f4] p-[7%]"
+            style={{ boxShadow: '0 18px 40px rgba(42,34,24,0.1)', transform: 'rotateY(-7deg)', transformOrigin: 'left center' }}>
+            <div className="grid grid-rows-[1.15fr_0.85fr] gap-[7%] h-full">
+              <img src={HERO_PHOTOS[1]} alt="" className="w-full h-full object-cover" />
+              <div className="grid grid-cols-2 gap-[8%]">
+                <img src={HERO_PHOTOS[2]} alt="" className="w-full h-full object-cover" />
+                <img src={HERO_PHOTOS[3]} alt="" className="w-full h-full object-cover" />
+              </div>
             </div>
           </div>
-          <div className="absolute inset-0 pointer-events-none bg-gradient-to-r from-black/12 via-transparent to-transparent" />
-        </div>
-      </div>
-      <p className="mt-6 text-center text-[10px] uppercase tracking-[0.22em] text-neutral-400">
-        {L(lang, 'Paraqitje e nisur nga fotot · e redaktueshme', 'Started from your photos · fully editable')}
+        </motion.div>
+      </motion.div>
+      <p className="absolute bottom-0 left-0 right-0 text-center text-[10px] uppercase tracking-[0.22em] text-neutral-400">
+        {L(lang, 'Fotot bien në faqe · pastaj i rregulloni', 'Photos land on the pages · then you edit')}
       </p>
     </div>
   );
@@ -111,7 +138,7 @@ function WizardRail({ step, lang }: { step: 1 | 2 | 3; lang: 'sq' | 'en' }) {
   const items = [
     { n: '01', sq: 'Kujtimi', en: 'Memory' },
     { n: '02', sq: 'Fotot', en: 'Photos' },
-    { n: '03', sq: 'Libri', en: 'Book' },
+    { n: '03', sq: 'Albumi', en: 'Album' },
   ];
   return (
     <ol className="flex items-center justify-center gap-0 mb-8 md:mb-10">
@@ -304,14 +331,14 @@ export default function AlbumAI() {
 
       setGenStageIndex(0); // project
       const chosenSize = ((bookSizes as any[]) || []).find(s => s.id === sizeId);
-      if (!chosenSize) throw new Error('No book sizes available');
+      if (!chosenSize) throw new Error('No album sizes available');
       // Opening + closing heroes, then ~1.55 photos/page so spreads stay airy
       // and each image is used once.
       const desiredInner = suggestInnerPageCount(photoUrls.length, 4);
       const finalInner = Math.max(desiredInner, chosenSize.minPages);
 
       const project = await createProject.mutateAsync({
-        data: { bookSizeId: chosenSize.id, title: lang === 'sq' ? 'Albumi Im AI' : 'My AI Album' },
+        data: { bookSizeId: chosenSize.id, title: lang === 'sq' ? 'Albumi im me AI' : 'My AI Album' },
       });
 
       setGenStageIndex(1); // pages
@@ -488,8 +515,8 @@ export default function AlbumAI() {
       <SEOMeta
         title={{ sq: 'Album me AI — Përgjithmonë', en: 'AI Album — Përgjithmonë' }}
         description={{
-          sq: 'Ngarkoni 25–40 foto. Ne i lidhim në një album me kopertinë të fortë, letër mat 200g dhe lidhje lay-flat — pastaj e rregulloni në të njëjtin editor para printimit.',
-          en: 'Upload 25–40 photos. We bind them into a hardcover album on matte 200g paper with lay-flat spreads — then you refine it in the same editor before we print.',
+          sq: 'Ngarkoni 25–40 foto. Ne i kthejmë në një album me kopertinë të fortë, letër mat 200g dhe hapje të sheshtë — pastaj e rregulloni në të njëjtin editor para printimit.',
+          en: 'Upload 25–40 photos. We turn them into a hardcover album on matte 200g paper with lay-flat spreads — then you refine it in the same editor before we print.',
         }}
         path="/album-ai"
       />
@@ -499,24 +526,36 @@ export default function AlbumAI() {
         <section className="relative overflow-hidden border-b border-neutral-200/70">
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-0"
-            style={{ background: 'radial-gradient(70% 55% at 85% 8%, rgba(255,255,255,0.92) 0%, transparent 58%)' }}
+            className="pointer-events-none absolute inset-0 opacity-[0.5]"
+            style={{
+              backgroundImage: `url(${HERO_PHOTOS[0]})`,
+              backgroundSize: 'cover',
+              backgroundPosition: '72% 28%',
+              filter: 'saturate(0.75) brightness(1.14)',
+            }}
           />
-          <div className="relative max-w-6xl mx-auto px-5 md:px-8 pt-14 pb-12 md:pt-20 md:pb-16">
-            <div className="grid lg:grid-cols-[1.05fr_0.95fr] gap-12 lg:gap-16 items-center">
-              <div>
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0"
+            style={{
+              background: `linear-gradient(105deg, ${PAPER}f0 0%, ${PAPER}c4 28%, ${PAPER}66 52%, transparent 82%), linear-gradient(to top, ${PAPER} 0%, ${PAPER}88 18%, transparent 42%)`,
+            }}
+          />
+          <div className="relative max-w-6xl mx-auto px-5 md:px-8 pt-10 pb-10 md:pt-16 md:pb-16">
+            <div className="grid lg:grid-cols-[1.05fr_0.95fr] gap-8 lg:gap-10 items-center">
+              <div className="order-2 lg:order-1">
                 <motion.p
                   initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                   className="text-[11px] uppercase tracking-[0.3em] text-neutral-400 mb-5"
                 >
-                  {L(lang, 'atelier · album me AI', 'atelier · album with AI')}
+                  {L(lang, 'studio · album me AI', 'studio · album with AI')}
                 </motion.p>
                 <motion.h1
                   initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
-                  className="font-serif text-[clamp(2.05rem,4.6vw,3.45rem)] font-medium leading-[1.08] mb-5"
+                  className="font-serif text-[clamp(2.05rem,4.6vw,3.45rem)] font-medium leading-[1.12] mb-5 overflow-visible"
                   style={{ color: INK }}
                 >
-                  {L(lang, 'Ngarkoni fotot. Ne i lidhim në një libër.', 'Upload the photos. We bind them into a book.')}
+                  {L(lang, 'Ngarkoni fotot. Ne i kthejmë në album.', 'Upload your photos. We turn them into an album.')}
                 </motion.h1>
                 <motion.p
                   initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
@@ -548,7 +587,7 @@ export default function AlbumAI() {
                 </motion.div>
                 <div className="grid grid-cols-3 gap-px bg-neutral-200/80 rounded-2xl overflow-hidden max-w-lg">
                   {[
-                    { value: `${MIN_PHOTOS}–${MAX_PHOTOS}`, label: L(lang, 'foto në libër', 'photos in the book') },
+                    { value: `${MIN_PHOTOS}–${MAX_PHOTOS}`, label: L(lang, 'foto në album', 'photos in the album') },
                     { value: L(lang, 'Editori', 'Editor'), label: L(lang, 'i njëjti, pas AI', 'the same, after AI') },
                     { value: '200g', label: L(lang, 'letër mat lay-flat', 'matte lay-flat paper') },
                   ].map((s) => (
@@ -559,7 +598,10 @@ export default function AlbumAI() {
                   ))}
                 </div>
               </div>
-              <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12, duration: 0.55 }}>
+              <motion.div
+                className="order-1 lg:order-2"
+                initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12, duration: 0.55 }}
+              >
                 <HeroSpread lang={lang} />
               </motion.div>
             </div>
@@ -569,7 +611,7 @@ export default function AlbumAI() {
         {!bookCreationEnabled && (
           <div className="max-w-3xl mx-auto px-4 mb-6">
             <div className="flex items-center gap-3 px-5 py-4 rounded-xl border border-amber-300 bg-amber-50 text-amber-900 text-sm">
-              {lang === 'sq' ? 'Krijimi i albumeve është përkohësisht i ndalur.' : 'Book creation is temporarily unavailable.'}
+              {lang === 'sq' ? 'Krijimi i albumeve është përkohësisht i ndalur.' : 'Album creation is temporarily unavailable.'}
             </div>
           </div>
         )}
@@ -674,7 +716,7 @@ export default function AlbumAI() {
                         transition={{ delay: 0.45 }}
                         className="font-serif text-xl md:text-2xl font-medium text-neutral-900 mb-2"
                       >
-                        {L(lang, 'Libri juaj është gati', 'Your book is ready')}
+                        {L(lang, 'Albumi juaj është gati', 'Your album is ready')}
                       </motion.h2>
                       <motion.p
                         initial={{ opacity: 0 }}
@@ -697,7 +739,7 @@ export default function AlbumAI() {
                         <PartyPopper size={26} className="text-white" />
                       </div>
                       <h2 className="font-serif text-xl font-medium text-neutral-900 mb-6">
-                        {L(lang, 'Libri u lidh.', 'The book is bound.')}
+                        {L(lang, 'Albumi u përgatit.', 'Your album is ready.')}
                       </h2>
                     </motion.div>
                   ) : (
@@ -742,7 +784,7 @@ export default function AlbumAI() {
                       </div>
 
                       <h2 className="font-serif text-xl font-medium mb-2" style={{ color: INK }}>
-                        {L(lang, 'Duke lidhur albumin tuaj…', 'Binding your album…')}
+                        {L(lang, 'Duke përgatitur albumin tuaj…', 'Preparing your album…')}
                       </h2>
                       <p className="text-sm text-neutral-500 mb-8 max-w-xs">
                         {L(
@@ -797,7 +839,7 @@ export default function AlbumAI() {
                 transition={{ duration: 0.25 }}
               >
                 <h2 className="text-xl md:text-2xl font-serif font-medium leading-tight mb-2 text-center" style={{ color: INK }}>
-                  {L(lang, 'Cili kujtim do të bëhet libër?', 'Which memory becomes the book?')}
+                  {L(lang, 'Cili kujtim do të bëhet album?', 'Which memory becomes the album?')}
                 </h2>
                 <p className="text-sm text-neutral-500 text-center mb-7 max-w-md mx-auto">
                   {L(lang, 'Paleta, shkronjat dhe kopertina ndjekin historinë që zgjidhni — dasmë, udhëtim, familje.', 'Palette, type and cover follow the story you pick — wedding, travel, family.')}
@@ -860,8 +902,8 @@ export default function AlbumAI() {
                 <p className="text-sm text-neutral-500 text-center mb-6 max-w-md mx-auto">
                   {L(
                     lang,
-                    `Të paktën ${MIN_PHOTOS} foto. E para bëhet kopertina, e fundit e mbyll librin. Tërhiqini për t’i rregulluar.`,
-                    `At least ${MIN_PHOTOS} photos. The first becomes the cover, the last closes the book. Drag to reorder.`,
+                    `Të paktën ${MIN_PHOTOS} foto. E para bëhet kopertina, e fundit e mbyll albumin. Tërhiqini për t’i rregulluar.`,
+                    `At least ${MIN_PHOTOS} photos. The first becomes the cover, the last closes the album. Drag to reorder.`,
                   )}
                 </p>
 
@@ -1021,7 +1063,7 @@ export default function AlbumAI() {
                     disabled={!canGenerate}
                     className="flex items-center gap-2 px-8 py-3.5 rounded-full bg-neutral-900 text-white text-[12px] uppercase tracking-[0.16em] font-semibold hover:bg-neutral-700 active:scale-95 transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-neutral-900"
                   >
-                    {L(lang, 'Vazhdo te libri', 'Continue to the book')}
+                    {L(lang, 'Vazhdo te albumi', 'Continue to the album')}
                     <ChevronRight size={15} />
                   </button>
                 </div>
@@ -1087,7 +1129,7 @@ export default function AlbumAI() {
                     className="flex items-center gap-2 px-8 py-3.5 rounded-full bg-neutral-900 text-white text-[12px] uppercase tracking-[0.16em] font-semibold hover:bg-neutral-700 active:scale-95 transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-neutral-900"
                   >
                     <Wand2 size={15} />
-                    {L(lang, 'Lidhe albumin', 'Bind the album')}
+                    {L(lang, 'Krijo albumin', 'Create the album')}
                   </button>
                 </div>
               </motion.div>
@@ -1110,8 +1152,8 @@ export default function AlbumAI() {
                   <p className="text-neutral-500 text-[15px] leading-relaxed">
                     {L(
                       lang,
-                      'Nuk është një kolazh i rastësishëm. Është i njëjti libër që printojmë nga editori — vetëm se faqet nisin të rregulluara.',
-                      'This is not a random collage. It is the same book we print from the editor — only the pages start already arranged.',
+                      'Nuk është një kolazh i rastësishëm. Është i njëjti album që printojmë nga editori — vetëm se faqet nisin të rregulluara.',
+                      'This is not a random collage. It is the same album we print from the editor — only the pages start already arranged.',
                     )}
                   </p>
                 </div>
@@ -1173,7 +1215,7 @@ export default function AlbumAI() {
                     {L(lang, 'çfarë vendosim', 'what we place')}
                   </p>
                   <h2 className="font-serif text-3xl md:text-4xl font-medium leading-tight mb-4" style={{ color: INK }}>
-                    {L(lang, 'Jo një generator. Një atelier që njeh librin.', 'Not a generator. An atelier that knows the book.')}
+                    {L(lang, 'Jo një generator. Një studio që njeh albumin.', 'Not a generator. A studio that knows albums.')}
                   </h2>
                   <p className="text-neutral-500 text-[15px] leading-relaxed">
                     {L(
@@ -1189,8 +1231,8 @@ export default function AlbumAI() {
                       icon: BookOpen,
                       title: { sq: 'Kopertina nga fotoja e parë', en: 'Cover from the first photo' },
                       desc: {
-                        sq: 'Historia hapet me foton që vendosni të parën. E fundit e mbyll kapakun e pasëm — si një libër i vërtetë.',
-                        en: 'The story opens with the photo you place first. The last one closes the back cover — like a real book.',
+                        sq: 'Historia hapet me foton që vendosni të parën. E fundit e mbyll kapakun e pasëm — si një album i vërtetë.',
+                        en: 'The story opens with the photo you place first. The last one closes the back cover — like a real album.',
                       },
                     },
                     {
@@ -1279,8 +1321,8 @@ export default function AlbumAI() {
                     <p className="text-[14px] leading-relaxed text-neutral-500 mb-8">
                       {L(
                         lang,
-                        'Zgjidhni stilin, madhësinë dhe paraqitjen. Vendosni fotot dhe tekstin — pikërisht si një libër i vërtetë, faqe dyshe.',
-                        'Pick style, size and layout. Place photos and type — like a real book, spread by spread.',
+                        'Zgjidhni stilin, madhësinë dhe paraqitjen. Vendosni fotot dhe tekstin — pikërisht si një album i vërtetë, faqe dyshe.',
+                        'Pick style, size and layout. Place photos and type — like a real album, spread by spread.',
                       )}
                     </p>
                     <Link href="/krijo" className="mt-auto">
@@ -1314,7 +1356,7 @@ export default function AlbumAI() {
                 <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
                   {[
                     { icon: Layers, title: { sq: 'Letër mat 200g', en: 'Matte 200g paper' }, desc: { sq: 'E butë, pa shkëlqim. Ngjyrat qëndrojnë të pasura në dritë ditore.', en: 'Soft, no glare. Colours stay rich in daylight.' } },
-                    { icon: BookOpen, title: { sq: 'Lidhje lay-flat', en: 'Lay-flat binding' }, desc: { sq: 'Faqja dyshe hapet fare — asnjë foto nuk humbet në mes.', en: 'The spread opens fully — no photo lost in the gutter.' } },
+                    { icon: BookOpen, title: { sq: 'Hapje e sheshtë', en: 'Lay-flat binding' }, desc: { sq: 'Faqja dyshe hapet fare — asnjë foto nuk humbet në mes.', en: 'The spread opens fully — no photo lost in the gutter.' } },
                     { icon: Package, title: { sq: 'Kopertinë e fortë', en: 'Hardcover' }, desc: { sq: 'E menduar të rrijë në tryezë dhe në raft, jo vetëm në telefon.', en: 'Meant to live on a table and a shelf, not only on a phone.' } },
                     { icon: Truck, title: { sq: 'Kuti & dërgesë', en: 'Box & delivery' }, desc: { sq: '10–16 ditë në Shqipëri. Mund të paguani edhe në dorëzim.', en: '10–16 days in Albania. Cash on delivery too.' } },
                   ].map((item) => (
@@ -1350,8 +1392,8 @@ export default function AlbumAI() {
                     {
                       q: { sq: 'Sa foto duhen?', en: 'How many photos do I need?' },
                       a: {
-                        sq: `Të paktën ${MIN_PHOTOS} për një libër të plotë, deri në ${MAX_PHOTOS}. E para është kopertina, e fundit kapaku i pasëm.`,
-                        en: `At least ${MIN_PHOTOS} for a full book, up to ${MAX_PHOTOS}. The first is the cover, the last is the back.`,
+                        sq: `Të paktën ${MIN_PHOTOS} për një album të plotë, deri në ${MAX_PHOTOS}. E para është kopertina, e fundit kapaku i pasëm.`,
+                        en: `At least ${MIN_PHOTOS} for a full album, up to ${MAX_PHOTOS}. The first is the cover, the last is the back.`,
                       },
                     },
                     {
@@ -1405,7 +1447,7 @@ export default function AlbumAI() {
             <section className="py-16 md:py-24 text-center" style={{ background: DARK }}>
               <div className="max-w-lg mx-auto px-5">
                 <h2 className="font-serif text-3xl md:text-4xl font-medium text-white mb-4 leading-tight">
-                  {L(lang, 'Libri juaj, i nisur nga fotot', 'Your book, started from the photos')}
+                  {L(lang, 'Albumi juaj, i nisur nga fotot', 'Your album, started from the photos')}
                 </h2>
                 <p className="text-white/50 text-[15px] leading-relaxed mb-8">
                   {L(

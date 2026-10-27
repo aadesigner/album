@@ -352,16 +352,16 @@
 }
 @keyframes bookFloat {
   0%, 100% { transform: translateY(0); }
-  50%      { transform: translateY(-16px); }
+  50%      { transform: translateY(-8px); }
 }
-/* Idle orbit around a left-facing pose so the spine stays visible */
+/* Idle orbit — shallow, almost flat, spine still readable */
 @keyframes bookIdleYaw {
-  0%, 100% { transform: rotateY(-38deg) rotateX(11deg); }
-  50%      { transform: rotateY(-24deg) rotateX(6deg); }
+  0%, 100% { transform: rotateY(-16deg) rotateX(3deg); }
+  50%      { transform: rotateY(-9deg) rotateX(2deg); }
 }
 @keyframes bookIdleYawStarter {
-  0%, 100% { transform: rotateY(-20deg) rotateX(6deg); }
-  50%      { transform: rotateY(-12deg) rotateX(3deg); }
+  0%, 100% { transform: rotateY(-12deg) rotateX(2deg); }
+  50%      { transform: rotateY(-6deg) rotateX(1deg); }
 }
 @keyframes heroKenBurns {
   0%   { transform: scale(1.08) translate3d(-1.4%, 0.4%, 0); }

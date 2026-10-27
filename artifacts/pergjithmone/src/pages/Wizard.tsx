@@ -325,7 +325,7 @@ export default function Wizard() {
         const msg = createProjectErrorMessage(e, lang);
         if (!msg) return; // silent on empty/transient failures after retry
         toast({
-          title: lang === 'sq' ? 'Nuk mund të krijohet albumi' : 'Could not create photobook',
+          title: lang === 'sq' ? 'Nuk mund të krijohet albumi' : 'Could not create album',
           description: msg,
           variant: 'destructive',
         });
@@ -359,7 +359,7 @@ export default function Wizard() {
       const msg = createProjectErrorMessage(e, lang);
       if (!msg) return;
       toast({
-        title: lang === 'sq' ? 'Nuk mund të krijohet albumi' : 'Could not create photobook',
+        title: lang === 'sq' ? 'Nuk mund të krijohet albumi' : 'Could not create album',
         description: msg,
         variant: 'destructive',
       });
@@ -387,10 +387,10 @@ export default function Wizard() {
   return (
     <AppLayout>
       <SEOMeta
-        title={{ sq: 'Krijo Albumin Tënd', en: 'Create Your Photobook' }}
+        title={{ sq: 'Krijo Albumin Tuaj', en: 'Create Your Album' }}
         description={{
-          sq: 'Zgjidhni kategorinë, stilin dhe madhësinë e albumit tuaj foto, pastaj dizajnojeni online — porosi e thjeshtë, dërgesa në të gjithë Shqipërinë.',
-          en: 'Choose your photobook category, style and size, then design it online — simple ordering, delivery across Albania.',
+          sq: 'Zgjidhni kategorinë, stilin dhe madhësinë e albumit tuaj, pastaj përgatiteni online — porosi e thjeshtë, dërgesa kudo në Shqipëri.',
+          en: 'Choose your album category, style and size, then design it online — simple ordering, delivery across Albania.',
         }}
         path="/krijo"
       />
@@ -466,12 +466,12 @@ export default function Wizard() {
               <BookX size={18} className="shrink-0 mt-0.5 text-amber-600" />
               <div>
                 <p className="text-sm font-semibold mb-0.5">
-                  {lang === 'sq' ? 'Krijimi i albumeve është i ndalur përkohësisht' : 'Book creation is temporarily unavailable'}
+                  {lang === 'sq' ? 'Krijimi i albumeve është i ndalur përkohësisht' : 'Album creation is temporarily unavailable'}
                 </p>
                 <p className="text-xs text-amber-700">
                   {lang === 'sq'
                     ? (siteSettings?.bookDisabledNoticeAl || 'Krijimi i albumeve është përkohësisht i ndalur.')
-                    : (siteSettings?.bookDisabledNoticeEn || 'Book creation is temporarily unavailable.')}
+                    : (siteSettings?.bookDisabledNoticeEn || 'Album creation is temporarily unavailable.')}
                   {' '}
                   <a
                     href={`https://wa.me/${(siteSettings?.whatsappNumber || '+355688755833').replace(/\D/g, '')}`}
@@ -742,7 +742,7 @@ export default function Wizard() {
                     whileTap={selectedSize && bookCreationEnabled ? { scale: 0.97 } : {}}
                     transition={{ duration: 0.16 }}
                     className="flex items-center gap-2.5 px-10 py-3.5 bg-neutral-900 text-white rounded-full text-[12.5px] font-semibold tracking-wide hover:bg-neutral-700 disabled:opacity-35 disabled:cursor-not-allowed transition-colors"
-                    title={!bookCreationEnabled ? (lang === 'sq' ? 'Krijimi i albumeve është i ndalur' : 'Book creation is disabled') : undefined}
+                    title={!bookCreationEnabled ? (lang === 'sq' ? 'Krijimi i albumeve është i ndalur' : 'Album creation is disabled') : undefined}
                   >
                     {createProject.isPending ? (
                       <>

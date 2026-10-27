@@ -32,7 +32,7 @@ describe('marketingPages helpers', () => {
     expect(txt(merged, 'hero.headline', 'sq')).toBe('X');
     expect(txt(merged, 'hero.headline', 'en')).toBe('Y');
     expect((getAt(merged, 'hero.headline') as { font?: string }).font).toBe('Georgia, serif');
-    expect(txt(merged, 'hero.cta', 'en')).toBe('Create your book');
+    expect(txt(merged, 'hero.cta', 'en')).toBe('Create your album');
     expect((merged as Record<string, unknown>).extraUnknown).toBeUndefined();
   });
 
@@ -62,7 +62,7 @@ describe('marketingPages helpers', () => {
     });
     expect(txt(merged, 'hero.headline', 'sq')).toBe('Ruaj kujtimet');
     expect(txt(merged, 'hero.headline', 'en')).toBe('Keep the memories');
-    expect(txt(merged, 'hero.cta', 'en')).toBe('Create your book');
+    expect(txt(merged, 'hero.cta', 'en')).toBe('Create your album');
   });
 
   it('merge keeps a one-language edit and does not blank images', () => {
@@ -92,7 +92,7 @@ describe('marketingPages helpers', () => {
       hero: { headline: { sq: 'X', en: 'Y' } },
     });
     expect(txt(prepared, 'hero.headline', 'en')).toBe('Y');
-    expect(txt(prepared, 'hero.cta', 'en')).toBe('Create your book');
+    expect(txt(prepared, 'hero.cta', 'en')).toBe('Create your album');
     expect(txt(prepared, 'process.steps.0.title', 'sq')).toBe('Zgjidhni stilin');
     const json = stringifyPageContent(prepared);
     expect(json.length).toBeLessThan(MAX_PAGE_JSON_CHARS);

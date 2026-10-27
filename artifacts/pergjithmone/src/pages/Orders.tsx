@@ -58,7 +58,7 @@ export default function Orders() {
             <p className="text-muted-foreground mb-8">
               {lang === 'sq'
                 ? 'Krijoni një projekt të ri dhe porositni albumin tuaj.'
-                : 'Create a new project and order your photobook.'}
+                : 'Create a new project and order your album.'}
             </p>
             <Link href="/krijo">
               <Button size="lg" className="rounded-full">

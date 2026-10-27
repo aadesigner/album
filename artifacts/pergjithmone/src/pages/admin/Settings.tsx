@@ -462,7 +462,7 @@ export default function AdminSettings() {
               </div>
 
               <div className={cardClass} style={cardStyle}>
-                <SectionHeader icon={DollarSign} title="Pricing Fallbacks" desc="Used when a book size has no price of its own. Per-size pricing wins when set." />
+                <SectionHeader icon={DollarSign} title="Pricing Fallbacks" desc="Used when an album size has no price of its own. Per-size pricing wins when set." />
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-5">
                   <FormField control={form.control} name="basePriceLek" render={({ field }) => (
                     <FormItem>
@@ -565,12 +565,12 @@ export default function AdminSettings() {
                   ...(!bookEnabled ? { borderColor: '#E8B4B4', background: '#FDF6F6' } : {}),
                 }}
               >
-                <SectionHeader icon={bookEnabled ? BookHeart : BookX} title="Book Creation" desc="Control whether visitors can create new photobooks." />
+                <SectionHeader icon={bookEnabled ? BookHeart : BookX} title="Album Creation" desc="Control whether visitors can create new albums." />
                 <FormField control={form.control} name="bookCreationEnabled" render={({ field }) => (
                   <FormItem>
                     <div className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-white mb-5" style={{ border: `1px solid ${ADMIN.line}` }}>
                       <div className="min-w-0">
-                        <FormLabel className="text-base cursor-pointer">Book Creation Enabled</FormLabel>
+                        <FormLabel className="text-base cursor-pointer">Album Creation Enabled</FormLabel>
                         <FormDescription>When OFF, the wizard shows a notice instead of the editor.</FormDescription>
                       </div>
                       <FormControl>
@@ -598,7 +598,7 @@ export default function AdminSettings() {
                 {!bookEnabled && (
                   <div className="flex items-center gap-2 p-3 rounded-2xl bg-red-50 border border-red-200 mb-5 text-red-800 text-sm">
                     <BookX size={15} className="shrink-0" />
-                    <span>Book creation is <strong>disabled</strong>.</span>
+                    <span>Album creation is <strong>disabled</strong>.</span>
                   </div>
                 )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -622,7 +622,7 @@ export default function AdminSettings() {
               </div>
 
               <div className={cardClass} style={cardStyle}>
-                <SectionHeader icon={ShieldAlert} title="Pending Books Limit" desc="Cap unordered photobooks a user can keep in progress." />
+                <SectionHeader icon={ShieldAlert} title="Pending Albums Limit" desc="Cap unordered albums a user can keep in progress." />
                 <FormField control={form.control} name="pendingBooksLimitEnabled" render={({ field }) => (
                   <FormItem>
                     <div className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-white mb-5" style={{ border: `1px solid ${ADMIN.line}` }}>
@@ -638,7 +638,7 @@ export default function AdminSettings() {
                 )} />
                 <FormField control={form.control} name="pendingBooksLimit" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Max pending photobooks per user</FormLabel>
+                    <FormLabel>Max pending albums per user</FormLabel>
                     <FormControl>
                       <Input {...field} type="number" min={1} step={1} disabled={!pendingLimitOn} className="max-w-[160px]" />
                     </FormControl>

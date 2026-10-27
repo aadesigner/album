@@ -255,10 +255,10 @@ function DemoPagesEdge() {
 }
 
 // ─── 3D Book demo ─────────────────────────────────────────────────────────────
-function DemoBook3D({ lang }: { lang: 'sq' | 'en' }) {
-  const [rotY, setRotY] = useState(-30);
-  const rotYRef = useRef(-30);
-  const rotXRef = useRef(10);
+function DemoBook3D({ lang, size = 260 }: { lang: 'sq' | 'en'; size?: number }) {
+  const [rotY, setRotY] = useState(-14);
+  const rotYRef = useRef(-14);
+  const rotXRef = useRef(3);
   const animRef = useRef<number>(0);
   const isDragging = useRef(false);
   const lastPos = useRef({ x: 0, y: 0 });
@@ -266,8 +266,7 @@ function DemoBook3D({ lang }: { lang: 'sq' | 'en' }) {
   const pages = useDemoPages();
   const p = usePageFields();
 
-  // Slim hardcover — few leaves, not a brick of pages
-  const W = 240, H = Math.round(240 * (DH / DW)), D = 7;
+  const W = size, H = Math.round(size * (DH / DW)), D = 6;
   const coverBgColor = (pages[1].find(e => e.type === 'background') as any)?.bgColor ?? '#1a1209';
 
   useEffect(() => {
@@ -295,9 +294,9 @@ function DemoBook3D({ lang }: { lang: 'sq' | 'en' }) {
 
   return (
     <div
-      style={{ perspective: '1000px', perspectiveOrigin: '50% 46%',
-        height: H + 80, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        position: 'relative', cursor: 'grab', userSelect: 'none' }}
+      style={{ perspective: '1800px', perspectiveOrigin: '50% 48%',
+        height: H + 64, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        position: 'relative', cursor: 'grab', userSelect: 'none', width: '100%' }}
       onMouseMove={e => {
         if (!isDragging.current) return;
         const dx = e.clientX - lastPos.current.x;
@@ -326,13 +325,10 @@ function DemoBook3D({ lang }: { lang: 'sq' | 'en' }) {
         {/* Front cover */}
         <div style={{ position: 'absolute', inset: 0, transform: 'translateZ(0px)',
           borderRadius: '1px 4px 4px 1px', overflow: 'hidden',
-          backfaceVisibility: 'hidden', boxShadow: '0 0 0 1px rgba(0,0,0,0.55)' }}>
+          backfaceVisibility: 'hidden', boxShadow: '0 18px 40px rgba(42,34,24,0.12)' }}>
           <MiniPage elements={coverEls} w={W} h={H} />
           <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
-            background: 'linear-gradient(118deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.03) 28%, transparent 52%, rgba(0,0,0,0.04) 100%)' }} />
-          {/* Soft hinge only — no heavy left shadow band */}
-          <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: 10, pointerEvents: 'none',
-            background: 'linear-gradient(to right, rgba(0,0,0,0.12), transparent)' }} />
+            background: 'linear-gradient(118deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.03) 30%, transparent 55%)' }} />
           <div style={{ position: 'absolute', bottom: 12, left: 0, right: 0, display: 'flex', justifyContent: 'center', pointerEvents: 'none' }}>
             <span style={{ fontFamily: 'Georgia, serif', fontStyle: 'italic', fontSize: 10,
               letterSpacing: '0.10em', color: 'rgba(255,255,255,0.18)' }}>përgjithmonë</span>
@@ -343,7 +339,7 @@ function DemoBook3D({ lang }: { lang: 'sq' | 'en' }) {
         <div style={{ position: 'absolute', inset: 0,
           transform: `rotateY(180deg) translateZ(${D}px)`,
           borderRadius: '4px 1px 1px 4px', overflow: 'hidden',
-          backfaceVisibility: 'hidden', boxShadow: '0 0 0 1px rgba(0,0,0,0.4)' }}>
+          backfaceVisibility: 'hidden' }}>
           <MiniPage elements={pages[8]} w={W} h={H} />
           <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
             background: 'linear-gradient(118deg, rgba(255,255,255,0.08) 0%, transparent 50%, rgba(0,0,0,0.06) 100%)' }} />
@@ -440,12 +436,10 @@ function SpreadBrowserDemo({ lang }: { lang: 'sq' | 'en' }) {
       return (
         <div style={{ width: pgW, height: pgH, position: 'relative', flexShrink: 0,
           borderRadius: 4, overflow: 'hidden',
-          filter: 'drop-shadow(0 18px 44px rgba(0,0,0,0.65))' }}>
+          boxShadow: '0 14px 32px rgba(42,34,24,0.12)' }}>
           <MiniPage elements={pages[e.pageId]} w={pgW} h={pgH} />
           <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
-            background: 'linear-gradient(to right, rgba(0,0,0,0.30) 0%, rgba(0,0,0,0.06) 12%, transparent 26%)' }} />
-          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
-            background: 'linear-gradient(118deg, rgba(255,255,255,0.07) 0%, transparent 40%)' }} />
+            background: 'linear-gradient(118deg, rgba(255,255,255,0.08) 0%, transparent 42%)' }} />
         </div>
       );
     }
@@ -453,31 +447,25 @@ function SpreadBrowserDemo({ lang }: { lang: 'sq' | 'en' }) {
       return (
         <div style={{ width: pgW, height: pgH, position: 'relative', flexShrink: 0,
           borderRadius: 4, overflow: 'hidden',
-          filter: 'drop-shadow(0 18px 44px rgba(0,0,0,0.65))' }}>
+          boxShadow: '0 14px 32px rgba(42,34,24,0.12)' }}>
           <MiniPage elements={pages[e.pageId]} w={pgW} h={pgH} />
-          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
-            background: 'linear-gradient(to left, rgba(0,0,0,0.30) 0%, rgba(0,0,0,0.06) 12%, transparent 26%)' }} />
         </div>
       );
     }
     // spread
     return (
       <div style={{ display: 'flex', alignItems: 'stretch',
-        filter: 'drop-shadow(0 18px 44px rgba(0,0,0,0.65))' }}>
+        boxShadow: '0 14px 32px rgba(42,34,24,0.12)' }}>
         <div style={{ width: pgW, height: pgH, position: 'relative', flexShrink: 0,
           borderRadius: '4px 0 0 4px', overflow: 'hidden' }}>
           {e.leftId ? <MiniPage elements={pages[e.leftId]} w={pgW} h={pgH} /> :
             <div style={{ position: 'absolute', inset: 0, background: '#F2EDE5' }} />}
-          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
-            background: 'linear-gradient(to left, rgba(0,0,0,0.20) 0%, rgba(0,0,0,0.05) 14%, transparent 30%)' }} />
         </div>
         <div style={{ width: 2, flexShrink: 0, background: 'rgba(0,0,0,0.14)' }} />
         <div style={{ width: pgW, height: pgH, position: 'relative', flexShrink: 0,
           borderRadius: '0 4px 4px 0', overflow: 'hidden' }}>
           {e.rightId ? <MiniPage elements={pages[e.rightId]} w={pgW} h={pgH} /> :
             <div style={{ position: 'absolute', inset: 0, background: '#F2EDE5' }} />}
-          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
-            background: 'linear-gradient(to right, rgba(0,0,0,0.20) 0%, rgba(0,0,0,0.05) 14%, transparent 30%)' }} />
         </div>
       </div>
     );
@@ -507,7 +495,7 @@ function SpreadBrowserDemo({ lang }: { lang: 'sq' | 'en' }) {
         </button>
 
         <div
-          style={{ position: 'relative', overflow: 'hidden', touchAction: 'pan-y', maxWidth: '100%' }}
+          style={{ position: 'relative', overflow: 'visible', touchAction: 'pan-y', maxWidth: '100%', perspective: 1400 }}
           onTouchStart={(e) => {
             swipeRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
           }}
@@ -526,10 +514,10 @@ function SpreadBrowserDemo({ lang }: { lang: 'sq' | 'en' }) {
         >
           <AnimatePresence mode="popLayout" initial={false}>
             <motion.div key={idx}
-              initial={{ opacity: 0, x: dir * 32 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -dir * 32 }}
-              transition={{ duration: 0.18, ease: 'easeOut' }}
+              initial={{ opacity: 0, rotateY: dir * 55, scale: 0.96 }}
+              animate={{ opacity: 1, rotateY: 0, scale: 1 }}
+              exit={{ opacity: 0, rotateY: -dir * 40, scale: 0.98 }}
+              transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
               drag="x"
               dragConstraints={{ left: 0, right: 0 }}
               dragElastic={0.18}
@@ -537,7 +525,7 @@ function SpreadBrowserDemo({ lang }: { lang: 'sq' | 'en' }) {
                 if (info.offset.x < -48 || info.velocity.x < -280) go(1);
                 else if (info.offset.x > 48 || info.velocity.x > 280) go(-1);
               }}
-              style={{ cursor: 'grab', touchAction: 'pan-y' }}
+              style={{ cursor: 'grab', touchAction: 'pan-y', transformStyle: 'preserve-3d' }}
             >
               {renderEntry(entry)}
             </motion.div>
@@ -580,7 +568,12 @@ function OccasionCard({ index }: { index: number }) {
   const href = `/krijo?category=${encodeURIComponent(meta.slug)}`;
   return (
     <Link href={href} className="group block h-full">
-      <article className="h-full flex flex-col bg-white overflow-hidden rounded-[1.35rem] border border-neutral-100 shadow-[0_10px_40px_rgba(40,32,24,0.06)] transition-shadow duration-300 group-hover:shadow-[0_18px_50px_rgba(40,32,24,0.12)]">
+      <motion.article
+        whileHover={{ y: -8, rotateX: 2, rotateY: -3 }}
+        transition={{ type: 'spring', stiffness: 260, damping: 22 }}
+        style={{ transformStyle: 'preserve-3d', perspective: 900 }}
+        className="h-full flex flex-col bg-white overflow-hidden rounded-[1.35rem] border border-neutral-100 shadow-[0_10px_32px_rgba(40,32,24,0.07)]"
+      >
         <div className="relative aspect-[4/5] overflow-hidden">
           <Editable path={`occasions.items.${index}.photo`} kind="image" as="div" className="absolute inset-0">
             <img
@@ -609,7 +602,7 @@ function OccasionCard({ index }: { index: number }) {
             <ArrowRight size={13} className="transition-transform group-hover:translate-x-0.5" />
           </span>
         </div>
-      </article>
+      </motion.article>
     </Link>
   );
 }
@@ -645,46 +638,72 @@ function ExamplesView() {
           <div
             aria-hidden
             className="pointer-events-none absolute inset-0"
-            style={{ background: 'radial-gradient(70% 55% at 80% 10%, rgba(255,255,255,0.9) 0%, transparent 60%)' }}
+            style={{ background: 'radial-gradient(70% 55% at 82% 12%, rgba(255,255,255,0.88) 0%, transparent 62%)' }}
           />
-          <div className="relative max-w-6xl mx-auto px-5 pt-14 pb-12 md:pt-20 md:pb-16">
-            <div className="max-w-2xl">
-              <p className="text-[11px] uppercase tracking-[0.3em] text-neutral-400 mb-5">
-                <Editable path="hero.kicker">{p.txt('hero.kicker')}</Editable>
-              </p>
-              <h1 className="font-serif text-[clamp(2.1rem,5vw,3.6rem)] font-medium text-[#2A2218] leading-[1.08] mb-5">
-                <Editable path="hero.title">{p.txt('hero.title')}</Editable>
-              </h1>
-              <p className="text-neutral-500 text-[15px] md:text-[16px] leading-relaxed max-w-xl mb-8">
-                <Editable path="hero.body">{p.txt('hero.body')}</Editable>
-              </p>
-              <div className="flex flex-wrap items-center gap-3 mb-12">
-                <a
-                  href="#albumi-demo"
-                  className="inline-flex items-center gap-2 px-6 py-3 rounded-full text-[13px] font-semibold text-white"
-                  style={{ background: '#2A2218' }}
-                >
-                  <Editable path="hero.cta">{p.txt('hero.cta')}</Editable>
-                </a>
-                <Link href="/krijo">
-                  <span className="inline-flex items-center gap-2 px-6 py-3 rounded-full text-[13px] font-semibold border border-neutral-300 bg-white/70 text-[#2A2218]">
-                    <Editable path="hero.secondaryCta">{p.txt('hero.secondaryCta')}</Editable>
-                    <ArrowRight size={14} />
-                  </span>
-                </Link>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-neutral-200/80 rounded-2xl overflow-hidden max-w-3xl">
-              {p.list('stats').map((_, i) => (
-                <div key={i} className="bg-[#f7f4f0] sm:bg-white/70 px-5 py-5">
-                  <p className="font-serif text-2xl md:text-[1.7rem] text-[#2A2218]">
-                    <Editable path={`stats.${i}.value`}>{p.txt(`stats.${i}.value`)}</Editable>
-                  </p>
-                  <p className="text-[11px] uppercase tracking-[0.14em] text-neutral-400 mt-1">
-                    <Editable path={`stats.${i}.label`}>{p.txt(`stats.${i}.label`)}</Editable>
-                  </p>
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 opacity-[0.55]"
+            style={{
+              backgroundImage: 'url(https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=1400&q=70&fit=crop)',
+              backgroundSize: 'cover',
+              backgroundPosition: '70% 30%',
+              filter: 'saturate(0.7) brightness(1.18)',
+              maskImage: 'linear-gradient(105deg, transparent 0%, transparent 28%, black 78%)',
+              WebkitMaskImage: 'linear-gradient(105deg, transparent 0%, transparent 28%, black 78%)',
+            }}
+          />
+          <div className="relative max-w-6xl mx-auto px-5 pt-12 pb-10 md:pt-16 md:pb-16">
+            <div className="grid lg:grid-cols-[1.05fr_0.95fr] gap-8 lg:gap-6 items-center">
+              <div className="order-2 lg:order-1 max-w-xl">
+                <p className="text-[11px] uppercase tracking-[0.3em] text-neutral-400 mb-5">
+                  <Editable path="hero.kicker">{p.txt('hero.kicker')}</Editable>
+                </p>
+                <h1 className="font-serif text-[clamp(2.1rem,5vw,3.55rem)] font-medium text-[#2A2218] leading-[1.1] mb-5 overflow-visible">
+                  <Editable path="hero.title">{p.txt('hero.title')}</Editable>
+                </h1>
+                <p className="text-neutral-500 text-[15px] md:text-[16px] leading-relaxed max-w-xl mb-8">
+                  <Editable path="hero.body">{p.txt('hero.body')}</Editable>
+                </p>
+                <div className="flex flex-wrap items-center gap-3 mb-10">
+                  <a
+                    href="#albumi-demo"
+                    className="inline-flex items-center gap-2 px-6 py-3 rounded-full text-[13px] font-semibold text-white"
+                    style={{ background: '#2A2218' }}
+                  >
+                    <Editable path="hero.cta">{p.txt('hero.cta')}</Editable>
+                  </a>
+                  <Link href="/krijo">
+                    <span className="inline-flex items-center gap-2 px-6 py-3 rounded-full text-[13px] font-semibold border border-neutral-300 bg-white/70 text-[#2A2218]">
+                      <Editable path="hero.secondaryCta">{p.txt('hero.secondaryCta')}</Editable>
+                      <ArrowRight size={14} />
+                    </span>
+                  </Link>
                 </div>
-              ))}
+                <div className="grid grid-cols-3 gap-px bg-neutral-200/80 rounded-2xl overflow-hidden">
+                  {p.list('stats').map((_, i) => (
+                    <div key={i} className="bg-white/70 px-3 py-4 md:px-5 md:py-5">
+                      <p className="font-serif text-xl md:text-[1.7rem] text-[#2A2218]">
+                        <Editable path={`stats.${i}.value`}>{p.txt(`stats.${i}.value`)}</Editable>
+                      </p>
+                      <p className="text-[10px] md:text-[11px] uppercase tracking-[0.12em] text-neutral-400 mt-1 leading-snug">
+                        <Editable path={`stats.${i}.label`}>{p.txt(`stats.${i}.label`)}</Editable>
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="order-1 lg:order-2 relative">
+                <motion.div
+                  initial={{ opacity: 0, y: 24 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+                  className="relative"
+                >
+                  <Editable path="photos.cover" kind="image" as="div">
+                    <DemoBook3D lang={lang} size={280} />
+                  </Editable>
+                </motion.div>
+              </div>
             </div>
           </div>
         </EditableSection>
@@ -706,20 +725,11 @@ function ExamplesView() {
               </p>
             </div>
 
-            <div className="flex flex-col lg:flex-row items-center gap-10 lg:gap-16">
-              <div className="flex-shrink-0 flex flex-col items-center">
-                <Editable path="photos.cover" kind="image" as="div">
-                  <DemoBook3D lang={lang} />
-                </Editable>
-              </div>
-              <div className="hidden lg:block w-px self-stretch bg-neutral-200" />
-              <div className="block lg:hidden w-16 h-px bg-neutral-200" />
-              <div className="flex-1 w-full max-w-xl">
-                <p className="text-center mb-5 text-[11px] uppercase tracking-[0.28em] text-neutral-400">
-                  <Editable path="demo.browse">{p.txt('demo.browse')}</Editable>
-                </p>
-                <SpreadBrowserDemo lang={lang} />
-              </div>
+            <div className="w-full max-w-3xl mx-auto">
+              <p className="text-center mb-6 text-[11px] uppercase tracking-[0.28em] text-neutral-400">
+                <Editable path="demo.browse">{p.txt('demo.browse')}</Editable>
+              </p>
+              <SpreadBrowserDemo lang={lang} />
             </div>
 
             {editor && (

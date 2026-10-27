@@ -28,8 +28,8 @@ const translations: Translations = {
 
   // Hero
   'hero.title': { sq: 'Kujtime që mbeten', en: 'Memories that last' },
-  'hero.subtitle': { sq: 'Krijo albumin tënd fotografik me cilësi galerie.', en: 'Create your personalised photobook with gallery quality.' },
-  'hero.cta': { sq: 'Krijo Albumin Tënd', en: 'Create Your Photobook' },
+  'hero.subtitle': { sq: 'Krijo albumin tuaj me cilësi galerie.', en: 'Create your photo album at gallery quality.' },
+  'hero.cta': { sq: 'Krijo Albumin Tuaj', en: 'Create Your Album' },
 
   // Steps
   'steps.choose': { sq: '1. Zgjidh stilin', en: '1. Choose style' },

@@ -43,7 +43,7 @@ export function Footer() {
   const siteName = s?.siteName || 'Përgjithmonë';
   const tagline = lang === 'sq'
     ? (s?.siteTaglineAl || 'Albume fotografike premium · Shqipëri')
-    : (s?.siteTaglineEn || 'Premium photo books · Albania');
+    : (s?.siteTaglineEn || 'Premium photo albums · Albania');
 
   return (
     <footer style={{ background: '#0d0d0d', color: '#fff', paddingBottom: 'var(--admin-chrome-offset, 0px)', position: 'relative' }}>

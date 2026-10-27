@@ -67,8 +67,8 @@ export default function Login() {
       <SEOMeta
         title={{ sq: 'Hyrje', en: 'Log In' }}
         description={{
-          sq: 'Hyni në llogarinë tuaj Përgjithmonë për të vazhduar me dizajnin e librit tuaj foto.',
-          en: 'Log in to your Përgjithmonë account to continue designing your photo book.',
+          sq: 'Hyni në llogarinë tuaj Përgjithmonë për të vazhduar me albumin tuaj.',
+          en: 'Log in to your Përgjithmonë account to continue designing your album.',
         }}
         path="/hyr"
         noIndex

@@ -174,7 +174,7 @@ export default function Projects() {
             <p className="text-muted-foreground mb-8">
               {lang === 'sq'
                 ? 'Filloni duke krijuar albumin tuaj të parë.'
-                : 'Start by creating your first photobook.'}
+                : 'Start by creating your first album.'}
             </p>
             <Link href="/krijo">
               <Button size="lg" className="rounded-full">
