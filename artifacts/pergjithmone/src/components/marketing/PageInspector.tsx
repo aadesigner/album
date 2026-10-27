@@ -23,7 +23,7 @@ export function PageInspector() {
       </p>
       {!path && (
         <p className="text-[13px] leading-relaxed" style={{ color: ADMIN.muted }}>
-          Click a headline, paragraph, image, or section on the page. Albanian and English edit together. Nothing goes live until Save.
+          Click a headline, paragraph, image, or section in the page body. The offer bar, navigation, and footer are locked. Albanian and English edit together. Nothing goes live until Save.
         </p>
       )}
       {path && (

@@ -6,6 +6,8 @@ import { ChevronDown, FolderOpen, UserRound, Shield, LogOut } from 'lucide-react
 import { useGetAppSettings, type User } from '@workspace/api-client-react-tsconfig';
 import { offerBarCopy, parseOfferBar } from '@/lib/offerBar';
 import { OfferBarStrip } from './OfferBarStrip';
+import { ChromeLock } from './ChromeLock';
+import { usePageEditorOptional } from '@/components/marketing/PageEditorContext';
 
 function userDisplayName(user: User | null | undefined): string {
   const name = user?.name?.trim();
@@ -64,7 +66,8 @@ export function AnnouncementBar() {
   if (!offer.enabled || !copy.text) return null;
 
   return (
-    <div role="region" aria-label={lang === 'sq' ? 'Ofertë' : 'Offer'}>
+    <div role="region" aria-label={lang === 'sq' ? 'Ofertë' : 'Offer'} className="relative">
+      <ChromeLock />
       <OfferBarStrip
         text={copy.text}
         button={copy.button}
@@ -81,6 +84,7 @@ export function AnnouncementBar() {
 export function Navbar() {
   const { lang, setLang, t } = useLanguage();
   const { isAuthenticated, user, logout } = useAuth();
+  const editing = !!usePageEditorOptional();
   const [isOpen, setIsOpen] = React.useState(false);
   const [accountOpen, setAccountOpen] = React.useState(false);
   const [scrolled, setScrolled] = React.useState(false);
@@ -94,6 +98,12 @@ export function Navbar() {
     setIsOpen(false);
     setAccountOpen(false);
   }, [loc]);
+
+  React.useEffect(() => {
+    if (!editing) return;
+    setIsOpen(false);
+    setAccountOpen(false);
+  }, [editing]);
 
   React.useEffect(() => {
     let raf: number;
@@ -147,6 +157,7 @@ export function Navbar() {
           boxShadow: scrolled ? '0 2px 28px rgba(0,0,0,0.07)' : 'none',
         }}
       >
+        <ChromeLock />
         <div
           className="max-w-7xl mx-auto px-4 md:px-10 h-[64px] md:h-[72px] flex items-center justify-between"
         >

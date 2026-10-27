@@ -32,26 +32,26 @@ describe("wizardEntryFromSearch", () => {
     });
   });
 
-  it("skips to size when the album starter already picked a cover", () => {
+  it("opens the style step with the cover preselected from a homepage starter", () => {
     expect(wizardEntryFromSearch({
       categorySlug: "dasme",
       designId: "cream-names",
       categories: CATS,
       designs: DESIGNS,
     })).toEqual({
-      step: 3,
+      step: 2,
       categoryId: 1,
       designId: "cream-names",
     });
   });
 
-  it("still opens size if only the design id is present", () => {
+  it("still opens style if only the design id is present", () => {
     expect(wizardEntryFromSearch({
       designId: "paris-pink",
       categories: CATS,
       designs: DESIGNS,
     })).toEqual({
-      step: 3,
+      step: 2,
       categoryId: 2,
       designId: "paris-pink",
     });

@@ -69,10 +69,10 @@ import {
   getCanvasHeight, scaleElementsToCanvas, fitDesignToCanvas,
   BLANK_STARTER_ID, blankFrontCoverElements, blankBackCoverElements,
   coverCropRect, imageFrameCoverFit, imageFrameContainFit, imageFrameFocusFromOffset, PHOTO_CORNER_ZOOM, minPhotoAdjustZoom,
-  RETIRED_LAYOUT_IDS,
   designFrontElements, designBackElements, buildDesignCatalog, parseCustomDesigns,
   type EditorElement, type DE, type DesignDef, type LayoutZone, type LayoutDef, type DesignOverrides,
 } from '@/lib/designs';
+import { mergeEditorLayouts } from '@/lib/editorLayouts';
 import { isStrokeOnlyShape, shapePathForElement } from '@/lib/shapes';
 import { getEmptyInnerPageNumbers } from '@/lib/pageContent';
 import { PageThumb, DesignCatalogThumb } from '@/components/PageThumb';
@@ -87,59 +87,6 @@ const PAPER_TEXTURE = `url("data:image/svg+xml,<svg viewBox='0 0 300 300' xmlns=
 
 /** Survives React Strict Mode remount so wizard design isn't applied twice / lost. */
 const consumedWizardDesignKeys = new Set<string>();
-
-/** Parse admin layout grid JSON into editor LayoutDef zones. */
-function parseAdminLayoutZones(json: string): LayoutZone[] {
-  try {
-    const parsed = JSON.parse(json);
-    const raw = Array.isArray(parsed)
-      ? parsed
-      : Array.isArray(parsed?.cells)
-        ? parsed.cells
-        : Array.isArray(parsed?.zones)
-          ? parsed.zones
-          : [];
-    return raw
-      .map((c: any) => ({
-        x: Number(c.x) || 0,
-        y: Number(c.y) || 0,
-        w: Math.max(0.05, Number(c.w) || 0.2),
-        h: Math.max(0.05, Number(c.h) || 0.2),
-        type: c.type === 'text' ? 'text' : 'photo',
-        ...(typeof c.rotation === 'number' ? { rotation: c.rotation } : {}),
-      }))
-      .filter((c: LayoutZone) => c.w > 0 && c.h > 0);
-  } catch {
-    return [];
-  }
-}
-
-function mergeEditorLayouts(dbLayouts: { slug: string; nameAl: string; nameEn: string; gridDefinitionJson: string; isActive: boolean }[] | undefined): LayoutDef[] {
-  const byId = new Map<string, LayoutDef>(LAYOUTS.map(l => [l.id, l]));
-  for (const row of dbLayouts || []) {
-    if (!row.isActive || RETIRED_LAYOUT_IDS.has(row.slug)) continue;
-    const zones = parseAdminLayoutZones(row.gridDefinitionJson);
-    if (!zones.length) continue;
-    const photoCount = zones.filter(z => z.type === 'photo').length;
-    const hasText = zones.some(z => z.type === 'text');
-    let category = 'Custom';
-    if (photoCount <= 1 && !hasText) category = '1 Photo';
-    else if (photoCount <= 1 && hasText) category = 'Photo + Text';
-    else if (photoCount === 2) category = '2 Photos';
-    else if (photoCount === 3) category = '3 Photos';
-    else if (photoCount === 4) category = '4 Photos';
-    else if (photoCount >= 5) category = '5-6 Photos';
-    byId.set(row.slug, {
-      id: row.slug,
-      category,
-      label: { sq: row.nameAl, en: row.nameEn },
-      zones,
-    });
-  }
-  return [...byId.values()].filter(l =>
-    !RETIRED_LAYOUT_IDS.has(l.id) && !!LAYOUT_CATEGORY_LABELS[l.category],
-  );
-}
 
 /** No canvas clamp — frames can sit outside the page; guides still snap to midlines. */
 function dragBoundBox(pos: { x: number; y: number }, _w?: number, _h?: number, _canvasH?: number) {

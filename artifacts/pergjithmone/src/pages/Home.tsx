@@ -32,7 +32,7 @@ type AlbumStyle = {
   designId: string;
   spine: string;
   img: string;
-  /** Deep hero base — should echo the cover, not fight it */
+  /** Light hero base — paper white with a hint of the cover */
   wash: string;
   ambient: string;
   /** Soft paper wash for the starter section */
@@ -51,8 +51,8 @@ const ALBUM_STYLES: AlbumStyle[] = [
     designId: 'cream-names',
     spine: '#8B6F47',
     img: CAT_IMG_BY_SLUG.dasme,
-    wash: '#1A1410',
-    ambient: '#3D2A1C',
+    wash: '#F7F3EE',
+    ambient: '#E8D5C4',
     paper: '#F3EDE6',
     ink: '#2A2218',
   },
@@ -66,8 +66,8 @@ const ALBUM_STYLES: AlbumStyle[] = [
     designId: 'paris-pink',
     spine: '#C45A78',
     img: CAT_IMG_BY_SLUG.udhetime,
-    wash: '#1A0E14',
-    ambient: '#4A2030',
+    wash: '#F8F3F5',
+    ambient: '#F0D0DA',
     paper: '#F8E8EE',
     ink: '#3A1828',
   },
@@ -81,8 +81,8 @@ const ALBUM_STYLES: AlbumStyle[] = [
     designId: 'baby-ador',
     spine: '#6A8490',
     img: CAT_IMG_BY_SLUG.familje,
-    wash: '#101618',
-    ambient: '#2A3A40',
+    wash: '#F4F6F7',
+    ambient: '#D4E0E4',
     paper: '#E8EEF0',
     ink: '#1E2A30',
   },
@@ -96,8 +96,8 @@ const ALBUM_STYLES: AlbumStyle[] = [
     designId: 'friends-forever',
     spine: '#1A3A42',
     img: CAT_IMG_BY_SLUG.miqesi,
-    wash: '#0A1416',
-    ambient: '#1A3840',
+    wash: '#F3F6F7',
+    ambient: '#D0E0E4',
     paper: '#E4EEF0',
     ink: '#142428',
   },
@@ -111,8 +111,8 @@ const ALBUM_STYLES: AlbumStyle[] = [
     designId: 'birthday-bloom',
     spine: '#C45A72',
     img: CAT_IMG_BY_SLUG.festash,
-    wash: '#160A10',
-    ambient: '#4A2030',
+    wash: '#F8F3F4',
+    ambient: '#F0D4DA',
     paper: '#F6E6EA',
     ink: '#2A1418',
   },
@@ -283,7 +283,9 @@ function LivingAlbumBook({
       <div
         aria-hidden
         className="absolute left-1/2 -translate-x-1/2 bottom-[-10%] w-[92%] h-[16%] rounded-[100%] blur-2xl opacity-60"
-        style={{ background: 'radial-gradient(ellipse, rgba(0,0,0,0.7), transparent 72%)' }}
+        style={{ background: size === 'hero'
+          ? 'radial-gradient(ellipse, rgba(42, 34, 24, 0.16), transparent 72%)'
+          : 'radial-gradient(ellipse, rgba(0,0,0,0.7), transparent 72%)' }}
       />
 
       <div
@@ -541,15 +543,15 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
             className={`absolute inset-0 h-full w-full object-cover ${reduced ? '' : 'hero-kenburns'}`}
             style={{
               objectPosition: '68% 35%',
-              opacity: 0.7,
-              filter: 'saturate(0.82) brightness(0.78) contrast(1.08)',
+              opacity: 0.42,
+              filter: 'saturate(0.55) brightness(1.22) contrast(0.92)',
             }}
           />
           </Editable>
         </motion.div>
       </AnimatePresence>
 
-      {/* Style-tinted veil — heavy left for type, open right so the book breathes */}
+      {/* Paper veil — bright left for type, airy right so the book sits on white */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0"
@@ -557,15 +559,14 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
           background: `
             linear-gradient(105deg,
               ${style.wash} 0%,
-              ${style.wash}f8 18%,
-              ${style.wash}e6 34%,
-              ${style.wash}99 48%,
-              ${style.wash}44 66%,
-              ${style.wash}14 84%,
+              ${style.wash}f5 22%,
+              ${style.wash}d8 40%,
+              ${style.wash}88 56%,
+              ${style.wash}33 74%,
               transparent 100%
             ),
-            linear-gradient(to top, ${style.wash}e8 0%, ${style.wash}66 22%, transparent 48%),
-            radial-gradient(52% 48% at 82% 40%, ${style.ambient}44 0%, transparent 70%)
+            linear-gradient(to top, ${style.wash} 0%, ${style.wash}aa 16%, transparent 40%),
+            radial-gradient(52% 48% at 82% 40%, ${style.ambient}66 0%, transparent 72%)
           `,
           transition: 'background 0.7s ease',
         }}
@@ -576,17 +577,17 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
         <>
           <div
             aria-hidden
-            className="hero-orb-a pointer-events-none absolute top-[4%] right-[-8%] w-[58%] h-[74%] rounded-full opacity-45 blur-3xl"
+            className="hero-orb-a pointer-events-none absolute top-[4%] right-[-8%] w-[58%] h-[74%] rounded-full opacity-70 blur-3xl"
             style={{
-              background: `radial-gradient(circle, ${style.paper}40 0%, ${style.spine}22 38%, transparent 70%)`,
+              background: `radial-gradient(circle, #ffffff 0%, ${style.paper} 38%, transparent 70%)`,
               transition: 'background 0.7s ease',
             }}
           />
           <div
             aria-hidden
-            className="hero-orb-b pointer-events-none absolute bottom-[-20%] left-[-12%] w-[52%] h-[52%] rounded-full opacity-55 blur-3xl"
+            className="hero-orb-b pointer-events-none absolute bottom-[-20%] left-[-12%] w-[52%] h-[52%] rounded-full opacity-50 blur-3xl"
             style={{
-              background: `radial-gradient(circle, ${style.spine}36 0%, transparent 68%)`,
+              background: `radial-gradient(circle, ${style.ambient} 0%, transparent 68%)`,
               transition: 'background 0.7s ease',
             }}
           />
@@ -608,9 +609,9 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
                 left: spark.l,
                 width: spark.s,
                 height: spark.s,
-                background: style.paper,
+                background: style.spine,
                 animationDelay: spark.d,
-                boxShadow: `0 0 ${spark.s * 4}px ${style.paper}`,
+                boxShadow: `0 0 ${spark.s * 4}px ${style.spine}88`,
               }}
             />
           ))}
@@ -635,12 +636,12 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
               className="mb-4 md:mb-5 text-[10px] md:text-[11px] tracking-[0.34em] uppercase"
-              style={{ color: `${style.paper}88` }}
+              style={{ color: `${style.ink}7a` }}
             >
               ✦ <Editable path="hero.eyebrow">{p.txt('hero.eyebrow')}</Editable>
             </motion.p>
 
-            <h1 className="font-serif text-[clamp(2.15rem,6.4vw,4.35rem)] text-[#F7F2EC] leading-[0.98] tracking-[-0.03em] font-medium mb-2 md:mb-3">
+            <h1 className="font-serif text-[clamp(2.15rem,6.4vw,4.35rem)] leading-[0.98] tracking-[-0.03em] font-medium mb-2 md:mb-3" style={{ color: style.ink }}>
               <Editable path="hero.headline">
               {p.txt('hero.headline').split(' ').map((word, i, words) => (
                 <motion.span
@@ -662,7 +663,7 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
               transition={{ duration: 0.75, delay: 0.28, ease: [0.22, 1, 0.36, 1] }}
               className={`font-serif text-[clamp(1.35rem,3.1vw,2.15rem)] leading-none tracking-[-0.01em] mb-3 md:mb-4 ${reduced ? '' : 'hero-word-shine'}`}
               style={{
-                backgroundImage: `linear-gradient(90deg, ${style.paper}66, ${style.paper}, ${style.paper}66)`,
+                backgroundImage: `linear-gradient(90deg, ${style.ink}55, ${style.spine}, ${style.ink}55)`,
                 WebkitBackgroundClip: 'text',
                 backgroundClip: 'text',
                 color: 'transparent',
@@ -676,7 +677,7 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
               animate={{ opacity: 1, scaleX: 1 }}
               transition={{ duration: 0.7, delay: 0.36, ease: [0.22, 1, 0.36, 1] }}
               className="mx-auto md:mx-0 mb-4 md:mb-5 h-px w-16 origin-center md:origin-left"
-              style={{ background: `linear-gradient(90deg, ${style.paper}00, ${style.paper}aa, ${style.paper}00)` }}
+              style={{ background: `linear-gradient(90deg, ${style.ink}00, ${style.spine}aa, ${style.ink}00)` }}
             />
 
             <div className="relative mb-4 md:mb-6 min-h-[1.5em]">
@@ -688,7 +689,7 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
                   exit={{ opacity: 0, y: -6 }}
                   transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
                   className="text-[14px] md:text-[16px] leading-snug font-serif italic"
-                  style={{ color: `${style.paper}88` }}
+                  style={{ color: `${style.ink}99` }}
                 >
                   <Editable path={`styles.${idx}.line`}>{liveLine(idx)}</Editable>
                 </motion.p>
@@ -697,7 +698,7 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
 
             <p
               className="hidden md:block text-[15px] max-w-sm mx-auto md:mx-0 leading-relaxed mb-8"
-              style={{ color: `${style.paper}70` }}
+              style={{ color: `${style.ink}99` }}
             >
               <Editable path="hero.sub">{p.txt('hero.sub')}</Editable>
             </p>
@@ -709,9 +710,9 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
                   whileTap={{ scale: 0.97 }}
                   className="relative overflow-hidden px-8 md:px-9 py-3.5 md:py-4 rounded-full text-[12.5px] md:text-[13px] font-semibold tracking-[0.04em]"
                   style={{
-                    background: style.paper,
-                    color: style.ink,
-                    boxShadow: `0 14px 40px ${style.paper}38, 0 0 0 1px ${style.paper}55, 0 0 28px ${style.paper}22`,
+                    background: style.ink,
+                    color: '#fff',
+                    boxShadow: `0 14px 36px ${style.ink}22, 0 0 0 1px ${style.ink}14`,
                   }}
                 >
                   {!reduced && (
@@ -730,9 +731,9 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
                 <button
                   className="px-6 py-3.5 text-[12.5px] border rounded-full transition-colors backdrop-blur-sm"
                   style={{
-                    color: `${style.paper}c8`,
-                    borderColor: `${style.paper}40`,
-                    background: `${style.paper}0a`,
+                    color: style.ink,
+                    borderColor: `${style.ink}22`,
+                    background: 'rgba(255,255,255,0.55)',
                   }}
                 >
                   <Editable path="hero.secondaryCta">{p.txt('hero.secondaryCta')}</Editable>
@@ -750,7 +751,7 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
                   aria-current={i === idx}
                   className="relative h-7 md:h-8 px-2 md:px-2.5 text-[9px] md:text-[10px] tracking-[0.12em] uppercase transition-colors"
                   style={{
-                    color: i === idx ? style.paper : `${style.paper}55`,
+                    color: i === idx ? style.ink : `${style.ink}55`,
                   }}
                 >
                   <Editable path={`styles.${i}.label`}>{liveLabel(i)}</Editable>
@@ -758,7 +759,7 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
                     <motion.span
                       layoutId="hero-style-underline"
                       className="absolute left-2 right-2 md:left-2.5 md:right-2.5 bottom-0.5 md:bottom-1 h-px"
-                      style={{ background: `${style.paper}b0` }}
+                      style={{ background: style.spine }}
                     />
                   )}
                 </button>
@@ -778,7 +779,7 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
                 aria-hidden
                 className="pointer-events-none absolute left-1/2 top-1/2 -z-10 h-[78%] w-[88%] -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl"
                 style={{
-                  background: `radial-gradient(circle, ${style.paper}28 0%, ${style.spine}33 40%, transparent 72%)`,
+                  background: `radial-gradient(circle, #ffffffcc 0%, ${style.ambient}88 42%, transparent 72%)`,
                   transition: 'background 0.7s ease',
                 }}
               />
@@ -789,12 +790,12 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
                 type="button"
                 onClick={() => go(-1)}
                 className="w-8 h-8 rounded-full text-base leading-none"
-                style={{ border: `1px solid ${style.paper}28`, color: `${style.paper}99` }}
+                style={{ border: `1px solid ${style.ink}22`, color: `${style.ink}99` }}
                 aria-label="Previous"
               >‹</button>
               <span
                 className="text-[10px] tracking-[0.2em] tabular-nums"
-                style={{ color: `${style.paper}55` }}
+                style={{ color: `${style.ink}55` }}
               >
                 {String(idx + 1).padStart(2, '0')} / {String(ALBUM_STYLES.length).padStart(2, '0')}
               </span>
@@ -802,7 +803,7 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
                 type="button"
                 onClick={() => go(1)}
                 className="w-8 h-8 rounded-full text-base leading-none"
-                style={{ border: `1px solid ${style.paper}28`, color: `${style.paper}99` }}
+                style={{ border: `1px solid ${style.ink}22`, color: `${style.ink}99` }}
                 aria-label="Next"
               >›</button>
             </div>
@@ -814,18 +815,18 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
         aria-hidden
         className="pointer-events-none absolute inset-0 z-[1]"
         style={{
-          background: 'radial-gradient(120% 80% at 50% 42%, transparent 42%, rgba(0,0,0,0.42) 100%)',
+          background: `radial-gradient(120% 80% at 50% 42%, transparent 55%, ${style.wash}cc 100%)`,
         }}
       />
 
       <div
         className={`pointer-events-none absolute bottom-5 left-1/2 z-20 -translate-x-1/2 flex flex-col items-center gap-1.5 ${reduced ? '' : 'hero-scroll-cue'}`}
-        style={{ color: `${style.paper}88` }}
+        style={{ color: `${style.ink}66` }}
       >
         <span className="text-[9px] tracking-[0.32em] uppercase">
           <Editable path="hero.explore">{p.txt('hero.explore')}</Editable>
         </span>
-        <span aria-hidden className="block h-7 w-px" style={{ background: `${style.paper}66` }} />
+        <span aria-hidden className="block h-7 w-px" style={{ background: `${style.ink}44` }} />
       </div>
     </section>
   );

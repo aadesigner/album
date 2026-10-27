@@ -15,9 +15,12 @@ type DbCategory = {
 
 /**
  * Homepage starter / deep links:
- *   /krijo?category=dasme&design=cream-names  → size step (cover already chosen)
+ *   /krijo?category=dasme&design=cream-names  → style step (cover preselected)
  *   /krijo?category=dasme                     → style step
  *   /krijo                                    → category step
+ *
+ * Never skip the design/style step from a deep link. A homepage cover only
+ * highlights that style; the shopper still confirms it before picking a size.
  */
 export function wizardEntryFromSearch(args: {
   categorySlug?: string | null;
@@ -32,11 +35,8 @@ export function wizardEntryFromSearch(args: {
   const match = matchDbCategory(args.categories, slug, designCat);
   const categoryId = match?.id != null ? Number(match.id) : null;
 
-  if (designOk) {
-    return { step: 3, categoryId, designId };
-  }
-  if (slug && (categoryId != null || designCat)) {
-    return { step: 2, categoryId, designId: null };
+  if (designOk || (slug && (categoryId != null || designCat))) {
+    return { step: 2, categoryId, designId: designOk ? designId : null };
   }
   return { step: 1, categoryId: null, designId: null };
 }

@@ -27,7 +27,7 @@ function SitePageIndex() {
         </p>
         <h1 className="font-serif text-3xl font-medium mb-2" style={{ color: ADMIN.ink }}>Site pages</h1>
         <p className="text-sm mb-8 max-w-lg" style={{ color: ADMIN.muted }}>
-          Open the live page, then tap Enable admin mode. Click headlines, photos, and sections to edit. Albanian and English save together. Layout stays in code so a save cannot blank the site.
+          Open the live page, then tap Enable admin mode. Click headlines, photos, and sections inside the page. The offer bar, navigation, and footer stay as they are — change those in Settings. Albanian and English save together.
         </p>
         <div className="grid sm:grid-cols-2 gap-3">
           {PAGE_META.map((p) => (

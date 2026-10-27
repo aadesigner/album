@@ -1,7 +1,20 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Check, Loader2, PanelRight, Pencil, RotateCcw, Save, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  Check,
+  Loader2,
+  Monitor,
+  PanelRight,
+  Pencil,
+  Redo2,
+  RotateCcw,
+  Save,
+  Smartphone,
+  Undo2,
+  X,
+} from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { ADMIN } from '@/components/layout/AdminLayout';
@@ -14,6 +27,7 @@ import {
 import { PageContentProvider } from './PageContent';
 import { PageEditorProvider, usePageEditorOptional } from './PageEditorContext';
 import { PageInspector } from './PageInspector';
+import { MobilePreviewFrame } from './MobilePreviewFrame';
 
 const LIVE_EDIT_KEY = 'pergjithmone_live_admin_edit';
 
@@ -49,6 +63,8 @@ export function LivePageRoot({
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const [enabled, setEnabled] = useState(isLiveAdminEdit);
+  const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [preview, setPreview] = useState<'desktop' | 'mobile'>('desktop');
 
   const { data, isFetched } = useQuery({
     queryKey: ['marketing-page', slug],
@@ -59,6 +75,7 @@ export function LivePageRoot({
   const setMode = useCallback((on: boolean) => {
     setLiveAdminEdit(on);
     setEnabled(on);
+    if (!on) setPreview('desktop');
   }, []);
 
   const ready = isFetched || data !== undefined;
@@ -66,11 +83,19 @@ export function LivePageRoot({
 
   const page = (
     <PageContentProvider slug={slug}>
-      {children}
+      {editing && preview === 'mobile' ? (
+        <MobilePreviewFrame inspectorOpen={inspectorOpen}>
+          {children}
+        </MobilePreviewFrame>
+      ) : children}
       {isAdmin && (
         <AdminModeChrome
           slug={slug}
           enabled={enabled}
+          preview={preview}
+          onPreviewChange={setPreview}
+          inspectorOpen={inspectorOpen}
+          onInspectorOpenChange={setInspectorOpen}
           onEnabledChange={setMode}
         />
       )}
@@ -90,26 +115,38 @@ export function LivePageRoot({
 function AdminModeChrome({
   slug,
   enabled,
+  preview,
+  onPreviewChange,
+  inspectorOpen,
+  onInspectorOpenChange,
   onEnabledChange,
 }: {
   slug: PageSlug;
   enabled: boolean;
+  preview: 'desktop' | 'mobile';
+  onPreviewChange: (next: 'desktop' | 'mobile') => void;
+  inspectorOpen: boolean;
+  onInspectorOpenChange: (open: boolean) => void;
   onEnabledChange: (on: boolean) => void;
 }) {
   const editor = usePageEditorOptional();
   const { lang } = useLanguage();
   const { getToken } = useAuth();
   const queryClient = useQueryClient();
-  const [inspectorOpen, setInspectorOpen] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const meta = PAGE_META.find((p) => p.slug === slug);
 
   useEffect(() => {
-    document.body.style.paddingBottom = enabled ? '72px' : '64px';
+    // Extra height lives on the dark footer (see --admin-chrome-offset), not on
+    // body — body padding was showing as a cream strip below the site.
+    document.documentElement.style.setProperty(
+      '--admin-chrome-offset',
+      enabled ? '84px' : '72px',
+    );
     return () => {
-      document.body.style.paddingBottom = '';
+      document.documentElement.style.removeProperty('--admin-chrome-offset');
     };
   }, [enabled]);
 
@@ -141,6 +178,24 @@ function AdminModeChrome({
     document.addEventListener('click', onClick, true);
     return () => document.removeEventListener('click', onClick, true);
   }, [enabled, editor?.dirty, lang]);
+
+  useEffect(() => {
+    if (!enabled || !editor) return;
+    const onKey = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase();
+      if (!(e.metaKey || e.ctrlKey)) return;
+      if (key === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) editor.redo();
+        else editor.undo();
+      } else if (key === 'y') {
+        e.preventDefault();
+        editor.redo();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [enabled, editor]);
 
   const save = async () => {
     if (!editor) return;
@@ -184,7 +239,8 @@ function AdminModeChrome({
     if (editor?.dirty && !window.confirm(lang === 'sq'
       ? 'Ke ndryshime të paruajtura. Të dalësh pa i ruajtur?'
       : 'You have unsaved changes. Leave without saving?')) return;
-    setInspectorOpen(false);
+    onInspectorOpenChange(false);
+    onPreviewChange('desktop');
     onEnabledChange(false);
   };
 
@@ -212,7 +268,7 @@ function AdminModeChrome({
             </p>
             <button
               type="button"
-              onClick={() => setInspectorOpen(false)}
+              onClick={() => onInspectorOpenChange(false)}
               className="p-1 rounded-md"
               style={{ color: ADMIN.muted }}
               aria-label={sq ? 'Mbyll' : 'Close'}
@@ -229,7 +285,7 @@ function AdminModeChrome({
         style={{ padding: '0 12px 12px' }}
       >
         <div
-          className="pointer-events-auto w-full max-w-3xl rounded-2xl border shadow-lg px-3 py-2.5 flex flex-wrap items-center gap-2"
+          className="pointer-events-auto w-full max-w-4xl rounded-2xl border shadow-lg px-3 py-2.5 flex flex-wrap items-center gap-2"
           style={{
             background: '#1a1a1a',
             borderColor: 'rgba(255,255,255,0.08)',
@@ -274,9 +330,64 @@ function AdminModeChrome({
                 )}
               </p>
               <div className="flex-1" />
+              <div
+                className="inline-flex rounded-full p-0.5"
+                style={{ background: 'rgba(255,255,255,0.08)' }}
+                role="group"
+                aria-label={sq ? 'Pamja' : 'Preview'}
+              >
+                <button
+                  type="button"
+                  onClick={() => onPreviewChange('desktop')}
+                  className="inline-flex items-center gap-1 text-[12px] font-semibold rounded-full px-2.5 py-1.5"
+                  style={{
+                    background: preview === 'desktop' ? 'rgba(255,255,255,0.16)' : 'transparent',
+                    color: '#f7f5f2',
+                  }}
+                  title={sq ? 'Pamja desktop' : 'Desktop view'}
+                >
+                  <Monitor size={13} />
+                  <span className="hidden sm:inline">Desktop</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onPreviewChange('mobile')}
+                  className="inline-flex items-center gap-1 text-[12px] font-semibold rounded-full px-2.5 py-1.5"
+                  style={{
+                    background: preview === 'mobile' ? 'rgba(255,255,255,0.16)' : 'transparent',
+                    color: '#f7f5f2',
+                  }}
+                  title={sq ? 'Pamja mobile' : 'Mobile view'}
+                >
+                  <Smartphone size={13} />
+                  <span className="hidden sm:inline">Mobile</span>
+                </button>
+              </div>
               <button
                 type="button"
-                onClick={() => setInspectorOpen((v) => !v)}
+                onClick={() => editor?.undo()}
+                disabled={!editor?.canUndo}
+                className="inline-flex items-center gap-1 text-[12px] font-semibold rounded-full px-2.5 py-1.5 disabled:opacity-40"
+                style={{ color: '#d4d0cb' }}
+                title={sq ? 'Kthe 1 hap (deri në 5)' : 'Undo 1 step (up to 5)'}
+              >
+                <Undo2 size={13} />
+                {editor?.undoCount ? editor.undoCount : ''}
+              </button>
+              <button
+                type="button"
+                onClick={() => editor?.redo()}
+                disabled={!editor?.canRedo}
+                className="inline-flex items-center gap-1 text-[12px] font-semibold rounded-full px-2.5 py-1.5 disabled:opacity-40"
+                style={{ color: '#d4d0cb' }}
+                title={sq ? 'Ribëj 1 hap (deri në 5)' : 'Redo 1 step (up to 5)'}
+              >
+                <Redo2 size={13} />
+                {editor?.redoCount ? editor.redoCount : ''}
+              </button>
+              <button
+                type="button"
+                onClick={() => onInspectorOpenChange(!inspectorOpen)}
                 className="inline-flex items-center gap-1 text-[12px] font-semibold rounded-full px-2.5 py-1.5"
                 style={{ background: inspectorOpen ? 'rgba(255,255,255,0.14)' : 'transparent', color: '#f7f5f2' }}
               >

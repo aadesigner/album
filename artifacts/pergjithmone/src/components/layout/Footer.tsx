@@ -3,6 +3,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { Link } from 'wouter';
 import { useGetAppSettings } from '@workspace/api-client-react-tsconfig';
 import { Instagram } from 'lucide-react';
+import { ChromeLock } from './ChromeLock';
 
 const INSTAGRAM_URL = 'https://www.instagram.com/pergjithmone.al/';
 const TIKTOK_URL = 'https://www.tiktok.com/@pergjithmone.al';
@@ -45,7 +46,8 @@ export function Footer() {
     : (s?.siteTaglineEn || 'Premium photo books · Albania');
 
   return (
-    <footer style={{ background: '#0d0d0d', color: '#fff' }}>
+    <footer style={{ background: '#0d0d0d', color: '#fff', paddingBottom: 'var(--admin-chrome-offset, 0px)', position: 'relative' }}>
+      <ChromeLock />
       <div className="max-w-7xl mx-auto px-5 md:px-10 pt-14 pb-10">
 
         {/* Brand — large serif italic */}

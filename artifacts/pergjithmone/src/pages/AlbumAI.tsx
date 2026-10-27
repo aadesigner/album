@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AppLayout } from '@/components/layout/AppLayout';
+import { MarketingLayout } from '@/components/layout/MarketingLayout';
 import { SEOMeta } from '@/components/SEOMeta';
 import {
   useListCategories, useListBookSizes, useGetAppSettings,
@@ -7,11 +7,11 @@ import {
 } from '@workspace/api-client-react-tsconfig';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Sparkles, UploadCloud, X, Check, ChevronRight, ArrowLeft,
+  Sparkles, UploadCloud, X, Check, ChevronRight, ArrowLeft, ArrowRight,
   Loader2, ImageOff, Wand2, LayoutTemplate, Palette, BookOpen, PartyPopper,
-  Clock, Images, PenLine, Truck, Plus, Minus,
+  Clock, Images, PenLine, Truck, Plus, Minus, Layers, Package,
 } from 'lucide-react';
-import { useLocation } from 'wouter';
+import { useLocation, Link } from 'wouter';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { resolveDesignCategory, resolveDesignCategoryFromQuery } from '@/lib/designMeta';
@@ -51,6 +51,91 @@ const GEN_STAGES = [
   { key: 'design',   icon: Palette,         sq: 'Duke dizajnuar çdo faqe', en: 'Designing every page' },
   { key: 'save',     icon: Sparkles,        sq: 'Duke ruajtur albumin',   en: 'Saving your album' },
 ] as const;
+
+const INK = '#2A2218';
+const PAPER = '#f7f4f0';
+const DARK = '#1a1714';
+
+const HERO_PHOTOS = [
+  'https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=800&q=84&fit=crop&crop=top',
+  'https://images.unsplash.com/photo-1516589178581-6cd7833ae3b2?w=700&q=84&fit=crop',
+  'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=600&q=84&fit=crop',
+  'https://images.unsplash.com/photo-1581952976147-5a2d15560349?w=600&q=84&fit=crop&crop=top',
+];
+
+function L(lang: 'sq' | 'en', sq: string, en: string) {
+  return lang === 'sq' ? sq : en;
+}
+
+function HeroSpread({ lang }: { lang: 'sq' | 'en' }) {
+  return (
+    <div className="relative w-full max-w-[440px] mx-auto lg:ml-auto" aria-hidden>
+      <div
+        className="absolute -top-6 -right-4 w-28 h-36 rounded-md overflow-hidden rotate-[8deg] border border-white shadow-[0_12px_30px_rgba(42,34,24,0.16)] hidden sm:block"
+      >
+        <img src={HERO_PHOTOS[3]} alt="" className="w-full h-full object-cover" />
+      </div>
+      <div
+        className="absolute -bottom-5 -left-3 w-24 h-32 rounded-md overflow-hidden -rotate-[7deg] border border-white shadow-[0_12px_28px_rgba(42,34,24,0.14)] hidden sm:block"
+      >
+        <img src={HERO_PHOTOS[2]} alt="" className="w-full h-full object-cover" />
+      </div>
+      <div className="relative flex" style={{ filter: 'drop-shadow(0 24px 48px rgba(42,34,24,0.18))' }}>
+        <div className="relative w-[48%] aspect-[3/4] overflow-hidden rounded-l-[5px] bg-[#1a1209]">
+          <img src={HERO_PHOTOS[0]} alt="" className="absolute inset-0 w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-l from-black/25 via-transparent to-black/10" />
+          <p className="absolute bottom-4 left-3 right-3 font-serif italic text-white/90 text-[12px] text-center">
+            Ana & Erjon
+          </p>
+        </div>
+        <div className="w-[2px] bg-black/20 shrink-0" />
+        <div className="relative w-[52%] aspect-[3/4] overflow-hidden rounded-r-[5px] bg-[#faf8f4] p-[7%]">
+          <div className="grid grid-rows-[1.15fr_0.85fr] gap-[7%] h-full">
+            <img src={HERO_PHOTOS[1]} alt="" className="w-full h-full object-cover" />
+            <div className="grid grid-cols-2 gap-[8%]">
+              <img src={HERO_PHOTOS[2]} alt="" className="w-full h-full object-cover" />
+              <img src={HERO_PHOTOS[3]} alt="" className="w-full h-full object-cover" />
+            </div>
+          </div>
+          <div className="absolute inset-0 pointer-events-none bg-gradient-to-r from-black/12 via-transparent to-transparent" />
+        </div>
+      </div>
+      <p className="mt-6 text-center text-[10px] uppercase tracking-[0.22em] text-neutral-400">
+        {L(lang, 'Paraqitje e nisur nga fotot · e redaktueshme', 'Started from your photos · fully editable')}
+      </p>
+    </div>
+  );
+}
+
+function WizardRail({ step, lang }: { step: 1 | 2 | 3; lang: 'sq' | 'en' }) {
+  const items = [
+    { n: '01', sq: 'Kujtimi', en: 'Memory' },
+    { n: '02', sq: 'Fotot', en: 'Photos' },
+    { n: '03', sq: 'Libri', en: 'Book' },
+  ];
+  return (
+    <ol className="flex items-center justify-center gap-0 mb-8 md:mb-10">
+      {items.map((it, i) => {
+        const n = (i + 1) as 1 | 2 | 3;
+        const on = step === n;
+        const done = step > n;
+        return (
+          <React.Fragment key={it.n}>
+            <li className="flex flex-col items-center gap-1 min-w-[68px]">
+              <span className={`font-serif text-[13px] ${on || done ? 'text-[#2A2218]' : 'text-neutral-300'}`}>{it.n}</span>
+              <span className={`text-[10px] uppercase tracking-[0.16em] font-semibold ${on ? 'text-[#2A2218]' : done ? 'text-neutral-500' : 'text-neutral-300'}`}>
+                {lang === 'sq' ? it.sq : it.en}
+              </span>
+            </li>
+            {i < 2 && (
+              <div className={`h-px w-8 md:w-16 mb-3 ${step > n ? 'bg-[#2A2218]' : 'bg-neutral-200'}`} />
+            )}
+          </React.Fragment>
+        );
+      })}
+    </ol>
+  );
+}
 
 export default function AlbumAI() {
   const { t, lang } = useLanguage();
@@ -399,100 +484,87 @@ export default function AlbumAI() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   return (
-    <AppLayout>
+    <MarketingLayout>
       <SEOMeta
-        title={{ sq: 'Krijo Album me AI', en: 'AI Photobook Maker' }}
+        title={{ sq: 'Album me AI — Përgjithmonë', en: 'AI Album — Përgjithmonë' }}
         description={{
-          sq: 'Ngarko fotot e tua dhe lëri sistemin tonë të krijojë automatikisht një album foto të plotë — struktura, ngjyrat dhe dizajni zgjidhen për ty, gati për t\'u redaktuar.',
-          en: 'Upload your photos and let our system automatically build a complete photobook — layouts, colors, and design chosen for you, ready to fine-tune.',
+          sq: 'Ngarkoni 25–40 foto. Ne i lidhim në një album me kopertinë të fortë, letër mat 200g dhe lidhje lay-flat — pastaj e rregulloni në të njëjtin editor para printimit.',
+          en: 'Upload 25–40 photos. We bind them into a hardcover album on matte 200g paper with lay-flat spreads — then you refine it in the same editor before we print.',
         }}
         path="/album-ai"
       />
 
-      <div style={{ background: '#f7f5f2' }} className="min-h-[calc(100dvh-48px)] md:min-h-[calc(100dvh-54px)]">
+      <div style={{ background: PAPER }} className="min-h-[calc(100dvh-48px)] md:min-h-[calc(100dvh-54px)]">
 
-        {/* ── Hero ── */}
-        <div className="relative max-w-4xl mx-auto px-4 md:px-8 pt-12 md:pt-16 pb-6 text-center overflow-hidden">
-          {/* Ambient floating sparkles */}
-          <div className="absolute inset-0 pointer-events-none select-none" aria-hidden>
-            {[
-              { top: '8%', left: '8%', size: 12, delay: 0 },
-              { top: '18%', left: '88%', size: 9, delay: 0.6 },
-              { top: '62%', left: '4%', size: 10, delay: 1.2 },
-              { top: '70%', left: '92%', size: 13, delay: 0.3 },
-              { top: '4%', left: '48%', size: 8, delay: 0.9 },
-            ].map((s, i) => (
-              <motion.div
-                key={i}
-                className="absolute text-neutral-300"
-                style={{ top: s.top, left: s.left }}
-                animate={{ opacity: [0.15, 0.55, 0.15], y: [0, -8, 0] }}
-                transition={{ duration: 3.4, repeat: Infinity, delay: s.delay, ease: 'easeInOut' }}
-              >
-                <Sparkles size={s.size} />
+        <section className="relative overflow-hidden border-b border-neutral-200/70">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0"
+            style={{ background: 'radial-gradient(70% 55% at 85% 8%, rgba(255,255,255,0.92) 0%, transparent 58%)' }}
+          />
+          <div className="relative max-w-6xl mx-auto px-5 md:px-8 pt-14 pb-12 md:pt-20 md:pb-16">
+            <div className="grid lg:grid-cols-[1.05fr_0.95fr] gap-12 lg:gap-16 items-center">
+              <div>
+                <motion.p
+                  initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                  className="text-[11px] uppercase tracking-[0.3em] text-neutral-400 mb-5"
+                >
+                  {L(lang, 'atelier · album me AI', 'atelier · album with AI')}
+                </motion.p>
+                <motion.h1
+                  initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
+                  className="font-serif text-[clamp(2.05rem,4.6vw,3.45rem)] font-medium leading-[1.08] mb-5"
+                  style={{ color: INK }}
+                >
+                  {L(lang, 'Ngarkoni fotot. Ne i lidhim në një libër.', 'Upload the photos. We bind them into a book.')}
+                </motion.h1>
+                <motion.p
+                  initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+                  className="text-neutral-500 text-[15px] md:text-[16px] leading-relaxed max-w-xl mb-8"
+                >
+                  {L(
+                    lang,
+                    `Zgjidhni kujtimin, vendosni ${MIN_PHOTOS}–${MAX_PHOTOS} foto në rendin e historisë. Sistemi ynë zgjedh kopertinën, paraqitjen dhe paletën — pastaj hapet i njëjti editor, gati për t’i prekur me dorë para printimit.`,
+                    `Choose the memory, lay ${MIN_PHOTOS}–${MAX_PHOTOS} photos in story order. We pick the cover, layouts and palette — then the same editor opens, ready for your hand before we print.`,
+                  )}
+                </motion.p>
+                <motion.div
+                  initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.16 }}
+                  className="flex flex-wrap items-center gap-3 mb-10"
+                >
+                  <a
+                    href="#fillo"
+                    className="inline-flex items-center gap-2 px-6 py-3 rounded-full text-[13px] font-semibold text-white"
+                    style={{ background: INK }}
+                  >
+                    {L(lang, 'Fillo me fotot e tua', 'Start with your photos')}
+                    <ArrowRight size={14} />
+                  </a>
+                  <Link href="/krijo">
+                    <span className="inline-flex items-center gap-2 px-6 py-3 rounded-full text-[13px] font-semibold border border-neutral-300 bg-white/70" style={{ color: INK }}>
+                      {L(lang, 'Dizajno vetë', 'Design it yourself')}
+                    </span>
+                  </Link>
+                </motion.div>
+                <div className="grid grid-cols-3 gap-px bg-neutral-200/80 rounded-2xl overflow-hidden max-w-lg">
+                  {[
+                    { value: `${MIN_PHOTOS}–${MAX_PHOTOS}`, label: L(lang, 'foto në libër', 'photos in the book') },
+                    { value: L(lang, 'Editori', 'Editor'), label: L(lang, 'i njëjti, pas AI', 'the same, after AI') },
+                    { value: '200g', label: L(lang, 'letër mat lay-flat', 'matte lay-flat paper') },
+                  ].map((s) => (
+                    <div key={s.label} className="bg-white/70 px-3 py-4 md:px-4 md:py-5">
+                      <p className="font-serif text-lg md:text-[1.35rem]" style={{ color: INK }}>{s.value}</p>
+                      <p className="text-[10px] uppercase tracking-[0.12em] text-neutral-400 mt-1 leading-snug">{s.label}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12, duration: 0.55 }}>
+                <HeroSpread lang={lang} />
               </motion.div>
-            ))}
+            </div>
           </div>
-
-          <motion.div
-            initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
-            className="relative inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-neutral-900 text-white text-[10px] uppercase tracking-[0.16em] font-semibold mb-5"
-          >
-            <Sparkles size={12} /> {lang === 'sq' ? 'E Re' : 'New'}
-          </motion.div>
-          <motion.h1
-            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.05 }}
-            className="relative text-3xl md:text-[48px] font-serif font-medium text-neutral-900 leading-tight mb-4"
-          >
-            {lang === 'sq' ? <>Album Foto në Sekonda <span className="relative inline-block whitespace-nowrap">me AI
-              <svg className="absolute left-0 -bottom-1.5 w-full" height="10" viewBox="0 0 200 10" preserveAspectRatio="none" aria-hidden>
-                <path d="M2 7 Q 100 -2 198 7" stroke="#d4a574" strokeWidth="4" fill="none" strokeLinecap="round" />
-              </svg>
-            </span></> : <>Your Photobook, Built by <span className="relative inline-block whitespace-nowrap">AI
-              <svg className="absolute left-0 -bottom-1.5 w-full" height="10" viewBox="0 0 60 10" preserveAspectRatio="none" aria-hidden>
-                <path d="M2 7 Q 30 -2 58 7" stroke="#d4a574" strokeWidth="4" fill="none" strokeLinecap="round" />
-              </svg>
-            </span> in Seconds</>}
-          </motion.h1>
-          <motion.p
-            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }}
-            className="text-neutral-500 text-sm md:text-base max-w-xl mx-auto leading-relaxed"
-          >
-            {lang === 'sq'
-              ? 'Zgjidh kategorinë, ngarko fotot e tua — sistemi zgjedh automatikisht strukturën, ngjyrat dhe dekorimet për çdo faqe. Redakto lirshëm më pas.'
-              : 'Pick a category, upload your photos — our system automatically chooses the layout, colors, and decorations for every page. Fine-tune anything afterwards.'}
-          </motion.p>
-
-          {/* Trust chips */}
-          <motion.div
-            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.18 }}
-            className="flex flex-wrap items-center justify-center gap-2.5 mt-7"
-          >
-            {[
-              { icon: Clock, label: lang === 'sq' ? 'Gati brenda minutash' : 'Ready within minutes' },
-              { icon: Images, label: lang === 'sq' ? `Deri ${MAX_PHOTOS} foto` : `Up to ${MAX_PHOTOS} photos` },
-              { icon: PenLine, label: lang === 'sq' ? 'Redaktueshëm plotësisht' : 'Fully editable after' },
-            ].map((chip, i) => (
-              <span key={i} className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white border border-neutral-200 shadow-sm text-[11.5px] font-medium text-neutral-600">
-                <chip.icon size={13} className="text-neutral-400" /> {chip.label}
-              </span>
-            ))}
-          </motion.div>
-
-          {/* How it works */}
-          <div className="flex flex-wrap items-center justify-center gap-2 md:gap-4 mt-8 mb-2 text-[11px] uppercase tracking-[0.1em] text-neutral-400">
-            {[
-              lang === 'sq' ? '1. Zgjidh kategorinë' : '1. Choose category',
-              lang === 'sq' ? '2. Ngarko fotot' : '2. Upload photos',
-              lang === 'sq' ? '3. Redakto & porosit' : '3. Edit & order',
-            ].map((s, i) => (
-              <React.Fragment key={i}>
-                <span className="font-semibold text-neutral-600">{s}</span>
-                {i < 2 && <ChevronRight size={12} className="opacity-40" />}
-              </React.Fragment>
-            ))}
-          </div>
-        </div>
+        </section>
 
         {!bookCreationEnabled && (
           <div className="max-w-3xl mx-auto px-4 mb-6">
@@ -502,8 +574,9 @@ export default function AlbumAI() {
           </div>
         )}
 
-        {/* ── Steps ── */}
-        <div className="max-w-3xl mx-auto px-4 md:px-8 pb-16">
+        <div id="fillo" className="max-w-4xl mx-auto px-4 md:px-8 py-12 md:py-16">
+          <div className="rounded-[1.75rem] border border-neutral-200/80 bg-white/75 shadow-[0_18px_50px_rgba(42,34,24,0.06)] px-4 py-8 sm:px-8 md:px-10 md:py-11">
+          {!generating && <WizardRail step={step} lang={lang} />}
           {step > 1 && !generating && (
             <button
               onClick={() => setStep(s => (s - 1) as 1 | 2)}
@@ -601,7 +674,7 @@ export default function AlbumAI() {
                         transition={{ delay: 0.45 }}
                         className="font-serif text-xl md:text-2xl font-medium text-neutral-900 mb-2"
                       >
-                        {lang === 'sq' ? 'Albumi yt është gati' : 'Your album is ready'}
+                        {L(lang, 'Libri juaj është gati', 'Your book is ready')}
                       </motion.h2>
                       <motion.p
                         initial={{ opacity: 0 }}
@@ -624,7 +697,7 @@ export default function AlbumAI() {
                         <PartyPopper size={26} className="text-white" />
                       </div>
                       <h2 className="font-serif text-xl font-medium text-neutral-900 mb-6">
-                        {lang === 'sq' ? 'Albumi u krijua!' : 'Your album is ready!'}
+                        {L(lang, 'Libri u lidh.', 'The book is bound.')}
                       </h2>
                     </motion.div>
                   ) : (
@@ -637,7 +710,8 @@ export default function AlbumAI() {
                       {/* Mini photo orbit while designing */}
                       <div className="relative w-28 h-28 mb-6">
                         <motion.div
-                          className="absolute inset-0 rounded-full bg-neutral-900 flex items-center justify-center shadow-xl"
+                          className="absolute inset-0 rounded-full flex items-center justify-center shadow-xl"
+                          style={{ background: INK }}
                           animate={{ rotate: [0, -5, 5, 0] }}
                           transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
                         >
@@ -667,13 +741,15 @@ export default function AlbumAI() {
                         })}
                       </div>
 
-                      <h2 className="font-serif text-xl font-medium text-neutral-900 mb-2">
-                        {lang === 'sq' ? 'Duke krijuar albumin tënd...' : 'Building your album...'}
+                      <h2 className="font-serif text-xl font-medium mb-2" style={{ color: INK }}>
+                        {L(lang, 'Duke lidhur albumin tuaj…', 'Binding your album…')}
                       </h2>
                       <p className="text-sm text-neutral-500 mb-8 max-w-xs">
-                        {lang === 'sq'
-                          ? 'Po zgjedhim kopertinat, layout-et dhe vendosim fotot — çdo herë ndryshe.'
-                          : 'Picking covers, layouts and placing your photos — different every time.'}
+                        {L(
+                          lang,
+                          'Po zgjedhim kopertinën, paraqitjen dhe vendosim fotot — gati për t’i prekur në editor.',
+                          'Choosing the cover, the layouts and placing your photos — ready to touch in the editor.',
+                        )}
                       </p>
 
                       {/* Stage stepper */}
@@ -720,10 +796,12 @@ export default function AlbumAI() {
                 initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.25 }}
               >
-                <p className="text-[10px] uppercase tracking-[0.28em] text-neutral-400 mb-2 text-center">01 / 03</p>
-                <h2 className="text-xl md:text-2xl font-serif font-medium text-neutral-900 leading-tight mb-6 text-center">
-                  {lang === 'sq' ? 'Çfarë albumi po krijon?' : 'What kind of album are you making?'}
+                <h2 className="text-xl md:text-2xl font-serif font-medium leading-tight mb-2 text-center" style={{ color: INK }}>
+                  {L(lang, 'Cili kujtim do të bëhet libër?', 'Which memory becomes the book?')}
                 </h2>
+                <p className="text-sm text-neutral-500 text-center mb-7 max-w-md mx-auto">
+                  {L(lang, 'Paleta, shkronjat dhe kopertina ndjekin historinë që zgjidhni — dasmë, udhëtim, familje.', 'Palette, type and cover follow the story you pick — wedding, travel, family.')}
+                </p>
 
                 {loadingCat ? (
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -776,14 +854,15 @@ export default function AlbumAI() {
                 initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.25 }}
               >
-                <p className="text-[10px] uppercase tracking-[0.28em] text-neutral-400 mb-2 text-center">02 / 03</p>
-                <h2 className="text-xl md:text-2xl font-serif font-medium text-neutral-900 leading-tight mb-2 text-center">
-                  {lang === 'sq' ? 'Ngarko fotot e tua' : 'Upload your photos'}
+                <h2 className="text-xl md:text-2xl font-serif font-medium leading-tight mb-2 text-center" style={{ color: INK }}>
+                  {L(lang, 'Vendosni fotot në rendin e historisë', 'Lay the photos in story order')}
                 </h2>
-                <p className="text-sm text-neutral-500 text-center mb-6">
-                  {lang === 'sq'
-                    ? `Të paktën ${MIN_PHOTOS} foto për një album të plotë dhe të larmishëm.`
-                    : `At least ${MIN_PHOTOS} photos for a full, varied album.`}
+                <p className="text-sm text-neutral-500 text-center mb-6 max-w-md mx-auto">
+                  {L(
+                    lang,
+                    `Të paktën ${MIN_PHOTOS} foto. E para bëhet kopertina, e fundit e mbyll librin. Tërhiqini për t’i rregulluar.`,
+                    `At least ${MIN_PHOTOS} photos. The first becomes the cover, the last closes the book. Drag to reorder.`,
+                  )}
                 </p>
 
                 {genError && (
@@ -819,10 +898,10 @@ export default function AlbumAI() {
                   onDrop={bookCreationEnabled ? handleDrop : undefined}
                   onClick={() => bookCreationEnabled && photos.length < MAX_PHOTOS && fileInputRef.current?.click()}
                   aria-disabled={!bookCreationEnabled}
-                  className={`rounded-2xl border-2 border-dashed transition-colors duration-150 flex flex-col items-center justify-center text-center py-10 px-6 mb-6 ${
+                  className={`rounded-[1.35rem] border-2 border-dashed transition-colors duration-150 flex flex-col items-center justify-center text-center py-12 px-6 mb-6 ${
                     !bookCreationEnabled ? 'cursor-not-allowed opacity-50 border-neutral-200 bg-neutral-50'
-                      : photos.length >= MAX_PHOTOS ? 'cursor-default border-neutral-200 bg-neutral-50'
-                      : dragActive ? 'cursor-pointer border-neutral-800 bg-neutral-100' : 'cursor-pointer border-neutral-300 bg-white hover:border-neutral-500'
+                      : photos.length >= MAX_PHOTOS ? 'cursor-default border-neutral-200 bg-[#f7f4f0]'
+                      : dragActive ? 'cursor-pointer border-[#2A2218] bg-[#f7f4f0]' : 'cursor-pointer border-neutral-300 bg-[#f7f4f0]/60 hover:border-[#2A2218]/50'
                   }`}
                 >
                   <input
@@ -942,7 +1021,7 @@ export default function AlbumAI() {
                     disabled={!canGenerate}
                     className="flex items-center gap-2 px-8 py-3.5 rounded-full bg-neutral-900 text-white text-[12px] uppercase tracking-[0.16em] font-semibold hover:bg-neutral-700 active:scale-95 transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-neutral-900"
                   >
-                    {lang === 'sq' ? 'Vazhdo' : 'Continue'}
+                    {L(lang, 'Vazhdo te libri', 'Continue to the book')}
                     <ChevronRight size={15} />
                   </button>
                 </div>
@@ -953,14 +1032,15 @@ export default function AlbumAI() {
                 initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.25 }}
               >
-                <p className="text-[10px] uppercase tracking-[0.28em] text-neutral-400 mb-2 text-center">03 / 03</p>
-                <h2 className="text-xl md:text-2xl font-serif font-medium text-neutral-900 leading-tight mb-2 text-center">
-                  {lang === 'sq' ? 'Zgjidh madhësinë e albumit' : 'Choose your album size'}
+                <h2 className="text-xl md:text-2xl font-serif font-medium leading-tight mb-2 text-center" style={{ color: INK }}>
+                  {L(lang, 'Si do ta mbani në dorë?', 'How will you hold it?')}
                 </h2>
                 <p className="text-sm text-neutral-500 text-center mb-6 max-w-md mx-auto">
-                  {lang === 'sq'
-                    ? `Bazuar në ${doneCount} fotot e tua, kemi zgjedhur madhësinë më të përshtatshme. Mund ta ndryshosh nëse dëshiron.`
-                    : `Based on your ${doneCount} photos, we picked the best-fitting size. Feel free to change it.`}
+                  {L(
+                    lang,
+                    `Nga ${doneCount} fotot tuaja, kemi zgjedhur madhësinë që i rri më mirë. Ndryshojeni nëse dëshironi — çmimi ndjek faqet, jo AI-në.`,
+                    `From your ${doneCount} photos, we chose the size that fits. Change it if you like — price follows pages, not AI.`,
+                  )}
                 </p>
 
                 {genError && (
@@ -1007,204 +1087,295 @@ export default function AlbumAI() {
                     className="flex items-center gap-2 px-8 py-3.5 rounded-full bg-neutral-900 text-white text-[12px] uppercase tracking-[0.16em] font-semibold hover:bg-neutral-700 active:scale-95 transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-neutral-900"
                   >
                     <Wand2 size={15} />
-                    {lang === 'sq' ? 'Krijo albumin tim' : 'Generate my album'}
+                    {L(lang, 'Lidhe albumin', 'Bind the album')}
                   </button>
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
+          </div>
         </div>
 
-        {/* ── Explanation sections ── */}
         {!generating && (
           <>
-            {/* How it works, in detail */}
-            <section className="border-t border-neutral-200/70 bg-white">
-              <div className="max-w-5xl mx-auto px-4 md:px-8 py-16 md:py-20">
-                <div className="text-center max-w-lg mx-auto mb-12">
-                  <p className="text-[10px] uppercase tracking-[0.28em] text-neutral-400 mb-2">
-                    {lang === 'sq' ? 'Si funksionon' : 'How it works'}
+            <section className="bg-white border-t border-neutral-100 py-16 md:py-24">
+              <div className="max-w-6xl mx-auto px-5 md:px-8">
+                <div className="max-w-xl mb-10 md:mb-14">
+                  <p className="text-[11px] uppercase tracking-[0.3em] text-neutral-400 mb-3">
+                    {L(lang, 'rituali', 'the ritual')}
                   </p>
-                  <h2 className="text-2xl md:text-[32px] font-serif font-medium text-neutral-900 leading-tight">
-                    {lang === 'sq' ? 'Nga fotot te albumi, në tre hapa' : 'From photos to a finished album in three steps'}
+                  <h2 className="font-serif text-3xl md:text-4xl font-medium leading-tight mb-4" style={{ color: INK }}>
+                    {L(lang, 'Tre gjeste, një album i vërtetë', 'Three gestures, one real album')}
                   </h2>
+                  <p className="text-neutral-500 text-[15px] leading-relaxed">
+                    {L(
+                      lang,
+                      'Nuk është një kolazh i rastësishëm. Është i njëjti libër që printojmë nga editori — vetëm se faqet nisin të rregulluara.',
+                      'This is not a random collage. It is the same book we print from the editor — only the pages start already arranged.',
+                    )}
+                  </p>
                 </div>
-
-                <div className="grid sm:grid-cols-3 gap-6 md:gap-8">
+                <div className="grid sm:grid-cols-3 gap-5 md:gap-6">
                   {[
                     {
-                      icon: LayoutTemplate,
-                      title: { sq: 'Zgjidh kategorinë', en: 'Choose a category' },
+                      icon: BookOpen,
+                      title: { sq: 'Zgjidhni kujtimin', en: 'Choose the memory' },
                       desc: {
-                        sq: 'Dasmë, udhëtim, familje apo ditëlindje — çdo kategori ka paletën, shkronjat dhe dekorimet e veta të gatshme.',
-                        en: 'Wedding, travel, family or birthday — each category comes with its own ready-made palette, fonts and decorations.',
+                        sq: 'Dasmë, udhëtim, familje, miqësi ose festë. Paleta dhe kopertina ndjekin atë histori, jo një stil të përgjithshëm.',
+                        en: 'Wedding, travel, family, friendship or a celebration. Palette and cover follow that story, not a generic look.',
                       },
                     },
                     {
-                      icon: UploadCloud,
-                      title: { sq: 'Ngarko fotot e tua', en: 'Upload your photos' },
+                      icon: Images,
+                      title: { sq: 'Vendosni fotot', en: 'Lay the photos' },
                       desc: {
-                        sq: `Të paktën ${MIN_PHOTOS}, deri në ${MAX_PHOTOS} foto. Ngarko në rendin e historisë — e para bëhet kopertina, e fundit e mbyll albumin.`,
-                        en: `At least ${MIN_PHOTOS}, up to ${MAX_PHOTOS} photos. Upload in story order — the first becomes the cover, the last closes the book.`,
-                      },
-                    },
-                    {
-                      icon: Wand2,
-                      title: { sq: 'AI dizajnon, ti redakton', en: 'AI designs, you fine-tune' },
-                      desc: {
-                        sq: 'Sistemi rregullon çdo faqe automatikisht — paraqitje, radhitje dhe dekorime. Pastaj hap editorin dhe ndrysho çka të duash.',
-                        en: 'The system lays out every page automatically — layout, ordering and decorations. Then open the editor and change anything you like.',
-                      },
-                    },
-                  ].map((item, i) => (
-                    <motion.div
-                      key={i}
-                      initial={{ opacity: 0, y: 16 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: true, margin: '-60px' }}
-                      transition={{ delay: i * 0.08, duration: 0.45 }}
-                      className="relative text-center sm:text-left"
-                    >
-                      <div className="w-11 h-11 rounded-2xl bg-neutral-900 flex items-center justify-center mb-4 mx-auto sm:mx-0">
-                        <item.icon size={18} className="text-white" />
-                      </div>
-                      <p className="text-[10px] uppercase tracking-[0.18em] text-neutral-300 font-semibold mb-1.5">
-                        0{i + 1}
-                      </p>
-                      <h3 className="font-serif text-lg font-medium text-neutral-900 mb-2">
-                        {lang === 'sq' ? item.title.sq : item.title.en}
-                      </h3>
-                      <p className="text-[13.5px] text-neutral-500 leading-relaxed">
-                        {lang === 'sq' ? item.desc.sq : item.desc.en}
-                      </p>
-                    </motion.div>
-                  ))}
-                </div>
-              </div>
-            </section>
-
-            {/* Why let AI build it */}
-            <section style={{ background: '#f7f5f2' }}>
-              <div className="max-w-5xl mx-auto px-4 md:px-8 py-16 md:py-20">
-                <div className="text-center max-w-lg mx-auto mb-12">
-                  <p className="text-[10px] uppercase tracking-[0.28em] text-neutral-400 mb-2">
-                    {lang === 'sq' ? 'Përse AI' : 'Why AI'}
-                  </p>
-                  <h2 className="text-2xl md:text-[32px] font-serif font-medium text-neutral-900 leading-tight">
-                    {lang === 'sq' ? 'E njëjta cilësi, pa orë pune' : 'Same quality, none of the manual work'}
-                  </h2>
-                </div>
-
-                <div className="grid sm:grid-cols-2 gap-4 md:gap-5">
-                  {[
-                    {
-                      icon: Clock,
-                      title: { sq: 'Shpejtësi e vërtetë', en: 'Genuinely fast' },
-                      desc: {
-                        sq: 'Zakonisht duhen orë të tëra për të radhitur fotot faqe për faqe. Me AI, albumi yt është gati brenda pak minutash.',
-                        en: 'Arranging photos page by page usually takes hours. With AI, your album is ready within a few minutes.',
-                      },
-                    },
-                    {
-                      icon: Palette,
-                      title: { sq: 'Dizajn i menduar', en: 'Thoughtful design' },
-                      desc: {
-                        sq: 'Ngjyrat, shkronjat dhe dekorimet zgjidhen sipas kategorisë që ke zgjedhur, jo në mënyrë të rastësishme.',
-                        en: 'Colors, fonts and decorations are chosen to match your category, not applied at random.',
+                        sq: `E para bëhet kopertina, e fundit kapaku i pasëm. Çdo foto përdoret një herë — faqet mbeten të ajrosura, jo të mbushura.`,
+                        en: 'The first becomes the cover, the last the back. Each photo is used once — spreads stay airy, never cramped.',
                       },
                     },
                     {
                       icon: PenLine,
-                      title: { sq: 'Ende në kontroll tënd', en: 'You stay in control' },
+                      title: { sq: 'Ne e nisim, ju e mbyllni', en: 'We start it, you finish it' },
                       desc: {
-                        sq: 'Rezultati i AI-së është vetëm pika e nisjes. Hape editorin dhe ndrysho çdo faqe, foto apo tekst siç dëshiron.',
-                        en: 'The AI result is just a starting point. Open the editor and change any page, photo or text however you like.',
-                      },
-                    },
-                    {
-                      icon: Truck,
-                      title: { sq: 'E njëjta cilësi printimi', en: 'Same print quality' },
-                      desc: {
-                        sq: 'Albumi yt printohet me letër mat 200g dhe lidhje layflat — pikërisht si çdo album i krijuar manualisht.',
-                        en: 'Your album is printed on matte 200g paper with lay-flat binding — exactly like a manually designed one.',
+                        sq: 'Hapet i njëjti editor. Ndryshoni paraqitjen, tekstin, kornizat — pastaj e printojmë me letër mat 200g.',
+                        en: 'The same editor opens. Change layout, type, frames — then we print it on matte 200g paper.',
                       },
                     },
                   ].map((item, i) => (
                     <motion.div
-                      key={i}
-                      initial={{ opacity: 0, y: 14 }}
+                      key={item.title.en}
+                      initial={{ opacity: 0, y: 16 }}
                       whileInView={{ opacity: 1, y: 0 }}
                       viewport={{ once: true, margin: '-60px' }}
-                      transition={{ delay: i * 0.06, duration: 0.4 }}
-                      className="flex items-start gap-4 p-5 rounded-2xl bg-white border border-neutral-200/70"
+                      transition={{ delay: i * 0.08, duration: 0.45 }}
+                      className="rounded-[1.35rem] border border-neutral-100 bg-[#f7f4f0] p-6 md:p-7"
                     >
-                      <div className="w-9 h-9 rounded-xl bg-neutral-100 flex items-center justify-center shrink-0">
-                        <item.icon size={16} className="text-neutral-700" />
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center mb-5 text-white" style={{ background: INK }}>
+                        <item.icon size={16} />
                       </div>
-                      <div>
-                        <h3 className="font-serif text-[15px] font-medium text-neutral-900 mb-1">
-                          {lang === 'sq' ? item.title.sq : item.title.en}
-                        </h3>
-                        <p className="text-[13px] text-neutral-500 leading-relaxed">
-                          {lang === 'sq' ? item.desc.sq : item.desc.en}
-                        </p>
-                      </div>
+                      <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-400 mb-2">0{i + 1}</p>
+                      <h3 className="font-serif text-xl mb-2" style={{ color: INK }}>
+                        {L(lang, item.title.sq, item.title.en)}
+                      </h3>
+                      <p className="text-[14px] text-neutral-500 leading-relaxed">
+                        {L(lang, item.desc.sq, item.desc.en)}
+                      </p>
                     </motion.div>
                   ))}
                 </div>
               </div>
             </section>
 
-            {/* FAQ */}
-            <section className="border-t border-neutral-200/70 bg-white">
-              <div className="max-w-2xl mx-auto px-4 md:px-8 py-16 md:py-20">
-                <div className="text-center mb-10">
-                  <p className="text-[10px] uppercase tracking-[0.28em] text-neutral-400 mb-2">
-                    {lang === 'sq' ? 'Pyetje' : 'FAQ'}
+            <section className="py-16 md:py-24 border-t border-neutral-200/70">
+              <div className="max-w-6xl mx-auto px-5 md:px-8">
+                <div className="max-w-xl mb-10 md:mb-14">
+                  <p className="text-[11px] uppercase tracking-[0.3em] text-neutral-400 mb-3">
+                    {L(lang, 'çfarë vendosim', 'what we place')}
                   </p>
-                  <h2 className="text-2xl md:text-[32px] font-serif font-medium text-neutral-900 leading-tight">
-                    {lang === 'sq' ? 'Pyetje të shpeshta' : 'Frequently asked questions'}
+                  <h2 className="font-serif text-3xl md:text-4xl font-medium leading-tight mb-4" style={{ color: INK }}>
+                    {L(lang, 'Jo një generator. Një atelier që njeh librin.', 'Not a generator. An atelier that knows the book.')}
                   </h2>
+                  <p className="text-neutral-500 text-[15px] leading-relaxed">
+                    {L(
+                      lang,
+                      'Sistemi ynë punon me të njëjtat paraqitje, fonte dhe paleta që përdorni në editor — të prerë për Përgjithmonë, jo për çdo aplikacion foto.',
+                      'Our system uses the same layouts, fonts and palettes you use in the editor — cut for Përgjithmonë, not for every photo app.',
+                    )}
+                  </p>
                 </div>
-
-                <div className="space-y-2.5">
+                <div className="grid sm:grid-cols-2 gap-4 md:gap-5">
                   {[
                     {
-                      q: { sq: 'A mund ta redaktoj albumin pasi ta krijojë AI?', en: 'Can I edit the album after AI creates it?' },
-                      a: {
-                        sq: 'Po, plotësisht. Pas krijimit, albumi hapet direkt në editorin tonë ku mund të ndryshosh çdo faqe, foto, tekst apo dekorim.',
-                        en: 'Yes, completely. Once created, the album opens directly in our editor where you can change any page, photo, text or decoration.',
+                      icon: BookOpen,
+                      title: { sq: 'Kopertina nga fotoja e parë', en: 'Cover from the first photo' },
+                      desc: {
+                        sq: 'Historia hapet me foton që vendosni të parën. E fundit e mbyll kapakun e pasëm — si një libër i vërtetë.',
+                        en: 'The story opens with the photo you place first. The last one closes the back cover — like a real book.',
                       },
                     },
                     {
-                      q: { sq: 'Sa foto duhen për një album?', en: 'How many photos do I need?' },
-                      a: {
-                        sq: `Të paktën ${MIN_PHOTOS} foto për një album të plotë e të larmishëm, deri në ${MAX_PHOTOS} foto në total.`,
-                        en: `At least ${MIN_PHOTOS} photos for a full, varied album, up to ${MAX_PHOTOS} photos total.`,
+                      icon: LayoutTemplate,
+                      title: { sq: 'Paraqitje të ajrosura', en: 'Airy layouts' },
+                      desc: {
+                        sq: 'Faqet nuk mbushen me kolazhe. Çdo foto merr hapësirë, me hapje lay-flat që nuk e humb imazhin në mes.',
+                        en: 'Pages are not stuffed with collages. Each photo gets room, with lay-flat spreads that do not lose the image in the gutter.',
                       },
                     },
                     {
-                      q: { sq: 'A ndryshon çmimi nëse e krijoj me AI?', en: 'Does it cost more to create it with AI?' },
-                      a: {
-                        sq: 'Jo. Çmimi varet vetëm nga madhësia dhe numri i faqeve të albumit, jo nga mënyra se si e krijove — manualisht apo me AI.',
-                        en: 'No. Price only depends on the book size and page count, not on whether you built it manually or with AI.',
+                      icon: Palette,
+                      title: { sq: 'Paletë sipas kujtimit', en: 'A palette for the memory' },
+                      desc: {
+                        sq: 'Dasma merr krem dhe ar; udhëtimi dritë dhe peizazh; familja ngrohtësi. Jo ngjyra të rastësishme.',
+                        en: 'Wedding gets cream and gold; travel, light and landscape; family, warmth. Not random colours.',
                       },
                     },
                     {
-                      q: { sq: 'Po nëse nuk më pëlqen dizajni i gjeneruar?', en: 'What if I don\'t like the generated design?' },
-                      a: {
-                        sq: 'Mund ta rigjenerosh me foto të tjera ose ta redaktosh lirshëm çdo faqe në editor derisa të jesh i/e kënaqur.',
-                        en: 'You can regenerate it with different photos, or freely edit any page in the editor until you\'re happy with it.',
+                      icon: Clock,
+                      title: { sq: 'Minuta, jo mbrëmje', en: 'Minutes, not an evening' },
+                      desc: {
+                        sq: 'Radhitja faqe për faqe zakonisht merr orë. Këtu niset brenda minutash — pastaj e prekni ju.',
+                        en: 'Arranging page by page usually takes hours. Here it starts within minutes — then you touch it.',
                       },
                     },
                   ].map((item, i) => (
-                    <div key={i} className="rounded-xl border border-neutral-200/70 overflow-hidden">
+                    <motion.div
+                      key={item.title.en}
+                      initial={{ opacity: 0, y: 14 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true, margin: '-60px' }}
+                      transition={{ delay: i * 0.06, duration: 0.4 }}
+                      className="rounded-2xl bg-white/80 border border-neutral-100 p-6 md:p-7"
+                    >
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center mb-4 text-white" style={{ background: INK }}>
+                        <item.icon size={16} />
+                      </div>
+                      <h3 className="font-serif text-xl mb-2" style={{ color: INK }}>
+                        {L(lang, item.title.sq, item.title.en)}
+                      </h3>
+                      <p className="text-[14px] text-neutral-500 leading-relaxed">
+                        {L(lang, item.desc.sq, item.desc.en)}
+                      </p>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            <section className="bg-white py-16 md:py-24 border-t border-neutral-100">
+              <div className="max-w-6xl mx-auto px-5 md:px-8">
+                <div className="text-center max-w-2xl mx-auto mb-10 md:mb-14">
+                  <p className="text-[11px] uppercase tracking-[0.3em] text-neutral-400 mb-3">
+                    {L(lang, 'dy rrugë, i njëjti printim', 'two paths, the same print')}
+                  </p>
+                  <h2 className="font-serif text-3xl md:text-4xl font-medium leading-tight" style={{ color: INK }}>
+                    {L(lang, 'Ju mbeteni autori. Printimi nuk ndryshon.', 'You remain the author. The print does not change.')}
+                  </h2>
+                </div>
+                <div className="grid md:grid-cols-2 gap-4 md:gap-5">
+                  <div className="rounded-[1.5rem] border border-neutral-800 p-7 md:p-9 flex flex-col text-white" style={{ background: DARK }}>
+                    <div className="w-11 h-11 rounded-full bg-white/10 border border-white/15 flex items-center justify-center mb-5">
+                      <Sparkles size={18} />
+                    </div>
+                    <h3 className="font-serif text-2xl mb-3">{L(lang, 'Nisni me AI', 'Start with AI')}</h3>
+                    <p className="text-[14px] leading-relaxed text-white/60 mb-8">
+                      {L(
+                        lang,
+                        `Ngarkoni ${MIN_PHOTOS}+ foto. Ne zgjedhim paraqitjen dhe paletën. Pastaj e rregulloni çdo faqe para se të printojmë.`,
+                        `Upload ${MIN_PHOTOS}+ photos. We choose layout and palette. Then you fine-tune every page before we print.`,
+                      )}
+                    </p>
+                    <a href="#fillo" className="mt-auto inline-flex items-center gap-2 text-[13px] font-semibold">
+                      {L(lang, 'Fillo këtu', 'Begin here')}
+                      <ArrowRight size={14} />
+                    </a>
+                  </div>
+                  <div className="rounded-[1.5rem] border border-neutral-100 bg-[#f7f4f0] p-7 md:p-9 flex flex-col">
+                    <div className="w-11 h-11 rounded-full bg-white border border-neutral-200 flex items-center justify-center mb-5">
+                      <PenLine size={18} style={{ color: INK }} />
+                    </div>
+                    <h3 className="font-serif text-2xl mb-3" style={{ color: INK }}>
+                      {L(lang, 'Dizajnoni çdo faqe', 'Design every page')}
+                    </h3>
+                    <p className="text-[14px] leading-relaxed text-neutral-500 mb-8">
+                      {L(
+                        lang,
+                        'Zgjidhni stilin, madhësinë dhe paraqitjen. Vendosni fotot dhe tekstin — pikërisht si një libër i vërtetë, faqe dyshe.',
+                        'Pick style, size and layout. Place photos and type — like a real book, spread by spread.',
+                      )}
+                    </p>
+                    <Link href="/krijo" className="mt-auto">
+                      <span className="inline-flex items-center gap-2 text-[13px] font-semibold" style={{ color: INK }}>
+                        {L(lang, 'Hap editorin', 'Open the editor')}
+                        <ArrowRight size={14} />
+                      </span>
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section className="py-16 md:py-24 border-t border-neutral-200/70">
+              <div className="max-w-6xl mx-auto px-5 md:px-8">
+                <div className="max-w-xl mb-10 md:mb-14">
+                  <p className="text-[11px] uppercase tracking-[0.3em] text-neutral-400 mb-3">
+                    {L(lang, 'çfarë pret në kuti', 'what arrives in the box')}
+                  </p>
+                  <h2 className="font-serif text-3xl md:text-4xl font-medium leading-tight mb-4" style={{ color: INK }}>
+                    {L(lang, 'I njëjti objekt. Asnjë shkurtim sepse e nisi AI.', 'The same object. No shortcut because AI started it.')}
+                  </h2>
+                  <p className="text-neutral-500 text-[15px] leading-relaxed">
+                    {L(
+                      lang,
+                      'Letër galerie, hapje e sheshtë, kopertinë e fortë dhe dërgesë e kujdesshme në Shqipëri — si çdo album i dizajnuar me dorë.',
+                      'Gallery paper, lay-flat opening, hardcover and careful delivery across Albania — like every album designed by hand.',
+                    )}
+                  </p>
+                </div>
+                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
+                  {[
+                    { icon: Layers, title: { sq: 'Letër mat 200g', en: 'Matte 200g paper' }, desc: { sq: 'E butë, pa shkëlqim. Ngjyrat qëndrojnë të pasura në dritë ditore.', en: 'Soft, no glare. Colours stay rich in daylight.' } },
+                    { icon: BookOpen, title: { sq: 'Lidhje lay-flat', en: 'Lay-flat binding' }, desc: { sq: 'Faqja dyshe hapet fare — asnjë foto nuk humbet në mes.', en: 'The spread opens fully — no photo lost in the gutter.' } },
+                    { icon: Package, title: { sq: 'Kopertinë e fortë', en: 'Hardcover' }, desc: { sq: 'E menduar të rrijë në tryezë dhe në raft, jo vetëm në telefon.', en: 'Meant to live on a table and a shelf, not only on a phone.' } },
+                    { icon: Truck, title: { sq: 'Kuti & dërgesë', en: 'Box & delivery' }, desc: { sq: '10–16 ditë në Shqipëri. Mund të paguani edhe në dorëzim.', en: '10–16 days in Albania. Cash on delivery too.' } },
+                  ].map((item) => (
+                    <div key={item.title.en} className="rounded-2xl bg-white/80 border border-neutral-100 p-6">
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center mb-4 text-white" style={{ background: INK }}>
+                        <item.icon size={16} />
+                      </div>
+                      <h3 className="font-serif text-lg mb-2" style={{ color: INK }}>{L(lang, item.title.sq, item.title.en)}</h3>
+                      <p className="text-[13.5px] text-neutral-500 leading-relaxed">{L(lang, item.desc.sq, item.desc.en)}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            <section className="bg-white border-t border-neutral-100 py-16 md:py-24">
+              <div className="max-w-2xl mx-auto px-5 md:px-8">
+                <p className="text-center text-[11px] uppercase tracking-[0.3em] text-neutral-400 mb-3">
+                  {L(lang, 'pyetje nga shtëpia', 'questions from home')}
+                </p>
+                <h2 className="text-center font-serif text-3xl md:text-4xl font-medium leading-tight mb-10" style={{ color: INK }}>
+                  {L(lang, 'Para se të ngarkoni fotot', 'Before you upload the photos')}
+                </h2>
+                <div className="space-y-2.5">
+                  {[
+                    {
+                      q: { sq: 'A mbetet albumi i redaktueshëm?', en: 'Does the album stay editable?' },
+                      a: {
+                        sq: 'Po. Sapo lidhet, hapet direkt në editorin tonë. Ndryshoni çdo faqe, foto, tekst apo kornizë para se të porositeni.',
+                        en: 'Yes. Once bound, it opens in our editor. Change any page, photo, caption or frame before you order.',
+                      },
+                    },
+                    {
+                      q: { sq: 'Sa foto duhen?', en: 'How many photos do I need?' },
+                      a: {
+                        sq: `Të paktën ${MIN_PHOTOS} për një libër të plotë, deri në ${MAX_PHOTOS}. E para është kopertina, e fundit kapaku i pasëm.`,
+                        en: `At least ${MIN_PHOTOS} for a full book, up to ${MAX_PHOTOS}. The first is the cover, the last is the back.`,
+                      },
+                    },
+                    {
+                      q: { sq: 'A kushton më shumë sepse e nisi AI?', en: 'Does it cost more because AI started it?' },
+                      a: {
+                        sq: 'Jo. Çmimi varet nga madhësia dhe faqet — i njëjti printim, e njëjta letër, qoftë me AI apo me editor.',
+                        en: 'No. Price follows size and pages — the same print, the same paper, whether AI or the editor started it.',
+                      },
+                    },
+                    {
+                      q: { sq: 'Po nëse nuk më pëlqen paraqitja?', en: 'What if I do not like the layout?' },
+                      a: {
+                        sq: 'Ndryshojeni faqe për faqe në editor, ose ngarkoni sërish fotot. Printojmë vetëm kur jeni të kënaqur.',
+                        en: 'Change it page by page in the editor, or upload again. We print only when you are happy.',
+                      },
+                    },
+                  ].map((item, i) => (
+                    <div key={item.q.en} className="rounded-xl border border-neutral-200/70 overflow-hidden bg-[#f7f4f0]/50">
                       <button
                         onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                        className="w-full flex items-center justify-between gap-4 px-5 py-4 text-left hover:bg-neutral-50 transition-colors"
+                        className="w-full flex items-center justify-between gap-4 px-5 py-4 text-left hover:bg-white/70 transition-colors"
                       >
-                        <span className="font-medium text-[14px] text-neutral-800">
-                          {lang === 'sq' ? item.q.sq : item.q.en}
+                        <span className="font-medium text-[14px]" style={{ color: INK }}>
+                          {L(lang, item.q.sq, item.q.en)}
                         </span>
                         {openFaq === i
                           ? <Minus size={15} className="text-neutral-400 shrink-0" />
@@ -1220,7 +1391,7 @@ export default function AlbumAI() {
                             className="overflow-hidden"
                           >
                             <p className="px-5 pb-4 text-[13.5px] text-neutral-500 leading-relaxed">
-                              {lang === 'sq' ? item.a.sq : item.a.en}
+                              {L(lang, item.a.sq, item.a.en)}
                             </p>
                           </motion.div>
                         )}
@@ -1230,9 +1401,35 @@ export default function AlbumAI() {
                 </div>
               </div>
             </section>
+
+            <section className="py-16 md:py-24 text-center" style={{ background: DARK }}>
+              <div className="max-w-lg mx-auto px-5">
+                <h2 className="font-serif text-3xl md:text-4xl font-medium text-white mb-4 leading-tight">
+                  {L(lang, 'Libri juaj, i nisur nga fotot', 'Your book, started from the photos')}
+                </h2>
+                <p className="text-white/50 text-[15px] leading-relaxed mb-8">
+                  {L(
+                    lang,
+                    'Filloni falas. Paguani kur jeni të kënaqur — kartë ose para në dorëzim, kudo në Shqipëri.',
+                    'Start free. Pay when you are happy — card or cash on delivery, anywhere in Albania.',
+                  )}
+                </p>
+                <a
+                  href="#fillo"
+                  className="inline-flex items-center gap-2 px-8 py-4 bg-white rounded-full text-[14px] font-semibold hover:bg-neutral-100 transition-colors"
+                  style={{ color: DARK }}
+                >
+                  {L(lang, 'Ngarko fotot', 'Upload photos')}
+                  <ArrowRight size={16} />
+                </a>
+                <p className="text-white/35 text-[11px] uppercase tracking-[0.16em] mt-5">
+                  {L(lang, 'Nga 3.100 LEK · dërgesë 10–16 ditë', 'From 3,100 LEK · 10–16 day delivery')}
+                </p>
+              </div>
+            </section>
           </>
         )}
       </div>
-    </AppLayout>
+    </MarketingLayout>
   );
 }

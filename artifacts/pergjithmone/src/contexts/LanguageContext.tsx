@@ -177,6 +177,16 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
 }
 
+export function LanguageScope({
+  value,
+  children,
+}: {
+  value: LanguageContextType;
+  children: React.ReactNode;
+}) {
+  return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
+}
+
 export function useLanguage() {
   const context = useContext(LanguageContext);
   const preview = useContext(PreviewLangContext);
