@@ -441,6 +441,14 @@
   animation: aiFilm 42s linear infinite;
   will-change: transform;
 }
+.ai-film-rev {
+  animation: aiFilm 48s linear infinite reverse;
+  will-change: transform;
+}
+.ai-film-slow {
+  animation: aiFilm 56s linear infinite;
+  will-change: transform;
+}
 .ai-polaroid {
   animation: aiPolaroid 6.5s ease-in-out infinite;
   will-change: transform;
@@ -448,6 +456,30 @@
 .ai-develop-sweep {
   animation: aiDevelopSweep 5.5s ease-in-out infinite;
   will-change: transform, opacity;
+}
+@keyframes aiKen {
+  0%   { transform: scale(1) translate3d(0, 0, 0); }
+  100% { transform: scale(1.08) translate3d(-2%, -1%, 0); }
+}
+.ai-ken {
+  animation: aiKen 8s ease-in-out infinite alternate;
+  will-change: transform;
+}
+@keyframes aiOrbA {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50%      { transform: translate3d(5%, 7%, 0) scale(1.1); }
+}
+@keyframes aiOrbB {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1.06); }
+  50%      { transform: translate3d(-7%, -5%, 0) scale(1); }
+}
+.ai-orb-a {
+  animation: aiOrbA 16s ease-in-out infinite;
+  will-change: transform;
+}
+.ai-orb-b {
+  animation: aiOrbB 21s ease-in-out infinite;
+  will-change: transform;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -462,8 +494,13 @@
   .hero-scroll-cue,
   .hero-word-shine,
   .ai-film,
+  .ai-film-rev,
+  .ai-film-slow,
   .ai-polaroid,
-  .ai-develop-sweep {
+  .ai-develop-sweep,
+  .ai-ken,
+  .ai-orb-a,
+  .ai-orb-b {
     animation: none !important;
   }
 }

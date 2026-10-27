@@ -46,25 +46,96 @@ const SS_KEY = 'albumai_pending';
 // Fixed generation stages, each paired with an icon, so the loading screen
 // can render a real stepper instead of a single line of changing text.
 const GEN_STAGES = [
-  { key: 'project', icon: BookOpen,        sq: 'Duke krijuar projektin',  en: 'Creating your project' },
+  { key: 'project', icon: BookOpen,        sq: 'Duke hapur albumin',      en: 'Creating your project' },
   { key: 'pages',    icon: LayoutTemplate,  sq: 'Duke shtuar faqet',       en: 'Adding your pages' },
-  { key: 'design',   icon: Palette,         sq: 'Duke dizajnuar çdo faqe', en: 'Designing every page' },
+  { key: 'design',   icon: Palette,         sq: 'Duke rregulluar çdo faqe', en: 'Designing every page' },
   { key: 'save',     icon: Sparkles,        sq: 'Duke ruajtur albumin',   en: 'Saving your album' },
 ] as const;
 
 const INK = '#2A2218';
 const PAPER = '#f7f4f0';
-const DARK = '#110e0c';
+const DARK = '#1a1410';
+
+const GRAIN =
+  'url("data:image/svg+xml,%3Csvg viewBox=\'0 0 200 200\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cfilter id=\'n\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'0.9\' numOctaves=\'3\' stitchTiles=\'stitch\'/%3E%3C/filter%3E%3Crect width=\'100%25\' height=\'100%25\' filter=\'url(%23n)\'/%3E%3C/svg%3E")';
+
+function AiAtmosphere({ photo, reduced }: { photo?: string; reduced?: boolean }) {
+  return (
+    <>
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background: 'radial-gradient(110% 70% at 50% -10%, #3a2c24 0%, #241c16 42%, #1a1410 100%)',
+        }}
+      />
+      {photo && (
+        <img
+          src={photo}
+          alt=""
+          aria-hidden
+          className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+          style={{
+            opacity: 0.28,
+            filter: 'blur(36px) saturate(0.55) brightness(0.72)',
+            transform: 'scale(1.18)',
+          }}
+        />
+      )}
+      <div
+        aria-hidden
+        className={`${reduced ? '' : 'ai-orb-a'} pointer-events-none absolute -top-[12%] left-[8%] h-[58%] w-[52%] rounded-full opacity-70 blur-3xl`}
+        style={{ background: 'radial-gradient(circle, rgba(212,168,112,0.28) 0%, transparent 68%)' }}
+      />
+      <div
+        aria-hidden
+        className={`${reduced ? '' : 'ai-orb-b'} pointer-events-none absolute -bottom-[18%] right-[-8%] h-[62%] w-[58%] rounded-full opacity-60 blur-3xl`}
+        style={{ background: 'radial-gradient(circle, rgba(140,72,64,0.22) 0%, transparent 70%)' }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 opacity-[0.11]"
+        style={{ backgroundImage: GRAIN, backgroundSize: '180px' }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background: 'radial-gradient(ellipse at 50% 42%, transparent 28%, rgba(12,8,6,0.55) 100%)',
+        }}
+      />
+    </>
+  );
+}
 
 const STAGE_PHOTOS = [
-  'https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=500&q=82&fit=crop&crop=top',
-  'https://images.unsplash.com/photo-1516589178581-6cd7833ae3b2?w=500&q=82&fit=crop',
-  'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=500&q=82&fit=crop',
-  'https://images.unsplash.com/photo-1581952976147-5a2d15560349?w=500&q=82&fit=crop&crop=top',
-  'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=500&q=82&fit=crop&crop=top',
-  'https://images.unsplash.com/photo-1465495976277-4387d4b0b4c6?w=500&q=82&fit=crop',
-  'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?w=500&q=82&fit=crop',
-  'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500&q=82&fit=crop',
+  'https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=800&q=84&fit=crop&crop=top',
+  'https://images.unsplash.com/photo-1516589178581-6cd7833ae3b2?w=800&q=84&fit=crop',
+  'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=800&q=84&fit=crop',
+  'https://images.unsplash.com/photo-1581952976147-5a2d15560349?w=800&q=84&fit=crop&crop=top',
+  'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=800&q=84&fit=crop&crop=top',
+  'https://images.unsplash.com/photo-1465495976277-4387d4b0b4c6?w=800&q=84&fit=crop',
+  'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?w=800&q=84&fit=crop',
+  'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&q=84&fit=crop',
+];
+
+const LIFE_PHOTOS = [
+  'https://images.unsplash.com/photo-1519741497674-611481863552?w=900&q=84&fit=crop',
+  'https://images.unsplash.com/photo-1522673607200-164d1b6ce486?w=900&q=84&fit=crop',
+  'https://images.unsplash.com/photo-1511895426328-dc8714191300?w=900&q=84&fit=crop',
+  'https://images.unsplash.com/photo-1606800052052-a08af7148866?w=900&q=84&fit=crop',
+  'https://images.unsplash.com/photo-1520854221256-17451cc331bf?w=900&q=84&fit=crop',
+  'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=900&q=84&fit=crop',
+  'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=900&q=84&fit=crop',
+  'https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?w=900&q=84&fit=crop',
+  'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=900&q=84&fit=crop',
+  'https://images.unsplash.com/photo-1542038784456-1ea8e935640e?w=900&q=84&fit=crop',
+  'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=900&q=84&fit=crop',
+  'https://images.unsplash.com/photo-1502082553048-f009c37129b9?w=900&q=84&fit=crop',
+  'https://images.unsplash.com/photo-1537633552985-df8429e8048b?w=900&q=84&fit=crop&crop=top',
+  'https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=900&q=84&fit=crop',
+  'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=900&q=84&fit=crop&crop=top',
+  'https://images.unsplash.com/photo-1516589178581-6cd7833ae3b2?w=900&q=84&fit=crop',
 ];
 
 function L(lang: 'sq' | 'en', sq: string, en: string) {
@@ -84,7 +155,7 @@ function usePrefersReducedMotion() {
 }
 
 function FilmMarquee() {
-  const strip = [...STAGE_PHOTOS, ...STAGE_PHOTOS];
+  const strip = [...LIFE_PHOTOS, ...LIFE_PHOTOS];
   return (
     <div className="relative overflow-hidden border-t border-white/10" aria-hidden>
       <div className="pointer-events-none absolute inset-y-0 left-0 w-16 z-10 bg-gradient-to-r from-[#110e0c] to-transparent" />
@@ -95,7 +166,7 @@ function FilmMarquee() {
             key={`${src}-${i}`}
             src={src}
             alt=""
-            className="h-[72px] w-[54px] sm:h-[88px] sm:w-[66px] object-cover rounded-[2px] opacity-80"
+            className="block h-[84px] w-[64px] sm:h-[104px] sm:w-[78px] object-cover rounded-[2px] opacity-85"
           />
         ))}
       </div>
@@ -108,7 +179,7 @@ function Polaroid({
 }: { src: string; className: string; tilt: string; delay: string; reduced: boolean }) {
   return (
     <div
-      className={`${reduced ? '' : 'ai-polaroid'} absolute z-[1] bg-white p-[5px] pb-5 shadow-[0_18px_40px_rgba(0,0,0,0.35)] ${className}`}
+      className={`${reduced ? '' : 'ai-polaroid'} absolute z-[1] bg-[#f3eee7] p-[3px] shadow-[0_18px_40px_rgba(0,0,0,0.35)] ${className}`}
       style={{ ['--tilt' as string]: tilt, animationDelay: delay, transform: `rotate(${tilt})` }}
     >
       <img src={src} alt="" className="block w-full aspect-[3/4] object-cover" />
@@ -116,28 +187,16 @@ function Polaroid({
   );
 }
 
-function DarkroomHero({ lang }: { lang: 'sq' | 'en' }) {
+function AlbumHero({ lang }: { lang: 'sq' | 'en' }) {
   const reduced = usePrefersReducedMotion();
   return (
     <section className="relative overflow-hidden text-[#f3eee7]" style={{ background: DARK }}>
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-[0.07]"
-        style={{
-          backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=\'0 0 200 200\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cfilter id=\'n\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'0.9\' numOctaves=\'3\' stitchTiles=\'stitch\'/%3E%3C/filter%3E%3Crect width=\'100%25\' height=\'100%25\' filter=\'url(%23n)\'/%3E%3C/svg%3E")',
-          backgroundSize: '180px',
-        }}
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute left-1/2 top-[18%] h-[42%] w-[70%] -translate-x-1/2 rounded-full opacity-40 blur-3xl"
-        style={{ background: 'radial-gradient(circle, rgba(232,196,150,0.28) 0%, transparent 68%)' }}
-      />
+      <AiAtmosphere photo={LIFE_PHOTOS[0]} reduced={reduced} />
       {!reduced && (
         <div
           aria-hidden
           className="ai-develop-sweep pointer-events-none absolute inset-y-[8%] left-0 w-[38%] z-[2]"
-          style={{ background: 'linear-gradient(90deg, transparent, rgba(255,244,220,0.16), transparent)' }}
+          style={{ background: 'linear-gradient(90deg, transparent, rgba(255,244,220,0.18), transparent)' }}
         />
       )}
 
@@ -153,14 +212,14 @@ function DarkroomHero({ lang }: { lang: 'sq' | 'en' }) {
           initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
           className="text-[10px] sm:text-[11px] uppercase tracking-[0.38em] text-white/40 mb-6"
         >
-          {L(lang, 'album me AI · dhomë e errët', 'album with AI · darkroom')}
+          {L(lang, 'fotot tuaja, në album', 'your photos, in an album')}
         </motion.p>
         <motion.h1
           initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.06, duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
           className="font-serif text-[clamp(2.15rem,6.4vw,4.1rem)] font-medium leading-[1.08] mb-5"
         >
-          {L(lang, 'Hidhini fotot. Albumi niset vetë.', 'Drop the photos. The album starts itself.')}
+          {L(lang, 'Shtoni fotot. Albumi bëhet vetë.', 'Drop the photos. The album starts itself.')}
         </motion.h1>
         <motion.p
           initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
@@ -169,7 +228,7 @@ function DarkroomHero({ lang }: { lang: 'sq' | 'en' }) {
         >
           {L(
             lang,
-            `Zgjidhni kujtimin. Vendosni ${MIN_PHOTOS}–${MAX_PHOTOS} foto. Ne i radhitim në faqe — pastaj i prekni ju, para printimit.`,
+            `Zgjidhni rastin. Shtoni ${MIN_PHOTOS}–${MAX_PHOTOS} foto. Ne i vendosim në faqe — pastaj i rregulloni ju, para se t’i printojmë.`,
             `Pick the memory. Lay ${MIN_PHOTOS}–${MAX_PHOTOS} photos. We place them on the pages — then you touch them, before we print.`,
           )}
         </motion.p>
@@ -182,17 +241,17 @@ function DarkroomHero({ lang }: { lang: 'sq' | 'en' }) {
             href="#fillo"
             className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full text-[13px] font-semibold bg-white text-[#110e0c] hover:bg-[#f3eee7] transition-colors"
           >
-            {L(lang, 'Hidhi fotot këtu', 'Drop photos here')}
+            {L(lang, 'Shtoni fotot këtu', 'Drop photos here')}
             <ArrowRight size={14} />
           </a>
           <Link href="/krijo">
             <span className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full text-[13px] font-semibold border border-white/20 text-white/80 hover:bg-white/5 transition-colors">
-              {L(lang, 'Ose përgatiteni vetë', 'Or design it yourself')}
+              {L(lang, 'Ose bëjeni vetë', 'Or design it yourself')}
             </span>
           </Link>
         </motion.div>
         <p className="mt-8 text-[10px] uppercase tracking-[0.22em] text-white/30">
-          {L(lang, `${MIN_PHOTOS}–${MAX_PHOTOS} foto  ·  i njëjti editor  ·  letër 200g`, `${MIN_PHOTOS}–${MAX_PHOTOS} photos  ·  the same editor  ·  200g paper`)}
+          {L(lang, `${MIN_PHOTOS}–${MAX_PHOTOS} foto  ·  pastaj i rregulloni  ·  letër 200g`, `${MIN_PHOTOS}–${MAX_PHOTOS} photos  ·  then you refine them  ·  200g paper`)}
         </p>
       </div>
       <FilmMarquee />
@@ -200,66 +259,197 @@ function DarkroomHero({ lang }: { lang: 'sq' | 'en' }) {
   );
 }
 
-function ChaosToOrder({ lang }: { lang: 'sq' | 'en' }) {
-  const pile = STAGE_PHOTOS.slice(0, 6);
+function PhotoRiver() {
+  const a = [...LIFE_PHOTOS, ...LIFE_PHOTOS];
+  const b = [...LIFE_PHOTOS.slice(6), ...LIFE_PHOTOS.slice(0, 6), ...LIFE_PHOTOS.slice(6), ...LIFE_PHOTOS.slice(0, 6)];
   return (
-    <section className="py-16 md:py-24 overflow-hidden" style={{ background: DARK }}>
-      <div className="max-w-6xl mx-auto px-5 md:px-8">
+    <div className="relative py-5 md:py-7 overflow-hidden" style={{ background: DARK }} aria-hidden>
+      <AiAtmosphere photo={LIFE_PHOTOS[4]} />
+      <div className="relative z-[1]">
+      <div className="ai-film-slow flex w-max gap-2 md:gap-2.5 mb-2 md:mb-2.5">
+        {a.map((src, i) => (
+          <img
+            key={`a-${i}`}
+            src={src}
+            alt=""
+            className="block h-32 sm:h-44 md:h-56 w-auto aspect-[4/5] object-cover rounded-[2px]"
+          />
+        ))}
+      </div>
+      <div className="ai-film-rev flex w-max gap-2 md:gap-2.5">
+        {b.map((src, i) => (
+          <img
+            key={`b-${i}`}
+            src={src}
+            alt=""
+            className="block h-28 sm:h-40 md:h-48 w-auto aspect-[5/4] object-cover rounded-[2px] opacity-90"
+          />
+        ))}
+      </div>
+      </div>
+    </div>
+  );
+}
+
+function ChaosToOrder({ lang }: { lang: 'sq' | 'en' }) {
+  const pile = LIFE_PHOTOS.slice(0, 8);
+  const page = LIFE_PHOTOS.slice(0, 6);
+  return (
+    <section className="relative py-16 md:py-24 overflow-hidden" style={{ background: DARK }}>
+      <AiAtmosphere photo={LIFE_PHOTOS[6]} />
+      <div className="relative z-[1] max-w-6xl mx-auto px-5 md:px-8">
         <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-center">
           <div>
             <p className="text-[11px] uppercase tracking-[0.3em] text-white/35 mb-3">
-              {L(lang, 'nga rrëmuja, te radha', 'from the pile, into order')}
+              {L(lang, 'nga rrëmuja, te rregulli', 'from the pile, into order')}
             </p>
             <h2 className="font-serif text-[clamp(1.85rem,3.4vw,2.8rem)] font-medium leading-[1.12] text-[#f3eee7] mb-4">
-              {L(lang, 'Galeria është e mbushur. Albumi merr frymë.', 'The gallery is crowded. The album can breathe.')}
+              {L(lang, 'Në telefon janë të gjitha. Në album, vetëm ato që duhen.', 'The gallery is crowded. The album can breathe.')}
             </h2>
             <p className="text-white/50 text-[15px] leading-relaxed max-w-md">
               {L(
                 lang,
-                'Nuk i ngjisim të gjitha fotot në një faqe. E para bëhet kopertina. Të tjerat gjejnë vend — me hapësirë, jo me kolazh.',
+                'Nuk i ngjisim të gjitha në një faqe. E para bëhet kopertina. Të tjerat gjejnë vendin e tyre — me ajër, jo të ngjeshura.',
                 'We do not glue every photo onto one page. The first becomes the cover. The rest find a place — with air, not collage.',
               )}
             </p>
           </div>
-          <div className="grid sm:grid-cols-2 gap-6 items-end">
-            <div className="relative h-[240px] sm:h-[280px]" aria-hidden>
-              {pile.map((src, i) => (
-                <motion.img
-                  key={src}
-                  src={src}
-                  alt=""
-                  className="absolute left-1/2 top-1/2 w-[88px] h-[118px] object-cover rounded-[2px] border border-white/80 shadow-xl"
-                  style={{ zIndex: i }}
-                  initial={{ x: '-50%', y: '-50%', rotate: 0, opacity: 0 }}
-                  whileInView={{ x: `calc(-50% + ${(i - 2.5) * 10}px)`, y: `calc(-50% + ${(i % 3) * 8}px)`, rotate: (i - 2.5) * 9, opacity: 1 }}
-                  viewport={{ once: true, margin: '-40px' }}
-                  transition={{ delay: i * 0.05, type: 'spring', stiffness: 160, damping: 16 }}
-                />
-              ))}
-              <p className="absolute -bottom-1 left-0 right-0 text-center text-[10px] uppercase tracking-[0.18em] text-white/30">
-                {L(lang, 'në telefon', 'on the phone')}
-              </p>
-            </div>
-            <div aria-hidden>
-              <div className="grid grid-cols-3 gap-1.5 bg-[#f7f4f0] p-2.5 rounded-sm shadow-[0_20px_50px_rgba(0,0,0,0.35)]">
+          <div className="grid sm:grid-cols-2 gap-6 sm:gap-8">
+            <figure className="m-0" aria-hidden>
+              <div className="relative aspect-[4/5]">
                 {pile.map((src, i) => (
                   <motion.img
-                    key={`g-${src}`}
+                    key={src}
                     src={src}
                     alt=""
-                    className={`w-full object-cover ${i === 0 ? 'col-span-2 aspect-[4/3]' : 'aspect-square'}`}
-                    initial={{ opacity: 0, y: 16 }}
-                    whileInView={{ opacity: 1, y: 0 }}
+                    className="absolute left-1/2 top-1/2 w-[46%] h-[58%] object-cover rounded-[2px] border border-white/70 shadow-[0_16px_40px_rgba(0,0,0,0.45)]"
+                    style={{ zIndex: i }}
+                    initial={{ x: '-50%', y: '-50%', rotate: 0, opacity: 0 }}
+                    whileInView={{
+                      x: `calc(-50% + ${(i - 3.5) * 10}%)`,
+                      y: `calc(-50% + ${(i % 4) * 6 - 8}%)`,
+                      rotate: (i - 3.5) * 8,
+                      opacity: 1,
+                    }}
                     viewport={{ once: true, margin: '-40px' }}
-                    transition={{ delay: 0.25 + i * 0.07, duration: 0.4 }}
+                    transition={{ delay: i * 0.05, type: 'spring', stiffness: 160, damping: 16 }}
                   />
                 ))}
               </div>
-              <p className="mt-2 text-center text-[10px] uppercase tracking-[0.18em] text-white/30">
+              <figcaption className="mt-3 text-center text-[10px] uppercase tracking-[0.18em] text-white/30">
+                {L(lang, 'në telefon', 'on the phone')}
+              </figcaption>
+            </figure>
+            <figure className="m-0" aria-hidden>
+              <div className="relative aspect-[4/5] rounded-[2px] shadow-[0_24px_60px_rgba(0,0,0,0.4)] overflow-hidden bg-[#1a120c]">
+                <div className="absolute inset-0 grid grid-cols-3 grid-rows-3 gap-[3px] p-[3px]">
+                  {page.map((src, i) => (
+                    <motion.div
+                      key={`g-${src}`}
+                      className={`relative overflow-hidden ${i === 0 ? 'col-span-2 row-span-2' : ''}`}
+                      initial={{ opacity: 0, y: 18 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true, margin: '-40px' }}
+                      transition={{ delay: 0.2 + i * 0.08, duration: 0.45 }}
+                    >
+                      <img src={src} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+              <figcaption className="mt-3 text-center text-[10px] uppercase tracking-[0.18em] text-white/30">
                 {L(lang, 'në album', 'in the album')}
+              </figcaption>
+            </figure>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const SPREADS = [
+  { cover: LIFE_PHOTOS[0], a: LIFE_PHOTOS[1], b: LIFE_PHOTOS[2], c: LIFE_PHOTOS[3], by: { sq: 'Ana & Erjon · Dasmë', en: 'Ana & Erjon · Wedding' } },
+  { cover: LIFE_PHOTOS[4], a: LIFE_PHOTOS[5], b: LIFE_PHOTOS[6], c: LIFE_PHOTOS[7], by: { sq: 'Familja · Tiranë', en: 'Family · Tirana' } },
+  { cover: LIFE_PHOTOS[8], a: LIFE_PHOTOS[9], b: LIFE_PHOTOS[10], c: LIFE_PHOTOS[11], by: { sq: 'Vera në jug', en: 'Summer in the south' } },
+  { cover: LIFE_PHOTOS[12], a: LIFE_PHOTOS[13], b: LIFE_PHOTOS[14], c: LIFE_PHOTOS[15], by: { sq: 'Miqësi', en: 'Friendship' } },
+];
+
+function LivingAlbum({ lang }: { lang: 'sq' | 'en' }) {
+  const reduced = usePrefersReducedMotion();
+  const [idx, setIdx] = useState(0);
+  useEffect(() => {
+    if (reduced) return;
+    const t = window.setInterval(() => setIdx(i => (i + 1) % SPREADS.length), 3400);
+    return () => window.clearInterval(t);
+  }, [reduced]);
+  const s = SPREADS[idx];
+  return (
+    <section className="relative py-16 md:py-24 overflow-hidden" style={{ background: DARK }}>
+      <AiAtmosphere photo={LIFE_PHOTOS[8]} reduced={reduced} />
+      <div className="relative z-[1] max-w-5xl mx-auto px-5 md:px-8 text-center mb-8 md:mb-12">
+        <p className="text-[11px] uppercase tracking-[0.3em] text-white/35 mb-3">
+          {L(lang, 'albumi i hapur', 'the open album')}
+        </p>
+        <h2 className="font-serif text-[clamp(1.85rem,3.4vw,2.8rem)] font-medium leading-[1.12] text-[#f3eee7]">
+          {L(lang, 'Faqet hapen vetë. Pastaj i rregulloni ju.', 'The pages turn themselves. You touch them after.')}
+        </h2>
+      </div>
+      <div className="relative z-[1] max-w-[920px] mx-auto px-4" style={{ perspective: 1600 }}>
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={s.by.en}
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+            className="flex aspect-[3/2] items-stretch shadow-[0_30px_80px_rgba(0,0,0,0.45)]"
+            style={{ transformStyle: 'preserve-3d' }}
+          >
+            <div
+              className="relative w-[46%] min-h-0 overflow-hidden bg-[#1a1209]"
+              style={{ transform: 'rotateY(5deg)', transformOrigin: 'right center' }}
+            >
+              <img src={s.cover} alt="" className={`${reduced ? '' : 'ai-ken'} absolute inset-0 w-full h-full object-cover`} />
+              <p className="absolute bottom-4 left-3 right-3 font-serif italic text-white/90 text-[12px] sm:text-[14px] text-center drop-shadow">
+                {L(lang, s.by.sq, s.by.en)}
               </p>
             </div>
-          </div>
+            <div className="w-px bg-black/30 shrink-0" />
+            <div
+              className="relative w-[54%] min-h-0 overflow-hidden bg-[#f6f1ea]"
+              style={{ transform: 'rotateY(-5deg)', transformOrigin: 'left center' }}
+            >
+              <div className="absolute inset-[4.5%] grid grid-rows-[minmax(0,1.2fr)_minmax(0,0.8fr)] gap-[4.5%] min-h-0">
+                <div className="relative min-h-0 overflow-hidden">
+                  <img src={s.a} alt="" className={`${reduced ? '' : 'ai-ken'} absolute inset-0 w-full h-full object-cover`} />
+                </div>
+                <div className="grid grid-cols-2 gap-[5%] min-h-0">
+                  <div className="relative min-h-0 overflow-hidden">
+                    <img src={s.b} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                  </div>
+                  <div className="relative min-h-0 overflow-hidden">
+                    <img src={s.c} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </AnimatePresence>
+        <div className="flex justify-center gap-2 mt-6">
+          {SPREADS.map((sp, i) => (
+            <button
+              key={sp.by.en}
+              type="button"
+              aria-label={L(lang, sp.by.sq, sp.by.en)}
+              onClick={() => setIdx(i)}
+              className="h-1.5 rounded-full transition-all"
+              style={{
+                width: i === idx ? 22 : 8,
+                background: i === idx ? '#f3eee7' : 'rgba(255,255,255,0.25)',
+              }}
+            />
+          ))}
         </div>
       </div>
     </section>
@@ -268,51 +458,55 @@ function ChaosToOrder({ lang }: { lang: 'sq' | 'en' }) {
 
 function SlottingDemo({ lang }: { lang: 'sq' | 'en' }) {
   const slots = [
-    { src: STAGE_PHOTOS[0], label: { sq: 'Kopertina', en: 'Cover' }, className: 'col-span-2 row-span-2' },
-    { src: STAGE_PHOTOS[1], label: { sq: 'Faqja 02', en: 'Page 02' }, className: '' },
-    { src: STAGE_PHOTOS[2], label: { sq: 'Faqja 03', en: 'Page 03' }, className: '' },
-    { src: STAGE_PHOTOS[3], label: { sq: 'Faqja 04', en: 'Page 04' }, className: 'col-span-2' },
+    { src: LIFE_PHOTOS[0], label: { sq: 'Kopertina', en: 'Cover' }, className: 'col-span-2 row-span-2' },
+    { src: LIFE_PHOTOS[1], label: { sq: 'Faqja 02', en: 'Page 02' }, className: '' },
+    { src: LIFE_PHOTOS[2], label: { sq: 'Faqja 03', en: 'Page 03' }, className: '' },
+    { src: LIFE_PHOTOS[5], label: { sq: 'Faqja 04', en: 'Page 04' }, className: '' },
+    { src: LIFE_PHOTOS[6], label: { sq: 'Faqja 05', en: 'Page 05' }, className: '' },
+    { src: LIFE_PHOTOS[9], label: { sq: 'Faqja 06', en: 'Page 06' }, className: '' },
   ];
   return (
     <section className="py-16 md:py-24 bg-[#f7f4f0]">
       <div className="max-w-6xl mx-auto px-5 md:px-8">
-        <div className="grid lg:grid-cols-[0.9fr_1.1fr] gap-10 lg:gap-14 items-center">
+        <div className="grid lg:grid-cols-[0.85fr_1.15fr] gap-10 lg:gap-14 items-center">
           <div>
             <p className="text-[11px] uppercase tracking-[0.3em] text-neutral-400 mb-3">
               {L(lang, 'si i vendosim', 'how we place them')}
             </p>
             <h2 className="font-serif text-[clamp(1.85rem,3.4vw,2.8rem)] font-medium leading-[1.12] mb-4" style={{ color: INK }}>
-              {L(lang, 'E para hap. E fundit mbyll. Të tjerat gjejnë faqe.', 'The first opens. The last closes. The rest find a page.')}
+              {L(lang, 'E para bëhet kopertina. E fundit e mbyll. Të tjerat shkojnë në faqe.', 'The first opens. The last closes. The rest find a page.')}
             </h2>
             <p className="text-neutral-500 text-[15px] leading-relaxed mb-6">
               {L(
                 lang,
-                'Tërhiqini fotot në rendin e historisë. Ne zgjedhim paraqitjen dhe paletën. Ju i ndryshoni në editor para se të printojmë.',
-                'Drag the photos into story order. We pick layout and palette. You change anything in the editor before we print.',
+                'Radhitini fotot si ka ndodhur. Ne i vendosim në faqe. Ju i ndryshoni para se t’i printojmë.',
+                'Drag the photos into story order. We place them on the pages. You change anything before we print.',
               )}
             </p>
             <a href="#fillo" className="inline-flex items-center gap-2 text-[13px] font-semibold" style={{ color: INK }}>
-              {L(lang, 'Provojeni me fotot tuaja', 'Try it with your photos')}
+              {L(lang, 'Provoni me fotot tuaja', 'Try it with your photos')}
               <ArrowRight size={14} />
             </a>
           </div>
           <div className="relative">
-            <div className="grid grid-cols-4 grid-rows-3 gap-2 aspect-[4/3] bg-white p-3 rounded-sm shadow-[0_24px_60px_rgba(42,34,24,0.12)]">
-              {slots.map((s, i) => (
-                <motion.div
-                  key={s.label.en}
-                  className={`relative overflow-hidden bg-neutral-100 ${s.className}`}
-                  initial={{ opacity: 0, scale: 0.86, y: 24 }}
-                  whileInView={{ opacity: 1, scale: 1, y: 0 }}
-                  viewport={{ once: true, margin: '-50px' }}
-                  transition={{ delay: 0.12 + i * 0.16, type: 'spring', stiffness: 180, damping: 18 }}
-                >
-                  <img src={s.src} alt="" className="absolute inset-0 w-full h-full object-cover" />
-                  <span className="absolute bottom-1.5 left-1.5 text-[9px] uppercase tracking-[0.16em] text-white/90 drop-shadow">
-                    {L(lang, s.label.sq, s.label.en)}
-                  </span>
-                </motion.div>
-              ))}
+            <div className="relative aspect-[4/5] sm:aspect-[5/4] rounded-[2px] shadow-[0_28px_70px_rgba(42,34,24,0.14)] overflow-hidden bg-[#2A2218]">
+              <div className="absolute inset-0 grid grid-cols-3 grid-rows-3 gap-[3px] p-[3px]">
+                {slots.map((s, i) => (
+                  <motion.div
+                    key={s.label.en}
+                    className={`relative overflow-hidden bg-[#1a1410] ${s.className}`}
+                    initial={{ opacity: 0, scale: 0.88, y: 28 }}
+                    whileInView={{ opacity: 1, scale: 1, y: 0 }}
+                    viewport={{ once: true, margin: '-50px' }}
+                    transition={{ delay: 0.1 + i * 0.12, type: 'spring', stiffness: 180, damping: 18 }}
+                  >
+                    <img src={s.src} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                    <span className="absolute bottom-1.5 left-1.5 text-[9px] uppercase tracking-[0.16em] text-white/90 drop-shadow">
+                      {L(lang, s.label.sq, s.label.en)}
+                    </span>
+                  </motion.div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -321,9 +515,46 @@ function SlottingDemo({ lang }: { lang: 'sq' | 'en' }) {
   );
 }
 
+function PageRiver({ lang }: { lang: 'sq' | 'en' }) {
+  const pages = [
+    [LIFE_PHOTOS[0], LIFE_PHOTOS[1]],
+    [LIFE_PHOTOS[2], LIFE_PHOTOS[3]],
+    [LIFE_PHOTOS[4], LIFE_PHOTOS[5]],
+    [LIFE_PHOTOS[6], LIFE_PHOTOS[8]],
+    [LIFE_PHOTOS[9], LIFE_PHOTOS[10]],
+    [LIFE_PHOTOS[12], LIFE_PHOTOS[13]],
+    [LIFE_PHOTOS[14], LIFE_PHOTOS[15]],
+    [LIFE_PHOTOS[7], LIFE_PHOTOS[11]],
+  ];
+  const strip = [...pages, ...pages];
+  return (
+    <section className="py-12 md:py-16 overflow-hidden bg-white">
+      <p className="text-center text-[11px] uppercase tracking-[0.3em] text-neutral-400 mb-8">
+        {L(lang, 'faqet, si kur e mbani albumin në dorë', 'pages that move, like the album in your hands')}
+      </p>
+      <div className="ai-film-slow flex w-max gap-4 md:gap-5 px-2" aria-hidden>
+        {strip.map((pair, i) => (
+          <div
+            key={i}
+            className="flex w-[240px] sm:w-[300px] md:w-[360px] aspect-[8/5] bg-[#2A2218] p-[3px] shadow-[0_16px_40px_rgba(42,34,24,0.1)]"
+          >
+            <div className="relative w-1/2 min-h-0 overflow-hidden">
+              <img src={pair[0]} alt="" className="absolute inset-0 w-full h-full object-cover" />
+            </div>
+            <div className="w-px bg-black/40 shrink-0" />
+            <div className="relative w-1/2 min-h-0 overflow-hidden">
+              <img src={pair[1]} alt="" className="absolute inset-0 w-full h-full object-cover" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function WizardRail({ step, lang }: { step: 1 | 2 | 3; lang: 'sq' | 'en' }) {
   const items = [
-    { n: '01', sq: 'Kujtimi', en: 'Memory' },
+    { n: '01', sq: 'Rasti', en: 'Memory' },
     { n: '02', sq: 'Fotot', en: 'Photos' },
     { n: '03', sq: 'Albumi', en: 'Album' },
   ];
@@ -620,14 +851,14 @@ export default function AlbumAI() {
         ? pendingBooksLimitMessage(lang, Number(e?.data?.limit) || 10)
         : isNoPhotos
         ? (lang === 'sq'
-          ? 'Ngarko të paktën disa foto përpara se të krijosh albumin.'
+          ? 'Shto të paktën disa foto, pastaj krijo albumin.'
           : 'Upload some photos before generating your album.')
         : isAuthError
         ? (lang === 'sq'
-          ? 'Sesioni ka skaduar. Hyr përsëri dhe provo sërish.'
+          ? 'Sesioni ka skaduar. Hyni përsëri dhe provoni sërish.'
           : 'Your session expired. Please log in again and retry.')
         : (lang === 'sq'
-          ? 'Krijimi i albumit dështoi. Provoni përsëri.'
+          ? 'Albumi nuk u krijua. Provoni përsëri.'
           : 'Album generation failed. Please try again.'));
       setGenerating(false);
       setGenDone(false);
@@ -702,20 +933,20 @@ export default function AlbumAI() {
       <SEOMeta
         title={{ sq: 'Album me AI — Përgjithmonë', en: 'AI Album — Përgjithmonë' }}
         description={{
-          sq: 'Ngarkoni 25–40 foto. Ne i kthejmë në një album me kopertinë të fortë, letër mat 200g dhe hapje të sheshtë — pastaj e rregulloni në të njëjtin editor para printimit.',
-          en: 'Upload 25–40 photos. We turn them into a hardcover album on matte 200g paper with lay-flat spreads — then you refine it in the same editor before we print.',
+          sq: 'Shtoni 25–40 foto. Ne i bëjmë albumin — kopertinë e fortë, letër mat 200g, hapje e sheshtë. Pastaj e rregulloni ju, para se t’i printojmë.',
+          en: 'Upload 25–40 photos. We turn them into a hardcover album on matte 200g paper with lay-flat spreads — then you refine it before we print.',
         }}
         path="/album-ai"
       />
 
       <div style={{ background: PAPER }} className="min-h-[calc(100dvh-48px)] md:min-h-[calc(100dvh-54px)]">
 
-        <DarkroomHero lang={lang} />
+        <AlbumHero lang={lang} />
 
         {!bookCreationEnabled && (
           <div className="max-w-3xl mx-auto px-4 mb-6">
             <div className="flex items-center gap-3 px-5 py-4 rounded-xl border border-amber-300 bg-amber-50 text-amber-900 text-sm">
-              {lang === 'sq' ? 'Krijimi i albumeve është përkohësisht i ndalur.' : 'Album creation is temporarily unavailable.'}
+              {lang === 'sq' ? 'Për momentin nuk mund të krijoni albume.' : 'Album creation is temporarily unavailable.'}
             </div>
           </div>
         )}
@@ -828,7 +1059,7 @@ export default function AlbumAI() {
                         transition={{ delay: 0.55 }}
                         className="text-sm text-neutral-500"
                       >
-                        {lang === 'sq' ? 'Duke hapur editorin…' : 'Opening the editor…'}
+                        {lang === 'sq' ? 'Duke hapur albumin…' : 'Opening your album…'}
                       </motion.p>
                     </motion.div>
                   ) : genDone ? (
@@ -888,13 +1119,13 @@ export default function AlbumAI() {
                       </div>
 
                       <h2 className="font-serif text-xl font-medium mb-2" style={{ color: INK }}>
-                        {L(lang, 'Duke përgatitur albumin tuaj…', 'Preparing your album…')}
+                        {L(lang, 'Duke përgatitur albumin…', 'Preparing your album…')}
                       </h2>
                       <p className="text-sm text-neutral-500 mb-8 max-w-xs">
                         {L(
                           lang,
-                          'Po zgjedhim kopertinën, paraqitjen dhe vendosim fotot — gati për t’i prekur në editor.',
-                          'Choosing the cover, the layouts and placing your photos — ready to touch in the editor.',
+                          'Po zgjedhim kopertinën dhe i vendosim fotot — pastaj i prekni ju.',
+                          'Choosing the cover and placing your photos — then you touch them.',
                         )}
                       </p>
 
@@ -943,10 +1174,10 @@ export default function AlbumAI() {
                 transition={{ duration: 0.25 }}
               >
                 <h2 className="text-xl md:text-2xl font-serif font-medium leading-tight mb-2 text-center" style={{ color: INK }}>
-                  {L(lang, 'Cili kujtim do të bëhet album?', 'Which memory becomes the album?')}
+                  {L(lang, 'Për cilin kujtim e bëjmë albumin?', 'Which memory becomes the album?')}
                 </h2>
                 <p className="text-sm text-neutral-500 text-center mb-7 max-w-md mx-auto">
-                  {L(lang, 'Paleta, shkronjat dhe kopertina ndjekin historinë që zgjidhni — dasmë, udhëtim, familje.', 'Palette, type and cover follow the story you pick — wedding, travel, family.')}
+                  {L(lang, 'Ngjyrat, shkronjat dhe kopertina dalin nga ajo që zgjidhni — dasmë, udhëtim, familje.', 'Palette, type and cover follow the story you pick — wedding, travel, family.')}
                 </p>
 
                 {loadingCat ? (
@@ -1001,12 +1232,12 @@ export default function AlbumAI() {
                 transition={{ duration: 0.25 }}
               >
                 <h2 className="text-xl md:text-2xl font-serif font-medium leading-tight mb-2 text-center" style={{ color: INK }}>
-                  {L(lang, 'Vendosni fotot në rendin e historisë', 'Lay the photos in story order')}
+                  {L(lang, 'Radhitini fotot si ka ndodhur', 'Lay the photos in story order')}
                 </h2>
                 <p className="text-sm text-neutral-500 text-center mb-6 max-w-md mx-auto">
                   {L(
                     lang,
-                    `Të paktën ${MIN_PHOTOS} foto. E para bëhet kopertina, e fundit e mbyll albumin. Tërhiqini për t’i rregulluar.`,
+                    `Të paktën ${MIN_PHOTOS} foto. E para bëhet kopertina, e fundit e mbyll. Tërhiqini për t’i rregulluar.`,
                     `At least ${MIN_PHOTOS} photos. The first becomes the cover, the last closes the album. Drag to reorder.`,
                   )}
                 </p>
@@ -1022,8 +1253,8 @@ export default function AlbumAI() {
                     <span>
                       {lang === 'sq'
                         ? (errorCount === 1
-                          ? '1 foto dështoi të ngarkohej.'
-                          : `${errorCount} foto dështuan të ngarkohen.`)
+                          ? '1 foto nuk u ngarkua.'
+                          : `${errorCount} foto nuk u ngarkuan.`)
                         : (errorCount === 1
                           ? '1 photo failed to upload.'
                           : `${errorCount} photos failed to upload.`)}
@@ -1058,8 +1289,8 @@ export default function AlbumAI() {
                   <UploadCloud size={28} className="text-neutral-400 mb-3" />
                   <p className="text-sm font-medium text-neutral-700 mb-1">
                     {photos.length >= MAX_PHOTOS
-                      ? (lang === 'sq' ? `Ke arritur limitin e ${MAX_PHOTOS} fotove` : `You've reached the ${MAX_PHOTOS}-photo limit`)
-                      : (lang === 'sq' ? 'Ngarko fotot këtu, ose kliko për t\'i zgjedhur' : 'Drag photos here, or click to browse')}
+                      ? (lang === 'sq' ? `Mjaft — deri në ${MAX_PHOTOS} foto` : `You've reached the ${MAX_PHOTOS}-photo limit`)
+                      : (lang === 'sq' ? 'Shto fotot këtu, ose prek për t’i zgjedhur' : 'Drag photos here, or click to browse')}
                   </p>
                   <p className="text-[11px] text-neutral-400">
                     {lang === 'sq' ? `JPG/PNG · deri në ${MAX_PHOTOS} foto` : `JPG/PNG · up to ${MAX_PHOTOS} photos`}
@@ -1069,7 +1300,7 @@ export default function AlbumAI() {
                 {/* Progress + count */}
                 <div className="flex items-center justify-between mb-4">
                   <span className={`text-sm font-semibold ${doneCount >= MIN_PHOTOS ? 'text-emerald-600' : 'text-neutral-500'}`}>
-                    {doneCount} / {MIN_PHOTOS} {lang === 'sq' ? 'foto të ngarkuara' : 'photos uploaded'}
+                    {doneCount} / {MIN_PHOTOS} {lang === 'sq' ? 'foto' : 'photos uploaded'}
                     {uploadingCount > 0 && (
                       <span className="text-neutral-400 font-normal"> · {uploadingCount} {lang === 'sq' ? 'duke u ngarkuar...' : 'uploading...'}</span>
                     )}
@@ -1096,7 +1327,7 @@ export default function AlbumAI() {
                   <>
                     <p className="text-[11px] text-neutral-500 mb-3">
                       {lang === 'sq'
-                        ? 'E para është kopertina, e fundit kapaku i pasëm. Tërhiq fotot për t\'i rregulluar.'
+                        ? 'E para është kopertina, e fundit kapaku i pasëm. Tërhiqi për t’i rregulluar.'
                         : 'The first photo is the cover, the last is the back. Drag to reorder.'}
                     </p>
                     <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-2 mb-8">
@@ -1135,13 +1366,13 @@ export default function AlbumAI() {
                               <button
                                 onClick={() => retryPhoto(p.id)}
                                 className="absolute inset-0 bg-red-900/60 flex flex-col items-center justify-center text-white"
-                                title={lang === 'sq' ? 'Kliko për të riprovuar' : 'Click to retry'}
+                                title={lang === 'sq' ? 'Provo sërish' : 'Click to retry'}
                               >
                                 <ImageOff size={14} />
                               </button>
                             )}
                             <span className="absolute bottom-1 left-1 px-1.5 h-4 rounded bg-black/65 text-white text-[9px] font-semibold leading-4">
-                              {isCover ? (lang === 'sq' ? 'Kopertinë' : 'Cover') : isBack ? (lang === 'sq' ? 'Pas' : 'Back') : index + 1}
+                              {isCover ? (lang === 'sq' ? 'Kopertinë' : 'Cover') : isBack ? (lang === 'sq' ? 'Mbrapa' : 'Back') : index + 1}
                             </span>
                             {p.status === 'done' && (
                               <div className="absolute top-1 left-1 w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center">
@@ -1167,7 +1398,7 @@ export default function AlbumAI() {
                     disabled={!canGenerate}
                     className="flex items-center gap-2 px-8 py-3.5 rounded-full bg-neutral-900 text-white text-[12px] uppercase tracking-[0.16em] font-semibold hover:bg-neutral-700 active:scale-95 transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-neutral-900"
                   >
-                    {L(lang, 'Vazhdo te albumi', 'Continue to the album')}
+                    {L(lang, 'Vazhdo te madhësia', 'Continue to the album')}
                     <ChevronRight size={15} />
                   </button>
                 </div>
@@ -1179,12 +1410,12 @@ export default function AlbumAI() {
                 transition={{ duration: 0.25 }}
               >
                 <h2 className="text-xl md:text-2xl font-serif font-medium leading-tight mb-2 text-center" style={{ color: INK }}>
-                  {L(lang, 'Si do ta mbani në dorë?', 'How will you hold it?')}
+                  {L(lang, 'Sa i madh ta doni albumin?', 'How will you hold it?')}
                 </h2>
                 <p className="text-sm text-neutral-500 text-center mb-6 max-w-md mx-auto">
                   {L(
                     lang,
-                    `Nga ${doneCount} fotot tuaja, kemi zgjedhur madhësinë që i rri më mirë. Ndryshojeni nëse dëshironi — çmimi ndjek faqet, jo AI-në.`,
+                    `Nga ${doneCount} fotot tuaja, kemi zgjedhur madhësinë që i rri më mirë. Ndryshojeni nëse doni — çmimi varet nga faqet, jo nga AI.`,
                     `From your ${doneCount} photos, we chose the size that fits. Change it if you like — price follows pages, not AI.`,
                   )}
                 </p>
@@ -1211,7 +1442,7 @@ export default function AlbumAI() {
                       >
                         {recommendedSize && s.id === recommendedSize.id && (
                           <span className="absolute -top-2 left-1/2 -translate-x-1/2 z-10 px-2 py-0.5 rounded-full bg-neutral-900 text-white text-[9px] uppercase tracking-[0.1em] font-semibold whitespace-nowrap">
-                            {lang === 'sq' ? 'E rekomanduar' : 'Recommended'}
+                            {lang === 'sq' ? 'Më e kërkuara' : 'Recommended'}
                           </span>
                         )}
                         <SizeCard
@@ -1244,53 +1475,56 @@ export default function AlbumAI() {
 
         {!generating && (
           <>
+            <PhotoRiver />
             <ChaosToOrder lang={lang} />
+            <LivingAlbum lang={lang} />
             <SlottingDemo lang={lang} />
+            <PageRiver lang={lang} />
 
             <section className="py-16 md:py-24 bg-white">
               <div className="max-w-5xl mx-auto px-5 md:px-8 grid lg:grid-cols-[1fr_1.15fr] gap-10 lg:gap-16 items-start">
                 <div>
                   <p className="text-[11px] uppercase tracking-[0.3em] text-neutral-400 mb-3">
-                    {L(lang, 'para se të hidhni fotot', 'before you drop the photos')}
+                    {L(lang, 'para se t’i shtoni fotot', 'before you drop the photos')}
                   </p>
                   <h2 className="font-serif text-[clamp(1.85rem,3.2vw,2.7rem)] font-medium leading-[1.12] mb-4" style={{ color: INK }}>
-                    {L(lang, 'Mbetet i juaji. Printojmë vetëm kur thoni po.', 'It stays yours. We print only when you say yes.')}
+                    {L(lang, 'Albumi mbetet i juaji. Printojmë vetëm kur jeni gati.', 'It stays yours. We print only when you say yes.')}
                   </h2>
                   <p className="text-neutral-500 text-[15px] leading-relaxed">
                     {L(
                       lang,
-                      'AI e niset. Ju e mbyllni në editor. I njëjti printim, e njëjta letër 200g, kudo në Shqipëri.',
-                      'AI starts it. You finish it in the editor. The same print, the same 200g paper, anywhere in Albania.',
+                      'E nisim ne. Ju e mbaroni. Printojmë kur jeni gati. I njëjti printim, e njëjta letër 200g, kudo në Shqipëri.',
+                      'We start it. You finish it. We print when you are ready. The same print, the same 200g paper, anywhere in Albania.',
                     )}
                   </p>
                 </div>
                 <div className="space-y-px bg-neutral-200/80">
                   {[
                     {
-                      q: { sq: 'A mbetet albumi i redaktueshëm?', en: 'Does the album stay editable?' },
+                      q: { sq: 'A mund t’i ndryshoj faqet pastaj?', en: 'Does the album stay editable?' },
                       a: {
-                        sq: 'Po. Hapet direkt në editorin tonë. Ndryshoni çdo faqe, foto, tekst apo kornizë para se të porositeni.',
-                        en: 'Yes. It opens in our editor. Change any page, photo, caption or frame before you order.',
+                        sq: 'Po. I hapni dhe i ndryshoni — çdo faqe, foto apo tekst — para se ta porositni.',
+                        en: 'Yes. You open it and change anything — every page, photo or caption — before you order.',
                       },
                     },
                     {
-                      q: { sq: 'Sa foto duhen?', en: 'How many photos do I need?' },
+                      q: { sq: 'Sa foto më duhen?', en: 'How many photos do I need?' },
                       a: {
-                        sq: `Të paktën ${MIN_PHOTOS}, deri në ${MAX_PHOTOS}. E para është kopertina, e fundit kapaku i pasëm.`,
+                        sq: `Të paktën ${MIN_PHOTOS}, më së shumti ${MAX_PHOTOS}. E para bëhet kopertina, e fundit kapaku i pasëm.`,
                         en: `At least ${MIN_PHOTOS}, up to ${MAX_PHOTOS}. The first is the cover, the last is the back.`,
                       },
                     },
                     {
-                      q: { sq: 'A kushton më shumë sepse e nisi AI?', en: 'Does it cost more because AI started it?' },
+                      q: { sq: 'A paguaj më shumë me AI?', en: 'Does it cost more because AI started it?' },
                       a: {
-                        sq: 'Jo. Çmimi varet nga madhësia dhe faqet — i njëjti printim, qoftë me AI apo me editor.',
-                        en: 'No. Price follows size and pages — the same print, whether AI or the editor started it.',
+                        sq: 'Jo. Çmimi varet nga madhësia dhe faqet — njësoj, qoftë me AI apo i bërë me dorë.',
+                        en: 'No. Price follows size and pages — the same print, whether AI started it or you did.',
                       },
                     },
                     {
-                      q: { sq: 'Po nëse nuk më pëlqen paraqitja?', en: 'What if I do not like the layout?' },
+                      q: { sq: 'Po sikur të mos më pëlqejnë faqet?', en: 'What if I do not like the layout?' },
                       a: {
-                        sq: 'Ndryshojeni faqe për faqe, ose ngarkoni sërish. Printojmë vetëm kur jeni të kënaqur.',
+                        sq: 'Ndryshojini faqe për faqe, ose shtoni fotot sërish. Printojmë vetëm kur jeni të kënaqur.',
                         en: 'Change it page by page, or upload again. We print only when you are happy.',
                       },
                     },
@@ -1330,28 +1564,28 @@ export default function AlbumAI() {
 
             <section className="relative overflow-hidden py-20 md:py-28" style={{ background: PAPER }}>
               <div className="relative max-w-xl mx-auto px-5 text-center">
-                <div className="relative h-28 mb-8" aria-hidden>
-                  {STAGE_PHOTOS.slice(0, 5).map((src, i) => (
+                <div className="relative h-36 sm:h-40 mb-10" aria-hidden>
+                  {LIFE_PHOTOS.slice(0, 7).map((src, i) => (
                     <motion.img
                       key={src}
                       src={src}
                       alt=""
-                      className="absolute left-1/2 top-0 w-[72px] h-[96px] object-cover rounded-[2px] border-2 border-white shadow-lg"
+                      className="absolute left-1/2 top-0 w-[84px] h-[112px] sm:w-[96px] sm:h-[128px] object-cover rounded-[2px] border-2 border-white shadow-lg"
                       style={{ zIndex: i }}
-                      initial={{ x: '-50%', y: 20, rotate: 0, opacity: 0 }}
-                      whileInView={{ x: `calc(-50% + ${(i - 2) * 22}px)`, y: Math.abs(i - 2) * 6, rotate: (i - 2) * 8, opacity: 1 }}
+                      initial={{ x: '-50%', y: 24, rotate: 0, opacity: 0 }}
+                      whileInView={{ x: `calc(-50% + ${(i - 3) * 26}px)`, y: Math.abs(i - 3) * 5, rotate: (i - 3) * 7, opacity: 1 }}
                       viewport={{ once: true }}
-                      transition={{ delay: i * 0.07, type: 'spring', stiffness: 200, damping: 16 }}
+                      transition={{ delay: i * 0.06, type: 'spring', stiffness: 200, damping: 16 }}
                     />
                   ))}
                 </div>
                 <h2 className="font-serif text-[clamp(1.9rem,3.6vw,2.9rem)] font-medium leading-[1.12] mb-4" style={{ color: INK }}>
-                  {L(lang, 'Hidhi. Ne i radhitim.', 'Drop them. We place them.')}
+                  {L(lang, 'Shtoni fotot. Ne i radhitim.', 'Drop them. We place them.')}
                 </h2>
                 <p className="text-neutral-500 text-[15px] leading-relaxed mb-8">
                   {L(
                     lang,
-                    'Filloni falas. Paguani kur jeni të kënaqur — kartë ose para në dorëzim.',
+                    'Filloni pa pagesë. Paguani kur jeni të kënaqur — me kartë, ose me para në dorëzim.',
                     'Start free. Pay when you are happy — card or cash on delivery.',
                   )}
                 </p>
@@ -1360,7 +1594,7 @@ export default function AlbumAI() {
                   className="inline-flex items-center gap-2 px-8 py-3.5 rounded-full text-[13px] font-semibold text-white"
                   style={{ background: INK }}
                 >
-                  {L(lang, 'Hidhi fotot këtu', 'Drop photos here')}
+                  {L(lang, 'Shtoni fotot këtu', 'Drop photos here')}
                   <ArrowRight size={15} />
                 </a>
                 <p className="text-[11px] uppercase tracking-[0.16em] text-neutral-400 mt-5">

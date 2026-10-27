@@ -21,7 +21,7 @@ const PLANS = [
     features: [
       { sq: 'Kopertinë e fortë me printim cilësor', en: 'Hard cover with quality printing' },
       { sq: 'Letër premium mat 200g',               en: 'Premium matte 200g paper'         },
-      { sq: 'Hapje e sheshtë (lay-flat)',            en: 'Lay-flat binding'                 },
+      { sq: 'Hapje e sheshtë',            en: 'Lay-flat binding'                 },
       { sq: '24 faqe të përfshira (12 fletë)',       en: '24 pages included (12 leaves)'   },
       { sq: 'Paketim premium',                      en: 'Premium packaging'               },
     ],
@@ -38,7 +38,7 @@ const PLANS = [
     features: [
       { sq: 'Kopertinë e fortë me printim cilësor', en: 'Hard cover with quality printing' },
       { sq: 'Letër premium mat 200g',               en: 'Premium matte 200g paper'         },
-      { sq: 'Hapje e sheshtë (lay-flat)',            en: 'Lay-flat binding'                 },
+      { sq: 'Hapje e sheshtë',            en: 'Lay-flat binding'                 },
       { sq: '24 faqe të përfshira (12 fletë)',       en: '24 pages included (12 leaves)'   },
       { sq: 'Paketim premium',                      en: 'Premium packaging'               },
     ],

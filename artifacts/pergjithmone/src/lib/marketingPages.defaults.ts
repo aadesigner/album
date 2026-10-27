@@ -21,7 +21,7 @@ export const PAGE_DEFAULTS: Record<PageSlug, Record<string, unknown>> = {
     ],
     starter: {
       title: bi('Cilat kujtime do t’i lini në një album?', 'Which memories belong in an album?'),
-      sub: bi('Zgjidhni stilin. Editori hapet me atë kopertinë, gati për fotot tuaja.', 'Pick a style. The editor opens with that cover, ready for your photos.'),
+      sub: bi('Zgjidhni stilin. Hapeni me atë kopertinë, gati për fotot tuaja.', 'Pick a style. It opens with that cover, ready for your photos.'),
       browse: bi('Shiko të gjitha stilet', 'Browse all styles'),
     },
     ticker: [
@@ -34,20 +34,20 @@ export const PAGE_DEFAULTS: Record<PageSlug, Record<string, unknown>> = {
     ],
     ai: {
       badge: bi('E re · me AI', 'New · powered by AI'),
-      title: bi('Ngarkoni fotot — AI-ja e krijon albumin', 'Upload your photos, let AI build the album'),
-      body: bi('Zgjidhni një kategori, ngarkoni 25+ foto — sistemi zgjedh vetë paraqitjen, ngjyrat dhe dizajnin e çdo faqeje. Më pas e rregulloni si të doni.', 'Pick a category, upload 25+ photos — our system automatically chooses the layout, colors, and design of every page. Fine-tune anything afterwards.'),
+      title: bi('Shtoni fotot. Albumi bëhet vetë.', 'Upload your photos, let AI build the album'),
+      body: bi('Zgjidhni rastin. Shtoni fotot. Ne i vendosim në faqe — pastaj i rregulloni ju, para se t’i printojmë.', 'Pick a category, upload 25+ photos — our system automatically chooses the layout, colors, and design of every page. Fine-tune anything afterwards.'),
       cta: bi('Provo albumin me AI', 'Try the AI album maker'),
       note: bi('Gati brenda sekondave', 'Ready in seconds'),
     },
     categories: {
-      kicker: bi('koleksionet tona', 'our collections'),
+      kicker: bi('për çdo rast', 'our collections'),
       title: bi('Albume për çdo moment të veçantë', 'An album for every special moment'),
       all: bi('të gjitha', 'all collections'),
     },
     spread: {
       kicker: bi('si duket brenda', "what's inside"),
       title: bi('Faqet që tregojnë historinë tuaj', 'Pages that tell your story'),
-      body: bi('Përgatitni çdo faqe dyshe si t’ju pëlqejë — dy faqe krah për krah, si një album i vërtetë. Zgjidhni paraqitjen, shtoni fotot dhe tekstin.', 'Design each spread as you like — two pages side by side, like a real album. Pick a layout, add your photos and text.'),
+      body: bi('Përgatitni çdo faqe dyshe si t’ju pëlqejë — dy faqe krah për krah, si një album i vërtetë. Vendosni fotot dhe tekstin si t’i doni.', 'Design each spread as you like — two pages side by side, like a real album. Pick a layout, add your photos and text.'),
       tag: bi('Faqja 6–7 · pamja e plotë', 'Page 6–7 · full spread view'),
       stats: [
         { num: bi('9+', '9+'), label: bi('modele faqesh', 'page layouts') },
@@ -84,8 +84,8 @@ export const PAGE_DEFAULTS: Record<PageSlug, Record<string, unknown>> = {
         },
         {
           title: bi('Ngarkoni fotot', 'Upload your photos'),
-          desc: bi('Dizajnoni çdo faqe me editorin tonë. Tërhiqni fotot dhe i vendosni si të doni.', 'Design every page with our editor. Drag photos and arrange freely.'),
-          detail: bi('Ngarkoni drejtpërdrejt nga telefoni ose kompjuteri. Ndryshoni tekstin, zgjidhni paraqitjet dhe shtoni dekorime. Funksionon në çdo pajisje.', 'Upload directly from your phone or computer. Edit text, choose layouts and add decorations. Works on any device.'),
+          desc: bi('Vendosini fotot në çdo faqe. I lëvizni si t’ju pëlqejë.', 'Design every page with our editor. Drag photos and arrange freely.'),
+          detail: bi('Shtoni nga telefoni ose kompjuteri. Ndryshoni tekstin, zgjidhni faqet dhe shtoni detaje. Funksionon në telefon dhe në kompjuter.', 'Upload directly from your phone or computer. Edit text, choose layouts and add decorations. Works on any device.'),
         },
         {
           title: bi('Porositni dhe merrni', 'Order and receive'),
@@ -117,10 +117,10 @@ export const PAGE_DEFAULTS: Record<PageSlug, Record<string, unknown>> = {
       body: bi('Procesi është i thjeshtë: zgjidhni, përgatitni, porositni. Albumi arrin i printuar me cilësi galerie.', 'The process is simple: choose, design, order. Your album arrives printed at gallery quality.'),
     },
     steps: [
-      { title: bi('Zgjidhni rastin', 'Pick your occasion'), desc: bi('Filloni me dasëm, udhëtim, familje ose çfarëdo rasti special. Çdo kategori ka modele të dizajnuara enkas për ato momente.', 'Start with wedding, travel, family or any special moment. Each category comes with layouts crafted for those exact memories.'), visual: bi('Dasmë · Udhëtim · Familje · Ditëlindje · Miqësi', 'Wedding · Travel · Family · Birthday · Friendship') },
-      { title: bi('Ngarkoni fotot tuaja', 'Upload your photos'), desc: bi('Shtoni fotot nga celulari ose kompjuteri. Mbështesim çdo format dhe rezolucion. Sistemi organizon fotot automatikisht.', 'Add photos from your phone or computer. We support every format and resolution. The system arranges them automatically.'), visual: bi('JPG · PNG · HEIC · Tërhiqni & Lëshoni', 'JPG · PNG · HEIC · Drag & Drop') },
-      { title: bi('Personalizoni çdo faqe', 'Personalise every page'), desc: bi('Lëvizni fotot, ndryshoni tekstet, zgjidhni fontet dhe personalizoni kopertinën. Kontroll i plotë mbi çdo detaj të albumit tuaj.', 'Move photos, edit text, pick fonts, personalise the cover. Full control over every detail — the way only you would want it.'), visual: bi('Tekst · Ngjyra · Fontet · Faqosjet', 'Text · Colors · Fonts · Layouts') },
-      { title: bi('Printim dhe Dërgim', 'Printing & Delivery'), desc: bi('Ne printojmë albumin tuaj me letër premium 200g dhe teknologji lay-flat. Arrihet te ju i paketuar me kujdes brenda 10–16 ditësh.', 'We print your album on premium 200g paper with lay-flat binding. It arrives carefully packaged within 10–16 working days.'), visual: bi('200g Letër mat · Lay-flat · Kuti premium', '200g Matte paper · Lay-flat · Premium box') },
+      { title: bi('Zgjidhni rastin', 'Pick your occasion'), desc: bi('Filloni me dasëm, udhëtim, familje ose çfarëdo rasti të veçantë. Çdo kategori ka modele të bëra enkas për ato momente.', 'Start with wedding, travel, family or any special moment. Each category comes with layouts crafted for those exact memories.'), visual: bi('Dasmë · Udhëtim · Familje · Ditëlindje · Miqësi', 'Wedding · Travel · Family · Birthday · Friendship') },
+      { title: bi('Ngarkoni fotot tuaja', 'Upload your photos'), desc: bi('Shtoni fotot nga celulari ose kompjuteri. Mbështesim çdo format dhe rezolucion. Sistemi organizon fotot automatikisht.', 'Add photos from your phone or computer. We support every format and resolution. The system arranges them automatically.'), visual: bi('JPG · PNG · HEIC · Tërhiq e lësho', 'JPG · PNG · HEIC · Drag & Drop') },
+      { title: bi('Ndryshoni çdo faqe', 'Personalise every page'), desc: bi('Lëvizni fotot, ndryshoni tekstet, zgjidhni shkronjat dhe kopertinën. Çdo detaj i albumit tuaj, si ta doni ju.', 'Move photos, edit text, pick fonts, personalise the cover. Full control over every detail — the way only you would want it.'), visual: bi('Tekst · Ngjyra · Shkronjat · Faqet', 'Text · Colors · Fonts · Layouts') },
+      { title: bi('Printim dhe dërgim', 'Printing & Delivery'), desc: bi('Ne printojmë albumin tuaj me letër premium 200g dhe hapje e sheshtë. Arrin te ju i paketuar me kujdes brenda 10–16 ditësh.', 'We print your album on premium 200g paper with lay-flat binding. It arrives carefully packaged within 10–16 working days.'), visual: bi('200g letër mat · hapje e sheshtë · kuti e fortë', '200g Matte paper · Lay-flat · Premium box') },
     ],
     quality: {
       kicker: bi('Standardet e cilësisë', 'Quality standards'),
@@ -164,7 +164,7 @@ export const PAGE_DEFAULTS: Record<PageSlug, Record<string, unknown>> = {
         features: [
           bi('Kopertinë e fortë me printim cilësor', 'Hard cover with quality printing'),
           bi('Letër premium mat 200g', 'Premium matte 200g paper'),
-          bi('Hapje e sheshtë (lay-flat)', 'Lay-flat binding'),
+          bi('Hapje e sheshtë', 'Lay-flat binding'),
           bi('24 faqe të përfshira (12 fletë)', '24 pages included (12 leaves)'),
           bi('Paketim premium', 'Premium packaging'),
         ],
@@ -178,7 +178,7 @@ export const PAGE_DEFAULTS: Record<PageSlug, Record<string, unknown>> = {
         features: [
           bi('Kopertinë e fortë me printim cilësor', 'Hard cover with quality printing'),
           bi('Letër premium mat 200g', 'Premium matte 200g paper'),
-          bi('Hapje e sheshtë (lay-flat)', 'Lay-flat binding'),
+          bi('Hapje e sheshtë', 'Lay-flat binding'),
           bi('24 faqe të përfshira (12 fletë)', '24 pages included (12 leaves)'),
           bi('Paketim premium', 'Premium packaging'),
         ],
@@ -215,7 +215,7 @@ export const PAGE_DEFAULTS: Record<PageSlug, Record<string, unknown>> = {
   examples: {
     seo: { title: bi('Shembuj Albumeve', 'Photo Album Examples'), description: bi('Shikoni albume reale Përgjithmonë — dasma, udhëtime, familje. Letër mat 200g, hapje e sheshtë, printim galerie. Dërgesa në Shqipëri.', 'See real Përgjithmonë photo albums — weddings, travel, family. Matte 200g paper, lay-flat binding, gallery print. Delivered across Albania.') },
     hero: {
-      kicker: bi('studio · albume reale', 'studio · real albums'),
+      kicker: bi('albume reale', 'real albums'),
       title: bi('Nga telefoni, në një album që e mbani në dorë', 'From your phone, into an album you can hold'),
       body: bi('Hapni një album të vërtetë: kopertinë e fortë, faqe që hapen fare, letër mat 200g. Pastaj krijojeni tuajin — faqe pas faqeje, ose me AI.', 'Open a real album: hardcover, lay-flat spreads, matte 200g paper. Then make yours — page by page, or with AI.'),
       cta: bi('Hap albumin demonstrues', 'Open the demo album'),
@@ -223,14 +223,14 @@ export const PAGE_DEFAULTS: Record<PageSlug, Record<string, unknown>> = {
     },
     stats: [
       { value: bi('200g', '200g'), label: bi('letër mat premium', 'premium matte paper') },
-      { value: bi('Lay-flat', 'Lay-flat'), label: bi('faqe që hapen fare', 'spreads that open fully') },
+      { value: bi('Hapje e sheshtë', 'Lay-flat'), label: bi('faqe që hapen fare', 'spreads that open fully') },
       { value: bi('10–16 ditë', '10–16 days'), label: bi('dërgesë në Shqipëri', 'delivered in Albania') },
     ],
     demo: {
       byline: bi('Ana & Erjon · Dasmë, Sarandë', 'Ana & Erjon · Wedding, Saranda'),
       browse: bi('Shfletoni faqet e brendshme', 'Browse the inside pages'),
       rotate: bi('Tërhiqeni albumin për ta rrotulluar', 'Drag the album to rotate'),
-      caption: bi('Kopertinë e fortë · lidhje lay-flat · letër mat 200g', 'Hardcover · lay-flat binding · matte 200g paper'),
+      caption: bi('Kopertinë e fortë · hapje e sheshtë · letër mat 200g', 'Hardcover · lay-flat binding · matte 200g paper'),
       cta: bi('Fillo me këtë stil dasme', 'Start with this wedding style'),
       coverTitle: bi('Ana & Erjon', 'Ana & Erjon'),
       coverSub: bi('12 Qershor 2023  ·  Sarandë', '12 June 2023  ·  Saranda'),
@@ -250,10 +250,10 @@ export const PAGE_DEFAULTS: Record<PageSlug, Record<string, unknown>> = {
       back: img('https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=900&q=82&fit=crop&crop=center'),
     },
     gallery: {
-      kicker: bi('paraqitje reale', 'real layouts'),
+      kicker: bi('faqe reale', 'real layouts'),
       title: bi('Faqe të dizajnuara me kujdes', 'Pages designed with care'),
       link: bi('fillo albumin tuaj →', 'start your album →'),
-      note: bi('Çdo album është unik — i dizajnuar plotësisht nga ju me editorin tonë online.', 'Every album is unique — designed entirely by you with our online editor.'),
+      note: bi('Çdo album është unik — e bëni ju, faqe për faqe.', 'Every album is unique — designed entirely by you, page by page.'),
       albums: [
         { title: bi('Ana & Erjon', 'Ana & Erjon'), category: bi('Dasmë', 'Wedding') },
         { title: bi('Kujtime · Ana & Erjon', 'Memories · Ana & Erjon'), category: bi('Familje', 'Family') },
@@ -263,7 +263,7 @@ export const PAGE_DEFAULTS: Record<PageSlug, Record<string, unknown>> = {
     occasions: {
       kicker: bi('për çdo kujtim', 'for every memory'),
       title: bi('Një album, i bërë për historinë tuaj', 'An album made for your story'),
-      body: bi('Zgjidhni stilin. Editori hapet me atë kopertinë, gati për fotot tuaja — dasmë, udhëtim, familje, miqësi ose festë.', 'Pick a style. The editor opens with that cover, ready for your photos — wedding, travel, family, friendship or a celebration.'),
+      body: bi('Zgjidhni stilin. Hapeni me atë kopertinë, gati për fotot tuaja — dasmë, udhëtim, familje, miqësi ose festë.', 'Pick a style. It opens with that cover, ready for your photos — wedding, travel, family, friendship or a celebration.'),
       cta: bi('Krijo këtë stil', 'Create this style'),
       items: [
         { category: bi('Dasmë', 'Wedding'), title: bi('Dita juaj, e mbajtur përgjithmonë', 'Your day, kept forever'), line: bi('Kopertinë e fortë, faqe të gjera për portrete dhe momentet e vogla.', 'A hardcover made for portraits and the small moments.'), photo: img('https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=900&q=86&fit=crop&crop=top') },
@@ -286,19 +286,19 @@ export const PAGE_DEFAULTS: Record<PageSlug, Record<string, unknown>> = {
     },
     paths: {
       kicker: bi('dy rrugë, i njëjti printim', 'two paths, the same print'),
-      title: bi('Dizajnoni çdo faqe, ose lëreni AI-në ta nisi', 'Design every page, or let AI start it'),
-      designTitle: bi('Editori ynë', 'Our editor'),
-      designBody: bi('Zgjidhni stilin, madhësinë dhe paraqitjen. Vendosni fotot, tekstin dhe shkronjat — pikërisht si një album i vërtetë, faqe dyshe.', 'Pick style, size and layout. Place photos, type and fonts — like a real album, spread by spread.'),
-      designCta: bi('Hap editorin', 'Open the editor'),
+      title: bi('Dizajnoni çdo faqe, ose lëreni t’i vendosim ne', 'Design every page, or let AI start it'),
+      designTitle: bi('Bëjeni vetë', 'Do it yourself'),
+      designBody: bi('Zgjidhni stilin, madhësinë dhe si i vendosni fotot. Teksti dhe shkronjat — si një album i vërtetë, faqe dyshe.', 'Pick style, size and layout. Place photos, type and fonts — like a real album, spread by spread.'),
+      designCta: bi('Hapeni dhe ndryshojeni', 'Open and change it'),
       aiTitle: bi('Album me AI', 'AI album'),
-      aiBody: bi('Ngarkoni 25+ foto. Sistemi zgjedh paraqitjen dhe paletën. Pastaj e rregulloni çdo faqe para se të printojmë.', 'Upload 25+ photos. The system chooses layout and palette. Then you fine-tune every page before we print.'),
+      aiBody: bi('Shtoni 25+ foto. Ne i vendosim në faqe. Pastaj e rregulloni çdo faqe para se të printojmë.', 'Upload 25+ photos. The system chooses layout and palette. Then you fine-tune every page before we print.'),
       aiCta: bi('Provo me AI', 'Try with AI'),
     },
     quotes: {
       kicker: bi('nga shtëpitë që i kanë hapur', 'from homes that opened them'),
       items: [
         { text: bi('"Letra mat e bën albumin të ndihet si album galerie, jo si printim i zakonshëm. E mbajmë në tryezën e ndenjes."', '"The matte paper makes it feel like a gallery album, not a regular print. It lives on our living-room table."'), name: bi('Ana M.', 'Ana M.'), occasion: bi('Dasmë · Tiranë', 'Wedding · Tirana') },
-        { text: bi('"Faqet lay-flat i mbajnë peizazhet të plota. Udhëtimi ynë në jug duket siç e kujtojmë."', '"Lay-flat pages keep the landscapes whole. Our trip south looks the way we remember it."'), name: bi('Erjon B.', 'Erjon B.'), occasion: bi('Udhëtim · Sarandë', 'Travel · Saranda') },
+        { text: bi('"Faqet që hapen fare i mbajnë peizazhet të plota. Udhëtimi ynë në jug duket siç e kujtojmë."', '"Lay-flat pages keep the landscapes whole. Our trip south looks the way we remember it."'), name: bi('Erjon B.', 'Erjon B.'), occasion: bi('Udhëtim · Sarandë', 'Travel · Saranda') },
         { text: bi('"E porosita si dhuratë. Erdhi në kuti, i rëndë, i qetë. Mbetën pa fjalë."', '"I ordered it as a gift. It arrived boxed, heavy, quiet. They were speechless."'), name: bi('Mirela K.', 'Mirela K.'), occasion: bi('Ditëlindje · Durrës', 'Birthday · Durrës') },
       ],
     },
@@ -335,7 +335,7 @@ export const PAGE_DEFAULTS: Record<PageSlug, Record<string, unknown>> = {
       { q: bi('Sa kohë duhet për të marrë albumin tim?', 'How long does it take to receive my album?'), a: bi('Pas konfirmimit të porosisë, procesi i printimit kërkon 2–3 ditë pune. Dërgesa merr 1–2 ditë shtesë për qytetet brenda Shqipërisë.', 'After order confirmation, the printing process takes 2–3 working days. Delivery takes an additional 1–2 days for cities within Albania.') },
       { q: bi('Çfarë cilësi letre përdorni?', 'What quality paper do you use?'), a: bi('Ne përdorim letër premium mat prej 200g. Është një letër luksoze, e butë në prekje, që thekson ngjyrat pa krijuar reflekse shqetësuese.', 'We use premium matte 200g paper. It is a luxurious, soft-to-the-touch paper that enhances colours without any distracting glare.') },
       { q: bi('A mund të ndryshoj albumin pasi ta kem porositur?', 'Can I change my album after ordering?'), a: bi('Pasi të klikoni butonin "Porosit" dhe të konfirmoni dizajnin përfundimtar, albumi kalon menjëherë në procesin e printimit. Për këtë arsye, ndryshimet pas këtij hapi nuk janë të mundura.', 'Once you click the "Order" button and confirm your final design, the album immediately enters the printing process. Changes after this point are therefore not possible.') },
-      { q: bi('Si mund të paguaj?', 'How can I pay?'), a: bi("Për momentin ofrojmë pagesë në dorëzim (Cash on Delivery). Pasi t'ju mbërrijë albumi nga korrieri, ju mund t'ia paguani shumën.", 'We currently offer payment on delivery (Cash on Delivery). Once the courier delivers your album, you pay the amount.') },
+      { q: bi('Si mund të paguaj?', 'How can I pay?'), a: bi('Për momentin paguani kur t’ju vijë albumi — para në dorëzim. Korrieri e sjell, ju e paguani.', 'We currently offer payment on delivery (Cash on Delivery). Once the courier delivers your album, you pay the amount.') },
       { q: bi('Sa faqe mund të ketë maksimalisht një album?', 'What is the maximum number of pages an album can have?'), a: bi('Albumet tona bazë vijnë me 24 faqe (12 fletë). Ju mund të shtoni deri në 100 faqe (50 fletë) me një kosto shtesë për fletë.', 'Our base albums come with 24 pages (12 leaves). You can add up to 100 pages (50 leaves) at an additional cost per leaf.') },
     ],
     still: {
@@ -357,7 +357,7 @@ export const PAGE_DEFAULTS: Record<PageSlug, Record<string, unknown>> = {
       number: bi('+355 69 00 00 000', '+355 69 00 00 000'),
     },
     email: {
-      note: bi('Për kërkesa zyrtare dhe suport', 'For official requests and support'),
+      note: bi('Për kërkesa zyrtare dhe ndihmë', 'For official requests and support'),
       address: bi('hello@pergjithmone.al', 'hello@pergjithmone.al'),
     },
     studio: {

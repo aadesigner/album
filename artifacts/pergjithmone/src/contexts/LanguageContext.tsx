@@ -64,7 +64,7 @@ const translations: Translations = {
   'wizard.s1.blankDesc': { sq: 'Pa stil të gatshëm — filloni nga e para', en: 'No premade style — start from scratch' },
   // Wizard – Step 2
   'wizard.s2.title': { sq: 'Zgjidhni një Stil', en: 'Choose a Style' },
-  'wizard.s2.subtitle': { sq: 'Çdo stil vjen me ngjyra, shkronja dhe paraqitje të gatshme. Gjithçka mund të ndryshohet.', en: 'Each style comes with colours, fonts and layouts ready to go. Everything can be changed.' },
+  'wizard.s2.subtitle': { sq: 'Çdo stil vjen me ngjyra, shkronja dhe faqe të gatshme. Gjithçka mund të ndryshohet.', en: 'Each style comes with colours, fonts and layouts ready to go. Everything can be changed.' },
   'wizard.s2.blankTitle': { sq: 'Faqe e Bardhë', en: 'Blank Canvas' },
   'wizard.s2.blankDesc': { sq: 'Keni zgjedhur të filloni nga e para pa dizajn të gatshëm.', en: 'You\'ve chosen to start from scratch with no pre-made design.' },
   'wizard.s2.blankContinue': { sq: 'Vazhdo pa Stil', en: 'Continue without a Style' },
@@ -79,7 +79,7 @@ const translations: Translations = {
   'wizard.s3.basePages': { sq: 'faqe bazë të përfshira', en: 'base pages included' },
   'wizard.s3.extraPage': { sq: 'LEK / fletë shtesë', en: 'LEK / extra sheet' },
   'wizard.s3.paper': { sq: 'Letër premium mat 200g', en: 'Premium matte 200g paper' },
-  'wizard.s3.layflat': { sq: 'Hapje e sheshtë (layflat)', en: 'Lay-flat binding' },
+  'wizard.s3.layflat': { sq: 'Hapje e sheshtë', en: 'Lay-flat binding' },
   'wizard.s3.create': { sq: 'Krijo Albumin', en: 'Create Album' },
   'wizard.s3.creating': { sq: 'Duke krijuar...', en: 'Creating...' },
 

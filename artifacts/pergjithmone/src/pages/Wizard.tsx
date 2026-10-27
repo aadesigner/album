@@ -408,7 +408,7 @@ export default function Wizard() {
             Përgjithmonë
           </p>
           <p className="text-sm text-neutral-500">
-            {lang === 'sq' ? 'Duke hapur editorin…' : 'Opening the editor…'}
+            {lang === 'sq' ? 'Duke hapur albumin…' : 'Opening your album…'}
           </p>
         </div>
       )}
