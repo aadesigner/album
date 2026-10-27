@@ -423,6 +423,33 @@
   animation: heroWordShine 7s ease-in-out infinite;
 }
 
+@keyframes aiFilm {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(-50%, 0, 0); }
+}
+@keyframes aiPolaroid {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(var(--tilt, 0deg)); }
+  50%      { transform: translate3d(0, -14px, 0) rotate(var(--tilt, 0deg)); }
+}
+@keyframes aiDevelopSweep {
+  0%   { transform: translateX(-30%) scaleX(0.4); opacity: 0; }
+  18%  { opacity: 0.55; }
+  42%  { transform: translateX(80%) scaleX(1); opacity: 0; }
+  100% { transform: translateX(80%) scaleX(1); opacity: 0; }
+}
+.ai-film {
+  animation: aiFilm 42s linear infinite;
+  will-change: transform;
+}
+.ai-polaroid {
+  animation: aiPolaroid 6.5s ease-in-out infinite;
+  will-change: transform;
+}
+.ai-develop-sweep {
+  animation: aiDevelopSweep 5.5s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .hero-orb-a,
   .hero-orb-b,
@@ -433,7 +460,10 @@
   .hero-kenburns,
   .hero-dust,
   .hero-scroll-cue,
-  .hero-word-shine {
+  .hero-word-shine,
+  .ai-film,
+  .ai-polaroid,
+  .ai-develop-sweep {
     animation: none !important;
   }
 }

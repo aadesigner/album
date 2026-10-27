@@ -9,7 +9,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Sparkles, UploadCloud, X, Check, ChevronRight, ArrowLeft, ArrowRight,
   Loader2, ImageOff, Wand2, LayoutTemplate, Palette, BookOpen, PartyPopper,
-  Clock, Images, PenLine, Truck, Plus, Minus, Layers, Package,
+  Plus, Minus,
 } from 'lucide-react';
 import { useLocation, Link } from 'wouter';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -54,83 +54,270 @@ const GEN_STAGES = [
 
 const INK = '#2A2218';
 const PAPER = '#f7f4f0';
-const DARK = '#1a1714';
+const DARK = '#110e0c';
 
-const HERO_PHOTOS = [
-  'https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=800&q=84&fit=crop&crop=top',
-  'https://images.unsplash.com/photo-1516589178581-6cd7833ae3b2?w=700&q=84&fit=crop',
-  'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=600&q=84&fit=crop',
-  'https://images.unsplash.com/photo-1581952976147-5a2d15560349?w=600&q=84&fit=crop&crop=top',
+const STAGE_PHOTOS = [
+  'https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=500&q=82&fit=crop&crop=top',
+  'https://images.unsplash.com/photo-1516589178581-6cd7833ae3b2?w=500&q=82&fit=crop',
+  'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=500&q=82&fit=crop',
+  'https://images.unsplash.com/photo-1581952976147-5a2d15560349?w=500&q=82&fit=crop&crop=top',
+  'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=500&q=82&fit=crop&crop=top',
+  'https://images.unsplash.com/photo-1465495976277-4387d4b0b4c6?w=500&q=82&fit=crop',
+  'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?w=500&q=82&fit=crop',
+  'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500&q=82&fit=crop',
 ];
 
 function L(lang: 'sq' | 'en', sq: string, en: string) {
   return lang === 'sq' ? sq : en;
 }
 
-function HeroSpread({ lang }: { lang: 'sq' | 'en' }) {
-  const fly = [
-    { src: HERO_PHOTOS[0], x: -42, y: -38, r: -16, delay: 0.05 },
-    { src: HERO_PHOTOS[1], x: 46, y: -42, r: 12, delay: 0.18 },
-    { src: HERO_PHOTOS[2], x: -38, y: 36, r: 9, delay: 0.3 },
-    { src: HERO_PHOTOS[3], x: 44, y: 34, r: -11, delay: 0.42 },
-  ];
+function usePrefersReducedMotion() {
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setReduced(mq.matches);
+    const onChange = () => setReduced(mq.matches);
+    mq.addEventListener?.('change', onChange);
+    return () => mq.removeEventListener?.('change', onChange);
+  }, []);
+  return reduced;
+}
+
+function FilmMarquee() {
+  const strip = [...STAGE_PHOTOS, ...STAGE_PHOTOS];
   return (
-    <div className="relative w-full max-w-[520px] mx-auto h-[320px] sm:h-[400px] lg:h-[460px]" aria-hidden>
-      {fly.map((f) => (
-        <motion.img
-          key={f.src}
-          src={f.src}
-          alt=""
-          className="absolute z-0 w-[72px] h-[96px] sm:w-[88px] sm:h-[118px] object-cover rounded-sm border border-white"
-          initial={{ opacity: 0, scale: 0.7, x: `${f.x}%`, y: `${f.y}%`, rotate: f.r * 1.6, left: '50%', top: '50%' }}
-          animate={{
-            opacity: [0, 1, 1, 0.35],
-            scale: [0.7, 1, 1, 0.92],
-            x: [`${f.x}%`, `${f.x * 0.55}%`, `${f.x * 0.22}%`, `${f.x * 0.08}%`],
-            y: [`${f.y}%`, `${f.y * 0.55}%`, `${f.y * 0.18}%`, `${f.y * 0.05}%`],
-            rotate: [f.r * 1.6, f.r, f.r * 0.3, 0],
-          }}
-          transition={{ duration: 2.8, delay: f.delay, ease: [0.22, 1, 0.36, 1], times: [0, 0.28, 0.62, 1] }}
-          style={{ marginLeft: -44, marginTop: -56, boxShadow: '0 10px 24px rgba(42,34,24,0.12)' }}
+    <div className="relative overflow-hidden border-t border-white/10" aria-hidden>
+      <div className="pointer-events-none absolute inset-y-0 left-0 w-16 z-10 bg-gradient-to-r from-[#110e0c] to-transparent" />
+      <div className="pointer-events-none absolute inset-y-0 right-0 w-16 z-10 bg-gradient-to-l from-[#110e0c] to-transparent" />
+      <div className="ai-film flex w-max gap-1.5 py-3 pl-1.5">
+        {strip.map((src, i) => (
+          <img
+            key={`${src}-${i}`}
+            src={src}
+            alt=""
+            className="h-[72px] w-[54px] sm:h-[88px] sm:w-[66px] object-cover rounded-[2px] opacity-80"
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Polaroid({
+  src, className, tilt, delay, reduced,
+}: { src: string; className: string; tilt: string; delay: string; reduced: boolean }) {
+  return (
+    <div
+      className={`${reduced ? '' : 'ai-polaroid'} absolute z-[1] bg-white p-[5px] pb-5 shadow-[0_18px_40px_rgba(0,0,0,0.35)] ${className}`}
+      style={{ ['--tilt' as string]: tilt, animationDelay: delay, transform: `rotate(${tilt})` }}
+    >
+      <img src={src} alt="" className="block w-full aspect-[3/4] object-cover" />
+    </div>
+  );
+}
+
+function DarkroomHero({ lang }: { lang: 'sq' | 'en' }) {
+  const reduced = usePrefersReducedMotion();
+  return (
+    <section className="relative overflow-hidden text-[#f3eee7]" style={{ background: DARK }}>
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 opacity-[0.07]"
+        style={{
+          backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=\'0 0 200 200\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cfilter id=\'n\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'0.9\' numOctaves=\'3\' stitchTiles=\'stitch\'/%3E%3C/filter%3E%3Crect width=\'100%25\' height=\'100%25\' filter=\'url(%23n)\'/%3E%3C/svg%3E")',
+          backgroundSize: '180px',
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute left-1/2 top-[18%] h-[42%] w-[70%] -translate-x-1/2 rounded-full opacity-40 blur-3xl"
+        style={{ background: 'radial-gradient(circle, rgba(232,196,150,0.28) 0%, transparent 68%)' }}
+      />
+      {!reduced && (
+        <div
+          aria-hidden
+          className="ai-develop-sweep pointer-events-none absolute inset-y-[8%] left-0 w-[38%] z-[2]"
+          style={{ background: 'linear-gradient(90deg, transparent, rgba(255,244,220,0.16), transparent)' }}
         />
-      ))}
-      <motion.div
-        className="absolute inset-0 z-10 flex items-center justify-center"
-        style={{ perspective: 1600 }}
-        initial={{ opacity: 0, y: 28, scale: 0.92 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.7, delay: 0.35, ease: [0.22, 1, 0.36, 1] }}
-      >
-        <motion.div
-          className="flex w-[86%] max-w-[420px]"
-          style={{ transformStyle: 'preserve-3d', transformOrigin: 'center center' }}
-          animate={{ rotateY: [-8, -4, -8], rotateX: [3, 2, 3] }}
-          transition={{ duration: 9, repeat: Infinity, ease: 'easeInOut' }}
+      )}
+
+      <Polaroid src={STAGE_PHOTOS[0]} className="top-[7%] left-[2%] sm:left-[5%] w-[68px] sm:w-[100px]" tilt="-13deg" delay="0s" reduced={reduced} />
+      <Polaroid src={STAGE_PHOTOS[1]} className="top-[9%] right-[2%] sm:right-[6%] w-[62px] sm:w-[88px]" tilt="10deg" delay="0.7s" reduced={reduced} />
+      <Polaroid src={STAGE_PHOTOS[2]} className="hidden md:block top-[38%] left-[2%] w-[78px]" tilt="7deg" delay="1.2s" reduced={reduced} />
+      <Polaroid src={STAGE_PHOTOS[3]} className="hidden md:block top-[42%] right-[3%] w-[86px]" tilt="-8deg" delay="1.8s" reduced={reduced} />
+      <Polaroid src={STAGE_PHOTOS[4]} className="bottom-[22%] left-[8%] sm:left-[14%] w-[56px] sm:w-[72px]" tilt="-6deg" delay="0.4s" reduced={reduced} />
+      <Polaroid src={STAGE_PHOTOS[5]} className="bottom-[20%] right-[8%] sm:right-[15%] w-[58px] sm:w-[76px]" tilt="8deg" delay="1.4s" reduced={reduced} />
+
+      <div className="relative z-10 max-w-3xl mx-auto px-5 pt-16 pb-12 sm:pt-20 md:pt-24 md:pb-16 text-center">
+        <motion.p
+          initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+          className="text-[10px] sm:text-[11px] uppercase tracking-[0.38em] text-white/40 mb-6"
         >
-          <div className="relative w-[48%] aspect-[3/4] overflow-hidden rounded-l-[4px] bg-[#1a1209]"
-            style={{ boxShadow: '0 18px 40px rgba(42,34,24,0.14)', transform: 'rotateY(7deg)', transformOrigin: 'right center' }}>
-            <img src={HERO_PHOTOS[0]} alt="" className="absolute inset-0 w-full h-full object-cover" />
-            <p className="absolute bottom-3 left-2 right-2 font-serif italic text-white/90 text-[11px] text-center">
-              Ana & Erjon
+          {L(lang, 'album me AI · dhomë e errët', 'album with AI · darkroom')}
+        </motion.p>
+        <motion.h1
+          initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.06, duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+          className="font-serif text-[clamp(2.15rem,6.4vw,4.1rem)] font-medium leading-[1.08] mb-5"
+        >
+          {L(lang, 'Hidhini fotot. Albumi niset vetë.', 'Drop the photos. The album starts itself.')}
+        </motion.h1>
+        <motion.p
+          initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.14 }}
+          className="text-white/55 text-[15px] md:text-[16px] leading-relaxed max-w-lg mx-auto mb-8"
+        >
+          {L(
+            lang,
+            `Zgjidhni kujtimin. Vendosni ${MIN_PHOTOS}–${MAX_PHOTOS} foto. Ne i radhitim në faqe — pastaj i prekni ju, para printimit.`,
+            `Pick the memory. Lay ${MIN_PHOTOS}–${MAX_PHOTOS} photos. We place them on the pages — then you touch them, before we print.`,
+          )}
+        </motion.p>
+        <motion.div
+          initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="flex flex-wrap items-center justify-center gap-3"
+        >
+          <a
+            href="#fillo"
+            className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full text-[13px] font-semibold bg-white text-[#110e0c] hover:bg-[#f3eee7] transition-colors"
+          >
+            {L(lang, 'Hidhi fotot këtu', 'Drop photos here')}
+            <ArrowRight size={14} />
+          </a>
+          <Link href="/krijo">
+            <span className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full text-[13px] font-semibold border border-white/20 text-white/80 hover:bg-white/5 transition-colors">
+              {L(lang, 'Ose përgatiteni vetë', 'Or design it yourself')}
+            </span>
+          </Link>
+        </motion.div>
+        <p className="mt-8 text-[10px] uppercase tracking-[0.22em] text-white/30">
+          {L(lang, `${MIN_PHOTOS}–${MAX_PHOTOS} foto  ·  i njëjti editor  ·  letër 200g`, `${MIN_PHOTOS}–${MAX_PHOTOS} photos  ·  the same editor  ·  200g paper`)}
+        </p>
+      </div>
+      <FilmMarquee />
+    </section>
+  );
+}
+
+function ChaosToOrder({ lang }: { lang: 'sq' | 'en' }) {
+  const pile = STAGE_PHOTOS.slice(0, 6);
+  return (
+    <section className="py-16 md:py-24 overflow-hidden" style={{ background: DARK }}>
+      <div className="max-w-6xl mx-auto px-5 md:px-8">
+        <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-center">
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.3em] text-white/35 mb-3">
+              {L(lang, 'nga rrëmuja, te radha', 'from the pile, into order')}
+            </p>
+            <h2 className="font-serif text-[clamp(1.85rem,3.4vw,2.8rem)] font-medium leading-[1.12] text-[#f3eee7] mb-4">
+              {L(lang, 'Galeria është e mbushur. Albumi merr frymë.', 'The gallery is crowded. The album can breathe.')}
+            </h2>
+            <p className="text-white/50 text-[15px] leading-relaxed max-w-md">
+              {L(
+                lang,
+                'Nuk i ngjisim të gjitha fotot në një faqe. E para bëhet kopertina. Të tjerat gjejnë vend — me hapësirë, jo me kolazh.',
+                'We do not glue every photo onto one page. The first becomes the cover. The rest find a place — with air, not collage.',
+              )}
             </p>
           </div>
-          <div className="w-px bg-black/10 shrink-0" />
-          <div className="relative w-[52%] aspect-[3/4] overflow-hidden rounded-r-[4px] bg-[#faf8f4] p-[7%]"
-            style={{ boxShadow: '0 18px 40px rgba(42,34,24,0.1)', transform: 'rotateY(-7deg)', transformOrigin: 'left center' }}>
-            <div className="grid grid-rows-[1.15fr_0.85fr] gap-[7%] h-full">
-              <img src={HERO_PHOTOS[1]} alt="" className="w-full h-full object-cover" />
-              <div className="grid grid-cols-2 gap-[8%]">
-                <img src={HERO_PHOTOS[2]} alt="" className="w-full h-full object-cover" />
-                <img src={HERO_PHOTOS[3]} alt="" className="w-full h-full object-cover" />
+          <div className="grid sm:grid-cols-2 gap-6 items-end">
+            <div className="relative h-[240px] sm:h-[280px]" aria-hidden>
+              {pile.map((src, i) => (
+                <motion.img
+                  key={src}
+                  src={src}
+                  alt=""
+                  className="absolute left-1/2 top-1/2 w-[88px] h-[118px] object-cover rounded-[2px] border border-white/80 shadow-xl"
+                  style={{ zIndex: i }}
+                  initial={{ x: '-50%', y: '-50%', rotate: 0, opacity: 0 }}
+                  whileInView={{ x: `calc(-50% + ${(i - 2.5) * 10}px)`, y: `calc(-50% + ${(i % 3) * 8}px)`, rotate: (i - 2.5) * 9, opacity: 1 }}
+                  viewport={{ once: true, margin: '-40px' }}
+                  transition={{ delay: i * 0.05, type: 'spring', stiffness: 160, damping: 16 }}
+                />
+              ))}
+              <p className="absolute -bottom-1 left-0 right-0 text-center text-[10px] uppercase tracking-[0.18em] text-white/30">
+                {L(lang, 'në telefon', 'on the phone')}
+              </p>
+            </div>
+            <div aria-hidden>
+              <div className="grid grid-cols-3 gap-1.5 bg-[#f7f4f0] p-2.5 rounded-sm shadow-[0_20px_50px_rgba(0,0,0,0.35)]">
+                {pile.map((src, i) => (
+                  <motion.img
+                    key={`g-${src}`}
+                    src={src}
+                    alt=""
+                    className={`w-full object-cover ${i === 0 ? 'col-span-2 aspect-[4/3]' : 'aspect-square'}`}
+                    initial={{ opacity: 0, y: 16 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: '-40px' }}
+                    transition={{ delay: 0.25 + i * 0.07, duration: 0.4 }}
+                  />
+                ))}
               </div>
+              <p className="mt-2 text-center text-[10px] uppercase tracking-[0.18em] text-white/30">
+                {L(lang, 'në album', 'in the album')}
+              </p>
             </div>
           </div>
-        </motion.div>
-      </motion.div>
-      <p className="absolute bottom-0 left-0 right-0 text-center text-[10px] uppercase tracking-[0.22em] text-neutral-400">
-        {L(lang, 'Fotot bien në faqe · pastaj i rregulloni', 'Photos land on the pages · then you edit')}
-      </p>
-    </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function SlottingDemo({ lang }: { lang: 'sq' | 'en' }) {
+  const slots = [
+    { src: STAGE_PHOTOS[0], label: { sq: 'Kopertina', en: 'Cover' }, className: 'col-span-2 row-span-2' },
+    { src: STAGE_PHOTOS[1], label: { sq: 'Faqja 02', en: 'Page 02' }, className: '' },
+    { src: STAGE_PHOTOS[2], label: { sq: 'Faqja 03', en: 'Page 03' }, className: '' },
+    { src: STAGE_PHOTOS[3], label: { sq: 'Faqja 04', en: 'Page 04' }, className: 'col-span-2' },
+  ];
+  return (
+    <section className="py-16 md:py-24 bg-[#f7f4f0]">
+      <div className="max-w-6xl mx-auto px-5 md:px-8">
+        <div className="grid lg:grid-cols-[0.9fr_1.1fr] gap-10 lg:gap-14 items-center">
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.3em] text-neutral-400 mb-3">
+              {L(lang, 'si i vendosim', 'how we place them')}
+            </p>
+            <h2 className="font-serif text-[clamp(1.85rem,3.4vw,2.8rem)] font-medium leading-[1.12] mb-4" style={{ color: INK }}>
+              {L(lang, 'E para hap. E fundit mbyll. Të tjerat gjejnë faqe.', 'The first opens. The last closes. The rest find a page.')}
+            </h2>
+            <p className="text-neutral-500 text-[15px] leading-relaxed mb-6">
+              {L(
+                lang,
+                'Tërhiqini fotot në rendin e historisë. Ne zgjedhim paraqitjen dhe paletën. Ju i ndryshoni në editor para se të printojmë.',
+                'Drag the photos into story order. We pick layout and palette. You change anything in the editor before we print.',
+              )}
+            </p>
+            <a href="#fillo" className="inline-flex items-center gap-2 text-[13px] font-semibold" style={{ color: INK }}>
+              {L(lang, 'Provojeni me fotot tuaja', 'Try it with your photos')}
+              <ArrowRight size={14} />
+            </a>
+          </div>
+          <div className="relative">
+            <div className="grid grid-cols-4 grid-rows-3 gap-2 aspect-[4/3] bg-white p-3 rounded-sm shadow-[0_24px_60px_rgba(42,34,24,0.12)]">
+              {slots.map((s, i) => (
+                <motion.div
+                  key={s.label.en}
+                  className={`relative overflow-hidden bg-neutral-100 ${s.className}`}
+                  initial={{ opacity: 0, scale: 0.86, y: 24 }}
+                  whileInView={{ opacity: 1, scale: 1, y: 0 }}
+                  viewport={{ once: true, margin: '-50px' }}
+                  transition={{ delay: 0.12 + i * 0.16, type: 'spring', stiffness: 180, damping: 18 }}
+                >
+                  <img src={s.src} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                  <span className="absolute bottom-1.5 left-1.5 text-[9px] uppercase tracking-[0.16em] text-white/90 drop-shadow">
+                    {L(lang, s.label.sq, s.label.en)}
+                  </span>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -523,90 +710,7 @@ export default function AlbumAI() {
 
       <div style={{ background: PAPER }} className="min-h-[calc(100dvh-48px)] md:min-h-[calc(100dvh-54px)]">
 
-        <section className="relative overflow-hidden border-b border-neutral-200/70">
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0 opacity-[0.5]"
-            style={{
-              backgroundImage: `url(${HERO_PHOTOS[0]})`,
-              backgroundSize: 'cover',
-              backgroundPosition: '72% 28%',
-              filter: 'saturate(0.75) brightness(1.14)',
-            }}
-          />
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0"
-            style={{
-              background: `linear-gradient(105deg, ${PAPER}f0 0%, ${PAPER}c4 28%, ${PAPER}66 52%, transparent 82%), linear-gradient(to top, ${PAPER} 0%, ${PAPER}88 18%, transparent 42%)`,
-            }}
-          />
-          <div className="relative max-w-6xl mx-auto px-5 md:px-8 pt-10 pb-10 md:pt-16 md:pb-16">
-            <div className="grid lg:grid-cols-[1.05fr_0.95fr] gap-8 lg:gap-10 items-center">
-              <div className="order-2 lg:order-1">
-                <motion.p
-                  initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                  className="text-[11px] uppercase tracking-[0.3em] text-neutral-400 mb-5"
-                >
-                  {L(lang, 'studio · album me AI', 'studio · album with AI')}
-                </motion.p>
-                <motion.h1
-                  initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
-                  className="font-serif text-[clamp(2.05rem,4.6vw,3.45rem)] font-medium leading-[1.12] mb-5 overflow-visible"
-                  style={{ color: INK }}
-                >
-                  {L(lang, 'Ngarkoni fotot. Ne i kthejmë në album.', 'Upload your photos. We turn them into an album.')}
-                </motion.h1>
-                <motion.p
-                  initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-                  className="text-neutral-500 text-[15px] md:text-[16px] leading-relaxed max-w-xl mb-8"
-                >
-                  {L(
-                    lang,
-                    `Zgjidhni kujtimin, vendosni ${MIN_PHOTOS}–${MAX_PHOTOS} foto në rendin e historisë. Sistemi ynë zgjedh kopertinën, paraqitjen dhe paletën — pastaj hapet i njëjti editor, gati për t’i prekur me dorë para printimit.`,
-                    `Choose the memory, lay ${MIN_PHOTOS}–${MAX_PHOTOS} photos in story order. We pick the cover, layouts and palette — then the same editor opens, ready for your hand before we print.`,
-                  )}
-                </motion.p>
-                <motion.div
-                  initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.16 }}
-                  className="flex flex-wrap items-center gap-3 mb-10"
-                >
-                  <a
-                    href="#fillo"
-                    className="inline-flex items-center gap-2 px-6 py-3 rounded-full text-[13px] font-semibold text-white"
-                    style={{ background: INK }}
-                  >
-                    {L(lang, 'Fillo me fotot e tua', 'Start with your photos')}
-                    <ArrowRight size={14} />
-                  </a>
-                  <Link href="/krijo">
-                    <span className="inline-flex items-center gap-2 px-6 py-3 rounded-full text-[13px] font-semibold border border-neutral-300 bg-white/70" style={{ color: INK }}>
-                      {L(lang, 'Dizajno vetë', 'Design it yourself')}
-                    </span>
-                  </Link>
-                </motion.div>
-                <div className="grid grid-cols-3 gap-px bg-neutral-200/80 rounded-2xl overflow-hidden max-w-lg">
-                  {[
-                    { value: `${MIN_PHOTOS}–${MAX_PHOTOS}`, label: L(lang, 'foto në album', 'photos in the album') },
-                    { value: L(lang, 'Editori', 'Editor'), label: L(lang, 'i njëjti, pas AI', 'the same, after AI') },
-                    { value: '200g', label: L(lang, 'letër mat lay-flat', 'matte lay-flat paper') },
-                  ].map((s) => (
-                    <div key={s.label} className="bg-white/70 px-3 py-4 md:px-4 md:py-5">
-                      <p className="font-serif text-lg md:text-[1.35rem]" style={{ color: INK }}>{s.value}</p>
-                      <p className="text-[10px] uppercase tracking-[0.12em] text-neutral-400 mt-1 leading-snug">{s.label}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <motion.div
-                className="order-1 lg:order-2"
-                initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12, duration: 0.55 }}
-              >
-                <HeroSpread lang={lang} />
-              </motion.div>
-            </div>
-          </div>
-        </section>
+        <DarkroomHero lang={lang} />
 
         {!bookCreationEnabled && (
           <div className="max-w-3xl mx-auto px-4 mb-6">
@@ -1140,283 +1244,63 @@ export default function AlbumAI() {
 
         {!generating && (
           <>
-            <section className="bg-white border-t border-neutral-100 py-16 md:py-24">
-              <div className="max-w-6xl mx-auto px-5 md:px-8">
-                <div className="max-w-xl mb-10 md:mb-14">
+            <ChaosToOrder lang={lang} />
+            <SlottingDemo lang={lang} />
+
+            <section className="py-16 md:py-24 bg-white">
+              <div className="max-w-5xl mx-auto px-5 md:px-8 grid lg:grid-cols-[1fr_1.15fr] gap-10 lg:gap-16 items-start">
+                <div>
                   <p className="text-[11px] uppercase tracking-[0.3em] text-neutral-400 mb-3">
-                    {L(lang, 'rituali', 'the ritual')}
+                    {L(lang, 'para se të hidhni fotot', 'before you drop the photos')}
                   </p>
-                  <h2 className="font-serif text-3xl md:text-4xl font-medium leading-tight mb-4" style={{ color: INK }}>
-                    {L(lang, 'Tre gjeste, një album i vërtetë', 'Three gestures, one real album')}
+                  <h2 className="font-serif text-[clamp(1.85rem,3.2vw,2.7rem)] font-medium leading-[1.12] mb-4" style={{ color: INK }}>
+                    {L(lang, 'Mbetet i juaji. Printojmë vetëm kur thoni po.', 'It stays yours. We print only when you say yes.')}
                   </h2>
                   <p className="text-neutral-500 text-[15px] leading-relaxed">
                     {L(
                       lang,
-                      'Nuk është një kolazh i rastësishëm. Është i njëjti album që printojmë nga editori — vetëm se faqet nisin të rregulluara.',
-                      'This is not a random collage. It is the same album we print from the editor — only the pages start already arranged.',
+                      'AI e niset. Ju e mbyllni në editor. I njëjti printim, e njëjta letër 200g, kudo në Shqipëri.',
+                      'AI starts it. You finish it in the editor. The same print, the same 200g paper, anywhere in Albania.',
                     )}
                   </p>
                 </div>
-                <div className="grid sm:grid-cols-3 gap-5 md:gap-6">
-                  {[
-                    {
-                      icon: BookOpen,
-                      title: { sq: 'Zgjidhni kujtimin', en: 'Choose the memory' },
-                      desc: {
-                        sq: 'Dasmë, udhëtim, familje, miqësi ose festë. Paleta dhe kopertina ndjekin atë histori, jo një stil të përgjithshëm.',
-                        en: 'Wedding, travel, family, friendship or a celebration. Palette and cover follow that story, not a generic look.',
-                      },
-                    },
-                    {
-                      icon: Images,
-                      title: { sq: 'Vendosni fotot', en: 'Lay the photos' },
-                      desc: {
-                        sq: `E para bëhet kopertina, e fundit kapaku i pasëm. Çdo foto përdoret një herë — faqet mbeten të ajrosura, jo të mbushura.`,
-                        en: 'The first becomes the cover, the last the back. Each photo is used once — spreads stay airy, never cramped.',
-                      },
-                    },
-                    {
-                      icon: PenLine,
-                      title: { sq: 'Ne e nisim, ju e mbyllni', en: 'We start it, you finish it' },
-                      desc: {
-                        sq: 'Hapet i njëjti editor. Ndryshoni paraqitjen, tekstin, kornizat — pastaj e printojmë me letër mat 200g.',
-                        en: 'The same editor opens. Change layout, type, frames — then we print it on matte 200g paper.',
-                      },
-                    },
-                  ].map((item, i) => (
-                    <motion.div
-                      key={item.title.en}
-                      initial={{ opacity: 0, y: 16 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: true, margin: '-60px' }}
-                      transition={{ delay: i * 0.08, duration: 0.45 }}
-                      className="rounded-[1.35rem] border border-neutral-100 bg-[#f7f4f0] p-6 md:p-7"
-                    >
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center mb-5 text-white" style={{ background: INK }}>
-                        <item.icon size={16} />
-                      </div>
-                      <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-400 mb-2">0{i + 1}</p>
-                      <h3 className="font-serif text-xl mb-2" style={{ color: INK }}>
-                        {L(lang, item.title.sq, item.title.en)}
-                      </h3>
-                      <p className="text-[14px] text-neutral-500 leading-relaxed">
-                        {L(lang, item.desc.sq, item.desc.en)}
-                      </p>
-                    </motion.div>
-                  ))}
-                </div>
-              </div>
-            </section>
-
-            <section className="py-16 md:py-24 border-t border-neutral-200/70">
-              <div className="max-w-6xl mx-auto px-5 md:px-8">
-                <div className="max-w-xl mb-10 md:mb-14">
-                  <p className="text-[11px] uppercase tracking-[0.3em] text-neutral-400 mb-3">
-                    {L(lang, 'çfarë vendosim', 'what we place')}
-                  </p>
-                  <h2 className="font-serif text-3xl md:text-4xl font-medium leading-tight mb-4" style={{ color: INK }}>
-                    {L(lang, 'Jo një generator. Një studio që njeh albumin.', 'Not a generator. A studio that knows albums.')}
-                  </h2>
-                  <p className="text-neutral-500 text-[15px] leading-relaxed">
-                    {L(
-                      lang,
-                      'Sistemi ynë punon me të njëjtat paraqitje, fonte dhe paleta që përdorni në editor — të prerë për Përgjithmonë, jo për çdo aplikacion foto.',
-                      'Our system uses the same layouts, fonts and palettes you use in the editor — cut for Përgjithmonë, not for every photo app.',
-                    )}
-                  </p>
-                </div>
-                <div className="grid sm:grid-cols-2 gap-4 md:gap-5">
-                  {[
-                    {
-                      icon: BookOpen,
-                      title: { sq: 'Kopertina nga fotoja e parë', en: 'Cover from the first photo' },
-                      desc: {
-                        sq: 'Historia hapet me foton që vendosni të parën. E fundit e mbyll kapakun e pasëm — si një album i vërtetë.',
-                        en: 'The story opens with the photo you place first. The last one closes the back cover — like a real album.',
-                      },
-                    },
-                    {
-                      icon: LayoutTemplate,
-                      title: { sq: 'Paraqitje të ajrosura', en: 'Airy layouts' },
-                      desc: {
-                        sq: 'Faqet nuk mbushen me kolazhe. Çdo foto merr hapësirë, me hapje lay-flat që nuk e humb imazhin në mes.',
-                        en: 'Pages are not stuffed with collages. Each photo gets room, with lay-flat spreads that do not lose the image in the gutter.',
-                      },
-                    },
-                    {
-                      icon: Palette,
-                      title: { sq: 'Paletë sipas kujtimit', en: 'A palette for the memory' },
-                      desc: {
-                        sq: 'Dasma merr krem dhe ar; udhëtimi dritë dhe peizazh; familja ngrohtësi. Jo ngjyra të rastësishme.',
-                        en: 'Wedding gets cream and gold; travel, light and landscape; family, warmth. Not random colours.',
-                      },
-                    },
-                    {
-                      icon: Clock,
-                      title: { sq: 'Minuta, jo mbrëmje', en: 'Minutes, not an evening' },
-                      desc: {
-                        sq: 'Radhitja faqe për faqe zakonisht merr orë. Këtu niset brenda minutash — pastaj e prekni ju.',
-                        en: 'Arranging page by page usually takes hours. Here it starts within minutes — then you touch it.',
-                      },
-                    },
-                  ].map((item, i) => (
-                    <motion.div
-                      key={item.title.en}
-                      initial={{ opacity: 0, y: 14 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: true, margin: '-60px' }}
-                      transition={{ delay: i * 0.06, duration: 0.4 }}
-                      className="rounded-2xl bg-white/80 border border-neutral-100 p-6 md:p-7"
-                    >
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center mb-4 text-white" style={{ background: INK }}>
-                        <item.icon size={16} />
-                      </div>
-                      <h3 className="font-serif text-xl mb-2" style={{ color: INK }}>
-                        {L(lang, item.title.sq, item.title.en)}
-                      </h3>
-                      <p className="text-[14px] text-neutral-500 leading-relaxed">
-                        {L(lang, item.desc.sq, item.desc.en)}
-                      </p>
-                    </motion.div>
-                  ))}
-                </div>
-              </div>
-            </section>
-
-            <section className="bg-white py-16 md:py-24 border-t border-neutral-100">
-              <div className="max-w-6xl mx-auto px-5 md:px-8">
-                <div className="text-center max-w-2xl mx-auto mb-10 md:mb-14">
-                  <p className="text-[11px] uppercase tracking-[0.3em] text-neutral-400 mb-3">
-                    {L(lang, 'dy rrugë, i njëjti printim', 'two paths, the same print')}
-                  </p>
-                  <h2 className="font-serif text-3xl md:text-4xl font-medium leading-tight" style={{ color: INK }}>
-                    {L(lang, 'Ju mbeteni autori. Printimi nuk ndryshon.', 'You remain the author. The print does not change.')}
-                  </h2>
-                </div>
-                <div className="grid md:grid-cols-2 gap-4 md:gap-5">
-                  <div className="rounded-[1.5rem] border border-neutral-800 p-7 md:p-9 flex flex-col text-white" style={{ background: DARK }}>
-                    <div className="w-11 h-11 rounded-full bg-white/10 border border-white/15 flex items-center justify-center mb-5">
-                      <Sparkles size={18} />
-                    </div>
-                    <h3 className="font-serif text-2xl mb-3">{L(lang, 'Nisni me AI', 'Start with AI')}</h3>
-                    <p className="text-[14px] leading-relaxed text-white/60 mb-8">
-                      {L(
-                        lang,
-                        `Ngarkoni ${MIN_PHOTOS}+ foto. Ne zgjedhim paraqitjen dhe paletën. Pastaj e rregulloni çdo faqe para se të printojmë.`,
-                        `Upload ${MIN_PHOTOS}+ photos. We choose layout and palette. Then you fine-tune every page before we print.`,
-                      )}
-                    </p>
-                    <a href="#fillo" className="mt-auto inline-flex items-center gap-2 text-[13px] font-semibold">
-                      {L(lang, 'Fillo këtu', 'Begin here')}
-                      <ArrowRight size={14} />
-                    </a>
-                  </div>
-                  <div className="rounded-[1.5rem] border border-neutral-100 bg-[#f7f4f0] p-7 md:p-9 flex flex-col">
-                    <div className="w-11 h-11 rounded-full bg-white border border-neutral-200 flex items-center justify-center mb-5">
-                      <PenLine size={18} style={{ color: INK }} />
-                    </div>
-                    <h3 className="font-serif text-2xl mb-3" style={{ color: INK }}>
-                      {L(lang, 'Dizajnoni çdo faqe', 'Design every page')}
-                    </h3>
-                    <p className="text-[14px] leading-relaxed text-neutral-500 mb-8">
-                      {L(
-                        lang,
-                        'Zgjidhni stilin, madhësinë dhe paraqitjen. Vendosni fotot dhe tekstin — pikërisht si një album i vërtetë, faqe dyshe.',
-                        'Pick style, size and layout. Place photos and type — like a real album, spread by spread.',
-                      )}
-                    </p>
-                    <Link href="/krijo" className="mt-auto">
-                      <span className="inline-flex items-center gap-2 text-[13px] font-semibold" style={{ color: INK }}>
-                        {L(lang, 'Hap editorin', 'Open the editor')}
-                        <ArrowRight size={14} />
-                      </span>
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <section className="py-16 md:py-24 border-t border-neutral-200/70">
-              <div className="max-w-6xl mx-auto px-5 md:px-8">
-                <div className="max-w-xl mb-10 md:mb-14">
-                  <p className="text-[11px] uppercase tracking-[0.3em] text-neutral-400 mb-3">
-                    {L(lang, 'çfarë pret në kuti', 'what arrives in the box')}
-                  </p>
-                  <h2 className="font-serif text-3xl md:text-4xl font-medium leading-tight mb-4" style={{ color: INK }}>
-                    {L(lang, 'I njëjti objekt. Asnjë shkurtim sepse e nisi AI.', 'The same object. No shortcut because AI started it.')}
-                  </h2>
-                  <p className="text-neutral-500 text-[15px] leading-relaxed">
-                    {L(
-                      lang,
-                      'Letër galerie, hapje e sheshtë, kopertinë e fortë dhe dërgesë e kujdesshme në Shqipëri — si çdo album i dizajnuar me dorë.',
-                      'Gallery paper, lay-flat opening, hardcover and careful delivery across Albania — like every album designed by hand.',
-                    )}
-                  </p>
-                </div>
-                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
-                  {[
-                    { icon: Layers, title: { sq: 'Letër mat 200g', en: 'Matte 200g paper' }, desc: { sq: 'E butë, pa shkëlqim. Ngjyrat qëndrojnë të pasura në dritë ditore.', en: 'Soft, no glare. Colours stay rich in daylight.' } },
-                    { icon: BookOpen, title: { sq: 'Hapje e sheshtë', en: 'Lay-flat binding' }, desc: { sq: 'Faqja dyshe hapet fare — asnjë foto nuk humbet në mes.', en: 'The spread opens fully — no photo lost in the gutter.' } },
-                    { icon: Package, title: { sq: 'Kopertinë e fortë', en: 'Hardcover' }, desc: { sq: 'E menduar të rrijë në tryezë dhe në raft, jo vetëm në telefon.', en: 'Meant to live on a table and a shelf, not only on a phone.' } },
-                    { icon: Truck, title: { sq: 'Kuti & dërgesë', en: 'Box & delivery' }, desc: { sq: '10–16 ditë në Shqipëri. Mund të paguani edhe në dorëzim.', en: '10–16 days in Albania. Cash on delivery too.' } },
-                  ].map((item) => (
-                    <div key={item.title.en} className="rounded-2xl bg-white/80 border border-neutral-100 p-6">
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center mb-4 text-white" style={{ background: INK }}>
-                        <item.icon size={16} />
-                      </div>
-                      <h3 className="font-serif text-lg mb-2" style={{ color: INK }}>{L(lang, item.title.sq, item.title.en)}</h3>
-                      <p className="text-[13.5px] text-neutral-500 leading-relaxed">{L(lang, item.desc.sq, item.desc.en)}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </section>
-
-            <section className="bg-white border-t border-neutral-100 py-16 md:py-24">
-              <div className="max-w-2xl mx-auto px-5 md:px-8">
-                <p className="text-center text-[11px] uppercase tracking-[0.3em] text-neutral-400 mb-3">
-                  {L(lang, 'pyetje nga shtëpia', 'questions from home')}
-                </p>
-                <h2 className="text-center font-serif text-3xl md:text-4xl font-medium leading-tight mb-10" style={{ color: INK }}>
-                  {L(lang, 'Para se të ngarkoni fotot', 'Before you upload the photos')}
-                </h2>
-                <div className="space-y-2.5">
+                <div className="space-y-px bg-neutral-200/80">
                   {[
                     {
                       q: { sq: 'A mbetet albumi i redaktueshëm?', en: 'Does the album stay editable?' },
                       a: {
-                        sq: 'Po. Sapo lidhet, hapet direkt në editorin tonë. Ndryshoni çdo faqe, foto, tekst apo kornizë para se të porositeni.',
-                        en: 'Yes. Once bound, it opens in our editor. Change any page, photo, caption or frame before you order.',
+                        sq: 'Po. Hapet direkt në editorin tonë. Ndryshoni çdo faqe, foto, tekst apo kornizë para se të porositeni.',
+                        en: 'Yes. It opens in our editor. Change any page, photo, caption or frame before you order.',
                       },
                     },
                     {
                       q: { sq: 'Sa foto duhen?', en: 'How many photos do I need?' },
                       a: {
-                        sq: `Të paktën ${MIN_PHOTOS} për një album të plotë, deri në ${MAX_PHOTOS}. E para është kopertina, e fundit kapaku i pasëm.`,
-                        en: `At least ${MIN_PHOTOS} for a full album, up to ${MAX_PHOTOS}. The first is the cover, the last is the back.`,
+                        sq: `Të paktën ${MIN_PHOTOS}, deri në ${MAX_PHOTOS}. E para është kopertina, e fundit kapaku i pasëm.`,
+                        en: `At least ${MIN_PHOTOS}, up to ${MAX_PHOTOS}. The first is the cover, the last is the back.`,
                       },
                     },
                     {
                       q: { sq: 'A kushton më shumë sepse e nisi AI?', en: 'Does it cost more because AI started it?' },
                       a: {
-                        sq: 'Jo. Çmimi varet nga madhësia dhe faqet — i njëjti printim, e njëjta letër, qoftë me AI apo me editor.',
-                        en: 'No. Price follows size and pages — the same print, the same paper, whether AI or the editor started it.',
+                        sq: 'Jo. Çmimi varet nga madhësia dhe faqet — i njëjti printim, qoftë me AI apo me editor.',
+                        en: 'No. Price follows size and pages — the same print, whether AI or the editor started it.',
                       },
                     },
                     {
                       q: { sq: 'Po nëse nuk më pëlqen paraqitja?', en: 'What if I do not like the layout?' },
                       a: {
-                        sq: 'Ndryshojeni faqe për faqe në editor, ose ngarkoni sërish fotot. Printojmë vetëm kur jeni të kënaqur.',
-                        en: 'Change it page by page in the editor, or upload again. We print only when you are happy.',
+                        sq: 'Ndryshojeni faqe për faqe, ose ngarkoni sërish. Printojmë vetëm kur jeni të kënaqur.',
+                        en: 'Change it page by page, or upload again. We print only when you are happy.',
                       },
                     },
                   ].map((item, i) => (
-                    <div key={item.q.en} className="rounded-xl border border-neutral-200/70 overflow-hidden bg-[#f7f4f0]/50">
+                    <div key={item.q.en} className="bg-white overflow-hidden">
                       <button
                         onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                        className="w-full flex items-center justify-between gap-4 px-5 py-4 text-left hover:bg-white/70 transition-colors"
+                        className="w-full flex items-center justify-between gap-4 px-5 py-4 text-left hover:bg-[#f7f4f0]/80 transition-colors"
                       >
-                        <span className="font-medium text-[14px]" style={{ color: INK }}>
+                        <span className="font-serif text-[17px]" style={{ color: INK }}>
                           {L(lang, item.q.sq, item.q.en)}
                         </span>
                         {openFaq === i
@@ -1444,27 +1328,42 @@ export default function AlbumAI() {
               </div>
             </section>
 
-            <section className="py-16 md:py-24 text-center" style={{ background: DARK }}>
-              <div className="max-w-lg mx-auto px-5">
-                <h2 className="font-serif text-3xl md:text-4xl font-medium text-white mb-4 leading-tight">
-                  {L(lang, 'Albumi juaj, i nisur nga fotot', 'Your album, started from the photos')}
+            <section className="relative overflow-hidden py-20 md:py-28" style={{ background: PAPER }}>
+              <div className="relative max-w-xl mx-auto px-5 text-center">
+                <div className="relative h-28 mb-8" aria-hidden>
+                  {STAGE_PHOTOS.slice(0, 5).map((src, i) => (
+                    <motion.img
+                      key={src}
+                      src={src}
+                      alt=""
+                      className="absolute left-1/2 top-0 w-[72px] h-[96px] object-cover rounded-[2px] border-2 border-white shadow-lg"
+                      style={{ zIndex: i }}
+                      initial={{ x: '-50%', y: 20, rotate: 0, opacity: 0 }}
+                      whileInView={{ x: `calc(-50% + ${(i - 2) * 22}px)`, y: Math.abs(i - 2) * 6, rotate: (i - 2) * 8, opacity: 1 }}
+                      viewport={{ once: true }}
+                      transition={{ delay: i * 0.07, type: 'spring', stiffness: 200, damping: 16 }}
+                    />
+                  ))}
+                </div>
+                <h2 className="font-serif text-[clamp(1.9rem,3.6vw,2.9rem)] font-medium leading-[1.12] mb-4" style={{ color: INK }}>
+                  {L(lang, 'Hidhi. Ne i radhitim.', 'Drop them. We place them.')}
                 </h2>
-                <p className="text-white/50 text-[15px] leading-relaxed mb-8">
+                <p className="text-neutral-500 text-[15px] leading-relaxed mb-8">
                   {L(
                     lang,
-                    'Filloni falas. Paguani kur jeni të kënaqur — kartë ose para në dorëzim, kudo në Shqipëri.',
-                    'Start free. Pay when you are happy — card or cash on delivery, anywhere in Albania.',
+                    'Filloni falas. Paguani kur jeni të kënaqur — kartë ose para në dorëzim.',
+                    'Start free. Pay when you are happy — card or cash on delivery.',
                   )}
                 </p>
                 <a
                   href="#fillo"
-                  className="inline-flex items-center gap-2 px-8 py-4 bg-white rounded-full text-[14px] font-semibold hover:bg-neutral-100 transition-colors"
-                  style={{ color: DARK }}
+                  className="inline-flex items-center gap-2 px-8 py-3.5 rounded-full text-[13px] font-semibold text-white"
+                  style={{ background: INK }}
                 >
-                  {L(lang, 'Ngarko fotot', 'Upload photos')}
-                  <ArrowRight size={16} />
+                  {L(lang, 'Hidhi fotot këtu', 'Drop photos here')}
+                  <ArrowRight size={15} />
                 </a>
-                <p className="text-white/35 text-[11px] uppercase tracking-[0.16em] mt-5">
+                <p className="text-[11px] uppercase tracking-[0.16em] text-neutral-400 mt-5">
                   {L(lang, 'Nga 3.100 LEK · dërgesë 10–16 ditë', 'From 3,100 LEK · 10–16 day delivery')}
                 </p>
               </div>

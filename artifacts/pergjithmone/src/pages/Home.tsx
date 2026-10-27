@@ -523,7 +523,7 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
         go(dx < 0 ? 1 : -1);
       }}
     >
-      {/* Atmosphere photo — soft texture behind the book, not a competing full-bleed */}
+      {/* Photo lives on the album side. Type sits on frosted paper, not on the image. */}
       <AnimatePresence mode="sync" initial={false}>
         <motion.div
           key={`bg-${style.key}`}
@@ -542,31 +542,66 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
             fetchPriority="high"
             className={`absolute inset-0 h-full w-full object-cover ${reduced ? '' : 'hero-kenburns'}`}
             style={{
-              objectPosition: '68% 35%',
-              opacity: 0.62,
-              filter: 'saturate(0.78) brightness(1.1) contrast(0.96)',
+              objectPosition: '78% 32%',
+              opacity: 0.9,
+              filter: 'saturate(0.86) brightness(1.05)',
+            }}
+          />
+          {/* Frosted smear of the same photo — left / bottom, so the headline never fights grain */}
+          <img
+            src={heroBgUrl(wallpaper)}
+            alt=""
+            decoding="async"
+            className="absolute inset-0 h-full w-full object-cover"
+            style={{
+              objectPosition: '30% 40%',
+              transform: 'scale(1.22)',
+              opacity: 0.7,
+              filter: 'blur(52px) saturate(0.45) brightness(1.28)',
+              WebkitMaskImage: 'linear-gradient(105deg, black 0%, black 36%, rgba(0,0,0,0.35) 52%, transparent 68%), linear-gradient(to top, black 0%, black 28%, transparent 58%)',
+              maskImage: 'linear-gradient(105deg, black 0%, black 36%, rgba(0,0,0,0.35) 52%, transparent 68%), linear-gradient(to top, black 0%, black 28%, transparent 58%)',
+              WebkitMaskComposite: 'source-over',
             }}
           />
           </Editable>
         </motion.div>
       </AnimatePresence>
 
-      {/* Paper veil — bright left for type, airy right so the book sits on white */}
+      {/* Paper slab — solid on the copy side, open around the album */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0"
         style={{
           background: `
-            linear-gradient(105deg,
-              ${style.wash}e8 0%,
-              ${style.wash}b8 20%,
-              ${style.wash}66 42%,
-              ${style.wash}28 64%,
-              transparent 88%
+            linear-gradient(90deg,
+              ${style.wash} 0%,
+              ${style.wash}fc 26%,
+              ${style.wash}d4 42%,
+              ${style.wash}66 54%,
+              transparent 72%
             ),
-            linear-gradient(to top, ${style.wash}cc 0%, ${style.wash}66 14%, transparent 36%),
-            radial-gradient(52% 48% at 82% 40%, ${style.ambient}44 0%, transparent 72%)
+            linear-gradient(to top, ${style.wash}f2 0%, ${style.wash}aa 12%, transparent 34%)
           `,
+          transition: 'background 0.7s ease',
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-[54%] md:hidden"
+        style={{
+          backdropFilter: reduced ? 'none' : 'blur(20px) saturate(0.7)',
+          WebkitBackdropFilter: reduced ? 'none' : 'blur(20px) saturate(0.7)',
+          background: `linear-gradient(to top, ${style.wash}f0 0%, ${style.wash}c4 46%, transparent 100%)`,
+          transition: 'background 0.7s ease',
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-y-0 left-0 hidden md:block w-[50%] lg:w-[46%]"
+        style={{
+          backdropFilter: reduced ? 'none' : 'blur(22px) saturate(0.7)',
+          WebkitBackdropFilter: reduced ? 'none' : 'blur(22px) saturate(0.7)',
+          background: `linear-gradient(90deg, ${style.wash}e6 0%, ${style.wash}99 58%, transparent 100%)`,
           transition: 'background 0.7s ease',
         }}
       />
