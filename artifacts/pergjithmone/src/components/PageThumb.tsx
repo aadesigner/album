@@ -66,7 +66,7 @@ export const PageThumb = React.memo(function PageThumb({
           const key = (el as EditorElement).id ?? i;
           if (el.type === 'background') {
             if (el.src) {
-              return <img key={key} src={el.src} alt="" loading="eager" decoding="async" style={{
+              return <img key={key} src={el.src} alt="" loading="lazy" decoding="async" style={{
                 position: 'absolute', inset: 0, width: '100%', height: '100%',
                 objectFit: 'cover',
                 objectPosition: `${(el.cropFocusX ?? 0.5) * 100}% ${(el.cropFocusY ?? 0.5) * 100}%`,
@@ -100,7 +100,7 @@ export const PageThumb = React.memo(function PageThumb({
                 <img
                   src={el.src}
                   alt=""
-                  loading="eager"
+                  loading="lazy"
                   decoding="async"
                   style={{
                     width: '100%', height: '100%', display: 'block',
@@ -283,7 +283,7 @@ export function DesignCatalogThumb({
         alt=""
         width={width}
         height={height}
-        loading="eager"
+        loading="lazy"
         decoding="async"
         style={{ width, height, objectFit: 'cover', display: 'block' }}
       />
@@ -315,7 +315,7 @@ export function ResponsiveDesignCatalogThumb({
         src={face.src}
         alt=""
         className={className}
-        loading="eager"
+        loading="lazy"
         decoding="async"
         style={{ ...MOCKUP_IMG, ...style }}
       />

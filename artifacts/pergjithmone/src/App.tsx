@@ -38,9 +38,9 @@ import Login from '@/pages/Login';
 import Register from '@/pages/Register';
 import NotFound from '@/pages/not-found';
 import Maintenance from '@/pages/Maintenance';
-import Wizard from '@/pages/Wizard';
 
 // ── Lazy loaded (heavy pages not needed on first paint) ────────────────────
+const Wizard        = lazyRetry(() => import('@/pages/Wizard'));
 const Pricing       = lazyRetry(() => import('@/pages/Pricing'));
 const ForgotPassword= lazyRetry(() => import('@/pages/ForgotPassword'));
 const HowItWorks    = lazyRetry(() => import('@/pages/HowItWorks'));

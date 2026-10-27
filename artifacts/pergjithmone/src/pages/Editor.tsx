@@ -80,6 +80,7 @@ import { uploadErrorMessage, uploadImageToApi } from '@/lib/uploadImage';
 import { applyCoverBackground, coverBgMode, type CoverBgMode } from '@/lib/coverBackground';
 import { useEditorFontsReady, ensureEditorFonts, normalizeEditorFont, isEditorSingleCutFont } from '@/lib/editorFonts';
 import { FontPicker } from '@/components/FontPicker';
+import { useCachedImage } from '@/lib/imageCache';
 
 const PAPER_COLOR = '#FEFDF9';
 const SPINE_W = 1;
@@ -233,13 +234,8 @@ function KBgEl({el,canvasH,interactive,isSelected,onChange,onGestureStart}: {
   onChange?: (c: Partial<EditorElement>) => void;
   onGestureStart?: () => void;
 }) {
-  const [img,setImg]=useState<HTMLImageElement>();
+  const img = useCachedImage(el.src);
   const panStartRef=useRef<{focusX:number;focusY:number;px:number;py:number}|null>(null);
-  useEffect(()=>{
-    if (!el.src) { setImg(undefined); return; }
-    const i=new window.Image(); i.crossOrigin='anonymous';
-    i.onload=()=>setImg(i); i.onerror=()=>setImg(undefined); i.src=el.src;
-  },[el.src]);
 
   const focusX = el.cropFocusX ?? 0.5;
   const focusY = el.cropFocusY ?? 0.5;
@@ -410,15 +406,8 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
   onExitPhotoAdjust?: () => void;
   onCanPanChange?: (canPan: boolean) => void;
 }) {
-  const [img,setImg]=useState<HTMLImageElement>();
+  const img = useCachedImage(el.src);
   const transformStartRef = useRef({ w: el.w, h: el.h });
-  useEffect(()=>{
-    if (!el.src) { setImg(undefined); return; }
-    const i=new window.Image(); i.crossOrigin='anonymous';
-    i.onload=()=>setImg(i);
-    i.onerror=()=>setImg(undefined);
-    i.src=el.src;
-  },[el.src]);
 
   // Sticky focus while / right after pan — avoids snap-back when React commits lag behind Konva.
   const [liveFocus, setLiveFocus] = useState<{ x: number; y: number } | null>(null);
@@ -1123,7 +1112,7 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
       } : undefined}
     >
       <Stage ref={stageRef} width={pageW} height={pageH} scaleX={scX} scaleY={scY}
-        pixelRatio={isMobile ? Math.min(window.devicePixelRatio ?? 1, 1.5) : window.devicePixelRatio ?? 1}
+        pixelRatio={Math.min(window.devicePixelRatio ?? 1, isMobile ? 1.5 : 2)}
         onMouseDown={(e:any)=>{if(e.target===e.target.getStage()){if(editId)commitEdit();onSelectId(null);}}}
         onTouchStart={(e:any)=>{if(e.target===e.target.getStage()){if(editId)commitEdit();onSelectId(null);}}}>
         <Layer>

@@ -2,11 +2,13 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db-tsconfig";
 import { categoriesTable, subcategoriesTable } from "@workspace/db-tsconfig";
 import { eq, asc } from "drizzle-orm";
+import { setPublicCatalogCache } from "../lib/httpCache";
 
 const router: IRouter = Router();
 
 // GET /categories
 router.get("/categories", async (_req, res): Promise<void> => {
+  setPublicCatalogCache(res);
   const categories = await db
     .select()
     .from(categoriesTable)
@@ -28,6 +30,7 @@ router.get(
       return;
     }
 
+    setPublicCatalogCache(res);
     const subcategories = await db
       .select()
       .from(subcategoriesTable)
