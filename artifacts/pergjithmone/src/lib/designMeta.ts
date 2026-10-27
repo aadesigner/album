@@ -154,14 +154,14 @@ export const DESIGN_METAS: DesignMeta[] = [
   // ── TRAVEL — landmark + real cities ──────────────────────────────────────
   { id: 'paris-pink', name: { sq: 'Paris', en: 'Paris' }, category: 'Travel',
     thumb: { background: '#FEC5D7' },
-    thumbPhoto: '/designs/paris-cover-thumb.jpg',
+    thumbPhoto: 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=900&q=84&fit=crop',
     thumbLabel: 'PARIS',
     thumbAccents: [
       { position: 'absolute', bottom: 0, left: 0, right: 0, height: '28%', background: 'linear-gradient(to top,rgba(254,197,215,0.55) 0%,transparent 100%)' },
     ] },
   { id: 'barcelona-red', name: { sq: 'Barcelona', en: 'Barcelona' }, category: 'Travel',
     thumb: { background: '#A83442' },
-    thumbPhoto: '/designs/barcelona-cover-thumb.jpg',
+    thumbPhoto: 'https://images.unsplash.com/photo-1583422409516-2895a77efded?w=900&q=84&fit=crop',
     thumbLabel: 'BARCELONA',
     thumbAccents: [
       { position: 'absolute', bottom: 0, left: 0, right: 0, height: '28%', background: 'linear-gradient(to top,rgba(168,52,66,0.55) 0%,transparent 100%)' },

@@ -21,6 +21,11 @@ import { uploadImageToApi } from '@/lib/uploadImage';
 import { pendingBooksLimitMessage } from '@/lib/projectErrors';
 import { SizeCard } from './Wizard';
 import { CategoryCoverImg, coverPressable } from '@/components/CategoryCoverImg';
+import { DEFAULT_CATEGORIES } from '@/lib/categoryImages';
+import {
+  LIFE_PHOTOS, STAGE_PHOTOS,
+  WEDDING_PHOTOS, TRAVEL_PHOTOS, FAMILY_PHOTOS, FRIEND_PHOTOS, PARTY_PHOTOS,
+} from '@/components/marketing/PhotoStages';
 
 // Minimum photos required before generation is allowed. Kept as a single
 // named constant so the UI copy, validation, and progress bar all agree.
@@ -108,35 +113,6 @@ function AiAtmosphere({ photo, reduced }: { photo?: string; reduced?: boolean })
   );
 }
 
-const STAGE_PHOTOS = [
-  'https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=800&q=84&fit=crop&crop=top',
-  'https://images.unsplash.com/photo-1516589178581-6cd7833ae3b2?w=800&q=84&fit=crop',
-  'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=800&q=84&fit=crop',
-  'https://images.unsplash.com/photo-1581952976147-5a2d15560349?w=800&q=84&fit=crop&crop=top',
-  'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=800&q=84&fit=crop&crop=top',
-  'https://images.unsplash.com/photo-1465495976277-4387d4b0b4c6?w=800&q=84&fit=crop',
-  'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?w=800&q=84&fit=crop',
-  'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&q=84&fit=crop',
-];
-
-const LIFE_PHOTOS = [
-  'https://images.unsplash.com/photo-1519741497674-611481863552?w=900&q=84&fit=crop',
-  'https://images.unsplash.com/photo-1522673607200-164d1b6ce486?w=900&q=84&fit=crop',
-  'https://images.unsplash.com/photo-1511895426328-dc8714191300?w=900&q=84&fit=crop',
-  'https://images.unsplash.com/photo-1606800052052-a08af7148866?w=900&q=84&fit=crop',
-  'https://images.unsplash.com/photo-1520854221256-17451cc331bf?w=900&q=84&fit=crop',
-  'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=900&q=84&fit=crop',
-  'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=900&q=84&fit=crop',
-  'https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?w=900&q=84&fit=crop',
-  'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=900&q=84&fit=crop',
-  'https://images.unsplash.com/photo-1542038784456-1ea8e935640e?w=900&q=84&fit=crop',
-  'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=900&q=84&fit=crop',
-  'https://images.unsplash.com/photo-1502082553048-f009c37129b9?w=900&q=84&fit=crop',
-  'https://images.unsplash.com/photo-1537633552985-df8429e8048b?w=900&q=84&fit=crop&crop=top',
-  'https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=900&q=84&fit=crop',
-  'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=900&q=84&fit=crop&crop=top',
-  'https://images.unsplash.com/photo-1516589178581-6cd7833ae3b2?w=900&q=84&fit=crop',
-];
 
 function L(lang: 'sq' | 'en', sq: string, en: string) {
   return lang === 'sq' ? sq : en;
@@ -292,8 +268,11 @@ function PhotoRiver() {
 }
 
 function ChaosToOrder({ lang }: { lang: 'sq' | 'en' }) {
-  const pile = LIFE_PHOTOS.slice(0, 8);
-  const page = LIFE_PHOTOS.slice(0, 6);
+  const pile = [
+    WEDDING_PHOTOS[0], TRAVEL_PHOTOS[1], FAMILY_PHOTOS[1], FRIEND_PHOTOS[0],
+    WEDDING_PHOTOS[4], PARTY_PHOTOS[0], TRAVEL_PHOTOS[3], FAMILY_PHOTOS[2],
+  ];
+  const page = WEDDING_PHOTOS.slice(0, 6);
   return (
     <section className="relative py-16 md:py-24 overflow-hidden" style={{ background: DARK }}>
       <AiAtmosphere photo={LIFE_PHOTOS[6]} />
@@ -369,10 +348,10 @@ function ChaosToOrder({ lang }: { lang: 'sq' | 'en' }) {
 }
 
 const SPREADS = [
-  { cover: LIFE_PHOTOS[0], a: LIFE_PHOTOS[1], b: LIFE_PHOTOS[2], c: LIFE_PHOTOS[3], by: { sq: 'Ana & Erjon · Dasmë', en: 'Ana & Erjon · Wedding' } },
-  { cover: LIFE_PHOTOS[4], a: LIFE_PHOTOS[5], b: LIFE_PHOTOS[6], c: LIFE_PHOTOS[7], by: { sq: 'Familja · Tiranë', en: 'Family · Tirana' } },
-  { cover: LIFE_PHOTOS[8], a: LIFE_PHOTOS[9], b: LIFE_PHOTOS[10], c: LIFE_PHOTOS[11], by: { sq: 'Vera në jug', en: 'Summer in the south' } },
-  { cover: LIFE_PHOTOS[12], a: LIFE_PHOTOS[13], b: LIFE_PHOTOS[14], c: LIFE_PHOTOS[15], by: { sq: 'Miqësi', en: 'Friendship' } },
+  { cover: WEDDING_PHOTOS[0], a: WEDDING_PHOTOS[2], b: WEDDING_PHOTOS[4], c: WEDDING_PHOTOS[3], by: { sq: 'Ana & Erjon · Dasmë', en: 'Ana & Erjon · Wedding' } },
+  { cover: FAMILY_PHOTOS[0], a: FAMILY_PHOTOS[1], b: FAMILY_PHOTOS[2], c: FAMILY_PHOTOS[3], by: { sq: 'Familja · Tiranë', en: 'Family · Tirana' } },
+  { cover: TRAVEL_PHOTOS[3], a: TRAVEL_PHOTOS[1], b: TRAVEL_PHOTOS[4], c: TRAVEL_PHOTOS[5], by: { sq: 'Vera në jug', en: 'Summer in the south' } },
+  { cover: FRIEND_PHOTOS[0], a: FRIEND_PHOTOS[1], b: FRIEND_PHOTOS[2], c: FRIEND_PHOTOS[3], by: { sq: 'Miqësi', en: 'Friendship' } },
 ];
 
 function LivingAlbum({ lang }: { lang: 'sq' | 'en' }) {
@@ -458,12 +437,12 @@ function LivingAlbum({ lang }: { lang: 'sq' | 'en' }) {
 
 function SlottingDemo({ lang }: { lang: 'sq' | 'en' }) {
   const slots = [
-    { src: LIFE_PHOTOS[0], label: { sq: 'Kopertina', en: 'Cover' }, className: 'col-span-2 row-span-2' },
-    { src: LIFE_PHOTOS[1], label: { sq: 'Faqja 02', en: 'Page 02' }, className: '' },
-    { src: LIFE_PHOTOS[2], label: { sq: 'Faqja 03', en: 'Page 03' }, className: '' },
-    { src: LIFE_PHOTOS[5], label: { sq: 'Faqja 04', en: 'Page 04' }, className: '' },
-    { src: LIFE_PHOTOS[6], label: { sq: 'Faqja 05', en: 'Page 05' }, className: '' },
-    { src: LIFE_PHOTOS[9], label: { sq: 'Faqja 06', en: 'Page 06' }, className: '' },
+    { src: WEDDING_PHOTOS[0], label: { sq: 'Kopertina', en: 'Cover' }, className: 'col-span-2 row-span-2' },
+    { src: WEDDING_PHOTOS[2], label: { sq: 'Faqja 02', en: 'Page 02' }, className: '' },
+    { src: WEDDING_PHOTOS[4], label: { sq: 'Faqja 03', en: 'Page 03' }, className: '' },
+    { src: WEDDING_PHOTOS[3], label: { sq: 'Faqja 04', en: 'Page 04' }, className: '' },
+    { src: WEDDING_PHOTOS[5], label: { sq: 'Faqja 05', en: 'Page 05' }, className: '' },
+    { src: WEDDING_PHOTOS[6], label: { sq: 'Faqja 06', en: 'Page 06' }, className: '' },
   ];
   return (
     <section className="py-16 md:py-24 bg-[#f7f4f0]">
@@ -517,14 +496,14 @@ function SlottingDemo({ lang }: { lang: 'sq' | 'en' }) {
 
 function PageRiver({ lang }: { lang: 'sq' | 'en' }) {
   const pages = [
-    [LIFE_PHOTOS[0], LIFE_PHOTOS[1]],
-    [LIFE_PHOTOS[2], LIFE_PHOTOS[3]],
-    [LIFE_PHOTOS[4], LIFE_PHOTOS[5]],
-    [LIFE_PHOTOS[6], LIFE_PHOTOS[8]],
-    [LIFE_PHOTOS[9], LIFE_PHOTOS[10]],
-    [LIFE_PHOTOS[12], LIFE_PHOTOS[13]],
-    [LIFE_PHOTOS[14], LIFE_PHOTOS[15]],
-    [LIFE_PHOTOS[7], LIFE_PHOTOS[11]],
+    [WEDDING_PHOTOS[0], WEDDING_PHOTOS[2]],
+    [WEDDING_PHOTOS[4], WEDDING_PHOTOS[3]],
+    [FAMILY_PHOTOS[0], FAMILY_PHOTOS[1]],
+    [TRAVEL_PHOTOS[1], TRAVEL_PHOTOS[3]],
+    [FRIEND_PHOTOS[0], FRIEND_PHOTOS[1]],
+    [TRAVEL_PHOTOS[4], TRAVEL_PHOTOS[5]],
+    [FAMILY_PHOTOS[2], FAMILY_PHOTOS[3]],
+    [WEDDING_PHOTOS[5], WEDDING_PHOTOS[6]],
   ];
   const strip = [...pages, ...pages];
   return (
@@ -964,7 +943,7 @@ export default function AlbumAI() {
             </button>
           )}
 
-          <AnimatePresence mode="wait">
+          <AnimatePresence mode="wait" initial={false}>
             {generating ? (
               <motion.div
                 key="generating"
@@ -1170,7 +1149,7 @@ export default function AlbumAI() {
             ) : step === 1 ? (
               <motion.div
                 key="s1"
-                initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+                initial={{ y: 10 }} animate={{ y: 0, opacity: 1 }} exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.25 }}
               >
                 <h2 className="text-xl md:text-2xl font-serif font-medium leading-tight mb-2 text-center" style={{ color: INK }}>
@@ -1182,8 +1161,18 @@ export default function AlbumAI() {
 
                 {loadingCat ? (
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {[1, 2, 3, 4, 5, 6].map(i => (
-                      <div key={i} className="rounded-2xl bg-neutral-200 animate-pulse" style={{ aspectRatio: '3/4' }} />
+                    {DEFAULT_CATEGORIES.map((c) => (
+                      <div
+                        key={c.slug}
+                        className="relative rounded-2xl overflow-hidden"
+                        style={{ aspectRatio: '3/4', minHeight: 168, WebkitTransform: 'translateZ(0)' }}
+                      >
+                        <CategoryCoverImg nameAl={c.nameAl} slug={c.slug} alt={c.nameAl} />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/78 via-black/18 to-transparent" />
+                        <p className="absolute bottom-3 left-3 right-3 text-white font-serif text-sm">
+                          {lang === 'en' ? c.nameEn : c.nameAl}
+                        </p>
+                      </div>
                     ))}
                   </div>
                 ) : (
@@ -1194,10 +1183,8 @@ export default function AlbumAI() {
                           key={cat.id}
                           {...coverPressable(() => handleCategorySelect(cat.id), lang === 'en' ? (cat.nameEn || cat.nameAl) : cat.nameAl)}
                           className="group relative w-full rounded-2xl overflow-hidden cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900"
-                          style={{ aspectRatio: '3/4', minHeight: 168, WebkitTransform: 'translateZ(0)' }}
-                          initial={{ opacity: 0, y: 16 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: i * 0.05, duration: 0.4 }}
+                          style={{ aspectRatio: '3/4', minHeight: 168, WebkitTransform: 'translateZ(0)', opacity: 1 }}
+                          initial={false}
                           whileHover={{ y: -3 }}
                           whileTap={{ scale: 0.97 }}
                         >

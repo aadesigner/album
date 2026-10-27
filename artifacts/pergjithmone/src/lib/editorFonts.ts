@@ -260,8 +260,14 @@ export function ensureEditorFonts(): Promise<void> {
           document.fonts.load(spec).catch(() => [] as FontFace[]),
         ),
       );
+      // fonts.ready waits for EVERY face on the page. Marketing Unsplash
+      // sheets or a stuck Google request can leave it pending forever, which
+      // used to hide cover text (opacity 0) on Barcelona / Paris.
       try {
-        await document.fonts.ready;
+        await Promise.race([
+          document.fonts.ready,
+          new Promise<void>((resolve) => setTimeout(resolve, 800)),
+        ]);
       } catch { /* ignore */ }
     }
 

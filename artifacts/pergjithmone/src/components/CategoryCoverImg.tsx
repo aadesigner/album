@@ -1,5 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { CAT_IMG_DEFAULT, getCategoryImage, resolvePublicImageSrc } from '@/lib/categoryImages';
+import {
+  CAT_IMG_DEFAULT,
+  getCatalogCover,
+  isUnusableCoverSrc,
+  phoneSafeImageSrc,
+  resolvePublicImageSrc,
+} from '@/lib/categoryImages';
 
 /** Keyboard + click handlers for photo tiles — iOS will not paint <img> inside <button>. */
 export function coverPressable(onClick: () => void, label?: string) {
@@ -17,7 +23,11 @@ export function coverPressable(onClick: () => void, label?: string) {
   };
 }
 
-/** Category photo that still paints on iOS (no native <button> parent). */
+/**
+ * Category photo that still paints on iOS.
+ * Catalog Unsplash is always the CSS fallback. The uploaded cover sits on top
+ * and falls back if it 404s, hangs behind opacity:0, or is a localhost URL.
+ */
 export function CategoryCoverImg({
   nameAl,
   coverImage,
@@ -31,15 +41,18 @@ export function CategoryCoverImg({
   alt: string;
   className?: string;
 }) {
-  const fallback = getCategoryImage(nameAl, null, slug);
-  const primary = resolvePublicImageSrc(coverImage) || fallback;
-  const [src, setSrc] = useState(primary);
+  const catalog = getCatalogCover(nameAl, slug);
+  const customRaw = resolvePublicImageSrc(coverImage);
+  const custom = customRaw && !isUnusableCoverSrc(coverImage) && customRaw !== catalog
+    ? phoneSafeImageSrc(customRaw)
+    : '';
+  const [src, setSrc] = useState(custom || catalog);
 
   useEffect(() => {
-    setSrc(primary);
-  }, [primary]);
+    setSrc(custom || catalog);
+  }, [custom, catalog]);
 
-  const safeBg = src.replace(/"/g, '');
+  const safeCatalog = catalog.replace(/"/g, '');
 
   return (
     <div
@@ -50,10 +63,9 @@ export function CategoryCoverImg({
         inset: 0,
         overflow: 'hidden',
         backgroundColor: '#d4cfc8',
-        backgroundImage: safeBg ? `url("${safeBg}")` : undefined,
+        backgroundImage: safeCatalog ? `url("${safeCatalog}")` : undefined,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
-        // Force a compositing layer so Safari actually paints the photo.
         WebkitTransform: 'translateZ(0)',
         transform: 'translateZ(0)',
       }}
@@ -65,6 +77,7 @@ export function CategoryCoverImg({
           referrerPolicy="no-referrer"
           decoding="async"
           loading="eager"
+          fetchPriority="high"
           draggable={false}
           style={{
             position: 'absolute',
@@ -77,10 +90,11 @@ export function CategoryCoverImg({
             pointerEvents: 'none',
             WebkitUserSelect: 'none',
             userSelect: 'none',
+            opacity: 1,
           }}
           onError={() => {
-            if (src !== fallback) setSrc(fallback);
-            else if (src !== CAT_IMG_DEFAULT) setSrc(CAT_IMG_DEFAULT);
+            if (src !== catalog) setSrc(catalog);
+            else if (src !== CAT_IMG_DEFAULT) setSrc(phoneSafeImageSrc(CAT_IMG_DEFAULT));
           }}
         />
       ) : null}

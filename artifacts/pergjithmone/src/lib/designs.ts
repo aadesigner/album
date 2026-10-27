@@ -785,24 +785,20 @@ export const DESIGNS: DesignDef[] = [
     name: { sq: 'Paris', en: 'Paris' },
     category: 'Travel',
     layoutRev: TRAVEL_LAYOUT_REV,
-    thumbPhoto: '/designs/paris-cover-thumb.jpg',
+    thumbPhoto: 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=900&q=84&fit=crop',
     thumb: { background: '#FEC5D7' },
     thumbAccents: [],
     elements: [
       BG('#FEC5D7'),
-      // City title — tower overlaps the middle letters (mockup).
-      TX('PARIS', 8, 28, DESIGN_W - 16, 100, {
-        fontSize: 100, fill: '#FFFFFF', align: 'center',
-        fontFamily: "'Londrina Solid', cursive", letterSpacing: 12, lineHeight: 0.9,
+      TX('PARIS', 8, 22, DESIGN_W - 16, 78, {
+        fontSize: 88, fill: '#FFFFFF', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 10, lineHeight: 0.9,
       }),
-      // Year sits under the right side of the title with clear air (not flush).
-      TX('2022', 300, 148, 260, 40, {
-        fontSize: 30, fill: '#F06BAF', align: 'right',
+      TX(String(new Date().getFullYear()), 8, 100, DESIGN_W - 16, 34, {
+        fontSize: 26, fill: '#F06BAF', align: 'center',
         fontFamily: "'Londrina Solid', cursive", letterSpacing: 8,
       }),
-      IMG('/designs/eiffel-tower.png', 70, 90, 460, 680, {
-        objectFit: 'contain',
-      }),
+      IMG('https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=900&q=84&fit=crop', 24, 152, DESIGN_W - 48, 620),
     ],
   },
   {
@@ -810,25 +806,20 @@ export const DESIGNS: DesignDef[] = [
     name: { sq: 'Barcelona', en: 'Barcelona' },
     category: 'Travel',
     layoutRev: TRAVEL_LAYOUT_REV,
-    thumbPhoto: '/designs/barcelona-cover-thumb.jpg',
+    thumbPhoto: 'https://images.unsplash.com/photo-1583422409516-2895a77efded?w=900&q=84&fit=crop',
     thumb: { background: '#A83442' },
     thumbAccents: [],
     elements: [
       BG('#A83442'),
-      // Title only at top — year belongs under the landmark (mockup).
-      TX('BARCELONA', 8, 22, DESIGN_W - 16, 88, {
-        fontSize: 72, fill: '#FCB426', align: 'center',
-        fontFamily: "'Londrina Solid', cursive", letterSpacing: 2, lineHeight: 0.9,
+      TX('BARCELONA', 8, 22, DESIGN_W - 16, 78, {
+        fontSize: 64, fill: '#FCB426', align: 'center',
+        fontFamily: "'Londrina Solid', cursive", letterSpacing: 3, lineHeight: 0.9,
       }),
-      // PNG is a tall padded cutout — give it the full mid-page so the
-      // landmark reads at cover size, not a speck on a red plate.
-      IMG('/designs/sagrada-familia.png', 8, 96, DESIGN_W - 16, 560, {
-        objectFit: 'contain',
-      }),
-      TX('2026', 8, 668, DESIGN_W - 16, 40, {
-        fontSize: 28, fill: '#FCB426', align: 'center',
+      TX(String(new Date().getFullYear()), 8, 100, DESIGN_W - 16, 34, {
+        fontSize: 26, fill: '#FCB426', align: 'center',
         fontFamily: "'Londrina Solid', cursive", letterSpacing: 8,
       }),
+      IMG('https://images.unsplash.com/photo-1583422409516-2895a77efded?w=900&q=84&fit=crop', 24, 152, DESIGN_W - 48, 620),
     ],
   },
 
@@ -1248,6 +1239,12 @@ export function normalizeOverride(raw: unknown): DesignSideOverride | null {
   };
 }
 
+/** True when a cover has something besides a flat color plate. */
+export function coverHasContent(els?: DE[] | null): boolean {
+  if (!Array.isArray(els) || !els.length) return false;
+  return els.some((e) => e.type === 'text' || e.type === 'image' || e.type === 'shape');
+}
+
 /** Merge persisted admin overrides onto a design list. */
 export function applyDesignOverrides(
   designs: DesignDef[] = DESIGNS,
@@ -1259,14 +1256,20 @@ export function applyDesignOverrides(
     const norm = normalizeOverride(raw);
     if (!norm) return d;
 
+    const frontOk = coverHasContent(norm.frontElements);
+    const backOk = coverHasContent(norm.backElements);
+    // A Design Studio save that only kept the background (fonts/images
+    // hadn't painted) used to wipe Barcelona down to a red plate.
+    if (!frontOk && !backOk) return d;
+
     // Design Studio is the source of truth. A new deploy must not throw away
     // a shop's saved covers just because built-in layoutRev was bumped.
     // Drop the baked catalog mockup so pickers show the saved layers.
     return {
       ...d,
       thumbPhoto: undefined,
-      elements: norm.frontElements?.length ? norm.frontElements : d.elements,
-      backElements: norm.backElements?.length
+      elements: frontOk && norm.frontElements?.length ? norm.frontElements : d.elements,
+      backElements: backOk && norm.backElements?.length
         ? norm.backElements
         : (d.backElements ?? d.elements),
     };

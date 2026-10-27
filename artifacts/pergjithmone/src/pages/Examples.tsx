@@ -8,8 +8,10 @@ import { Link } from 'wouter';
 import { ChevronLeft, ChevronRight, ArrowRight, BookOpen, Layers, Package, PenLine, Sparkles, Truck } from 'lucide-react';
 import {
   PhotoRiver, OpenAlbumSpread, PhoneVsAlbum, PageMosaic, SpreadRiver,
-  DarkAtmosphere, PolaroidField, FilmMarquee, usePrefersReducedMotion,
-  LIFE_PHOTOS, type MosaicSlot,
+  DarkAtmosphere, PrintedPageStack, usePrefersReducedMotion,
+  EXAMPLES_RIVER, EXAMPLES_SPREADS,
+  WEDDING_PHOTOS, TRAVEL_PHOTOS, FAMILY_PHOTOS, FRIEND_PHOTOS, PARTY_PHOTOS,
+  type MosaicSlot,
 } from '@/components/marketing/PhotoStages';
 import { usePageFields } from '@/components/marketing/PageContent';
 import { LivePageRoot } from '@/components/marketing/LivePageRoot';
@@ -88,9 +90,9 @@ const DEMO: Record<number, DE[]> = {
   5: [
     { id:'bg', type:'background', x:0,y:0,w:DW,h:DH, bgColor:'#ffffff' },
     { id:'i1', type:'image', x:24,y:24,w:552,h:372,
-      src:'https://images.unsplash.com/photo-1537633552985-df8429e8048b?w=900&q=82&fit=crop' },
+      src:'https://images.unsplash.com/photo-1522673607200-164d1b6ce486?w=900&q=82&fit=crop' },
     { id:'i2', type:'image', x:24,y:408,w:552,h:368,
-      src:'https://images.unsplash.com/photo-1474552226712-ac0f0961a954?w=900&q=82&fit=crop' },
+      src:'https://images.unsplash.com/photo-1519741497674-611481863552?w=900&q=82&fit=crop' },
   ],
 
   // Spread 3 — left: full-bleed landscape (dramatic, keeps dark)
@@ -191,6 +193,9 @@ function MiniPage({ elements, w, h }: { elements: DE[]; w: number; h: number }) 
     <div style={{ position: 'absolute', inset: 0, background: bgStyle, overflow: 'hidden' }}>
       {imgs.map((el, i) => (
         <img key={i} src={el.src} draggable={false} alt=""
+          referrerPolicy="no-referrer"
+          decoding="async"
+          loading={i === 0 ? 'eager' : 'lazy'}
           style={{
             position: 'absolute',
             left: el.x * sx, top: el.y * sy,
@@ -260,7 +265,9 @@ function DemoPagesEdge() {
 }
 
 // ─── 3D Book demo ─────────────────────────────────────────────────────────────
-function DemoBook3D({ lang, size = 260 }: { lang: 'sq' | 'en'; size?: number }) {
+function DemoBook3D({ lang, size }: { lang: 'sq' | 'en'; size?: number }) {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [bookSize, setBookSize] = useState(size ?? 200);
   const [rotY, setRotY] = useState(-14);
   const rotYRef = useRef(-14);
   const rotXRef = useRef(3);
@@ -271,7 +278,33 @@ function DemoBook3D({ lang, size = 260 }: { lang: 'sq' | 'en'; size?: number }) 
   const pages = useDemoPages();
   const p = usePageFields();
 
-  const W = size, H = Math.round(size * (DH / DW)), D = 6;
+  useEffect(() => {
+    const apply = () => {
+      if (size) {
+        setBookSize(size);
+        return;
+      }
+      const w = wrapRef.current?.clientWidth || window.innerWidth;
+      setBookSize(Math.round(Math.min(280, Math.max(176, w * 0.58))));
+    };
+    apply();
+    window.addEventListener('resize', apply);
+    return () => window.removeEventListener('resize', apply);
+  }, [size]);
+
+  useEffect(() => {
+    Object.values(pages).forEach((els) => {
+      els.forEach((el) => {
+        if (el.type === 'image' && el.src) {
+          const img = new Image();
+          img.referrerPolicy = 'no-referrer';
+          img.src = el.src;
+        }
+      });
+    });
+  }, [pages]);
+
+  const W = bookSize, H = Math.round(bookSize * (DH / DW)), D = 6;
   const coverBgColor = (pages[1].find(e => e.type === 'background') as any)?.bgColor ?? '#1a1209';
 
   useEffect(() => {
@@ -299,6 +332,7 @@ function DemoBook3D({ lang, size = 260 }: { lang: 'sq' | 'en'; size?: number }) 
 
   return (
     <div
+      ref={wrapRef}
       style={{ perspective: '1800px', perspectiveOrigin: '50% 48%',
         height: H + 64, display: 'flex', alignItems: 'center', justifyContent: 'center',
         position: 'relative', cursor: 'grab', userSelect: 'none', width: '100%' }}
@@ -621,12 +655,12 @@ export default function Examples() {
 }
 
 const EXAMPLES_MOSAIC: MosaicSlot[] = [
-  { src: LIFE_PHOTOS[0], label: { sq: 'Kopertina', en: 'Cover' }, className: 'col-span-2 row-span-2' },
-  { src: LIFE_PHOTOS[12], label: { sq: 'Dasma', en: 'Wedding' }, className: '' },
-  { src: LIFE_PHOTOS[6], label: { sq: 'Jugu', en: 'South' }, className: '' },
-  { src: LIFE_PHOTOS[7], label: { sq: 'Familja', en: 'Family' }, className: '' },
-  { src: LIFE_PHOTOS[1], label: { sq: 'Vallëzimi', en: 'Dance' }, className: '' },
-  { src: LIFE_PHOTOS[15], label: { sq: 'Mbrapa', en: 'Back' }, className: '' },
+  { src: WEDDING_PHOTOS[0], label: { sq: 'Dasmë', en: 'Wedding' }, className: 'col-span-2 row-span-2' },
+  { src: TRAVEL_PHOTOS[5], label: { sq: 'Udhëtim', en: 'Travel' }, className: '' },
+  { src: FAMILY_PHOTOS[1], label: { sq: 'Familje', en: 'Family' }, className: '' },
+  { src: FRIEND_PHOTOS[0], label: { sq: 'Miqësi', en: 'Friends' }, className: '' },
+  { src: PARTY_PHOTOS[1], label: { sq: 'Festë', en: 'Party' }, className: '' },
+  { src: TRAVEL_PHOTOS[3], label: { sq: 'Deti', en: 'Sea' }, className: '' },
 ];
 
 function ExamplesView() {
@@ -649,57 +683,57 @@ function ExamplesView() {
       />
       <div className="bg-[#f7f4f0]">
 
-        <EditableSection path="hero" className="relative overflow-hidden text-[#f3eee7]" style={{ background: '#1a1410' }}>
-          <DarkAtmosphere photo={LIFE_PHOTOS[0]} reduced={reduced} />
-          {!reduced && (
-            <div
-              aria-hidden
-              className="ai-develop-sweep pointer-events-none absolute inset-y-[8%] left-0 w-[38%] z-[2]"
-              style={{ background: 'linear-gradient(90deg, transparent, rgba(255,244,220,0.18), transparent)' }}
-            />
-          )}
-          <PolaroidField reduced={reduced} />
-          <div className="relative z-10 max-w-3xl mx-auto px-5 pt-16 pb-12 sm:pt-20 md:pt-24 md:pb-16 text-center">
-            <p className="text-[10px] sm:text-[11px] uppercase tracking-[0.38em] text-white/40 mb-6">
-              <Editable path="hero.kicker">{p.txt('hero.kicker')}</Editable>
-            </p>
-            <h1 className="font-serif text-[clamp(2.15rem,6.4vw,4.1rem)] font-medium leading-[1.08] mb-5">
-              <Editable path="hero.title">{p.txt('hero.title')}</Editable>
-            </h1>
-            <p className="text-white/55 text-[15px] md:text-[16px] leading-relaxed max-w-lg mx-auto mb-8">
-              <Editable path="hero.body">{p.txt('hero.body')}</Editable>
-            </p>
-            <div className="flex flex-wrap items-center justify-center gap-3 mb-8">
-              <a
-                href="#albumi-demo"
-                className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full text-[13px] font-semibold bg-white text-[#110e0c] hover:bg-[#f3eee7] transition-colors"
-              >
-                <Editable path="hero.cta">{p.txt('hero.cta')}</Editable>
-              </a>
-              <Link href="/krijo">
-                <span className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full text-[13px] font-semibold border border-white/20 text-white/80 hover:bg-white/5 transition-colors">
-                  <Editable path="hero.secondaryCta">{p.txt('hero.secondaryCta')}</Editable>
-                  <ArrowRight size={14} />
-                </span>
-              </Link>
-            </div>
-            <div className="grid grid-cols-3 gap-px max-w-lg mx-auto bg-white/10 overflow-hidden rounded-sm">
-              {p.list('stats').map((_, i) => (
-                <div key={i} className="bg-white/[0.04] px-3 py-4">
-                  <p className="font-serif text-lg md:text-xl text-[#f3eee7]">
-                    <Editable path={`stats.${i}.value`}>{p.txt(`stats.${i}.value`)}</Editable>
-                  </p>
-                  <p className="text-[10px] uppercase tracking-[0.12em] text-white/35 mt-1 leading-snug">
-                    <Editable path={`stats.${i}.label`}>{p.txt(`stats.${i}.label`)}</Editable>
-                  </p>
+        <EditableSection path="hero" className="relative overflow-hidden text-[#f3eee7]" style={{ background: '#12151a' }}>
+          <DarkAtmosphere photo={TRAVEL_PHOTOS[5]} reduced={reduced} tone="cool" />
+          <div className="relative z-10 max-w-6xl mx-auto px-5 pt-10 pb-10 sm:pt-16 md:pt-20 md:pb-16">
+            <div className="grid lg:grid-cols-[1.05fr_0.95fr] gap-6 lg:gap-12 items-center">
+              <div className="order-2 lg:order-1 text-left max-w-xl">
+                <p className="text-[10px] sm:text-[11px] uppercase tracking-[0.32em] text-white/40 mb-5">
+                  <Editable path="hero.kicker">{p.txt('hero.kicker')}</Editable>
+                </p>
+                <h1 className="font-serif text-[clamp(1.85rem,8vw,3.7rem)] font-medium leading-[1.08] mb-4 md:mb-5">
+                  <Editable path="hero.title">{p.txt('hero.title')}</Editable>
+                </h1>
+                <p className="text-white/55 text-[14px] md:text-[16px] leading-relaxed mb-6 md:mb-8">
+                  <Editable path="hero.body">{p.txt('hero.body')}</Editable>
+                </p>
+                <div className="flex flex-wrap items-center gap-3 mb-8">
+                  <a
+                    href="#albumi-demo"
+                    className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full text-[13px] font-semibold bg-white text-[#12151a] hover:bg-[#eef2f6] transition-colors"
+                  >
+                    <Editable path="hero.cta">{p.txt('hero.cta')}</Editable>
+                  </a>
+                  <Link href="/krijo">
+                    <span className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full text-[13px] font-semibold border border-white/20 text-white/80 hover:bg-white/5 transition-colors">
+                      <Editable path="hero.secondaryCta">{p.txt('hero.secondaryCta')}</Editable>
+                      <ArrowRight size={14} />
+                    </span>
+                  </Link>
                 </div>
-              ))}
+                <div className="grid grid-cols-3 gap-3 border-t border-white/10 pt-5">
+                  {p.list('stats').map((_, i) => (
+                    <div key={i}>
+                      <p className="font-serif text-lg text-[#e8eef4]">
+                        <Editable path={`stats.${i}.value`}>{p.txt(`stats.${i}.value`)}</Editable>
+                      </p>
+                      <p className="text-[10px] uppercase tracking-[0.12em] text-white/35 mt-0.5">
+                        <Editable path={`stats.${i}.label`}>{p.txt(`stats.${i}.label`)}</Editable>
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="order-1 lg:order-2">
+                <PrintedPageStack
+                  photos={[WEDDING_PHOTOS[1], TRAVEL_PHOTOS[5], FAMILY_PHOTOS[0], FRIEND_PHOTOS[0]]}
+                />
+              </div>
             </div>
           </div>
-          <FilmMarquee />
         </EditableSection>
 
-        <PhotoRiver />
+        <PhotoRiver photos={EXAMPLES_RIVER} rows={1} size="md" tone="cool" />
 
         <div id="albumi-demo">
         <EditableSection path="demo" className="relative border-b border-neutral-200/70">
@@ -719,8 +753,8 @@ function ExamplesView() {
             </div>
 
             <div className="flex justify-center mb-10 md:mb-14">
-              <Editable path="photos.cover" kind="image" as="div">
-                <DemoBook3D lang={lang} size={280} />
+              <Editable path="photos.cover" kind="image" as="div" className="w-full max-w-[280px] mx-auto">
+                <DemoBook3D lang={lang} />
               </Editable>
             </div>
 
@@ -761,6 +795,7 @@ function ExamplesView() {
             lang={lang}
             kicker={<Editable path="spread.kicker">{p.txt('spread.kicker')}</Editable>}
             title={<Editable path="spread.title">{p.txt('spread.title')}</Editable>}
+            spreads={EXAMPLES_SPREADS}
           />
         </EditableSection>
 
@@ -771,6 +806,7 @@ function ExamplesView() {
             body={<Editable path="life.body">{p.txt('life.body')}</Editable>}
             pileLabel={p.txt('life.pile')}
             albumLabel={p.txt('life.album')}
+            photos={EXAMPLES_RIVER}
           />
         </EditableSection>
 
@@ -895,7 +931,7 @@ function ExamplesView() {
         </EditableSection>
 
         <EditableSection path="pages">
-          <SpreadRiver kicker={<Editable path="pages.kicker">{p.txt('pages.kicker')}</Editable>} />
+          <SpreadRiver kicker={<Editable path="pages.kicker">{p.txt('pages.kicker')}</Editable>} photos={EXAMPLES_RIVER} />
         </EditableSection>
 
         <EditableSection path="quotes" className="py-16 md:py-24 border-b border-neutral-200/70">
@@ -924,7 +960,7 @@ function ExamplesView() {
         </EditableSection>
 
         <EditableSection path="cta" className="relative overflow-hidden py-20 md:py-28 text-center" style={{ background: '#1a1410' }}>
-          <DarkAtmosphere photo={LIFE_PHOTOS[4]} />
+          <DarkAtmosphere photo={TRAVEL_PHOTOS[2]} tone="cool" />
           <div className="relative z-10 max-w-lg mx-auto px-5">
             <h2 className="font-serif text-[clamp(1.85rem,3.4vw,2.8rem)] font-medium text-[#f3eee7] mb-4 leading-[1.12]">
               <Editable path="cta.title">{p.txt('cta.title')}</Editable>

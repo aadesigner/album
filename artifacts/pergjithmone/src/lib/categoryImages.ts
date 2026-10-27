@@ -69,6 +69,45 @@ const CAT_SUBLABEL: Record<string, { sq: string; en: string }> = {
   festash: { sq: 'Festat që s’harrohen kurrë', en: 'Celebrations you never forget' },
 };
 
+function isPrivateHost(host: string): boolean {
+  const h = host.toLowerCase();
+  return (
+    h === 'localhost' ||
+    h === '127.0.0.1' ||
+    h === '0.0.0.0' ||
+    h === '::1' ||
+    h.endsWith('.local') ||
+    h.endsWith('.internal')
+  );
+}
+
+/** Unsplash JPEG so iOS Safari does not sit on a blocked WebP/AVIF variant. */
+export function phoneSafeImageSrc(src: string): string {
+  if (!src.includes('images.unsplash.com')) return src;
+  try {
+    const u = new URL(src);
+    u.searchParams.set('auto', 'format');
+    u.searchParams.set('fm', 'jpg');
+    return u.toString();
+  } catch {
+    return src;
+  }
+}
+
+/** True when a stored cover will not load on a real phone. */
+export function isUnusableCoverSrc(src?: string | null): boolean {
+  const raw = String(src || '').trim();
+  if (!raw) return true;
+  if (raw.startsWith('blob:') || raw.startsWith('file:')) return true;
+  if (!/^https?:\/\//i.test(raw)) return false;
+  try {
+    const u = new URL(raw);
+    return isPrivateHost(u.hostname);
+  } catch {
+    return true;
+  }
+}
+
 /** Make stored cover URLs load on phones (relative /api path, not localhost). */
 export function resolvePublicImageSrc(src?: string | null): string {
   const raw = String(src || '').trim();
@@ -76,16 +115,22 @@ export function resolvePublicImageSrc(src?: string | null): string {
   try {
     if (/^https?:\/\//i.test(raw)) {
       const u = new URL(raw);
-      if (u.hostname === 'localhost' || u.hostname === '127.0.0.1') {
+      if (isPrivateHost(u.hostname)) {
         return `${u.pathname}${u.search}`;
       }
-      return raw;
+      if (u.protocol === 'http:') u.protocol = 'https:';
+      return phoneSafeImageSrc(u.toString());
     }
   } catch {
     /* keep raw */
   }
   if (raw.startsWith('/uploads/')) return `/api${raw}`;
-  return raw;
+  return phoneSafeImageSrc(raw);
+}
+
+export function getCatalogCover(nameAl: string, slug?: string | null): string {
+  if (slug && CAT_IMG_BY_SLUG[slug]) return phoneSafeImageSrc(CAT_IMG_BY_SLUG[slug]);
+  return phoneSafeImageSrc(CAT_IMG[nameAl] || CAT_IMG_DEFAULT);
 }
 
 export function getCategoryImage(
@@ -94,9 +139,8 @@ export function getCategoryImage(
   slug?: string | null,
 ): string {
   const custom = resolvePublicImageSrc(coverImage);
-  if (custom) return custom;
-  if (slug && CAT_IMG_BY_SLUG[slug]) return CAT_IMG_BY_SLUG[slug];
-  return CAT_IMG[nameAl] || CAT_IMG_DEFAULT;
+  if (custom && !isUnusableCoverSrc(coverImage)) return custom;
+  return getCatalogCover(nameAl, slug);
 }
 
 export function getCategorySpine(slug: string): string {

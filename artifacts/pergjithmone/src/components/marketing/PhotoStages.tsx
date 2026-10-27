@@ -5,34 +5,96 @@ export const DARK = '#1a1410';
 export const INK = '#2A2218';
 export const PAPER = '#f7f4f0';
 
-export const STAGE_PHOTOS = [
-  'https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=800&q=84&fit=crop&crop=top',
-  'https://images.unsplash.com/photo-1516589178581-6cd7833ae3b2?w=800&q=84&fit=crop',
-  'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=800&q=84&fit=crop',
-  'https://images.unsplash.com/photo-1581952976147-5a2d15560349?w=800&q=84&fit=crop&crop=top',
-  'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=800&q=84&fit=crop&crop=top',
-  'https://images.unsplash.com/photo-1465495976277-4387d4b0b4c6?w=800&q=84&fit=crop',
-  'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?w=800&q=84&fit=crop',
-  'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&q=84&fit=crop',
+const u = (id: string, extra = '') =>
+  `https://images.unsplash.com/photo-${id}?w=900&q=84&fit=crop${extra}`;
+
+/** Wedding — ceremony, rings, bride, reception. Not friends, not travel. */
+export const WEDDING_PHOTOS = [
+  u('1519741497674-611481863552'),
+  u('1519225421980-715cb0215aed', '&crop=top'),
+  u('1511285560929-80b456fea0bc'),
+  u('1465495976277-4387d4b0b4c6'),
+  u('1606800052052-a08af7148866'),
+  u('1520854221256-17451cc331bf'),
+  u('1537633552985-df8429e8048b', '&crop=top'),
+  u('1516589178581-6cd7833ae3b2'),
 ];
 
+/** Travel — landscapes, roads, sea, cities. */
+export const TRAVEL_PHOTOS = [
+  u('1476514525535-07fb3b4ae5f1'),
+  u('1469854523086-cc02fe5d8800'),
+  u('1500530855697-b586d89ba3ee'),
+  u('1507525428034-b723cf961d3e'),
+  u('1501785888041-af3ef285b470'),
+  u('1523906834658-6e24ef2386f9'),
+  u('1502602898657-3e91760cbb34'),
+  u('1470071459604-3b5ec3a7fe05'),
+];
+
+/** Family — parents, children, home life. Not a wedding, not a landscape. */
+export const FAMILY_PHOTOS = [
+  u('1581952976147-5a2d15560349', '&crop=top'),
+  u('1503454537195-1dcabb73ffb9'),
+  u('1511895426328-dc8714191300'),
+  u('1519689680058-324335c77eba'),
+  u('1555252333-9f8e92e65df9'),
+  u('1581952976147-5a2d15560349'),
+];
+
+/** Friendship — groups of friends. Never a wedding dress. */
+export const FRIEND_PHOTOS = [
+  u('1529156069898-49953e39b3ac', '&crop=top'),
+  u('1511632765486-a01980e01a18'),
+  u('1511988617509-a57c8a288659'),
+  u('1529156069898-49953e39b3ac'),
+];
+
+/** Celebrations — concert, balloons, sparklers. */
+export const PARTY_PHOTOS = [
+  u('1492684223066-81342ee5ff30'),
+  u('1530103862676-de8c9debad1d'),
+  u('1467810563316-b5476525c0f9'),
+  u('1492684223066-81342ee5ff30', '&crop=entropy'),
+];
+
+export const STAGE_PHOTOS = [
+  WEDDING_PHOTOS[1],
+  WEDDING_PHOTOS[7],
+  TRAVEL_PHOTOS[0],
+  FAMILY_PHOTOS[0],
+  FRIEND_PHOTOS[0],
+  WEDDING_PHOTOS[3],
+  WEDDING_PHOTOS[2],
+  TRAVEL_PHOTOS[3],
+];
+
+/** Mixed river — unique shots, no repeats across the first 24. */
 export const LIFE_PHOTOS = [
-  'https://images.unsplash.com/photo-1519741497674-611481863552?w=900&q=84&fit=crop',
-  'https://images.unsplash.com/photo-1522673607200-164d1b6ce486?w=900&q=84&fit=crop',
-  'https://images.unsplash.com/photo-1511895426328-dc8714191300?w=900&q=84&fit=crop',
-  'https://images.unsplash.com/photo-1606800052052-a08af7148866?w=900&q=84&fit=crop',
-  'https://images.unsplash.com/photo-1520854221256-17451cc331bf?w=900&q=84&fit=crop',
-  'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=900&q=84&fit=crop',
-  'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=900&q=84&fit=crop',
-  'https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?w=900&q=84&fit=crop',
-  'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=900&q=84&fit=crop',
-  'https://images.unsplash.com/photo-1542038784456-1ea8e935640e?w=900&q=84&fit=crop',
-  'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=900&q=84&fit=crop',
-  'https://images.unsplash.com/photo-1502082553048-f009c37129b9?w=900&q=84&fit=crop',
-  'https://images.unsplash.com/photo-1537633552985-df8429e8048b?w=900&q=84&fit=crop&crop=top',
-  'https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=900&q=84&fit=crop',
-  'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=900&q=84&fit=crop&crop=top',
-  'https://images.unsplash.com/photo-1516589178581-6cd7833ae3b2?w=900&q=84&fit=crop',
+  ...WEDDING_PHOTOS,
+  ...TRAVEL_PHOTOS,
+  ...FAMILY_PHOTOS,
+  ...FRIEND_PHOTOS.slice(0, 4),
+  ...PARTY_PHOTOS,
+];
+
+export const EXAMPLES_RIVER = [
+  WEDDING_PHOTOS[0], TRAVEL_PHOTOS[1], FAMILY_PHOTOS[2], FRIEND_PHOTOS[1],
+  PARTY_PHOTOS[0], TRAVEL_PHOTOS[4], WEDDING_PHOTOS[4], FAMILY_PHOTOS[1],
+  TRAVEL_PHOTOS[5], FRIEND_PHOTOS[2], WEDDING_PHOTOS[5], TRAVEL_PHOTOS[2],
+  FAMILY_PHOTOS[3], PARTY_PHOTOS[1], WEDDING_PHOTOS[2], TRAVEL_PHOTOS[6],
+  FRIEND_PHOTOS[0], FAMILY_PHOTOS[4], WEDDING_PHOTOS[6], TRAVEL_PHOTOS[3],
+  PARTY_PHOTOS[2], WEDDING_PHOTOS[3], FAMILY_PHOTOS[0], TRAVEL_PHOTOS[7],
+  WEDDING_PHOTOS[7], TRAVEL_PHOTOS[0], FAMILY_PHOTOS[1], FRIEND_PHOTOS[2],
+  u('1503220317375-aaad61436b1b'),
+  u('1499856871958-5b9627545d1a'),
+  u('1528360983277-13d401cdc186'),
+  u('1583422409516-2895a77efded'),
+  u('1500534314209-a25ddb2bd429'),
+  u('1469474968028-56623f02e42e'),
+  u('1441974231531-c6227db76b6e'),
+  u('1519681393784-d120267933ba'),
+  u('1506905925346-21bda4d32df4'),
 ];
 
 const GRAIN =
@@ -50,15 +112,24 @@ export function usePrefersReducedMotion() {
   return reduced;
 }
 
-export function DarkAtmosphere({ photo, reduced }: { photo?: string; reduced?: boolean }) {
+export function DarkAtmosphere({
+  photo, reduced, tone = 'warm',
+}: { photo?: string; reduced?: boolean; tone?: 'warm' | 'cool' }) {
+  const wash = tone === 'cool'
+    ? 'radial-gradient(110% 70% at 50% -10%, #2a3340 0%, #1a2028 42%, #12151a 100%)'
+    : 'radial-gradient(110% 70% at 50% -10%, #3a2c24 0%, #241c16 42%, #1a1410 100%)';
+  const orbA = tone === 'cool'
+    ? 'radial-gradient(circle, rgba(120,150,180,0.22) 0%, transparent 68%)'
+    : 'radial-gradient(circle, rgba(212,168,112,0.28) 0%, transparent 68%)';
+  const orbB = tone === 'cool'
+    ? 'radial-gradient(circle, rgba(70,90,110,0.28) 0%, transparent 70%)'
+    : 'radial-gradient(circle, rgba(140,72,64,0.22) 0%, transparent 70%)';
   return (
     <>
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0"
-        style={{
-          background: 'radial-gradient(110% 70% at 50% -10%, #3a2c24 0%, #241c16 42%, #1a1410 100%)',
-        }}
+        style={{ background: wash }}
       />
       {photo && (
         <img
@@ -67,7 +138,7 @@ export function DarkAtmosphere({ photo, reduced }: { photo?: string; reduced?: b
           aria-hidden
           className="pointer-events-none absolute inset-0 h-full w-full object-cover"
           style={{
-            opacity: 0.28,
+            opacity: tone === 'cool' ? 0.18 : 0.28,
             filter: 'blur(36px) saturate(0.55) brightness(0.72)',
             transform: 'scale(1.18)',
           }}
@@ -76,12 +147,12 @@ export function DarkAtmosphere({ photo, reduced }: { photo?: string; reduced?: b
       <div
         aria-hidden
         className={`${reduced ? '' : 'ai-orb-a'} pointer-events-none absolute -top-[12%] left-[8%] h-[58%] w-[52%] rounded-full opacity-70 blur-3xl`}
-        style={{ background: 'radial-gradient(circle, rgba(212,168,112,0.28) 0%, transparent 68%)' }}
+        style={{ background: orbA }}
       />
       <div
         aria-hidden
         className={`${reduced ? '' : 'ai-orb-b'} pointer-events-none absolute -bottom-[18%] right-[-8%] h-[62%] w-[58%] rounded-full opacity-60 blur-3xl`}
-        style={{ background: 'radial-gradient(circle, rgba(140,72,64,0.22) 0%, transparent 70%)' }}
+        style={{ background: orbB }}
       />
       <div
         aria-hidden
@@ -92,7 +163,9 @@ export function DarkAtmosphere({ photo, reduced }: { photo?: string; reduced?: b
         aria-hidden
         className="pointer-events-none absolute inset-0"
         style={{
-          background: 'radial-gradient(ellipse at 50% 42%, transparent 28%, rgba(12,8,6,0.55) 100%)',
+          background: tone === 'cool'
+            ? 'radial-gradient(ellipse at 50% 42%, transparent 28%, rgba(8,10,14,0.58) 100%)'
+            : 'radial-gradient(ellipse at 50% 42%, transparent 28%, rgba(12,8,6,0.55) 100%)',
         }}
       />
     </>
@@ -126,6 +199,47 @@ export function PolaroidField({ reduced, photos = STAGE_PHOTOS }: { reduced: boo
   );
 }
 
+/** Overlapping printed pages — examples hero, not polaroids. */
+export function PrintedPageStack({ photos }: { photos: string[] }) {
+  const shots = photos.slice(0, 4);
+  const phone = [
+    { w: '54%', left: '4%', top: '10%', rot: -8, z: 2 },
+    { w: '54%', left: '40%', top: '18%', rot: 9, z: 3 },
+  ];
+  const desktop = [
+    { w: '58%', left: '8%', top: '2%', rot: -8, z: 3 },
+    { w: '42%', left: '50%', top: '-2%', rot: 9, z: 2 },
+    { w: '40%', left: '-2%', top: '48%', rot: -5, z: 1 },
+    { w: '46%', left: '46%', top: '44%', rot: 6, z: 4 },
+  ];
+  const frame = (src: string, i: number, layout: typeof phone) => (
+    <div
+      key={`${src}-${i}`}
+      className="absolute overflow-hidden bg-[#ebe4db] p-[6px] shadow-[0_18px_40px_rgba(0,0,0,0.38)]"
+      style={{
+        width: layout[i].w,
+        aspectRatio: '3 / 4',
+        left: layout[i].left,
+        top: layout[i].top,
+        transform: `rotate(${layout[i].rot}deg)`,
+        zIndex: layout[i].z,
+      }}
+    >
+      <img src={src} alt="" referrerPolicy="no-referrer" decoding="async" className="block h-full w-full object-cover" />
+    </div>
+  );
+  return (
+    <>
+      <div className="relative h-[210px] sm:hidden max-w-[280px] mx-auto" aria-hidden>
+        {shots.slice(0, 2).map((src, i) => frame(src, i, phone))}
+      </div>
+      <div className="relative hidden sm:block h-[400px] md:h-[480px] max-w-[420px] mx-auto" aria-hidden>
+        {shots.map((src, i) => frame(src, i, desktop))}
+      </div>
+    </>
+  );
+}
+
 export function FilmMarquee({ photos = LIFE_PHOTOS }: { photos?: string[] }) {
   const strip = [...photos, ...photos];
   return (
@@ -146,33 +260,48 @@ export function FilmMarquee({ photos = LIFE_PHOTOS }: { photos?: string[] }) {
   );
 }
 
-export function PhotoRiver({ photos = LIFE_PHOTOS }: { photos?: string[] }) {
+export function PhotoRiver({
+  photos = LIFE_PHOTOS,
+  rows = 2,
+  size = 'lg',
+  tone = 'warm',
+}: {
+  photos?: string[];
+  rows?: 1 | 2;
+  size?: 'md' | 'lg';
+  tone?: 'warm' | 'cool';
+}) {
   const a = [...photos, ...photos];
   const b = [...photos.slice(6), ...photos.slice(0, 6), ...photos.slice(6), ...photos.slice(0, 6)];
+  const h = size === 'md'
+    ? 'h-28 sm:h-36 md:h-44'
+    : 'h-32 sm:h-44 md:h-56';
   return (
     <div className="relative py-5 md:py-7 overflow-hidden" style={{ background: DARK }} aria-hidden>
-      <DarkAtmosphere photo={photos[4]} />
+      <DarkAtmosphere photo={photos[4]} tone={tone} />
       <div className="relative z-[1]">
-        <div className="ai-film-slow flex w-max gap-2 md:gap-2.5 mb-2 md:mb-2.5">
+        <div className="ai-film-slow flex w-max gap-2 md:gap-2.5">
           {a.map((src, i) => (
             <img
               key={`a-${i}`}
               src={src}
               alt=""
-              className="block h-32 sm:h-44 md:h-56 w-auto aspect-[4/5] object-cover rounded-[2px]"
+              className={`block ${h} w-auto aspect-[4/5] object-cover rounded-[2px]`}
             />
           ))}
         </div>
-        <div className="ai-film-rev flex w-max gap-2 md:gap-2.5">
-          {b.map((src, i) => (
-            <img
-              key={`b-${i}`}
-              src={src}
-              alt=""
-              className="block h-28 sm:h-40 md:h-48 w-auto aspect-[5/4] object-cover rounded-[2px] opacity-90"
-            />
-          ))}
-        </div>
+        {rows === 2 && (
+          <div className="ai-film-rev flex w-max gap-2 md:gap-2.5 mt-2 md:mt-2.5">
+            {b.map((src, i) => (
+              <img
+                key={`b-${i}`}
+                src={src}
+                alt=""
+                className="block h-28 sm:h-40 md:h-48 w-auto aspect-[5/4] object-cover rounded-[2px] opacity-90"
+              />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -187,10 +316,18 @@ export type SpreadAlbum = {
 };
 
 export const DEFAULT_SPREADS: SpreadAlbum[] = [
-  { cover: LIFE_PHOTOS[0], a: LIFE_PHOTOS[1], b: LIFE_PHOTOS[2], c: LIFE_PHOTOS[3], by: { sq: 'Ana & Erjon · Dasmë', en: 'Ana & Erjon · Wedding' } },
-  { cover: LIFE_PHOTOS[4], a: LIFE_PHOTOS[5], b: LIFE_PHOTOS[6], c: LIFE_PHOTOS[7], by: { sq: 'Familja · Tiranë', en: 'Family · Tirana' } },
-  { cover: LIFE_PHOTOS[8], a: LIFE_PHOTOS[9], b: LIFE_PHOTOS[10], c: LIFE_PHOTOS[11], by: { sq: 'Vera në jug', en: 'Summer in the south' } },
-  { cover: LIFE_PHOTOS[12], a: LIFE_PHOTOS[13], b: LIFE_PHOTOS[14], c: LIFE_PHOTOS[15], by: { sq: 'Miqësi', en: 'Friendship' } },
+  { cover: WEDDING_PHOTOS[0], a: WEDDING_PHOTOS[2], b: WEDDING_PHOTOS[4], c: WEDDING_PHOTOS[3], by: { sq: 'Ana & Erjon · Dasmë', en: 'Ana & Erjon · Wedding' } },
+  { cover: FAMILY_PHOTOS[0], a: FAMILY_PHOTOS[1], b: FAMILY_PHOTOS[2], c: FAMILY_PHOTOS[3], by: { sq: 'Familja · Tiranë', en: 'Family · Tirana' } },
+  { cover: TRAVEL_PHOTOS[3], a: TRAVEL_PHOTOS[1], b: TRAVEL_PHOTOS[4], c: TRAVEL_PHOTOS[5], by: { sq: 'Vera në jug', en: 'Summer in the south' } },
+  { cover: FRIEND_PHOTOS[0], a: FRIEND_PHOTOS[1], b: FRIEND_PHOTOS[2], c: FRIEND_PHOTOS[3], by: { sq: 'Miqësi', en: 'Friendship' } },
+];
+
+export const EXAMPLES_SPREADS: SpreadAlbum[] = [
+  { cover: WEDDING_PHOTOS[1], a: WEDDING_PHOTOS[0], b: WEDDING_PHOTOS[5], c: WEDDING_PHOTOS[6], by: { sq: 'Ana & Erjon · Dasmë, Sarandë', en: 'Ana & Erjon · Wedding, Saranda' } },
+  { cover: TRAVEL_PHOTOS[5], a: TRAVEL_PHOTOS[0], b: TRAVEL_PHOTOS[2], c: TRAVEL_PHOTOS[6], by: { sq: 'Udhëtim · Venecia', en: 'Travel · Venice' } },
+  { cover: FAMILY_PHOTOS[2], a: FAMILY_PHOTOS[0], b: FAMILY_PHOTOS[1], c: FAMILY_PHOTOS[4], by: { sq: 'Familja · Durrës', en: 'Family · Durrës' } },
+  { cover: FRIEND_PHOTOS[1], a: FRIEND_PHOTOS[0], b: FRIEND_PHOTOS[3], c: FRIEND_PHOTOS[2], by: { sq: 'Miqësi · Tiranë', en: 'Friendship · Tirana' } },
+  { cover: PARTY_PHOTOS[1], a: PARTY_PHOTOS[0], b: PARTY_PHOTOS[2], c: PARTY_PHOTOS[3], by: { sq: 'Ditëlindje · Vlorë', en: 'Birthday · Vlorë' } },
 ];
 
 export function OpenAlbumSpread({

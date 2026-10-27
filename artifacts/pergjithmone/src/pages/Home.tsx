@@ -24,7 +24,9 @@ import { LivePageRoot } from '@/components/marketing/LivePageRoot';
 import { Editable, EditableSection } from '@/components/marketing/Editable';
 import {
   PhotoRiver, OpenAlbumSpread, PhoneVsAlbum, PageMosaic, SpreadRiver,
-  DarkAtmosphere, LIFE_PHOTOS, type MosaicSlot,
+  DarkAtmosphere, LIFE_PHOTOS,
+  WEDDING_PHOTOS, TRAVEL_PHOTOS, FAMILY_PHOTOS, FRIEND_PHOTOS, PARTY_PHOTOS,
+  type MosaicSlot,
 } from '@/components/marketing/PhotoStages';
 import { ArrowRight } from 'lucide-react';
 
@@ -201,7 +203,13 @@ function LivingAlbumBook({
     [liveDesign],
   );
 
-  const [coverSize, setCoverSize] = useState({ w: 0, h: 0 });
+  const [coverSize, setCoverSize] = useState(() => {
+    const maxW = size === 'hero' ? 380 : 220;
+    const frac = size === 'hero' ? 0.56 : 0.48;
+    const vw = typeof window === 'undefined' ? maxW : window.innerWidth * frac;
+    const w = Math.max(140, Math.round(Math.min(maxW, vw)));
+    return { w, h: Math.round(w * (DESIGN_H / DESIGN_W)) };
+  });
   const coverFaceRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -274,7 +282,7 @@ function LivingAlbumBook({
       className={`relative mx-auto ${!reduced ? 'book-float' : ''}`}
       style={{
         // Exact catalog aspect — stops paper letterboxing under the cover art
-        width: `min(${size === 'hero' ? '70vw' : '48vw'}, ${maxW}px)`,
+        width: `min(${size === 'hero' ? '56vw' : '48vw'}, ${maxW}px)`,
         aspectRatio: `${DESIGN_W} / ${DESIGN_H}`,
         maxWidth: maxW,
         perspective: size === 'hero' ? 1800 : 1100,
@@ -391,7 +399,7 @@ function LivingAlbumBook({
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
                 key={style.designId}
-                initial={reduced ? { opacity: 1 } : { opacity: 0, rotateY: 16, scale: 1.04 }}
+                initial={reduced ? { opacity: 1 } : { opacity: 1, rotateY: 8, scale: 1.02 }}
                 animate={{ opacity: 1, rotateY: 0, scale: 1 }}
                 exit={reduced ? { opacity: 0 } : { opacity: 0, rotateY: -12, scale: 0.98 }}
                 transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
@@ -404,6 +412,7 @@ function LivingAlbumBook({
                     height={coverSize.h}
                     fit="width"
                     background={coverBg}
+                    priority
                   />
                 ) : (
                   <img
@@ -508,9 +517,8 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
 
   return (
     <section
-      className="relative w-full overflow-hidden"
+      className="relative w-full overflow-hidden md:min-h-[min(100svh,960px)]"
       style={{
-        minHeight: 'min(100svh, 960px)',
         background: style.wash,
         transition: 'background-color 0.7s ease',
       }}
@@ -666,7 +674,7 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
         }}
       />
 
-      <div className="relative z-10 max-w-7xl mx-auto px-5 md:px-10 pt-6 pb-16 md:pt-16 md:pb-20 min-h-[inherit] flex flex-col justify-center">
+      <div className="relative z-10 max-w-7xl mx-auto px-5 md:px-10 pt-6 pb-8 md:pt-16 md:pb-20 min-h-[inherit] flex flex-col justify-center">
         <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] gap-6 md:gap-8 lg:gap-12 md:items-center">
           {/* Copy — headline first, brand second */}
           <div className="order-2 md:order-1 md:col-start-1 text-center md:text-left">
@@ -780,7 +788,7 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
               </Link>
             </div>
 
-            <div className="mt-7 md:mt-11 flex flex-wrap items-center justify-center md:justify-start gap-x-0.5 gap-y-0.5 max-w-md mx-auto md:mx-0">
+            <div className="mt-7 mb-2 md:mt-11 md:mb-0 flex flex-wrap items-center justify-center md:justify-start gap-x-0.5 gap-y-0.5 max-w-md mx-auto md:mx-0">
               {ALBUM_STYLES.map((s, i) => (
                 <button
                   key={s.key}
@@ -807,11 +815,11 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
           </div>
 
           {/* 3D book — first on mobile so the hero reads as one composition */}
-          <div className="order-1 md:order-2 md:col-start-2 md:row-start-1 flex flex-col items-center justify-center pt-8 pb-3 md:py-0 md:pl-2">
+          <div className="order-1 md:order-2 md:col-start-2 md:row-start-1 flex flex-col items-center justify-center pt-4 pb-2 md:py-0 md:pl-2">
             <motion.div
-              initial={reduced ? false : { opacity: 0, y: 56, scale: 0.84, rotate: 4 }}
-              animate={{ opacity: 1, y: 0, scale: 1, rotate: 0 }}
-              transition={{ duration: 1.15, ease: [0.16, 1, 0.3, 1] }}
+              initial={reduced ? false : { y: 28, scale: 0.94 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
               className="relative"
             >
               <div
@@ -859,7 +867,7 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
       />
 
       <div
-        className={`pointer-events-none absolute bottom-5 left-1/2 z-20 -translate-x-1/2 flex flex-col items-center gap-1.5 ${reduced ? '' : 'hero-scroll-cue'}`}
+        className={`relative z-20 flex flex-col items-center gap-1.5 pt-6 pb-5 md:pt-0 md:pb-0 md:pointer-events-none md:absolute md:bottom-5 md:left-1/2 md:-translate-x-1/2 ${reduced ? '' : 'hero-scroll-cue'}`}
         style={{ color: `${style.ink}66` }}
       >
         <span className="text-[9px] tracking-[0.32em] uppercase">
@@ -1386,12 +1394,12 @@ export default function Home() {
 }
 
 const HOME_MOSAIC: MosaicSlot[] = [
-  { src: LIFE_PHOTOS[0], label: { sq: 'Dasmë', en: 'Wedding' }, className: 'col-span-2 row-span-2' },
-  { src: LIFE_PHOTOS[6], label: { sq: 'Udhëtim', en: 'Travel' }, className: '' },
-  { src: LIFE_PHOTOS[7], label: { sq: 'Familje', en: 'Family' }, className: '' },
-  { src: LIFE_PHOTOS[14], label: { sq: 'Miqësi', en: 'Friends' }, className: '' },
-  { src: LIFE_PHOTOS[8], label: { sq: 'Festë', en: 'Party' }, className: '' },
-  { src: LIFE_PHOTOS[10], label: { sq: 'Shtëpi', en: 'Home' }, className: '' },
+  { src: WEDDING_PHOTOS[0], label: { sq: 'Dasmë', en: 'Wedding' }, className: 'col-span-2 row-span-2' },
+  { src: TRAVEL_PHOTOS[1], label: { sq: 'Udhëtim', en: 'Travel' }, className: '' },
+  { src: FAMILY_PHOTOS[1], label: { sq: 'Familje', en: 'Family' }, className: '' },
+  { src: FRIEND_PHOTOS[0], label: { sq: 'Miqësi', en: 'Friends' }, className: '' },
+  { src: PARTY_PHOTOS[0], label: { sq: 'Festë', en: 'Party' }, className: '' },
+  { src: FAMILY_PHOTOS[0], label: { sq: 'Shtëpi', en: 'Home' }, className: '' },
 ];
 
 function HomeView() {

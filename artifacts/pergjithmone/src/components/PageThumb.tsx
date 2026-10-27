@@ -26,7 +26,7 @@ function thumbFontStyle(ff?: string, fs?: string): { fontStyle: string; fontWeig
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const PageThumb = React.memo(function PageThumb({
-  elements, width, height, canvasH = DESIGN_H, fit = 'width', background,
+  elements, width, height, canvasH = DESIGN_H, fit = 'width', background, priority = false,
 }: {
   elements: EditorElement[] | Omit<EditorElement, 'id'>[];
   width: number;
@@ -36,9 +36,20 @@ export const PageThumb = React.memo(function PageThumb({
   fit?: 'width' | 'cover';
   /** Overrides the default paper fill (use cover color for 3D books). */
   background?: string;
+  /** Eager-load photos — needed for CSS 3D covers, where lazy never fires on iOS. */
+  priority?: boolean;
 }) {
   const fontsReady = useEditorFontsReady();
+  const [paintText, setPaintText] = useState(fontsReady);
   useEffect(() => { void ensureEditorFonts(); }, []);
+  useEffect(() => {
+    if (fontsReady) {
+      setPaintText(true);
+      return;
+    }
+    const t = window.setTimeout(() => setPaintText(true), 180);
+    return () => window.clearTimeout(t);
+  }, [fontsReady]);
 
   const scaleW = width / DESIGN_W;
   const scaleH = height / Math.max(1, canvasH);
@@ -66,7 +77,7 @@ export const PageThumb = React.memo(function PageThumb({
           const key = (el as EditorElement).id ?? i;
           if (el.type === 'background') {
             if (el.src) {
-              return <img key={key} src={el.src} alt="" loading="lazy" decoding="async" style={{
+              return <img key={key} src={el.src} alt="" loading={priority ? 'eager' : 'lazy'} decoding="async" referrerPolicy="no-referrer" style={{
                 position: 'absolute', inset: 0, width: '100%', height: '100%',
                 objectFit: 'cover',
                 objectPosition: `${(el.cropFocusX ?? 0.5) * 100}% ${(el.cropFocusY ?? 0.5) * 100}%`,
@@ -100,8 +111,9 @@ export const PageThumb = React.memo(function PageThumb({
                 <img
                   src={el.src}
                   alt=""
-                  loading="lazy"
+                  loading={priority ? 'eager' : 'lazy'}
                   decoding="async"
+                  referrerPolicy="no-referrer"
                   style={{
                     width: '100%', height: '100%', display: 'block',
                     objectFit: el.objectFit === 'contain' ? 'contain' : 'cover',
@@ -136,9 +148,10 @@ export const PageThumb = React.memo(function PageThumb({
                 whiteSpace: 'pre-wrap',
                 padding: 6,
                 boxSizing: 'border-box',
-                // Hold text until webfonts land — avoids Great Vibes FOUT on hero/wedding covers.
-                opacity: fontsReady ? (el.opacity ?? 1) : 0,
-                transition: fontsReady ? 'opacity 0.18s ease' : undefined,
+                // Hold briefly for webfonts, then paint anyway — fonts.ready
+                // can hang and used to leave Barcelona/Paris as a blank plate.
+                opacity: paintText ? (el.opacity ?? 1) : 0,
+                transition: paintText ? 'opacity 0.18s ease' : undefined,
                 transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
                 transformOrigin: 'top left',
               }}>

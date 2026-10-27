@@ -19,6 +19,7 @@ import { ResponsiveDesignCatalogThumb } from '@/components/PageThumb';
 import { SEOMeta } from '@/components/SEOMeta';
 import { useToast } from '@/hooks/use-toast';
 import { CategoryCoverImg, coverPressable } from '@/components/CategoryCoverImg';
+import { DEFAULT_CATEGORIES } from '@/lib/categoryImages';
 import { wizardEntryFromSearch } from '@/lib/wizardEntry';
 import { createProjectErrorMessage } from '@/lib/projectErrors';
 import { ensureEditorFonts } from '@/lib/editorFonts';
@@ -497,17 +498,17 @@ export default function Wizard() {
             </button>
           )}
 
-          <AnimatePresence mode="wait">
+          <AnimatePresence mode="wait" initial={false}>
 
             {/* ── STEP 1: Category ── */}
             {step === 1 && (
-              <motion.div
-                key="s1"
-                initial={{ opacity: 0, y: 14 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.28, ease: 'easeOut' }}
-              >
+                <motion.div
+                  key="s1"
+                  initial={{ y: 10 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.28, ease: 'easeOut' }}
+                >
                 <div className="mb-7 md:mb-10">
                   <p className="text-[10px] uppercase tracking-[0.28em] text-neutral-400 mb-2">
                     {String(currentProgressIndex).padStart(2, '0')} / {String(totalProgressSteps).padStart(2, '0')}
@@ -520,8 +521,18 @@ export default function Wizard() {
 
                 {loadingCat ? (
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
-                    {[1,2,3,4,5,6,7,8].map(i => (
-                      <div key={i} className="rounded-2xl bg-neutral-200 animate-pulse" style={{ aspectRatio: '3/4' }} />
+                    {DEFAULT_CATEGORIES.map((c) => (
+                      <div
+                        key={c.slug}
+                        className="relative rounded-2xl overflow-hidden"
+                        style={{ aspectRatio: '3/4', minHeight: 168, WebkitTransform: 'translateZ(0)' }}
+                      >
+                        <CategoryCoverImg nameAl={c.nameAl} slug={c.slug} alt={c.nameAl} />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/78 via-black/18 to-transparent" />
+                        <p className="absolute bottom-3 left-3.5 right-3 text-white font-serif text-sm">
+                          {lang === 'en' ? c.nameEn : c.nameAl}
+                        </p>
+                      </div>
                     ))}
                   </div>
                 ) : (
@@ -532,10 +543,8 @@ export default function Wizard() {
                           key={cat.id}
                           {...coverPressable(() => handleCategorySelect(cat.id), lang === 'en' ? (cat.nameEn || cat.nameAl) : cat.nameAl)}
                           className="group relative w-full rounded-2xl overflow-hidden cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900"
-                          style={{ aspectRatio: '3/4', minHeight: 168, WebkitTransform: 'translateZ(0)' }}
-                          initial={{ opacity: 0, y: 12 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: idx * 0.045, duration: 0.3 }}
+                          style={{ aspectRatio: '3/4', minHeight: 168, WebkitTransform: 'translateZ(0)', opacity: 1 }}
+                          initial={false}
                           whileHover={{ y: -4, transition: { duration: 0.2 } }}
                           whileTap={{ scale: 0.97 }}
                         >
