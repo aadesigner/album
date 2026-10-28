@@ -1,4 +1,5 @@
 import { compressImageFile, ImageTooLargeError } from './imageCompression';
+import { authFetch } from './authFetch';
 
 export class UploadFailedError extends Error {
   constructor(message: string, public status?: number) {
@@ -19,14 +20,13 @@ function parseErrorBody(raw: string): string {
 }
 
 /** Upload a photo through the same path the builder, AI album, and studio use. */
-export async function uploadImageToApi(file: File, token?: string | null): Promise<string> {
+export async function uploadImageToApi(file: File, _token?: string | null): Promise<string> {
   const compressed = await compressImageFile(file);
   const fd = new FormData();
   fd.append('file', compressed);
-  const r = await fetch('/api/uploads/image', {
+  // authFetch attaches a fresh access token (and retries once after refresh).
+  const r = await authFetch('/api/uploads/image', {
     method: 'POST',
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-    credentials: 'include',
     body: fd,
   });
   const raw = await r.text().catch(() => '');

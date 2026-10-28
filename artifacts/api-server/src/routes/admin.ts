@@ -37,6 +37,7 @@ import {
   type AdminStatsRange,
 } from "../lib/adminStatsCache";
 import { attachAdminMarketingPageRoutes } from "./marketingPages";
+import { isPageContentSettingKey } from "../lib/marketingPages";
 
 const router: IRouter = Router();
 
@@ -1207,6 +1208,7 @@ router.patch(
     };
 
     for (const [jsKey, dbKey] of Object.entries(keyMap)) {
+      if (isPageContentSettingKey(dbKey) || isPageContentSettingKey(jsKey)) continue;
       if (req.body[jsKey] !== undefined) {
         const raw = req.body[jsKey];
         const offerValue = normalizeOfferBarWrite(jsKey, raw);

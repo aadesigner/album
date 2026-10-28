@@ -30,6 +30,13 @@ export function pageSettingKey(slug: PageSlug): string {
   return `page_content_${slug.replace(/-/g, '_')}`;
 }
 
+export async function fetchPublishedPage(slug: PageSlug): Promise<{ content: unknown; updatedAt?: string | null }> {
+  const r = await fetch(`/api/pages/${slug}`, { credentials: 'include' });
+  if (!r.ok) throw new Error(`Failed to load page (${r.status})`);
+  const body = await r.json().catch(() => ({}));
+  return { content: body.content ?? {}, updatedAt: body.updatedAt ?? null };
+}
+
 export type BiText = {
   sq: string;
   en: string;

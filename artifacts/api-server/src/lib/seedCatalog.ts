@@ -9,6 +9,7 @@ import {
 import { eq, inArray } from "drizzle-orm";
 import { logger } from "./logger";
 import { BUILTIN_LAYOUTS, RETIRED_LAYOUT_SLUGS } from "./builtinLayouts";
+import { isPageContentSettingKey } from "./marketingPages";
 
 /** Default catalog so a fresh Railway/Postgres deploy can show Create Album. */
 const DEFAULT_CATEGORIES = [
@@ -152,6 +153,8 @@ export async function seedCatalog(): Promise<void> {
   }
 
   for (const setting of DEFAULT_SETTINGS) {
+    // Visual-editor JSON lives in page_content_* and must survive deploys.
+    if (isPageContentSettingKey(setting.key)) continue;
     const [existing] = await db
       .select({ id: appSettingsTable.id })
       .from(appSettingsTable)

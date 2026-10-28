@@ -64,7 +64,16 @@ function CoverThumb({ src, label }: { src?: string | null; label: string }) {
       </div>
     );
   }
-  return <img src={src} alt="" className="w-full h-full object-cover" loading="lazy" onError={() => setBroken(true)} />;
+  return (
+    <img
+      src={src}
+      alt=""
+      className="w-full h-full object-cover"
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      onError={() => setBroken(true)}
+    />
+  );
 }
 
 function TemplateFormModal({ template, onClose }: { template: Template | null; onClose: () => void }) {

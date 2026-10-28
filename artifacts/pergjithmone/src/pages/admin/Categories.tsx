@@ -13,6 +13,7 @@ import { Plus, Edit2, Trash2, ChevronDown, ChevronRight, FolderTree, Search } fr
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { getCategoryImage } from '@/lib/categoryImages';
+import { CategoryCoverImg } from '@/components/CategoryCoverImg';
 
 type Category = {
   id: number; slug: string; nameAl: string; nameEn: string; iconEmoji: string;
@@ -492,7 +493,6 @@ export default function AdminCategories() {
                   </td></tr>
                 ) : (
                   filtered.map(cat => {
-                    const coverSrc = getCategoryImage(cat.nameAl, cat.coverImage, cat.slug);
                     const isCustomCover = !!cat.coverImage;
                     return (
                     <React.Fragment key={cat.id}>
@@ -508,8 +508,16 @@ export default function AdminCategories() {
                           </button>
                         </td>
                         <td className="px-4 sm:px-6 py-3">
-                          <div className="relative w-14 h-14 rounded-xl overflow-hidden border shrink-0" style={{ borderColor: ADMIN.line }}>
-                            <img src={coverSrc} alt="" className="w-full h-full object-cover" loading="lazy" />
+                          <div
+                            className="relative rounded-xl overflow-hidden border shrink-0"
+                            style={{ width: 56, height: 56, borderColor: ADMIN.line }}
+                          >
+                            <CategoryCoverImg
+                              nameAl={cat.nameAl}
+                              coverImage={cat.coverImage}
+                              slug={cat.slug}
+                              alt={cat.nameEn || cat.nameAl}
+                            />
                             <span className="absolute bottom-0.5 left-0.5 text-[11px] leading-none drop-shadow">{cat.iconEmoji}</span>
                           </div>
                           <p className="text-[9px] mt-1 font-medium" style={{ color: isCustomCover ? ADMIN.success : ADMIN.warn }}>

@@ -202,12 +202,16 @@ function LivingAlbumBook({
     () => (liveDesign ? designFrontElements(liveDesign) : []),
     [liveDesign],
   );
+  const canvasH = useMemo(() => {
+    const bg = coverEls.find(e => e.type === 'background' && e.h > 0);
+    return bg && typeof bg.h === 'number' ? Math.round(bg.h) : DESIGN_H;
+  }, [coverEls]);
 
   const [coverSize, setCoverSize] = useState(() => {
-    const maxW = size === 'hero' ? 380 : 220;
-    const frac = size === 'hero' ? 0.56 : 0.48;
+    const maxW = size === 'hero' ? 480 : 240;
+    const frac = size === 'hero' ? 0.72 : 0.48;
     const vw = typeof window === 'undefined' ? maxW : window.innerWidth * frac;
-    const w = Math.max(140, Math.round(Math.min(maxW, vw)));
+    const w = Math.max(160, Math.round(Math.min(maxW, vw)));
     return { w, h: Math.round(w * (DESIGN_H / DESIGN_W)) };
   });
   const coverFaceRef = useRef<HTMLDivElement>(null);
@@ -240,7 +244,7 @@ function LivingAlbumBook({
       window.removeEventListener('resize', measure);
       window.removeEventListener('orientationchange', measure);
     };
-  }, [style.designId, size]);
+  }, [style.designId, size, canvasH]);
 
   useEffect(() => { void ensureEditorFonts(); }, []);
 
@@ -253,9 +257,8 @@ function LivingAlbumBook({
     }
   }, [coverEls]);
 
-  const spineD = size === 'hero' ? 18 : 12;
-  const pageBlock = size === 'hero' ? 10 : 7;
-  const maxW = size === 'hero' ? 380 : 220;
+  const spineD = size === 'hero' ? 20 : 12;
+  const pageBlock = size === 'hero' ? 11 : 7;
 
   const onMove = (e: React.MouseEvent) => {
     if (!interactive || reduced || !wrapRef.current) return;
@@ -281,26 +284,34 @@ function LivingAlbumBook({
       onMouseLeave={onLeave}
       className={`relative mx-auto ${!reduced ? 'book-float' : ''}`}
       style={{
-        // Exact catalog aspect — stops paper letterboxing under the cover art
-        width: `min(${size === 'hero' ? '56vw' : '48vw'}, ${maxW}px)`,
-        aspectRatio: `${DESIGN_W} / ${DESIGN_H}`,
-        maxWidth: maxW,
+        // Gutter only — keeps spine/pages outside the hero overflow clip.
+        // Cover size lives on the inner 3:4 box so padding cannot squash it.
+        paddingTop: size === 'hero' ? 10 : 6,
+        paddingBottom: size === 'hero' ? 22 : 14,
+        paddingLeft: spineD + 6,
+        paddingRight: pageBlock + 8,
         perspective: size === 'hero' ? 1800 : 1100,
         perspectiveOrigin: '42% 45%',
         touchAction: 'manipulation',
-        paddingTop: size === 'hero' ? 18 : 10,
-        paddingLeft: spineD * 0.55,
-        paddingRight: pageBlock * 0.7,
       }}
     >
       <div
         aria-hidden
-        className="absolute left-1/2 -translate-x-1/2 bottom-[-8%] w-[80%] h-[12%] rounded-[100%] blur-2xl opacity-40"
+        className="absolute left-1/2 -translate-x-1/2 bottom-[2%] w-[80%] h-[12%] rounded-[100%] blur-2xl opacity-40"
         style={{ background: size === 'hero'
           ? 'radial-gradient(ellipse, rgba(42, 34, 24, 0.10), transparent 72%)'
           : 'radial-gradient(ellipse, rgba(42,34,24,0.18), transparent 72%)' }}
       />
 
+      <div
+        className={size === 'hero'
+          ? 'relative w-[min(72vw,300px)] md:w-[min(40vw,500px)]'
+          : 'relative w-[min(48vw,200px)] md:w-[min(24vw,240px)]'}
+        style={{
+          aspectRatio: `${DESIGN_W} / ${canvasH}`,
+          maxWidth: size === 'hero' ? 500 : 240,
+        }}
+      >
       <div
         className={!usePointerTilt && !reduced ? idleClass : undefined}
         style={{
@@ -410,7 +421,8 @@ function LivingAlbumBook({
                     elements={coverEls}
                     width={coverSize.w}
                     height={coverSize.h}
-                    fit="width"
+                    canvasH={canvasH}
+                    fit="cover"
                     background={coverBg}
                     priority
                   />
@@ -464,6 +476,7 @@ function LivingAlbumBook({
             }}
           />
         </motion.div>
+      </div>
       </div>
     </div>
   );
@@ -556,11 +569,11 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
             className={`absolute inset-0 h-full w-full object-cover ${reduced ? '' : 'hero-kenburns'}`}
             style={{
               objectPosition: '78% 32%',
-              opacity: 0.9,
-              filter: 'saturate(0.86) brightness(1.05)',
+              opacity: 1,
+              filter: 'saturate(0.96) brightness(1.02)',
             }}
           />
-          {/* Frosted smear of the same photo — left / bottom, so the headline never fights grain */}
+          {/* Frosted smear — left / bottom only, so the album photo stays sharp */}
           <img
             src={heroBgUrl(wallpaper)}
             alt=""
@@ -569,10 +582,10 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
             style={{
               objectPosition: '30% 40%',
               transform: 'scale(1.22)',
-              opacity: 0.7,
-              filter: 'blur(52px) saturate(0.45) brightness(1.28)',
-              WebkitMaskImage: 'linear-gradient(105deg, black 0%, black 36%, rgba(0,0,0,0.35) 52%, transparent 68%), linear-gradient(to top, black 0%, black 28%, transparent 58%)',
-              maskImage: 'linear-gradient(105deg, black 0%, black 36%, rgba(0,0,0,0.35) 52%, transparent 68%), linear-gradient(to top, black 0%, black 28%, transparent 58%)',
+              opacity: 0.42,
+              filter: 'blur(52px) saturate(0.5) brightness(1.22)',
+              WebkitMaskImage: 'linear-gradient(105deg, black 0%, black 22%, rgba(0,0,0,0.18) 36%, transparent 48%), linear-gradient(to top, black 0%, black 18%, transparent 42%)',
+              maskImage: 'linear-gradient(105deg, black 0%, black 22%, rgba(0,0,0,0.18) 36%, transparent 48%), linear-gradient(to top, black 0%, black 18%, transparent 42%)',
               WebkitMaskComposite: 'source-over',
             }}
           />
@@ -588,12 +601,12 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
           background: `
             linear-gradient(90deg,
               ${style.wash} 0%,
-              ${style.wash}fc 26%,
-              ${style.wash}d4 42%,
-              ${style.wash}66 54%,
-              transparent 72%
+              ${style.wash}f5 18%,
+              ${style.wash}99 32%,
+              ${style.wash}33 42%,
+              transparent 54%
             ),
-            linear-gradient(to top, ${style.wash}f2 0%, ${style.wash}aa 12%, transparent 34%)
+            linear-gradient(to top, ${style.wash}e8 0%, ${style.wash}66 10%, transparent 26%)
           `,
           transition: 'background 0.7s ease',
         }}
@@ -610,11 +623,11 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-y-0 left-0 hidden md:block w-[50%] lg:w-[46%]"
+        className="pointer-events-none absolute inset-y-0 left-0 hidden md:block w-[42%] lg:w-[38%]"
         style={{
-          backdropFilter: reduced ? 'none' : 'blur(22px) saturate(0.7)',
-          WebkitBackdropFilter: reduced ? 'none' : 'blur(22px) saturate(0.7)',
-          background: `linear-gradient(90deg, ${style.wash}e6 0%, ${style.wash}99 58%, transparent 100%)`,
+          backdropFilter: reduced ? 'none' : 'blur(16px) saturate(0.75)',
+          WebkitBackdropFilter: reduced ? 'none' : 'blur(16px) saturate(0.75)',
+          background: `linear-gradient(90deg, ${style.wash}cc 0%, ${style.wash}55 48%, transparent 100%)`,
           transition: 'background 0.7s ease',
         }}
       />
@@ -624,7 +637,7 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
         <>
           <div
             aria-hidden
-            className="hero-orb-a pointer-events-none absolute top-[4%] right-[-8%] w-[58%] h-[74%] rounded-full opacity-70 blur-3xl"
+            className="hero-orb-a pointer-events-none absolute top-[-6%] right-[-14%] w-[34%] h-[42%] rounded-full opacity-25 blur-3xl"
             style={{
               background: `radial-gradient(circle, #ffffff 0%, ${style.paper} 38%, transparent 70%)`,
               transition: 'background 0.7s ease',
@@ -824,9 +837,9 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
             >
               <div
                 aria-hidden
-                className="pointer-events-none absolute left-1/2 top-1/2 -z-10 h-[78%] w-[88%] -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl"
+                className="pointer-events-none absolute left-1/2 top-1/2 -z-10 h-[62%] w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl"
                 style={{
-                  background: `radial-gradient(circle, #ffffffcc 0%, ${style.ambient}88 42%, transparent 72%)`,
+                  background: `radial-gradient(circle, #ffffff88 0%, ${style.ambient}44 38%, transparent 72%)`,
                   transition: 'background 0.7s ease',
                 }}
               />
@@ -862,7 +875,7 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
         aria-hidden
         className="pointer-events-none absolute inset-0 z-[1]"
         style={{
-          background: `radial-gradient(120% 80% at 50% 42%, transparent 55%, ${style.wash}cc 100%)`,
+          background: `radial-gradient(120% 80% at 50% 42%, transparent 68%, ${style.wash}66 100%)`,
         }}
       />
 

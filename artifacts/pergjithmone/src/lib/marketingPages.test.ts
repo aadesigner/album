@@ -1,8 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   bi, img, getAt, setAt, mergePageContent, txt, imgSrc, sanitizePageContent,
   isPageSlug, pageSettingKey, stringifyPageContent, preparePageContentForSave,
-  MAX_PAGE_JSON_CHARS,
+  fetchPublishedPage, MAX_PAGE_JSON_CHARS,
 } from './marketingPages';
 import { PAGE_DEFAULTS } from './marketingPages.defaults';
 
@@ -104,5 +104,21 @@ describe('marketingPages helpers', () => {
       expect(stringifyPageContent(doc).length).toBeLessThan(MAX_PAGE_JSON_CHARS);
       expect(slug).toBeTruthy();
     }
+  });
+
+  it('fetchPublishedPage throws on HTTP errors instead of returning empty content', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 502, json: async () => ({}) });
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(fetchPublishedPage('home')).rejects.toThrow(/502/);
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ content: { hero: { headline: { sq: 'A', en: 'B' } } }, updatedAt: '2026-01-01' }),
+    });
+    await expect(fetchPublishedPage('home')).resolves.toEqual({
+      content: { hero: { headline: { sq: 'A', en: 'B' } } },
+      updatedAt: '2026-01-01',
+    });
+    vi.unstubAllGlobals();
   });
 });

@@ -52,7 +52,10 @@ describe("getCategoryImage", () => {
       getCatalogCover("Dasmë", "dasme"),
     );
     expect(getCategoryImage("Dasmë", null, "dasme")).toBe(getCatalogCover("Dasmë", "dasme"));
-    expect(getCatalogCover("Dasmë", "dasme")).toContain("fm=jpg");
-    expect(CAT_IMG_BY_SLUG.dasme).toContain("photo-1519225421980");
+    expect(getCatalogCover("Dasmë", "dasme")).toContain("/designs/");
+    expect(CAT_IMG_BY_SLUG.dasme).toContain("wedding-spin");
+    expect(getCategoryImage("Dasmë", "https://images.unsplash.com/photo-x", "dasme")).toBe(
+      getCatalogCover("Dasmë", "dasme"),
+    );
   });
 });

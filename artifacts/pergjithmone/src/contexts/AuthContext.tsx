@@ -13,8 +13,11 @@ import type { LoginInput, RegisterInput, User } from '@workspace/api-client-reac
 import { useQueryClient } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
+import { accessTokenNeedsRefresh } from '@/lib/accessToken';
+import { setAuthFetchHooks } from '@/lib/authFetch';
 
 const USER_CACHE_KEY = 'pergjithmone_user';
+const KEEP_ALIVE_MS = 60_000;
 
 function readCachedUser(): User | null {
   try {
@@ -66,6 +69,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Session user — localStorage for instant paint, then refresh / /auth/me.
   const [sessionUser, setSessionUser] = useState<User | null>(readCachedUser);
 
+  // Synchronous getter for the first paint (effects have not run yet).
   useMemo(() => {
     setAuthTokenGetter(() => accessTokenRef.current);
   }, []);
@@ -79,11 +83,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [queryClient]);
 
+  const dropLocalSession = useCallback(() => {
+    accessTokenRef.current = null;
+    setSessionRestored(false);
+    setSessionUser(null);
+    writeCachedUser(null);
+    queryClient.setQueryData(getGetMeQueryKey(), null);
+  }, [queryClient]);
+
   // Shared refresh-token exchange: cookie → access token (+ user).
-  const refreshAccessToken = useCallback((): Promise<boolean> => {
+  // The refresh cookie lasts a year; the access JWT is 15 minutes. Never treat a
+  // network blip as logout — only a 401 from /auth/refresh means the session is gone.
+  const refreshAccessToken = useCallback((opts?: { clearOnFail?: boolean }): Promise<boolean> => {
     if (refreshInFlightRef.current) return refreshInFlightRef.current;
 
-    const attemptOnce = async (): Promise<{ ok: boolean; retry429?: boolean }> => {
+    const clearOnFail = opts?.clearOnFail !== false;
+
+    const attemptOnce = async (): Promise<{ ok: boolean; retry429?: boolean; unauthorized?: boolean }> => {
       try {
         const res = await fetch('/api/auth/refresh', {
           method: 'POST',
@@ -93,13 +109,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const data = await res.json();
           if (data?.accessToken) {
             applyAuthSession(data.accessToken, data.user ?? null);
+            setSessionRestored(true);
             return { ok: true };
           }
         }
         // Concurrent tab/request hit — retry shortly instead of logging out.
         if (res.status === 429) return { ok: false, retry429: true };
+        if (res.status === 401 || res.status === 403) return { ok: false, unauthorized: true };
       } catch {
-        // Network / no cookie
+        // Network — session cookie is still there.
       }
       return { ok: false };
     };
@@ -111,7 +129,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         result = await attemptOnce();
       }
       if (result.ok) return true;
-      accessTokenRef.current = null;
+      if (result.unauthorized) {
+        dropLocalSession();
+        return false;
+      }
+      if (clearOnFail) accessTokenRef.current = null;
       return false;
     })();
 
@@ -120,30 +142,63 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (refreshInFlightRef.current === attempt) refreshInFlightRef.current = null;
     });
     return attempt;
-  }, [applyAuthSession]);
+  }, [applyAuthSession, dropLocalSession]);
+
+  const ensureAccessToken = useCallback(async (): Promise<string | null> => {
+    const current = accessTokenRef.current;
+    if (current && !accessTokenNeedsRefresh(current)) return current;
+    await refreshAccessToken({ clearOnFail: false });
+    return accessTokenRef.current;
+  }, [refreshAccessToken]);
 
   useEffect(() => {
-    setUnauthorizedHandler(refreshAccessToken);
-    return () => setUnauthorizedHandler(null);
-  }, [refreshAccessToken]);
+    setAuthTokenGetter(() => ensureAccessToken());
+    setUnauthorizedHandler(() => refreshAccessToken({ clearOnFail: true }));
+    setAuthFetchHooks({
+      ensureToken: ensureAccessToken,
+      onUnauthorized: () => refreshAccessToken({ clearOnFail: true }),
+    });
+    return () => {
+      setAuthTokenGetter(() => accessTokenRef.current);
+      setUnauthorizedHandler(null);
+      setAuthFetchHooks(null);
+    };
+  }, [refreshAccessToken, ensureAccessToken]);
 
   // On mount: restore session from httpOnly refresh cookie.
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const ok = await refreshAccessToken();
+      const ok = await refreshAccessToken({ clearOnFail: false });
       if (cancelled) return;
       setSessionRestored(ok);
-      if (!ok) {
-        // No valid refresh cookie — clear any stale cached persona.
-        setSessionUser(null);
-        writeCachedUser(null);
-        queryClient.setQueryData(getGetMeQueryKey(), null);
-      }
       setTokenReady(true);
     })();
     return () => { cancelled = true; };
-  }, [refreshAccessToken, queryClient]);
+  }, [refreshAccessToken]);
+
+  // Keep the 15-minute access JWT fresh while this tab is open (and when it
+  // comes back from the background). The year-long refresh cookie does the rest.
+  useEffect(() => {
+    const tick = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      if (!accessTokenRef.current && !readCachedUser()) return;
+      if (accessTokenNeedsRefresh(accessTokenRef.current)) {
+        void refreshAccessToken({ clearOnFail: false });
+      }
+    };
+    const id = window.setInterval(tick, KEEP_ALIVE_MS);
+    const onVis = () => {
+      if (document.visibilityState === 'visible') tick();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('focus', tick);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('focus', tick);
+    };
+  }, [refreshAccessToken]);
 
   // Only hit /auth/me when we actually have an access token.
   const {

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
-  CAT_IMG_DEFAULT,
   getCatalogCover,
+  getCategorySpine,
   isUnusableCoverSrc,
   phoneSafeImageSrc,
   resolvePublicImageSrc,
@@ -25,8 +25,9 @@ export function coverPressable(onClick: () => void, label?: string) {
 
 /**
  * Category photo that still paints on iOS.
- * Catalog Unsplash is always the CSS fallback. The uploaded cover sits on top
- * and falls back if it 404s, hangs behind opacity:0, or is a localhost URL.
+ * Paper/spine wash is always underneath. The photo sits on top and is removed
+ * if it 404s — a failed <img> otherwise shows the browser's missing-icon
+ * glyph in the middle of the tile.
  */
 export function CategoryCoverImg({
   nameAl,
@@ -43,16 +44,21 @@ export function CategoryCoverImg({
 }) {
   const catalog = getCatalogCover(nameAl, slug);
   const customRaw = resolvePublicImageSrc(coverImage);
-  const custom = customRaw && !isUnusableCoverSrc(coverImage) && customRaw !== catalog
+  const custom = customRaw
+    && !isUnusableCoverSrc(coverImage)
+    && !customRaw.includes('images.unsplash.com')
+    && customRaw !== catalog
     ? phoneSafeImageSrc(customRaw)
     : '';
-  const [src, setSrc] = useState(custom || catalog);
+  const preferred = custom || catalog;
+  const [src, setSrc] = useState(preferred);
+  const [showImg, setShowImg] = useState(!!preferred);
+  const spine = getCategorySpine(slug || '');
 
   useEffect(() => {
-    setSrc(custom || catalog);
-  }, [custom, catalog]);
-
-  const safeCatalog = catalog.replace(/"/g, '');
+    setSrc(preferred);
+    setShowImg(!!preferred);
+  }, [preferred]);
 
   return (
     <div
@@ -61,40 +67,40 @@ export function CategoryCoverImg({
       style={{
         position: 'absolute',
         inset: 0,
+        width: '100%',
+        height: '100%',
         overflow: 'hidden',
-        backgroundColor: '#d4cfc8',
-        backgroundImage: safeCatalog ? `url("${safeCatalog}")` : undefined,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
+        backgroundColor: spine || '#d4cfc8',
+        backgroundImage: `linear-gradient(165deg, ${spine || '#c4b8aa'} 0%, #d4cfc8 100%)`,
         WebkitTransform: 'translateZ(0)',
         transform: 'translateZ(0)',
       }}
     >
-      {src ? (
+      {showImg && src ? (
         <img
           src={src}
           alt={alt}
           referrerPolicy="no-referrer"
           decoding="async"
           loading="eager"
-          fetchPriority="high"
           draggable={false}
           style={{
-            position: 'absolute',
-            inset: 0,
             width: '100%',
             height: '100%',
             objectFit: 'cover',
+            objectPosition: 'center',
             display: 'block',
             border: 0,
             pointerEvents: 'none',
             WebkitUserSelect: 'none',
             userSelect: 'none',
-            opacity: 1,
           }}
           onError={() => {
-            if (src !== catalog) setSrc(catalog);
-            else if (src !== CAT_IMG_DEFAULT) setSrc(phoneSafeImageSrc(CAT_IMG_DEFAULT));
+            if (src !== catalog && catalog) {
+              setSrc(catalog);
+              return;
+            }
+            setShowImg(false);
           }}
         />
       ) : null}

@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useLanguage } from '@/contexts/LanguageContext';
 import {
   type PageSlug, type FieldKind,
-  mergePageContent, txt, imgSrc, listAt, hiddenAt, textStyle, textSizeClass, spaceClass,
+  fetchPublishedPage, mergePageContent, txt, imgSrc, listAt, hiddenAt, textStyle, textSizeClass, spaceClass,
 } from '@/lib/marketingPages';
 import { PAGE_DEFAULTS } from '@/lib/marketingPages.defaults';
 import { usePageEditorOptional } from './PageEditorContext';
@@ -29,14 +29,10 @@ export function PageContentProvider({ slug, children }: { slug: PageSlug; childr
   const { lang } = useLanguage();
   const { data } = useQuery({
     queryKey: ['marketing-page', slug],
-    queryFn: async () => {
-      const r = await fetch(`/api/pages/${slug}`, { credentials: 'include' });
-      if (!r.ok) return { content: {} };
-      const body = await r.json().catch(() => ({}));
-      return { content: body.content ?? {} };
-    },
+    queryFn: () => fetchPublishedPage(slug),
     enabled: !editor || editor.slug !== slug,
     staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
   });
 
   const content = useMemo(() => {

@@ -17,10 +17,12 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { authFetch } from '@/lib/authFetch';
 import { ADMIN } from '@/components/layout/AdminLayout';
 import { PAGE_DEFAULTS } from '@/lib/marketingPages.defaults';
 import {
   PAGE_META,
+  fetchPublishedPage,
   preparePageContentForSave,
   type PageSlug,
 } from '@/lib/marketingPages';
@@ -46,13 +48,6 @@ export function isLiveAdminEdit(): boolean {
   }
 }
 
-async function fetchPublishedPage(slug: PageSlug): Promise<{ content: unknown }> {
-  const r = await fetch(`/api/pages/${slug}`, { credentials: 'include' });
-  if (!r.ok) return { content: {} };
-  const body = await r.json().catch(() => ({}));
-  return { content: body.content ?? {} };
-}
-
 export function LivePageRoot({
   slug,
   children,
@@ -70,6 +65,8 @@ export function LivePageRoot({
     queryKey: ['marketing-page', slug],
     queryFn: () => fetchPublishedPage(slug),
     staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
+    retry: 2,
   });
 
   const setMode = useCallback((on: boolean) => {
@@ -131,7 +128,6 @@ function AdminModeChrome({
 }) {
   const editor = usePageEditorOptional();
   const { lang } = useLanguage();
-  const { getToken } = useAuth();
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
@@ -179,6 +175,42 @@ function AdminModeChrome({
     return () => document.removeEventListener('click', onClick, true);
   }, [enabled, editor?.dirty, lang]);
 
+  const save = useCallback(async () => {
+    if (!editor || saving) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const content = preparePageContentForSave(PAGE_DEFAULTS[slug], editor.content);
+      if (!content || Object.keys(content).length === 0) {
+        throw new Error(lang === 'sq' ? 'Nuk ka përmbajtje për të ruajtur.' : 'Nothing to save.');
+      }
+      const r = await authFetch(`/api/admin/pages/${slug}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content }),
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        if (r.status === 401 || r.status === 403) {
+          throw new Error(lang === 'sq' ? 'Sesioni skadoi — rifresko faqen.' : 'Session expired — refresh the page.');
+        }
+        throw new Error(body.error || 'Save failed');
+      }
+      const saved = (body.content || content) as Record<string, unknown>;
+      editor.replace(saved);
+      queryClient.setQueryData(['marketing-page', slug], {
+        content: saved,
+        updatedAt: body.updatedAt ?? new Date().toISOString(),
+      });
+      setSavedFlash(true);
+      setTimeout(() => setSavedFlash(false), 2200);
+    } catch (err: any) {
+      setSaveError(err?.message || 'Save failed');
+    } finally {
+      setSaving(false);
+    }
+  }, [editor, saving, slug, lang, queryClient]);
+
   useEffect(() => {
     if (!enabled || !editor) return;
     const onKey = (e: KeyboardEvent) => {
@@ -191,48 +223,25 @@ function AdminModeChrome({
       } else if (key === 'y') {
         e.preventDefault();
         editor.redo();
+      } else if (key === 's') {
+        e.preventDefault();
+        if (editor.dirty) void save();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [enabled, editor]);
-
-  const save = async () => {
-    if (!editor) return;
-    setSaving(true);
-    setSaveError(null);
-    try {
-      const content = preparePageContentForSave(PAGE_DEFAULTS[slug], editor.content);
-      const token = getToken();
-      if (!token) throw new Error(lang === 'sq' ? 'Sesioni skadoi — rifresko faqen.' : 'Session expired — refresh the page.');
-      const r = await fetch(`/api/admin/pages/${slug}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        credentials: 'include',
-        body: JSON.stringify({ content }),
-      });
-      const body = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(body.error || 'Save failed');
-      editor.replace((body.content || content) as Record<string, unknown>);
-      queryClient.setQueryData(['marketing-page', slug], { content: body.content || content });
-      setSavedFlash(true);
-      setTimeout(() => setSavedFlash(false), 2200);
-    } catch (err: any) {
-      setSaveError(err?.message || 'Save failed');
-    } finally {
-      setSaving(false);
-    }
-  };
+  }, [enabled, editor, save]);
 
   const discard = async () => {
     if (!editor) return;
     if (editor.dirty && !window.confirm(lang === 'sq' ? 'Anulo ndryshimet?' : 'Discard unsaved changes?')) return;
-    const fresh = await fetchPublishedPage(slug);
-    editor.replace((fresh.content || {}) as Record<string, unknown>);
-    setSaveError(null);
+    try {
+      const fresh = await fetchPublishedPage(slug);
+      editor.replace((fresh.content || {}) as Record<string, unknown>);
+      setSaveError(null);
+    } catch (err: any) {
+      setSaveError(err?.message || (lang === 'sq' ? 'Nuk u ngarkua faqja.' : 'Could not reload the page.'));
+    }
   };
 
   const exit = () => {

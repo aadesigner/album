@@ -76,6 +76,7 @@ export function ImageUploadInput({
             src={displaySrc}
             alt="Cover preview"
             className="w-full h-full object-cover"
+            referrerPolicy="no-referrer"
             onError={() => setBroken(true)}
           />
           {showingFallback && (

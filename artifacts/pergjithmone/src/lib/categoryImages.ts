@@ -1,14 +1,14 @@
-/** Backgrounds keyed by API slug (preferred) and nameAl (legacy). */
+/** Same-origin photos so admin + phones never depend on Unsplash hotlinking. */
 export const CAT_IMG_BY_SLUG: Record<string, string> = {
-  dasme: 'https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=700&q=88&fit=crop&crop=top',
-  udhetime: 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=700&q=88&fit=crop&crop=center',
-  familje: 'https://images.unsplash.com/photo-1581952976147-5a2d15560349?w=700&q=88&fit=crop&crop=top',
-  ditelindje: 'https://images.unsplash.com/photo-1530103862676-de8c9debad1d?w=700&q=88&fit=crop',
-  miqesi: 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=700&q=88&fit=crop&crop=top',
-  festash: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=700&q=88&fit=crop',
+  dasme: '/designs/wedding-spin-cover.jpg',
+  udhetime: '/designs/paris-cover-thumb.jpg',
+  familje: '/designs/baby-ador-cover.jpg',
+  ditelindje: '/designs/baby-ador-thumb.jpg',
+  miqesi: '/designs/amalfi-cover-thumb.jpg',
+  festash: '/designs/santorini-cover-thumb.jpg',
 };
 
-/** Unsplash backgrounds keyed by category nameAl from the API. */
+/** Local backgrounds keyed by category nameAl from the API. */
 export const CAT_IMG: Record<string, string> = {
   Dasmë: CAT_IMG_BY_SLUG.dasme,
   Udhëtime: CAT_IMG_BY_SLUG.udhetime,
@@ -19,27 +19,26 @@ export const CAT_IMG: Record<string, string> = {
   // Alternate spellings / legacy
   Dasëm: CAT_IMG_BY_SLUG.dasme,
   Udhëtim: CAT_IMG_BY_SLUG.udhetime,
-  Graduim: 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=700&q=88&fit=crop&crop=top',
-  Fëmijëri: 'https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?w=700&q=88&fit=crop',
-  Fëmijë: 'https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?w=700&q=88&fit=crop',
-  Natyrë: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=700&q=88&fit=crop&crop=center',
-  Çifte: 'https://images.unsplash.com/photo-1516589178581-6cd7833ae3b2?w=700&q=88&fit=crop',
-  Dashurinë: 'https://images.unsplash.com/photo-1516589178581-6cd7833ae3b2?w=700&q=88&fit=crop',
+  Graduim: '/designs/athens-cover-thumb.jpg',
+  Fëmijëri: CAT_IMG_BY_SLUG.familje,
+  Fëmijë: CAT_IMG_BY_SLUG.familje,
+  Natyrë: '/designs/amalfi-cover-thumb.jpg',
+  Çifte: CAT_IMG_BY_SLUG.dasme,
+  Dashurinë: CAT_IMG_BY_SLUG.dasme,
   Festë: CAT_IMG_BY_SLUG.festash,
   Festim: CAT_IMG_BY_SLUG.festash,
-  'Kafshë shtëpie': 'https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=700&q=88&fit=crop',
-  'Vit i ri': 'https://images.unsplash.com/photo-1467810563316-b5476525c0f9?w=700&q=88&fit=crop',
-  Nostalgjia: 'https://images.unsplash.com/photo-1495521821757-a1efb6729352?w=700&q=88&fit=crop',
-  Shtatzëni: 'https://images.unsplash.com/photo-1555252333-9f8e92e65df9?w=700&q=88&fit=crop',
-  Bebe: 'https://images.unsplash.com/photo-1519689680058-324335c77eba?w=700&q=88&fit=crop',
-  Peizazh: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=700&q=88&fit=crop',
-  Arkitekturë: 'https://images.unsplash.com/photo-1486325212027-8081e485255e?w=700&q=88&fit=crop',
-  Sport: 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?w=700&q=88&fit=crop',
-  Ushqim: 'https://images.unsplash.com/photo-1476224203421-9ac39bcb3327?w=700&q=88&fit=crop',
+  'Kafshë shtëpie': '/designs/baby-ador-thumb.jpg',
+  'Vit i ri': '/designs/prague-cover-thumb.jpg',
+  Nostalgjia: '/designs/rome-cover-thumb.jpg',
+  Shtatzëni: CAT_IMG_BY_SLUG.familje,
+  Bebe: CAT_IMG_BY_SLUG.familje,
+  Peizazh: '/designs/amalfi-cover-thumb.jpg',
+  Arkitekturë: '/designs/barcelona-cover-thumb.jpg',
+  Sport: '/designs/newyork-cover-thumb.jpg',
+  Ushqim: '/designs/lisbon-cover-thumb.jpg',
 };
 
-export const CAT_IMG_DEFAULT =
-  'https://images.unsplash.com/photo-1474552226712-ac0f0961a954?w=700&q=88&fit=crop&crop=center';
+export const CAT_IMG_DEFAULT = '/designs/wedding-cream-thumb.jpg';
 
 /** Default catalog shown on the homepage even if /api/categories is slow or fails. */
 export const DEFAULT_CATEGORIES = [
@@ -81,12 +80,12 @@ function isPrivateHost(host: string): boolean {
   );
 }
 
-/** Unsplash JPEG so iOS Safari does not sit on a blocked WebP/AVIF variant. */
+/** Force JPEG — `auto=format` can serve AVIF/WebP that some phones will not paint. */
 export function phoneSafeImageSrc(src: string): string {
   if (!src.includes('images.unsplash.com')) return src;
   try {
     const u = new URL(src);
-    u.searchParams.set('auto', 'format');
+    u.searchParams.delete('auto');
     u.searchParams.set('fm', 'jpg');
     return u.toString();
   } catch {
@@ -139,7 +138,14 @@ export function getCategoryImage(
   slug?: string | null,
 ): string {
   const custom = resolvePublicImageSrc(coverImage);
-  if (custom && !isUnusableCoverSrc(coverImage)) return custom;
+  // Unsplash hotlinks 403 in admin/phones — skip them and use the local catalog.
+  if (
+    custom
+    && !isUnusableCoverSrc(coverImage)
+    && !custom.includes('images.unsplash.com')
+  ) {
+    return custom;
+  }
   return getCatalogCover(nameAl, slug);
 }
 
