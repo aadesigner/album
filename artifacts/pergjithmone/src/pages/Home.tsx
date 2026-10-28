@@ -185,9 +185,9 @@ function LivingAlbumBook({
   const mx = useMotionValue(0);
   const my = useMotionValue(0);
 
-  // Shallow pose — almost flat, spine still readable, no dramatic tilt.
-  const baseYaw = size === 'hero' ? -16 : -10;
-  const basePitch = size === 'hero' ? 3 : 2;
+  // Turned enough that spine + page block read as a real book, not a flat cover.
+  const baseYaw = size === 'hero' ? -32 : -18;
+  const basePitch = size === 'hero' ? 8 : 4;
   const rotY = useSpring(
     useTransform(mx, [-1, 1], [baseYaw - 5, baseYaw + 8]),
     { stiffness: 130, damping: 22, mass: 0.4 },
@@ -208,8 +208,8 @@ function LivingAlbumBook({
   }, [coverEls]);
 
   const [coverSize, setCoverSize] = useState(() => {
-    const maxW = size === 'hero' ? 480 : 240;
-    const frac = size === 'hero' ? 0.72 : 0.48;
+    const maxW = size === 'hero' ? 340 : 220;
+    const frac = size === 'hero' ? 0.52 : 0.42;
     const vw = typeof window === 'undefined' ? maxW : window.innerWidth * frac;
     const w = Math.max(160, Math.round(Math.min(maxW, vw)));
     return { w, h: Math.round(w * (DESIGN_H / DESIGN_W)) };
@@ -257,8 +257,8 @@ function LivingAlbumBook({
     }
   }, [coverEls]);
 
-  const spineD = size === 'hero' ? 20 : 12;
-  const pageBlock = size === 'hero' ? 11 : 7;
+  const spineD = size === 'hero' ? 26 : 14;
+  const pageBlock = size === 'hero' ? 16 : 9;
 
   const onMove = (e: React.MouseEvent) => {
     if (!interactive || reduced || !wrapRef.current) return;
@@ -286,12 +286,12 @@ function LivingAlbumBook({
       style={{
         // Gutter only — keeps spine/pages outside the hero overflow clip.
         // Cover size lives on the inner 3:4 box so padding cannot squash it.
-        paddingTop: size === 'hero' ? 10 : 6,
-        paddingBottom: size === 'hero' ? 22 : 14,
-        paddingLeft: spineD + 6,
-        paddingRight: pageBlock + 8,
-        perspective: size === 'hero' ? 1800 : 1100,
-        perspectiveOrigin: '42% 45%',
+        paddingTop: size === 'hero' ? 14 : 8,
+        paddingBottom: size === 'hero' ? 28 : 16,
+        paddingLeft: spineD + 14,
+        paddingRight: pageBlock + 18,
+        perspective: size === 'hero' ? 1180 : 900,
+        perspectiveOrigin: '38% 42%',
         touchAction: 'manipulation',
       }}
     >
@@ -305,11 +305,11 @@ function LivingAlbumBook({
 
       <div
         className={size === 'hero'
-          ? 'relative w-[min(72vw,300px)] md:w-[min(40vw,500px)]'
-          : 'relative w-[min(48vw,200px)] md:w-[min(24vw,240px)]'}
+          ? 'relative w-[min(56vw,220px)] md:w-[min(26vw,340px)]'
+          : 'relative w-[min(44vw,180px)] md:w-[min(22vw,220px)]'}
         style={{
           aspectRatio: `${DESIGN_W} / ${canvasH}`,
-          maxWidth: size === 'hero' ? 500 : 240,
+          maxWidth: size === 'hero' ? 340 : 220,
         }}
       >
       <div
@@ -402,7 +402,7 @@ function LivingAlbumBook({
               borderRadius: '0 5px 5px 0',
               overflow: 'hidden',
               boxShadow:
-                '0 16px 36px rgba(42,34,24,0.12), inset 0 0 0 1px rgba(255,255,255,0.18)',
+                '0 22px 48px rgba(42,34,24,0.22), 8px 18px 28px rgba(42,34,24,0.10), inset 0 0 0 1px rgba(255,255,255,0.18)',
               background: coverBg,
               transform: 'translateZ(1px)',
             }}
@@ -568,12 +568,14 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
             fetchPriority="high"
             className={`absolute inset-0 h-full w-full object-cover ${reduced ? '' : 'hero-kenburns'}`}
             style={{
-              objectPosition: '78% 32%',
-              opacity: 1,
-              filter: 'saturate(0.96) brightness(1.02)',
+              objectPosition: '82% 32%',
+              opacity: 0.88,
+              filter: 'saturate(0.88) brightness(1.06)',
+              WebkitMaskImage: 'linear-gradient(90deg, transparent 0%, transparent 46%, rgba(0,0,0,0.45) 58%, black 72%)',
+              maskImage: 'linear-gradient(90deg, transparent 0%, transparent 46%, rgba(0,0,0,0.45) 58%, black 72%)',
             }}
           />
-          {/* Frosted smear — left / bottom only, so the album photo stays sharp */}
+          {/* Frosted smear — left paper side, so type stays readable */}
           <img
             src={heroBgUrl(wallpaper)}
             alt=""
@@ -582,10 +584,10 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
             style={{
               objectPosition: '30% 40%',
               transform: 'scale(1.22)',
-              opacity: 0.42,
-              filter: 'blur(52px) saturate(0.5) brightness(1.22)',
-              WebkitMaskImage: 'linear-gradient(105deg, black 0%, black 22%, rgba(0,0,0,0.18) 36%, transparent 48%), linear-gradient(to top, black 0%, black 18%, transparent 42%)',
-              maskImage: 'linear-gradient(105deg, black 0%, black 22%, rgba(0,0,0,0.18) 36%, transparent 48%), linear-gradient(to top, black 0%, black 18%, transparent 42%)',
+              opacity: 0.58,
+              filter: 'blur(56px) saturate(0.42) brightness(1.24)',
+              WebkitMaskImage: 'linear-gradient(105deg, black 0%, black 32%, rgba(0,0,0,0.28) 48%, transparent 62%), linear-gradient(to top, black 0%, black 24%, transparent 52%)',
+              maskImage: 'linear-gradient(105deg, black 0%, black 32%, rgba(0,0,0,0.28) 48%, transparent 62%), linear-gradient(to top, black 0%, black 24%, transparent 52%)',
               WebkitMaskComposite: 'source-over',
             }}
           />
@@ -601,12 +603,13 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
           background: `
             linear-gradient(90deg,
               ${style.wash} 0%,
-              ${style.wash}f5 18%,
-              ${style.wash}99 32%,
-              ${style.wash}33 42%,
-              transparent 54%
+              ${style.wash}fc 34%,
+              ${style.wash}d8 48%,
+              ${style.wash}77 60%,
+              ${style.wash}33 70%,
+              transparent 82%
             ),
-            linear-gradient(to top, ${style.wash}e8 0%, ${style.wash}66 10%, transparent 26%)
+            linear-gradient(to top, ${style.wash}ee 0%, ${style.wash}88 12%, transparent 30%)
           `,
           transition: 'background 0.7s ease',
         }}
@@ -623,11 +626,11 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-y-0 left-0 hidden md:block w-[42%] lg:w-[38%]"
+        className="pointer-events-none absolute inset-y-0 left-0 hidden md:block w-[58%] lg:w-[54%]"
         style={{
-          backdropFilter: reduced ? 'none' : 'blur(16px) saturate(0.75)',
-          WebkitBackdropFilter: reduced ? 'none' : 'blur(16px) saturate(0.75)',
-          background: `linear-gradient(90deg, ${style.wash}cc 0%, ${style.wash}55 48%, transparent 100%)`,
+          backdropFilter: reduced ? 'none' : 'blur(20px) saturate(0.68)',
+          WebkitBackdropFilter: reduced ? 'none' : 'blur(20px) saturate(0.68)',
+          background: `linear-gradient(90deg, ${style.wash}e8 0%, ${style.wash}88 62%, transparent 100%)`,
           transition: 'background 0.7s ease',
         }}
       />
@@ -637,7 +640,7 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
         <>
           <div
             aria-hidden
-            className="hero-orb-a pointer-events-none absolute top-[-6%] right-[-14%] w-[34%] h-[42%] rounded-full opacity-25 blur-3xl"
+            className="hero-orb-a pointer-events-none absolute top-[2%] right-[-10%] w-[44%] h-[56%] rounded-full opacity-40 blur-3xl"
             style={{
               background: `radial-gradient(circle, #ffffff 0%, ${style.paper} 38%, transparent 70%)`,
               transition: 'background 0.7s ease',
@@ -688,7 +691,7 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
       />
 
       <div className="relative z-10 max-w-7xl mx-auto px-5 md:px-10 pt-6 pb-8 md:pt-16 md:pb-20 min-h-[inherit] flex flex-col justify-center">
-        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] gap-6 md:gap-8 lg:gap-12 md:items-center">
+        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.25fr)_minmax(0,0.72fr)] gap-6 md:gap-8 lg:gap-10 md:items-center">
           {/* Copy — headline first, brand second */}
           <div className="order-2 md:order-1 md:col-start-1 text-center md:text-left">
             <motion.p
@@ -828,7 +831,7 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
           </div>
 
           {/* 3D book — first on mobile so the hero reads as one composition */}
-          <div className="order-1 md:order-2 md:col-start-2 md:row-start-1 flex flex-col items-center justify-center pt-4 pb-2 md:py-0 md:pl-2">
+          <div className="order-1 md:order-2 md:col-start-2 md:row-start-1 flex flex-col items-center md:items-end justify-center pt-4 pb-2 md:py-0 md:pl-0 md:pr-2">
             <motion.div
               initial={reduced ? false : { y: 28, scale: 0.94 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -875,7 +878,7 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
         aria-hidden
         className="pointer-events-none absolute inset-0 z-[1]"
         style={{
-          background: `radial-gradient(120% 80% at 50% 42%, transparent 68%, ${style.wash}66 100%)`,
+          background: `radial-gradient(120% 80% at 50% 42%, transparent 58%, ${style.wash}99 100%)`,
         }}
       />
 

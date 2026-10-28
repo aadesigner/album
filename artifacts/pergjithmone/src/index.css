@@ -354,14 +354,14 @@
   0%, 100% { transform: translateY(0); }
   50%      { transform: translateY(-8px); }
 }
-/* Idle orbit — shallow, almost flat, spine still readable */
+/* Idle orbit — stay clearly yawed so the spine never disappears */
 @keyframes bookIdleYaw {
-  0%, 100% { transform: rotateY(-16deg) rotateX(3deg); }
-  50%      { transform: rotateY(-9deg) rotateX(2deg); }
+  0%, 100% { transform: rotateY(-32deg) rotateX(8deg); }
+  50%      { transform: rotateY(-26deg) rotateX(6deg); }
 }
 @keyframes bookIdleYawStarter {
-  0%, 100% { transform: rotateY(-12deg) rotateX(2deg); }
-  50%      { transform: rotateY(-6deg) rotateX(1deg); }
+  0%, 100% { transform: rotateY(-18deg) rotateX(4deg); }
+  50%      { transform: rotateY(-14deg) rotateX(3deg); }
 }
 @keyframes heroKenBurns {
   0%   { transform: scale(1.08) translate3d(-1.4%, 0.4%, 0); }
