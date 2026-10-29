@@ -63,6 +63,57 @@ export function clampSecurityNumber(key: keyof SecuritySettings, n: number): num
   return n;
 }
 
+const MIME_ALIASES: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  "image/jpg": "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  gif: "image/gif",
+  heic: "image/heic",
+  heif: "image/heic",
+  "image/heif": "image/heic",
+  avif: "image/avif",
+  tiff: "image/tiff",
+  tif: "image/tiff",
+  bmp: "image/bmp",
+};
+
+/**
+ * Admin Settings saves this field as a JSON array. The uploader used to
+ * split that string on commas, so `["image/jpeg", ...]` never matched
+ * `image/jpeg` and every real photo was rejected.
+ */
+export function parseAllowedUploadMimeTypes(raw: unknown): string[] {
+  let parts: string[] = [];
+  if (Array.isArray(raw)) {
+    parts = raw.map((v) => String(v ?? ""));
+  } else if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (!trimmed) return [...SECURITY_SETTINGS_DEFAULTS.allowedUploadMimeTypes];
+    if (trimmed.startsWith("[")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) parts = parsed.map((v) => String(v ?? ""));
+      } catch {
+        parts = trimmed.split(",");
+      }
+    } else {
+      parts = trimmed.split(",");
+    }
+  } else {
+    return [...SECURITY_SETTINGS_DEFAULTS.allowedUploadMimeTypes];
+  }
+
+  const out: string[] = [];
+  for (const part of parts) {
+    const token = part.trim().toLowerCase().replace(/^["']+|["']+$/g, "");
+    if (!token) continue;
+    out.push(MIME_ALIASES[token] || token);
+  }
+  return out.length > 0 ? [...new Set(out)] : [...SECURITY_SETTINGS_DEFAULTS.allowedUploadMimeTypes];
+}
+
 export const SECURITY_SETTINGS_KEY_MAP: Record<keyof SecuritySettings, string> = {
   rateLimitGeneralWindowMs: "rate_limit_general_window_ms",
   rateLimitGeneralMax: "rate_limit_general_max",

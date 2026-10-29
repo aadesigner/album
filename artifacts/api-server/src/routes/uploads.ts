@@ -6,6 +6,7 @@ import sharp from "sharp";
 import { logger } from "../lib/logger";
 import { getSecuritySettings } from "../lib/securitySettings";
 import { ensureDataDirs, uploadFilePathCandidates, uploadsDir } from "../lib/dataDir";
+import { sniffImageFormat } from "../lib/imageSniff";
 
 const router: IRouter = Router();
 
@@ -37,8 +38,8 @@ const upload = multer({
     const ext = path.extname(file.originalname || "").toLowerCase();
     const okMime = !mime || mime === "application/octet-stream" || mime.startsWith("image/");
     const okExt = [
-      "", ".jpg", ".jpeg", ".png", ".webp", ".gif",
-      ".heic", ".heif", ".avif", ".tif", ".tiff",
+      "", ".jpg", ".jpeg", ".jfif", ".png", ".webp", ".gif",
+      ".heic", ".heif", ".avif", ".tif", ".tiff", ".bmp",
     ].includes(ext);
     if (okMime || okExt) {
       cb(null, true);
@@ -73,10 +74,15 @@ const SHARP_FORMAT_TO_MIME: Record<string, string> = {
   heif: "image/heic",
   avif: "image/avif",
   tiff: "image/tiff",
+  bmp: "image/bmp",
 };
 
 /** Source formats we convert to JPEG/PNG for the editor and print PDF. */
 const CONVERTIBLE_FORMATS = new Set(Object.keys(SHARP_FORMAT_TO_MIME));
+/** These are photos. An admin MIME typo must never block them. */
+const ALWAYS_ACCEPT_FORMATS = new Set([
+  "jpeg", "png", "webp", "gif", "heif", "avif", "tiff", "bmp",
+]);
 
 // Uploaded photos only need to look good on screen while editing and be
 // sharp enough to print later; nothing in this app needs the original
@@ -150,9 +156,9 @@ router.post(
       return;
     }
 
-    // Real content-type sniffing: trust what sharp reads from the file's
-    // actual bytes, not the client-supplied MIME header, which is trivially
-    // spoofable (e.g. a renamed .exe sent with a Content-Type of image/png).
+    // Real content-type sniffing: trust file bytes, not the client MIME.
+    // Saving Settings used to JSON-encode the allowlist; splitting that
+    // string on commas made `image/jpeg` never match, so every photo failed.
     let detectedFormat: string | undefined;
     let detectedMime: string | undefined;
     try {
@@ -163,14 +169,28 @@ router.post(
       detectedFormat = undefined;
       detectedMime = undefined;
     }
+    if (!detectedFormat) {
+      try {
+        const head = Buffer.alloc(16);
+        const fd = fs.openSync(req.file.path, "r");
+        const n = fs.readSync(fd, head, 0, 16, 0);
+        fs.closeSync(fd);
+        detectedFormat = sniffImageFormat(head.subarray(0, n));
+        detectedMime = detectedFormat ? SHARP_FORMAT_TO_MIME[detectedFormat] : undefined;
+      } catch {
+        /* keep undefined */
+      }
+    }
     if (!detectedFormat || !CONVERTIBLE_FORMATS.has(detectedFormat) || !detectedMime) {
+      logger.warn(
+        { size: req.file.size, mime: req.file.mimetype, name: req.file.originalname, detectedFormat },
+        "Rejected upload: could not identify image bytes",
+      );
       fs.unlink(req.file.path, () => {});
       res.status(400).json({ error: "This file is not a valid or allowed image type." });
       return;
     }
 
-    // Admin allowlist applies to common web formats. Phone HEIC/AVIF/TIFF
-    // are converted to JPEG/PNG so they still get through.
     const convertedOutput = detectedFormat === "png" || detectedFormat === "gif"
       ? "image/png"
       : "image/jpeg";
@@ -178,7 +198,12 @@ router.post(
     const sourceAllowed = allow.includes(detectedMime)
       || (allow.includes("image/jpg") && detectedMime === "image/jpeg");
     const outputAllowed = allow.includes(convertedOutput) || allow.includes("image/jpg");
-    if (!sourceAllowed && !outputAllowed && !["heif", "avif", "tiff"].includes(detectedFormat)) {
+    if (
+      !ALWAYS_ACCEPT_FORMATS.has(detectedFormat)
+      && !sourceAllowed
+      && !outputAllowed
+    ) {
+      logger.warn({ detectedFormat, detectedMime, allow }, "Rejected upload: not in allowlist");
       fs.unlink(req.file.path, () => {});
       res.status(400).json({ error: "This file is not a valid or allowed image type." });
       return;

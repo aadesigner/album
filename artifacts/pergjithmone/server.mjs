@@ -81,6 +81,8 @@ const HOP_BY_HOP = new Set([
   "te",
   "trailer",
   "upgrade",
+  "transfer-encoding",
+  "expect",
 ]);
 
 /**

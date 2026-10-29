@@ -4,6 +4,7 @@ import {
   SECURITY_SETTINGS_DEFAULTS,
   SECURITY_SETTINGS_KEY_MAP,
   clampSecurityNumber,
+  parseAllowedUploadMimeTypes,
   type SecuritySettings,
 } from "./securitySettingsShared";
 
@@ -11,6 +12,7 @@ export {
   SECURITY_SETTINGS_DEFAULTS,
   SECURITY_SETTINGS_KEY_MAP,
   clampSecurityNumber,
+  parseAllowedUploadMimeTypes,
   type SecuritySettings,
 };
 
@@ -36,8 +38,7 @@ export async function getSecuritySettings(): Promise<SecuritySettings> {
       const raw = map[dbKey];
       if (raw === undefined || raw === "") continue;
       if (key === "allowedUploadMimeTypes") {
-        const list = raw.split(",").map((s) => s.trim()).filter(Boolean);
-        if (list.length > 0) data.allowedUploadMimeTypes = list;
+        data.allowedUploadMimeTypes = parseAllowedUploadMimeTypes(raw);
       } else {
         const n = parseInt(raw, 10);
         if (!Number.isFinite(n)) continue;

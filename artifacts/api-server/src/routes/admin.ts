@@ -20,6 +20,7 @@ import {
   SECURITY_SETTINGS_DEFAULTS,
   SECURITY_SETTINGS_KEY_MAP,
   invalidateSecuritySettingsCache,
+  parseAllowedUploadMimeTypes,
   type SecuritySettings,
 } from "../lib/securitySettings";
 import { OFFER_BAR_KEY_MAP, normalizeOfferBarWrite, readOfferBarSettings } from "../lib/offerBarSettings";
@@ -98,8 +99,7 @@ function readSecuritySettings(map: Record<string, string>): SecuritySettings {
     const raw = map[SECURITY_SETTINGS_KEY_MAP[key]];
     if (raw === undefined || raw === "") continue;
     if (key === "allowedUploadMimeTypes") {
-      const list = raw.split(",").map((s) => s.trim()).filter(Boolean);
-      if (list.length > 0) data.allowedUploadMimeTypes = list;
+      data.allowedUploadMimeTypes = parseAllowedUploadMimeTypes(raw);
     } else {
       const n = parseInt(raw, 10);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1213,7 +1213,9 @@ router.patch(
         const raw = req.body[jsKey];
         const offerValue = normalizeOfferBarWrite(jsKey, raw);
         let value: string;
-        if (offerValue !== null) value = offerValue;
+        if (jsKey === "allowedUploadMimeTypes") {
+          value = parseAllowedUploadMimeTypes(raw).join(", ");
+        } else if (offerValue !== null) value = offerValue;
         else if (typeof raw === "string") value = raw;
         else if (Array.isArray(raw) || (raw && typeof raw === "object")) value = JSON.stringify(raw);
         else value = String(raw);
