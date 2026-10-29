@@ -129,7 +129,7 @@ export function MobilePreviewFrame({
         paddingTop: 20,
         paddingBottom: 100,
         paddingLeft: 16,
-        paddingRight: inspectorOpen ? 'calc(min(22rem, calc(100vw - 24px)) + 28px)' : 16,
+        paddingRight: inspectorOpen ? 'calc(min(22rem, calc(100vw - 80px)) + 76px)' : 60,
       }}
     >
       <div className="flex flex-col items-center gap-3">

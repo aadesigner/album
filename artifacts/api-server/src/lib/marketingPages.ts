@@ -6,6 +6,7 @@ export const PAGE_SLUGS = [
   "about",
   "faq",
   "contact",
+  "album-ai",
 ] as const;
 
 export type PageSlug = (typeof PAGE_SLUGS)[number];

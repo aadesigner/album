@@ -1,3 +1,5 @@
+import { SAFE_IMAGE_NAME } from './acceptedImages';
+
 // Client-side photo compression — runs before any upload leaves the browser.
 //
 // Why: phone cameras routinely produce 8-20MB photos. Uploading those in full
@@ -25,7 +27,11 @@ function isLikelyImageFile(file: File): boolean {
   const type = String(file.type || '').toLowerCase();
   if (type.startsWith('image/')) return true;
   if (!type || type === 'application/octet-stream') return true;
-  return /\.(jpe?g|png|webp|gif|heic|heif|avif|tiff?)$/i.test(file.name || '');
+  return SAFE_IMAGE_NAME.test(file.name || '');
+}
+
+function fileLooksLike(file: File, mime: string, ext: RegExp): boolean {
+  return String(file.type || '').toLowerCase() === mime || ext.test(file.name || '');
 }
 
 export class ImageTooLargeError extends Error {
@@ -81,7 +87,9 @@ function canvasToBlob(canvas: HTMLCanvasElement, mime: string, quality?: number)
 export async function compressImageFile(file: File): Promise<File> {
   // Animated GIFs would be flattened to a single frame by a canvas re-encode —
   // leave them alone and let the size-limit check below gate them instead.
-  if (!isLikelyImageFile(file) || file.type === 'image/gif') {
+  const keepGif = fileLooksLike(file, 'image/gif', /\.gif$/i);
+  const keepPng = fileLooksLike(file, 'image/png', /\.png$/i);
+  if (!isLikelyImageFile(file) || keepGif) {
     if (file.size > HARD_LIMIT_BYTES) throw new ImageTooLargeError(file.size);
     return file;
   }
@@ -114,17 +122,23 @@ export async function compressImageFile(file: File): Promise<File> {
   ctx.drawImage(source as any, 0, 0, targetW, targetH);
   if ('close' in source) (source as ImageBitmap).close();
 
-  // PNGs with real transparency should stay PNG so we don't crush alpha to a
-  // flat color; everything else compresses far better as JPEG.
-  const hasAlpha = file.type === 'image/png' && (await pngHasAlpha(canvas, ctx));
-  const mime = hasAlpha ? 'image/png' : 'image/jpeg';
-  const ext = hasAlpha ? 'png' : 'jpg';
+  // Keep PNG as PNG (covers, logos, graphics). Photos without alpha become JPEG.
+  const hasAlpha = keepPng && (await pngHasAlpha(canvas, ctx));
+  let mime = keepPng || hasAlpha ? 'image/png' : 'image/jpeg';
+  let ext = keepPng || hasAlpha ? 'png' : 'jpg';
 
   let blob: Blob | null = null;
-  if (hasAlpha) {
-    // PNG quality isn't a simple 0-1 knob in the Canvas API — resizing alone
-    // (already done above) is the main lever here.
+  if (keepPng || hasAlpha) {
     blob = await canvasToBlob(canvas, mime);
+    // Huge opaque PNGs: fall back to JPEG so the 3MB cap still holds.
+    if (!hasAlpha && blob.size > HARD_LIMIT_BYTES) {
+      for (const q of QUALITY_STEPS) {
+        blob = await canvasToBlob(canvas, 'image/jpeg', q);
+        if (blob.size <= HARD_LIMIT_BYTES) break;
+      }
+      mime = 'image/jpeg';
+      ext = 'jpg';
+    }
   } else {
     for (const q of QUALITY_STEPS) {
       blob = await canvasToBlob(canvas, mime, q);

@@ -33,7 +33,14 @@ export const SECURITY_SETTINGS_DEFAULTS: SecuritySettings = {
   maxOrdersPerDay: 15,
   maxConcurrentPdfGenerations: 6,
   maxUploadFileSizeMb: 25,
-  allowedUploadMimeTypes: ["image/jpeg", "image/png", "image/webp", "image/gif"],
+  allowedUploadMimeTypes: [
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/gif",
+    "image/heic",
+    "image/avif",
+  ],
 };
 
 const SECURITY_NUMBER_FLOOR: Partial<Record<keyof SecuritySettings, number>> = {

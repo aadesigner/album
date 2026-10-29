@@ -77,6 +77,7 @@ import { isStrokeOnlyShape, shapePathForElement } from '@/lib/shapes';
 import { getEmptyInnerPageNumbers } from '@/lib/pageContent';
 import { PageThumb, DesignCatalogThumb } from '@/components/PageThumb';
 import { uploadErrorMessage, uploadImageToApi } from '@/lib/uploadImage';
+import { ACCEPT_SAFE_IMAGES } from '@/lib/acceptedImages';
 import { applyCoverBackground, coverBgMode, type CoverBgMode } from '@/lib/coverBackground';
 import { useEditorFontsReady, ensureEditorFonts, normalizeEditorFont, isEditorSingleCutFont } from '@/lib/editorFonts';
 import { FontPicker } from '@/components/FontPicker';
@@ -1856,7 +1857,7 @@ function InlinePhotoPicker({photos,onSelect,onUploadAndPlace,uploading,onClose,l
           )}
         </div>
 
-        <input ref={fileRef} type="file" accept="image/*,.heic,.heif,.avif" style={{display:'none'}}
+        <input ref={fileRef} type="file" accept={ACCEPT_SAFE_IMAGES} style={{display:'none'}}
           onChange={e=>{if(e.target.files?.[0]){onUploadAndPlace(e.target.files[0]);e.target.value='';}}}/>
       </div>
     </div>
@@ -2387,7 +2388,7 @@ function CoverBackgroundPanel({
 
       {uiMode === 'photo' && (
         <div className="space-y-2">
-          <input ref={fileRef} type="file" accept="image/*,.heic,.heif,.avif" className="hidden"
+          <input ref={fileRef} type="file" accept={ACCEPT_SAFE_IMAGES} className="hidden"
             onChange={e => {
               const f = e.target.files?.[0];
               if (f) onUploadPhoto(f);
@@ -2656,7 +2657,7 @@ function Sidebar({tab,onTab,photos,onUpload,uploading,onAddPhoto,onAddText,onLay
         )}
         {tab==='photos' && (
           <div className="overflow-y-auto flex-1 p-3 space-y-3">
-            <input ref={fileRef} type="file" accept="image/*,.heic,.heif,.avif" multiple className="hidden"
+            <input ref={fileRef} type="file" accept={ACCEPT_SAFE_IMAGES} multiple className="hidden"
               onChange={e=>{Array.from(e.target.files||[]).forEach(f=>onUpload(f));e.target.value='';}}/>
             <button onClick={()=>fileRef.current?.click()} disabled={uploading}
               className="w-full py-2.5 border-2 border-dashed border-neutral-300 rounded-xl text-xs text-neutral-500 hover:border-neutral-600 flex items-center justify-center gap-1.5 transition-colors disabled:opacity-60">
@@ -2795,7 +2796,7 @@ function MobileSheet({tab,show,onClose,photos,onUpload,uploading,onAddPhoto,onLa
             )}
             {tab==='photos' && (
               <div className="space-y-3">
-                <input ref={fileRef} type="file" accept="image/*,.heic,.heif,.avif" multiple className="hidden"
+                <input ref={fileRef} type="file" accept={ACCEPT_SAFE_IMAGES} multiple className="hidden"
                   onChange={e=>{Array.from(e.target.files||[]).forEach(f=>onUpload(f));e.target.value='';}}/>
                 <button onClick={()=>fileRef.current?.click()} disabled={uploading}
                   className="w-full py-3 border-2 border-dashed border-neutral-300 rounded-xl text-sm flex items-center justify-center gap-2 text-neutral-500 disabled:opacity-60">

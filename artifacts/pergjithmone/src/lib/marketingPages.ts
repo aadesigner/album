@@ -8,6 +8,7 @@ export const PAGE_SLUGS = [
   'about',
   'faq',
   'contact',
+  'album-ai',
 ] as const;
 
 export type PageSlug = (typeof PAGE_SLUGS)[number];
@@ -20,6 +21,7 @@ export const PAGE_META: Array<{ slug: PageSlug; label: string; path: string }> =
   { slug: 'about', label: 'About', path: '/rreth-nesh' },
   { slug: 'faq', label: 'FAQ', path: '/faq' },
   { slug: 'contact', label: 'Contact', path: '/kontakt' },
+  { slug: 'album-ai', label: 'AI Album', path: '/album-ai' },
 ];
 
 export function isPageSlug(raw: string): raw is PageSlug {

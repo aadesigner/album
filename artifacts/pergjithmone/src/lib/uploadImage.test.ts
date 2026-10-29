@@ -11,7 +11,7 @@ describe("uploadErrorMessage", () => {
 
   it("maps API rejections to a clear retry hint", () => {
     expect(uploadErrorMessage(new UploadFailedError("This file is not a valid or allowed image type.", 400), "sq"))
-      .toMatch(/JPG|HEIC/i);
+      .toMatch(/JPG|PNG|HEIC/i);
     expect(uploadErrorMessage(new UploadFailedError("Too many uploads, please slow down.", 429), "en"))
       .toMatch(/Too many uploads/i);
   });

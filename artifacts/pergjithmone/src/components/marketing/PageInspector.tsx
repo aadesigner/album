@@ -6,6 +6,7 @@ import { FontPicker } from '@/components/FontPicker';
 import { Input } from '@/components/ui/input';
 import { getAt, isBiText, isImgRef, type BiText, type ImgRef } from '@/lib/marketingPages';
 import { uploadErrorMessage, uploadImageToApi } from '@/lib/uploadImage';
+import { ACCEPT_SAFE_IMAGES } from '@/lib/acceptedImages';
 import { usePageEditor } from './PageEditorContext';
 
 export function PageInspector() {
@@ -193,7 +194,7 @@ function ImageFields({
         <Upload size={13} /> {uploading ? 'Uploading…' : 'Upload image'}
         <input
           type="file"
-          accept="image/*,.heic,.heif,.avif"
+          accept={ACCEPT_SAFE_IMAGES}
           className="hidden"
           disabled={uploading}
           onChange={(e) => {

@@ -19,6 +19,7 @@ import {
 } from '@/lib/designs';
 import { applyCoverBackground, coverBgMode, type CoverBgMode } from '@/lib/coverBackground';
 import { uploadErrorMessage, uploadImageToApi } from '@/lib/uploadImage';
+import { ACCEPT_SAFE_IMAGES } from '@/lib/acceptedImages';
 import { resolvePublicImageSrc } from '@/lib/categoryImages';
 import { useAuth } from '@/contexts/AuthContext';
 import { DesignCatalogThumb } from '@/components/PageThumb';
@@ -2140,9 +2141,9 @@ export default function AdminDesignStudio() {
                   {/* Tool strip */}
                   <div className="shrink-0 flex flex-wrap items-center justify-center gap-1 px-1.5 py-1.5"
                     style={{ background: ADMIN.card, borderTop: `1px solid ${ADMIN.line}` }}>
-                    <input ref={imageFileRef} type="file" accept="image/*,.heic,.heif,.avif" className="hidden"
+                    <input ref={imageFileRef} type="file" accept={ACCEPT_SAFE_IMAGES} className="hidden"
                       onChange={e => { const f = e.target.files?.[0]; if (f) void uploadAndReplaceImage(f); e.target.value = ''; }} />
-                    <input ref={bgFileRef} type="file" accept="image/*,.heic,.heif,.avif" className="hidden"
+                    <input ref={bgFileRef} type="file" accept={ACCEPT_SAFE_IMAGES} className="hidden"
                       onChange={e => { const f = e.target.files?.[0]; if (f) void uploadAndSetBgPhoto(f); e.target.value = ''; }} />
                     <button type="button" onClick={addText} disabled={uploading}
                       className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold disabled:opacity-50"

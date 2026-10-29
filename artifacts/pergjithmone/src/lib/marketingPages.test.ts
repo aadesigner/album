@@ -9,8 +9,10 @@ import { PAGE_DEFAULTS } from './marketingPages.defaults';
 describe('marketingPages helpers', () => {
   it('recognizes slugs and setting keys', () => {
     expect(isPageSlug('home')).toBe(true);
+    expect(isPageSlug('album-ai')).toBe(true);
     expect(isPageSlug('wizard')).toBe(false);
     expect(pageSettingKey('how-it-works')).toBe('page_content_how_it_works');
+    expect(pageSettingKey('album-ai')).toBe('page_content_album_ai');
   });
 
   it('getAt / setAt walk dotted paths', () => {
@@ -99,6 +101,7 @@ describe('marketingPages helpers', () => {
   });
 
   it('every page default document is within the save size cap', () => {
+    expect(PAGE_DEFAULTS['album-ai']).toBeTruthy();
     for (const [slug, doc] of Object.entries(PAGE_DEFAULTS)) {
       expect(() => stringifyPageContent(doc)).not.toThrow();
       expect(stringifyPageContent(doc).length).toBeLessThan(MAX_PAGE_JSON_CHARS);

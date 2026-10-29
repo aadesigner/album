@@ -90,7 +90,7 @@ const PNG_QUALITY = 82;
 
 async function compressUpload(
   filePath: string,
-  originalMimetype: string,
+  detectedFormat: string,
 ): Promise<{ finalPath: string; width: number; height: number }> {
   const dir = path.dirname(filePath);
   const base = path.basename(filePath, path.extname(filePath));
@@ -98,10 +98,24 @@ async function compressUpload(
 
   const metadata = await image.metadata();
   const hasAlpha = !!metadata.hasAlpha;
+  const format = detectedFormat || metadata.format || "jpeg";
 
-  // Keep transparency (PNG) as PNG; everything else becomes JPEG, which
-  // compresses photographic content far better than PNG/GIF/WEBP-lossless.
-  const outputExt = hasAlpha ? ".png" : ".jpg";
+  // Keep PNG / WebP / GIF as themselves. Convert HEIC/AVIF/TIFF/BMP to JPEG
+  // (or PNG when they have transparency).
+  let outputExt = ".jpg";
+  if (hasAlpha || format === "png") outputExt = ".png";
+  else if (format === "webp") outputExt = ".webp";
+  else if (format === "gif") outputExt = ".gif";
+  else if (format === "jpeg") outputExt = ".jpg";
+
+  if (format === "gif" && !hasAlpha) {
+    return {
+      finalPath: filePath,
+      width: metadata.width || 0,
+      height: metadata.height || 0,
+    };
+  }
+
   const outputPath = path.join(dir, `${base}${outputExt}`);
   const tmpPath = `${outputPath}.tmp`;
 
@@ -111,9 +125,13 @@ async function compressUpload(
     fit: "inside",
     withoutEnlargement: true,
   });
-  pipeline = hasAlpha
-    ? pipeline.png({ quality: PNG_QUALITY, compressionLevel: 9 })
-    : pipeline.jpeg({ quality: JPEG_QUALITY, mozjpeg: true });
+  if (outputExt === ".png") {
+    pipeline = pipeline.png({ quality: PNG_QUALITY, compressionLevel: 9 });
+  } else if (outputExt === ".webp") {
+    pipeline = pipeline.webp({ quality: JPEG_QUALITY });
+  } else {
+    pipeline = pipeline.jpeg({ quality: JPEG_QUALITY, mozjpeg: true });
+  }
 
   const info = await pipeline.toFile(tmpPath);
 
@@ -190,7 +208,7 @@ router.post(
     try {
       const { finalPath, width, height } = await compressUpload(
         req.file.path,
-        detectedMime,
+        detectedFormat,
       );
       const filename = path.basename(finalPath);
       res.json({
@@ -204,7 +222,7 @@ router.post(
       if (detectedFormat === "heif" || detectedFormat === "avif") {
         fs.unlink(req.file.path, () => {});
         res.status(400).json({
-          error: "This photo format needs conversion. Please try JPG or PNG.",
+          error: "This photo format needs conversion. Please try JPG, PNG, or WebP.",
         });
         return;
       }

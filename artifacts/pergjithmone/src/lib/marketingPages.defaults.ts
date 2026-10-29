@@ -398,4 +398,24 @@ export const PAGE_DEFAULTS: Record<PageSlug, Record<string, unknown>> = {
       send: bi('Dërgo Mesazhin', 'Send Message'),
     },
   },
+
+  'album-ai': {
+    seo: {
+      title: bi('Album me AI — Përgjithmonë', 'AI Album — Përgjithmonë'),
+      description: bi('Shtoni 25–40 foto. Ne i bëjmë albumin — kopertinë e fortë, letër mat 200g, hapje e sheshtë. Pastaj e rregulloni ju, para se t’i printojmë.', 'Upload 25–40 photos. We turn them into a hardcover album on matte 200g paper with lay-flat spreads — then you refine it before we print.'),
+    },
+    hero: {
+      eyebrow: bi('fotot tuaja, në album', 'your photos, in an album'),
+      headline: bi('Shtoni fotot. Albumi bëhet vetë.', 'Drop the photos. The album starts itself.'),
+      sub: bi('Zgjidhni rastin. Shtoni 25–40 foto. Ne i vendosim në faqe — pastaj i rregulloni ju, para se t’i printojmë.', 'Pick the memory. Lay 25–40 photos. We place them on the pages — then you touch them, before we print.'),
+      cta: bi('Shtoni fotot këtu', 'Drop photos here'),
+      secondary: bi('Ose bëjeni vetë', 'Or design it yourself'),
+      note: bi('25–40 foto  ·  pastaj i rregulloni  ·  letër 200g', '25–40 photos  ·  then you refine them  ·  200g paper'),
+    },
+    story: {
+      kicker: bi('nga rrëmuja, te rregulli', 'from the pile, into order'),
+      title: bi('Në telefon janë të gjitha. Në album, vetëm ato që duhen.', 'The gallery is crowded. The album can breathe.'),
+      body: bi('Nuk i ngjisim të gjitha në një faqe. E para bëhet kopertina. Të tjerat gjejnë vendin e tyre — me ajër, jo të ngjeshura.', 'We do not glue every photo onto one page. The first becomes the cover. The rest find a place — with air, not collage.'),
+    },
+  },
 };

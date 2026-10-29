@@ -18,10 +18,14 @@ import { resolveDesignCategory, resolveDesignCategoryFromQuery } from '@/lib/des
 import { DESIGNS } from '@/lib/designs';
 import { generateAlbum, suggestInnerPageCount } from '@/lib/albumGenerator';
 import { uploadImageToApi } from '@/lib/uploadImage';
+import { ACCEPT_SAFE_IMAGES } from '@/lib/acceptedImages';
 import { pendingBooksLimitMessage } from '@/lib/projectErrors';
 import { SizeCard } from './Wizard';
 import { CategoryCoverImg, coverPressable } from '@/components/CategoryCoverImg';
 import { DEFAULT_CATEGORIES } from '@/lib/categoryImages';
+import { usePageFields } from '@/components/marketing/PageContent';
+import { LivePageRoot } from '@/components/marketing/LivePageRoot';
+import { Editable, EditableSection } from '@/components/marketing/Editable';
 import {
   LIFE_PHOTOS, STAGE_PHOTOS,
   WEDDING_PHOTOS, TRAVEL_PHOTOS, FAMILY_PHOTOS, FRIEND_PHOTOS, PARTY_PHOTOS,
@@ -163,8 +167,9 @@ function Polaroid({
   );
 }
 
-function AlbumHero({ lang }: { lang: 'sq' | 'en' }) {
+function AlbumHero() {
   const reduced = usePrefersReducedMotion();
+  const p = usePageFields();
   return (
     <section className="relative overflow-hidden text-[#f3eee7]" style={{ background: DARK }}>
       <AiAtmosphere photo={LIFE_PHOTOS[0]} reduced={reduced} />
@@ -183,30 +188,26 @@ function AlbumHero({ lang }: { lang: 'sq' | 'en' }) {
       <Polaroid src={STAGE_PHOTOS[4]} className="bottom-[22%] left-[8%] sm:left-[14%] w-[56px] sm:w-[72px]" tilt="-6deg" delay="0.4s" reduced={reduced} />
       <Polaroid src={STAGE_PHOTOS[5]} className="bottom-[20%] right-[8%] sm:right-[15%] w-[58px] sm:w-[76px]" tilt="8deg" delay="1.4s" reduced={reduced} />
 
-      <div className="relative z-10 max-w-3xl mx-auto px-5 pt-16 pb-12 sm:pt-20 md:pt-24 md:pb-16 text-center">
+      <EditableSection path="hero" className="relative z-10 max-w-3xl mx-auto px-5 pt-16 pb-12 sm:pt-20 md:pt-24 md:pb-16 text-center">
         <motion.p
           initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
           className="text-[10px] sm:text-[11px] uppercase tracking-[0.38em] text-white/40 mb-6"
         >
-          {L(lang, 'fotot tuaja, në album', 'your photos, in an album')}
+          <Editable path="hero.eyebrow">{p.txt('hero.eyebrow')}</Editable>
         </motion.p>
         <motion.h1
           initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.06, duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
           className="font-serif text-[clamp(2.15rem,6.4vw,4.1rem)] font-medium leading-[1.08] mb-5"
         >
-          {L(lang, 'Shtoni fotot. Albumi bëhet vetë.', 'Drop the photos. The album starts itself.')}
+          <Editable path="hero.headline">{p.txt('hero.headline')}</Editable>
         </motion.h1>
         <motion.p
           initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.14 }}
           className="text-white/55 text-[15px] md:text-[16px] leading-relaxed max-w-lg mx-auto mb-8"
         >
-          {L(
-            lang,
-            `Zgjidhni rastin. Shtoni ${MIN_PHOTOS}–${MAX_PHOTOS} foto. Ne i vendosim në faqe — pastaj i rregulloni ju, para se t’i printojmë.`,
-            `Pick the memory. Lay ${MIN_PHOTOS}–${MAX_PHOTOS} photos. We place them on the pages — then you touch them, before we print.`,
-          )}
+          <Editable path="hero.sub">{p.txt('hero.sub')}</Editable>
         </motion.p>
         <motion.div
           initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
@@ -217,19 +218,19 @@ function AlbumHero({ lang }: { lang: 'sq' | 'en' }) {
             href="#fillo"
             className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full text-[13px] font-semibold bg-white text-[#110e0c] hover:bg-[#f3eee7] transition-colors"
           >
-            {L(lang, 'Shtoni fotot këtu', 'Drop photos here')}
+            <Editable path="hero.cta">{p.txt('hero.cta')}</Editable>
             <ArrowRight size={14} />
           </a>
           <Link href="/krijo">
             <span className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full text-[13px] font-semibold border border-white/20 text-white/80 hover:bg-white/5 transition-colors">
-              {L(lang, 'Ose bëjeni vetë', 'Or design it yourself')}
+              <Editable path="hero.secondary">{p.txt('hero.secondary')}</Editable>
             </span>
           </Link>
         </motion.div>
         <p className="mt-8 text-[10px] uppercase tracking-[0.22em] text-white/30">
-          {L(lang, `${MIN_PHOTOS}–${MAX_PHOTOS} foto  ·  pastaj i rregulloni  ·  letër 200g`, `${MIN_PHOTOS}–${MAX_PHOTOS} photos  ·  then you refine them  ·  200g paper`)}
+          <Editable path="hero.note">{p.txt('hero.note')}</Editable>
         </p>
-      </div>
+      </EditableSection>
       <FilmMarquee />
     </section>
   );
@@ -268,6 +269,7 @@ function PhotoRiver() {
 }
 
 function ChaosToOrder({ lang }: { lang: 'sq' | 'en' }) {
+  const p = usePageFields();
   const pile = [
     WEDDING_PHOTOS[0], TRAVEL_PHOTOS[1], FAMILY_PHOTOS[1], FRIEND_PHOTOS[0],
     WEDDING_PHOTOS[4], PARTY_PHOTOS[0], TRAVEL_PHOTOS[3], FAMILY_PHOTOS[2],
@@ -278,21 +280,17 @@ function ChaosToOrder({ lang }: { lang: 'sq' | 'en' }) {
       <AiAtmosphere photo={LIFE_PHOTOS[6]} />
       <div className="relative z-[1] max-w-6xl mx-auto px-5 md:px-8">
         <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-center">
-          <div>
+          <EditableSection path="story">
             <p className="text-[11px] uppercase tracking-[0.3em] text-white/35 mb-3">
-              {L(lang, 'nga rrëmuja, te rregulli', 'from the pile, into order')}
+              <Editable path="story.kicker">{p.txt('story.kicker')}</Editable>
             </p>
             <h2 className="font-serif text-[clamp(1.85rem,3.4vw,2.8rem)] font-medium leading-[1.12] text-[#f3eee7] mb-4">
-              {L(lang, 'Në telefon janë të gjitha. Në album, vetëm ato që duhen.', 'The gallery is crowded. The album can breathe.')}
+              <Editable path="story.title">{p.txt('story.title')}</Editable>
             </h2>
             <p className="text-white/50 text-[15px] leading-relaxed max-w-md">
-              {L(
-                lang,
-                'Nuk i ngjisim të gjitha në një faqe. E para bëhet kopertina. Të tjerat gjejnë vendin e tyre — me ajër, jo të ngjeshura.',
-                'We do not glue every photo onto one page. The first becomes the cover. The rest find a place — with air, not collage.',
-              )}
+              <Editable path="story.body">{p.txt('story.body')}</Editable>
             </p>
-          </div>
+          </EditableSection>
           <div className="grid sm:grid-cols-2 gap-6 sm:gap-8">
             <figure className="m-0" aria-hidden>
               <div className="relative aspect-[4/5]">
@@ -562,7 +560,16 @@ function WizardRail({ step, lang }: { step: 1 | 2 | 3; lang: 'sq' | 'en' }) {
 }
 
 export default function AlbumAI() {
+  return (
+    <LivePageRoot slug="album-ai">
+      <AlbumAIView />
+    </LivePageRoot>
+  );
+}
+
+function AlbumAIView() {
   const { t, lang } = useLanguage();
+  const p = usePageFields();
   const { isAuthenticated, getToken } = useAuth();
   const [, setLocation] = useLocation();
 
@@ -910,17 +917,14 @@ export default function AlbumAI() {
   return (
     <MarketingLayout>
       <SEOMeta
-        title={{ sq: 'Album me AI — Përgjithmonë', en: 'AI Album — Përgjithmonë' }}
-        description={{
-          sq: 'Shtoni 25–40 foto. Ne i bëjmë albumin — kopertinë e fortë, letër mat 200g, hapje e sheshtë. Pastaj e rregulloni ju, para se t’i printojmë.',
-          en: 'Upload 25–40 photos. We turn them into a hardcover album on matte 200g paper with lay-flat spreads — then you refine it before we print.',
-        }}
+        title={p.txtAll('seo.title')}
+        description={p.txtAll('seo.description')}
         path="/album-ai"
       />
 
       <div style={{ background: PAPER }} className="min-h-[calc(100dvh-48px)] md:min-h-[calc(100dvh-54px)]">
 
-        <AlbumHero lang={lang} />
+        <AlbumHero />
 
         {!bookCreationEnabled && (
           <div className="max-w-3xl mx-auto px-4 mb-6">
@@ -1269,7 +1273,7 @@ export default function AlbumAI() {
                   }`}
                 >
                   <input
-                    ref={fileInputRef} type="file" accept="image/*,.heic,.heif,.avif" multiple className="hidden"
+                    ref={fileInputRef} type="file" accept={ACCEPT_SAFE_IMAGES} multiple className="hidden"
                     disabled={!bookCreationEnabled}
                     onChange={e => { if (e.target.files) addFiles(e.target.files); e.target.value = ''; }}
                   />

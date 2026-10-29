@@ -698,7 +698,7 @@ export default function AdminSettings() {
                   <FormField control={form.control} name="allowedUploadMimeTypes" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Allowed image types</FormLabel>
-                      <FormControl><Input {...field} placeholder="image/jpeg, image/png, image/webp" /></FormControl>
+                      <FormControl><Input {...field} placeholder="image/jpeg, image/png, image/webp, image/gif" /></FormControl>
                     </FormItem>
                   )} />
                 </div>

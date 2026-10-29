@@ -61,8 +61,8 @@ export function uploadErrorMessage(err: unknown, lang: 'sq' | 'en'): string {
   }
   if (/not a valid or allowed|only image/i.test(raw)) {
     return lang === 'sq'
-      ? 'Ky format fotoje nuk u pranua. Provoni JPG, PNG ose HEIC nga telefoni.'
-      : 'That photo format was rejected. Try JPG, PNG, or a phone HEIC.';
+      ? 'Ky format fotoje nuk u pranua. Provoni JPG, PNG, WebP, GIF ose HEIC nga telefoni.'
+      : 'That photo format was rejected. Try JPG, PNG, WebP, GIF, or a phone HEIC.';
   }
   if (/too large|exceeds the maximum/i.test(raw)) {
     return lang === 'sq'
@@ -78,6 +78,6 @@ export function uploadErrorMessage(err: unknown, lang: 'sq' | 'en'): string {
       : 'Upload timed out. Try a smaller photo or check your connection.';
   }
   return lang === 'sq'
-    ? 'Ngarkimi dështoi. Provoni përsëri ose një foto tjetër (JPG / PNG).'
-    : 'Upload failed. Try again or pick another photo (JPG / PNG).';
+    ? 'Ngarkimi dështoi. Provoni përsëri ose një foto tjetër (JPG, PNG, WebP).'
+    : 'Upload failed. Try again or pick another photo (JPG, PNG, WebP).';
 }

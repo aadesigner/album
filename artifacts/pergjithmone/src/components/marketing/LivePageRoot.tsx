@@ -58,7 +58,7 @@ export function LivePageRoot({
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const [enabled, setEnabled] = useState(isLiveAdminEdit);
-  const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
   const [preview, setPreview] = useState<'desktop' | 'mobile'>('desktop');
 
   const { data, isFetched } = useQuery({
@@ -109,6 +109,41 @@ export function LivePageRoot({
   return page;
 }
 
+function ChromeIcon({
+  title,
+  onClick,
+  disabled,
+  active,
+  accent,
+  children,
+}: {
+  title: string;
+  onClick?: () => void;
+  disabled?: boolean;
+  active?: boolean;
+  accent?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-label={title}
+      disabled={disabled}
+      onClick={onClick}
+      className="relative inline-flex items-center justify-center rounded-full disabled:opacity-35"
+      style={{
+        width: 36,
+        height: 36,
+        background: accent ? '#C45A78' : active ? 'rgba(255,255,255,0.16)' : 'transparent',
+        color: '#f7f5f2',
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
 function AdminModeChrome({
   slug,
   enabled,
@@ -135,16 +170,8 @@ function AdminModeChrome({
   const meta = PAGE_META.find((p) => p.slug === slug);
 
   useEffect(() => {
-    // Extra height lives on the dark footer (see --admin-chrome-offset), not on
-    // body — body padding was showing as a cream strip below the site.
-    document.documentElement.style.setProperty(
-      '--admin-chrome-offset',
-      enabled ? '84px' : '72px',
-    );
-    return () => {
-      document.documentElement.style.removeProperty('--admin-chrome-offset');
-    };
-  }, [enabled]);
+    document.documentElement.style.removeProperty('--admin-chrome-offset');
+  }, []);
 
   useEffect(() => {
     if (!editor?.dirty) return;
@@ -255,6 +282,18 @@ function AdminModeChrome({
 
   const sq = lang === 'sq';
 
+  const railStyle: React.CSSProperties = {
+    position: 'fixed',
+    right: 12,
+    top: '46%',
+    transform: 'translateY(-50%)',
+    zIndex: 80,
+    background: '#1a1a1a',
+    border: '1px solid rgba(255,255,255,0.1)',
+    color: '#f7f5f2',
+    boxShadow: '0 10px 28px rgba(0,0,0,0.28)',
+  };
+
   const bar = (
     <div data-admin-chrome className="contents">
       {enabled && inspectorOpen && editor && (
@@ -262,9 +301,9 @@ function AdminModeChrome({
           className="fixed z-[70] overflow-y-auto border shadow-xl"
           style={{
             top: 12,
-            right: 12,
-            bottom: 84,
-            width: 'min(22rem, calc(100vw - 24px))',
+            right: 60,
+            bottom: 12,
+            width: 'min(22rem, calc(100vw - 80px))',
             borderColor: ADMIN.line,
             background: ADMIN.card,
             borderRadius: 16,
@@ -289,158 +328,97 @@ function AdminModeChrome({
         </aside>
       )}
 
-      <div
-        className="fixed inset-x-0 bottom-0 z-[80] flex justify-center pointer-events-none"
-        style={{ padding: '0 12px 12px' }}
-      >
-        <div
-          className="pointer-events-auto w-full max-w-4xl rounded-2xl border shadow-lg px-3 py-2.5 flex flex-wrap items-center gap-2"
-          style={{
-            background: '#1a1a1a',
-            borderColor: 'rgba(255,255,255,0.08)',
-            color: '#f7f5f2',
-          }}
+      {!enabled ? (
+        <button
+          type="button"
+          onClick={() => onEnabledChange(true)}
+          className="inline-flex items-center gap-1.5 rounded-full pl-2.5 pr-3"
+          style={{ ...railStyle, height: 40 }}
+          title={sq ? 'Aktivizo editimin' : 'Enable admin mode'}
+          aria-label={sq ? 'Aktivizo editimin' : 'Enable admin mode'}
         >
-          {!enabled ? (
-            <>
+          <Pencil size={14} />
+          <span className="text-[11px] font-semibold tracking-wide">{sq ? 'Edito' : 'Edit'}</span>
+        </button>
+      ) : (
+        <div
+          className="flex flex-col items-center gap-0.5 p-1 rounded-full"
+          style={railStyle}
+          role="toolbar"
+          aria-label={sq ? 'Redaktimi i faqes' : 'Page editing'}
+        >
+          <ChromeIcon
+            title={editor?.dirty ? (sq ? 'Po redakton — e paruajtur' : 'Editing — unsaved') : (sq ? 'Po redakton' : 'Editing')}
+            active
+          >
+            <Pencil size={13} />
+            {editor?.dirty && (
               <span
-                className="inline-flex items-center justify-center rounded-full shrink-0"
-                style={{ width: 28, height: 28, background: 'rgba(255,255,255,0.1)' }}
-              >
-                <Pencil size={13} />
-              </span>
-              <p className="text-[13px] font-medium flex-1 min-w-[12rem]">
-                {sq ? 'Je i kyçur si admin. Aktivizo editimin e kësaj faqeje.' : 'Signed in as admin. Enable editing on this page.'}
-              </p>
-              <button
-                type="button"
-                onClick={() => onEnabledChange(true)}
-                className="text-[12px] font-semibold rounded-full px-3.5 py-1.5"
-                style={{ background: '#C45A78', color: '#fff' }}
-              >
-                {sq ? 'Aktivizo editimin' : 'Enable admin mode'}
-              </button>
-            </>
-          ) : (
-            <>
-              <span
-                className="inline-flex items-center justify-center rounded-full shrink-0"
-                style={{ width: 28, height: 28, background: 'rgba(196,90,120,0.25)' }}
-              >
-                <Pencil size={13} />
-              </span>
-              <p className="text-[13px] font-medium min-w-0">
-                {sq ? 'Po redakton' : 'Editing'}{' '}
-                <span style={{ color: '#E8C4CE' }}>{meta?.label}</span>
-                {editor?.dirty && (
-                  <span className="ml-2 text-[11px] uppercase tracking-wide" style={{ color: '#E8C4CE' }}>
-                    {sq ? 'e paruajtur' : 'unsaved'}
-                  </span>
-                )}
-              </p>
-              <div className="flex-1" />
-              <div
-                className="inline-flex rounded-full p-0.5"
-                style={{ background: 'rgba(255,255,255,0.08)' }}
-                role="group"
-                aria-label={sq ? 'Pamja' : 'Preview'}
-              >
-                <button
-                  type="button"
-                  onClick={() => onPreviewChange('desktop')}
-                  className="inline-flex items-center gap-1 text-[12px] font-semibold rounded-full px-2.5 py-1.5"
-                  style={{
-                    background: preview === 'desktop' ? 'rgba(255,255,255,0.16)' : 'transparent',
-                    color: '#f7f5f2',
-                  }}
-                  title={sq ? 'Pamja desktop' : 'Desktop view'}
-                >
-                  <Monitor size={13} />
-                  <span className="hidden sm:inline">Desktop</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onPreviewChange('mobile')}
-                  className="inline-flex items-center gap-1 text-[12px] font-semibold rounded-full px-2.5 py-1.5"
-                  style={{
-                    background: preview === 'mobile' ? 'rgba(255,255,255,0.16)' : 'transparent',
-                    color: '#f7f5f2',
-                  }}
-                  title={sq ? 'Pamja mobile' : 'Mobile view'}
-                >
-                  <Smartphone size={13} />
-                  <span className="hidden sm:inline">Mobile</span>
-                </button>
-              </div>
-              <button
-                type="button"
-                onClick={() => editor?.undo()}
-                disabled={!editor?.canUndo}
-                className="inline-flex items-center gap-1 text-[12px] font-semibold rounded-full px-2.5 py-1.5 disabled:opacity-40"
-                style={{ color: '#d4d0cb' }}
-                title={sq ? 'Kthe 1 hap (deri në 5)' : 'Undo 1 step (up to 5)'}
-              >
-                <Undo2 size={13} />
-                {editor?.undoCount ? editor.undoCount : ''}
-              </button>
-              <button
-                type="button"
-                onClick={() => editor?.redo()}
-                disabled={!editor?.canRedo}
-                className="inline-flex items-center gap-1 text-[12px] font-semibold rounded-full px-2.5 py-1.5 disabled:opacity-40"
-                style={{ color: '#d4d0cb' }}
-                title={sq ? 'Ribëj 1 hap (deri në 5)' : 'Redo 1 step (up to 5)'}
-              >
-                <Redo2 size={13} />
-                {editor?.redoCount ? editor.redoCount : ''}
-              </button>
-              <button
-                type="button"
-                onClick={() => onInspectorOpenChange(!inspectorOpen)}
-                className="inline-flex items-center gap-1 text-[12px] font-semibold rounded-full px-2.5 py-1.5"
-                style={{ background: inspectorOpen ? 'rgba(255,255,255,0.14)' : 'transparent', color: '#f7f5f2' }}
-              >
-                <PanelRight size={13} />
-                {sq ? 'Fushat' : 'Fields'}
-              </button>
-              <button
-                type="button"
-                onClick={discard}
-                disabled={saving || !editor}
-                className="inline-flex items-center gap-1 text-[12px] font-semibold rounded-full px-2.5 py-1.5 disabled:opacity-40"
-                style={{ color: '#d4d0cb' }}
-              >
-                <RotateCcw size={12} />
-                {sq ? 'Anulo' : 'Discard'}
-              </button>
-              <button
-                type="button"
-                onClick={save}
-                disabled={saving || !editor || !editor.dirty}
-                className="inline-flex items-center gap-1 text-[12px] font-semibold rounded-full px-3 py-1.5 disabled:opacity-40"
-                style={{ background: '#C45A78', color: '#fff' }}
-              >
-                {saving ? <Loader2 size={12} className="animate-spin" /> : savedFlash ? <Check size={12} /> : <Save size={12} />}
-                {savedFlash ? (sq ? 'U ruajt' : 'Saved') : (sq ? 'Ruaj' : 'Save')}
-              </button>
-              <button
-                type="button"
-                onClick={exit}
-                className="inline-flex items-center gap-1 text-[12px] font-semibold rounded-full px-2.5 py-1.5"
-                style={{ color: '#d4d0cb' }}
-              >
-                <X size={13} />
-                {sq ? 'Dil' : 'Exit'}
-              </button>
-            </>
-          )}
+                className="absolute top-1 right-1 rounded-full"
+                style={{ width: 6, height: 6, background: '#C45A78' }}
+              />
+            )}
+          </ChromeIcon>
+          <ChromeIcon
+            title={sq ? 'Pamja desktop' : 'Desktop view'}
+            onClick={() => onPreviewChange('desktop')}
+            active={preview === 'desktop'}
+          >
+            <Monitor size={13} />
+          </ChromeIcon>
+          <ChromeIcon
+            title={sq ? 'Pamja mobile' : 'Mobile view'}
+            onClick={() => onPreviewChange('mobile')}
+            active={preview === 'mobile'}
+          >
+            <Smartphone size={13} />
+          </ChromeIcon>
+          <ChromeIcon
+            title={sq ? 'Kthe 1 hap' : 'Undo'}
+            onClick={() => editor?.undo()}
+            disabled={!editor?.canUndo}
+          >
+            <Undo2 size={13} />
+          </ChromeIcon>
+          <ChromeIcon
+            title={sq ? 'Ribëj 1 hap' : 'Redo'}
+            onClick={() => editor?.redo()}
+            disabled={!editor?.canRedo}
+          >
+            <Redo2 size={13} />
+          </ChromeIcon>
+          <ChromeIcon
+            title={sq ? 'Fushat' : 'Fields'}
+            onClick={() => onInspectorOpenChange(!inspectorOpen)}
+            active={inspectorOpen}
+          >
+            <PanelRight size={13} />
+          </ChromeIcon>
+          <ChromeIcon
+            title={sq ? 'Anulo' : 'Discard'}
+            onClick={discard}
+            disabled={saving || !editor}
+          >
+            <RotateCcw size={12} />
+          </ChromeIcon>
+          <ChromeIcon
+            title={savedFlash ? (sq ? 'U ruajt' : 'Saved') : (sq ? 'Ruaj' : 'Save')}
+            onClick={save}
+            disabled={saving || !editor || !editor.dirty}
+            accent
+          >
+            {saving ? <Loader2 size={12} className="animate-spin" /> : savedFlash ? <Check size={12} /> : <Save size={12} />}
+          </ChromeIcon>
+          <ChromeIcon title={sq ? 'Dil' : 'Exit'} onClick={exit}>
+            <X size={13} />
+          </ChromeIcon>
         </div>
-      </div>
+      )}
 
       {saveError && (
         <div
-          className="fixed left-1/2 z-[81] -translate-x-1/2 flex items-center gap-2 rounded-xl px-3 py-2 text-[12px] shadow-lg"
-          style={{ bottom: 88, background: '#FDECEC', color: '#9B1C1C' }}
+          className="fixed z-[81] flex items-center gap-2 rounded-xl px-3 py-2 text-[12px] shadow-lg max-w-[16rem]"
+          style={{ right: 60, top: '46%', transform: 'translateY(-50%)', background: '#FDECEC', color: '#9B1C1C' }}
         >
           <AlertTriangle size={13} /> {saveError}
         </div>

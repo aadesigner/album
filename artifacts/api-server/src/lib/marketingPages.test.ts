@@ -13,8 +13,10 @@ import {
 describe("marketingPages", () => {
   it("maps slugs to setting keys", () => {
     expect(isPageSlug("home")).toBe(true);
+    expect(isPageSlug("album-ai")).toBe(true);
     expect(isPageSlug("editor")).toBe(false);
     expect(pageSettingKey("how-it-works")).toBe("page_content_how_it_works");
+    expect(pageSettingKey("album-ai")).toBe("page_content_album_ai");
   });
 
   it("sanitizes and parses stored JSON", () => {

@@ -3,6 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Upload, X, Loader2 } from 'lucide-react';
 import { uploadErrorMessage, uploadImageToApi } from '@/lib/uploadImage';
 import { resolvePublicImageSrc } from '@/lib/categoryImages';
+import { ACCEPT_SAFE_IMAGES } from '@/lib/acceptedImages';
 
 /**
  * Cover-image uploader for admin forms.
@@ -63,7 +64,7 @@ export function ImageUploadInput({
       <input
         ref={inputRef}
         type="file"
-        accept="image/*,.heic,.heif,.avif"
+        accept={ACCEPT_SAFE_IMAGES}
         className="hidden"
         onChange={e => {
           const file = e.target.files?.[0];
