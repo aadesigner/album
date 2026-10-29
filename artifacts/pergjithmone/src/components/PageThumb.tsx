@@ -32,7 +32,7 @@ export const PageThumb = React.memo(function PageThumb({
   width: number;
   height: number;
   canvasH?: number;
-  /** `width` = scale by width only (may letterbox). `cover` = fill the box. */
+  /** `width` = contain the full page in the box. `cover` = fill the box (may crop). */
   fit?: 'width' | 'cover';
   /** Overrides the default paper fill (use cover color for 3D books). */
   background?: string;
@@ -53,11 +53,13 @@ export const PageThumb = React.memo(function PageThumb({
 
   const scaleW = width / DESIGN_W;
   const scaleH = height / Math.max(1, canvasH);
-  const scale = fit === 'cover' ? Math.max(scaleW, scaleH) : scaleW;
+  // `width` used to scale only by width, so a 1px-short box cropped names/dates
+  // at the cover edge. Contain (min) keeps the full builder canvas in view.
+  const scale = fit === 'cover' ? Math.max(scaleW, scaleH) : Math.min(scaleW, scaleH);
   const scaledW = DESIGN_W * scale;
   const scaledH = canvasH * scale;
-  const ox = fit === 'cover' ? (width - scaledW) / 2 : 0;
-  const oy = fit === 'cover' ? (height - scaledH) / 2 : 0;
+  const ox = (width - scaledW) / 2;
+  const oy = (height - scaledH) / 2;
 
   return (
     <div
@@ -133,10 +135,15 @@ export const PageThumb = React.memo(function PageThumb({
           }
           if (el.type === 'text') {
             const face = thumbFontStyle(el.fontFamily, el.fontStyle);
+            const vAlign = el.verticalAlign || 'top';
             return (
               <div key={key} style={{
                 position: 'absolute', left: el.x, top: el.y, width: el.w,
-                height: Math.max(el.h, 8), overflow: 'hidden',
+                height: Math.max(el.h, 8),
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: vAlign === 'middle' ? 'center' : vAlign === 'bottom' ? 'flex-end' : 'flex-start',
+                overflow: 'visible',
                 fontSize: el.fontSize || 18,
                 fontFamily: thumbFontFamily(el.fontFamily),
                 fontStyle: face.fontStyle,
@@ -146,6 +153,7 @@ export const PageThumb = React.memo(function PageThumb({
                 lineHeight: el.lineHeight ?? 1.2,
                 letterSpacing: el.letterSpacing ?? 0,
                 whiteSpace: 'pre-wrap',
+                overflowWrap: 'break-word',
                 padding: 6,
                 boxSizing: 'border-box',
                 // Hold briefly for webfonts, then paint anyway — fonts.ready

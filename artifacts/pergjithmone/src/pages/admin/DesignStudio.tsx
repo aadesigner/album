@@ -749,7 +749,7 @@ const StudioText = React.memo(function StudioText({ el, onSelect, onChange, shap
         fontStyle={studioFontStyle(el.fontFamily, el.fontStyle)}
         letterSpacing={el.letterSpacing || 0}
         lineHeight={el.lineHeight ?? 1.2}
-        padding={4}
+        padding={6}
         listening={false}
         perfectDrawEnabled={false}
       />

@@ -51,7 +51,7 @@ const PageMiniRender = memo(function PageMiniRender({ elements, w, h, paperColor
 }) {
   const safe = Array.isArray(elements) ? elements : [];
   return (
-    <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', userSelect: 'none', contain: 'strict' }}>
+    <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', userSelect: 'none' }}>
       <PageThumb
         elements={safe}
         width={w}
@@ -672,11 +672,10 @@ export function Book3DViewer({
               <div style={{
                 position: 'absolute', inset: 0,
                 transform: 'translateZ(0px)',
-                borderRadius: '1px 4px 4px 1px',
+                borderRadius: 0,
                 overflow: 'hidden',
                 backfaceVisibility: 'hidden',
                 WebkitBackfaceVisibility: 'hidden',
-                contain: 'strict',
               }}>
                 {coverEls.length > 0
                   ? <PageMiniRender elements={coverEls} w={W} h={H} canvasH={canvasH} />
@@ -688,11 +687,10 @@ export function Book3DViewer({
               <div style={{
                 position: 'absolute', inset: 0,
                 transform: `rotateY(180deg) translateZ(${D}px)`,
-                borderRadius: '4px 1px 1px 4px',
+                borderRadius: 0,
                 overflow: 'hidden',
                 backfaceVisibility: 'hidden',
                 WebkitBackfaceVisibility: 'hidden',
-                contain: 'strict',
               }}>
                 {backEls.length > 0
                   ? <PageMiniRender elements={backEls} w={W} h={H} canvasH={canvasH} />
