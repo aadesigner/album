@@ -19,6 +19,7 @@ import {
 } from '@/lib/designs';
 import { applyCoverBackground, coverBgMode, type CoverBgMode } from '@/lib/coverBackground';
 import { uploadErrorMessage, uploadImageToApi } from '@/lib/uploadImage';
+import { resolvePublicImageSrc } from '@/lib/categoryImages';
 import { useAuth } from '@/contexts/AuthContext';
 import { DesignCatalogThumb } from '@/components/PageThumb';
 import {
@@ -231,11 +232,12 @@ function useHtmlImage(src?: string) {
   const [img, setImg] = useState<HTMLImageElement>();
   useEffect(() => {
     if (!src) { setImg(undefined); return; }
+    const url = resolvePublicImageSrc(src) || src;
     const i = new window.Image();
     i.crossOrigin = 'anonymous';
     i.onload = () => setImg(i);
     i.onerror = () => setImg(undefined);
-    i.src = src;
+    i.src = url;
   }, [src]);
   return img;
 }

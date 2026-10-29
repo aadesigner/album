@@ -138,10 +138,11 @@ export function getCategoryImage(
   slug?: string | null,
 ): string {
   const custom = resolvePublicImageSrc(coverImage);
-  // Unsplash hotlinks 403 in admin/phones — skip them and use the local catalog.
+  // Check the resolved URL so a cover saved as http://localhost/api/uploads/...
+  // still shows after deploy (same-origin /api path). Unsplash 403s on phones.
   if (
     custom
-    && !isUnusableCoverSrc(coverImage)
+    && !isUnusableCoverSrc(custom)
     && !custom.includes('images.unsplash.com')
   ) {
     return custom;

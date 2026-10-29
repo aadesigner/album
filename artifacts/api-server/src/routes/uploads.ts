@@ -5,16 +5,12 @@ import fs from "fs";
 import sharp from "sharp";
 import { logger } from "../lib/logger";
 import { getSecuritySettings } from "../lib/securitySettings";
+import { ensureDataDirs, uploadFilePathCandidates, uploadsDir } from "../lib/dataDir";
 
 const router: IRouter = Router();
 
-// Prefer DATA_DIR (Railway volume) so uploads survive redeploys — must match
-// where generateProjectPdf looks when resolving /api/uploads/files/* for print.
-const dataRoot = process.env.DATA_DIR || process.cwd();
-export const uploadsDir = path.join(dataRoot, "uploads");
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
+ensureDataDirs();
+export { uploadsDir };
 
 const storage = multer.diskStorage({
   destination: uploadsDir,
@@ -230,11 +226,7 @@ router.get("/uploads/files/:filename", (req, res): void => {
     res.status(400).json({ error: "Invalid filename" });
     return;
   }
-  const candidates = [
-    path.join(uploadsDir, raw),
-    path.join(process.cwd(), "uploads", raw),
-  ];
-  const filePath = candidates.find((p) => fs.existsSync(p));
+  const filePath = uploadFilePathCandidates(raw).find((p) => fs.existsSync(p));
   if (!filePath) {
     res.status(404).json({ error: "File not found" });
     return;

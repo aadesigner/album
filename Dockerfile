@@ -70,7 +70,8 @@ RUN cp /app/artifacts/pergjithmone/server.mjs /app/server.mjs \
  && printf '%s\n' \
 '#!/bin/sh' \
 'set -eu' \
-'echo "[api] starting node /app/artifacts/api-server/dist/index.mjs"' \
+'if [ -z "${DATA_DIR:-}" ] && [ -d /data ]; then export DATA_DIR=/data; fi' \
+'echo "[api] starting node /app/artifacts/api-server/dist/index.mjs DATA_DIR=${DATA_DIR:-unset}"' \
 'exec node /app/artifacts/api-server/dist/index.mjs' \
 > /app/boot-api.sh \
  && chmod +x /app/boot-web.sh /app/boot-api.sh \

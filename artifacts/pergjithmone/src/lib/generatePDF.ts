@@ -1,4 +1,5 @@
 import { isStrokeOnlyShape, shapePathForElement } from './shapes';
+import { resolvePublicImageSrc } from './categoryImages';
 
 /**
  * PDF preview generator — renders each photobook page to an off-screen
@@ -62,14 +63,19 @@ export interface PdfPage {
 // ── Image loader (with crossOrigin) ─────────────────────────────────────────
 const imgCache = new Map<string, HTMLImageElement>();
 
+function imageUrl(src: string): string {
+  return resolvePublicImageSrc(src) || src;
+}
+
 function loadImg(src: string): Promise<HTMLImageElement> {
-  if (imgCache.has(src)) return Promise.resolve(imgCache.get(src)!);
+  const url = imageUrl(src);
+  if (imgCache.has(url)) return Promise.resolve(imgCache.get(url)!);
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
-    img.onload = () => { imgCache.set(src, img); resolve(img); };
-    img.onerror = () => reject(new Error(`Failed to load ${src}`));
-    img.src = src;
+    img.onload = () => { imgCache.set(url, img); resolve(img); };
+    img.onerror = () => reject(new Error(`Failed to load ${url}`));
+    img.src = url;
   });
 }
 
@@ -175,7 +181,7 @@ async function renderPage(elements: PdfElement[], canvasH: number): Promise<stri
 
     // ── Background ─────────────────────────────────────────────────────────
     if (el.type === 'background') {
-      const wallpaper = el.src ? imgCache.get(el.src) : undefined;
+      const wallpaper = el.src ? imgCache.get(imageUrl(el.src)) : undefined;
       if (wallpaper) {
         // object-fit: cover the full page (honours crop focus + zoom)
         const z = Math.max(1, el.cropZoom ?? 1);
@@ -236,7 +242,7 @@ async function renderPage(elements: PdfElement[], canvasH: number): Promise<stri
 
     // ── Image ──────────────────────────────────────────────────────────────
     else if (el.type === 'image' && el.src) {
-      const img = imgCache.get(el.src);
+      const img = imgCache.get(imageUrl(el.src));
       if (img) {
         if (el.mixBlendMode === 'screen') ctx.globalCompositeOperation = 'screen';
         ctx.save();

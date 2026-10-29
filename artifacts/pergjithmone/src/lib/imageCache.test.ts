@@ -57,4 +57,22 @@ describe('imageCache', () => {
     expect(created?.crossOrigin).toBe('');
     vi.unstubAllGlobals();
   });
+
+  it('turns localhost upload URLs into same-origin paths', async () => {
+    const seen: string[] = [];
+    class FakeImage {
+      crossOrigin = '';
+      decoding = '';
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      set src(v: string) {
+        seen.push(v);
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+    vi.stubGlobal('Image', FakeImage);
+    await loadCachedImage('http://localhost:8787/api/uploads/files/a.jpg');
+    expect(seen).toEqual(['/api/uploads/files/a.jpg']);
+    vi.unstubAllGlobals();
+  });
 });

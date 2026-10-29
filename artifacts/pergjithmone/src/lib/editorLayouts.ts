@@ -131,7 +131,12 @@ export function mergeEditorLayouts(
 ): LayoutDef[] {
   const byId = new Map<string, LayoutDef>(LAYOUTS.map((l) => [l.id, l]));
   for (const row of dbLayouts || []) {
-    if (!row.isActive || RETIRED_LAYOUT_IDS.has(row.slug)) continue;
+    // Inactive / retired DB rows hide the matching builtin so a redeploy
+    // cannot resurrect a layout the admin turned off.
+    if (!row.isActive || RETIRED_LAYOUT_IDS.has(row.slug)) {
+      byId.delete(row.slug);
+      continue;
+    }
     const zones = parseAdminLayoutZones(row.gridDefinitionJson);
     if (!zones.length) continue;
     byId.set(row.slug, {

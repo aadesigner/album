@@ -4,15 +4,12 @@ import { db } from "@workspace/db-tsconfig";
 import { projectsTable, projectPagesTable, bookSizesTable } from "@workspace/db-tsconfig";
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
-import { uploadsDir } from "../routes/uploads";
+import { ensureDataDirs, pdfsDir, uploadsDir } from "./dataDir";
 import { renderProjectPdf, type PdfRenderPage } from "./pdfRenderer";
 import { getSecuritySettings } from "./securitySettings";
 
-/** Prefer DATA_DIR (Railway volume) so PDFs survive redeploys. */
-const dataRoot = process.env.DATA_DIR || process.cwd();
-export const pdfsDir = path.join(dataRoot, "pdfs");
-if (!fs.existsSync(pdfsDir)) fs.mkdirSync(pdfsDir, { recursive: true });
-logger.info({ pdfsDir }, "PDF storage directory ready");
+ensureDataDirs();
+export { pdfsDir };
 
 export function projectPdfPath(projectId: number): string {
   return path.join(pdfsDir, `project-${projectId}.pdf`);

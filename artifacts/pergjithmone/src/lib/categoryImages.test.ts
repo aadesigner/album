@@ -48,8 +48,8 @@ describe("getCategoryImage", () => {
     expect(getCategoryImage("Dasmë", "/api/uploads/files/x.jpg", "dasme")).toBe(
       "/api/uploads/files/x.jpg",
     );
-    expect(getCategoryImage("Dasmë", "http://localhost:8787/api/uploads/x.jpg", "dasme")).toBe(
-      getCatalogCover("Dasmë", "dasme"),
+    expect(getCategoryImage("Dasmë", "http://localhost:8787/api/uploads/files/x.jpg", "dasme")).toBe(
+      "/api/uploads/files/x.jpg",
     );
     expect(getCategoryImage("Dasmë", null, "dasme")).toBe(getCatalogCover("Dasmë", "dasme"));
     expect(getCatalogCover("Dasmë", "dasme")).toContain("/designs/");

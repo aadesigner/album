@@ -45,7 +45,7 @@ export function CategoryCoverImg({
   const catalog = getCatalogCover(nameAl, slug);
   const customRaw = resolvePublicImageSrc(coverImage);
   const custom = customRaw
-    && !isUnusableCoverSrc(coverImage)
+    && !isUnusableCoverSrc(customRaw)
     && !customRaw.includes('images.unsplash.com')
     && customRaw !== catalog
     ? phoneSafeImageSrc(customRaw)

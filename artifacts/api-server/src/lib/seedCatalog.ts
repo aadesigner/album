@@ -115,41 +115,12 @@ export async function seedCatalog(): Promise<void> {
     );
   }
 
-  const existingSizes = await db.select().from(bookSizesTable);
+  const existingSizes = await db.select({ id: bookSizesTable.id }).from(bookSizesTable).limit(1);
   if (existingSizes.length === 0) {
     await db.insert(bookSizesTable).values(
       DEFAULT_BOOK_SIZES.map((s) => ({ ...s, isActive: true })),
     );
     logger.info({ count: DEFAULT_BOOK_SIZES.length }, "Seeded default book sizes");
-  } else {
-    // Keep labels/prices in sync with the product catalog on restart.
-    for (const wanted of DEFAULT_BOOK_SIZES) {
-      const match = existingSizes.find(
-        (s) =>
-          parseFloat(String(s.widthCm)) === parseFloat(wanted.widthCm) &&
-          parseFloat(String(s.heightCm)) === parseFloat(wanted.heightCm),
-      );
-      if (!match) {
-        await db.insert(bookSizesTable).values({ ...wanted, isActive: true });
-        continue;
-      }
-      if (
-        match.label !== wanted.label ||
-        match.priceBase !== wanted.priceBase ||
-        match.pricePerExtraSpread !== wanted.pricePerExtraSpread ||
-        !match.isActive
-      ) {
-        await db
-          .update(bookSizesTable)
-          .set({
-            label: wanted.label,
-            priceBase: wanted.priceBase,
-            pricePerExtraSpread: wanted.pricePerExtraSpread,
-            isActive: true,
-          })
-          .where(eq(bookSizesTable.id, match.id));
-      }
-    }
   }
 
   for (const setting of DEFAULT_SETTINGS) {
@@ -165,23 +136,24 @@ export async function seedCatalog(): Promise<void> {
     }
   }
 
-  // Seed built-in page layouts (insert missing only — never overwrite edits).
+  // Seed built-in page layouts on a fresh DB only. Never re-insert deleted
+  // rows or overwrite grid JSON — admin edits and deletions survive deploys.
   {
     const existingLayouts = await db
       .select({ slug: layoutsTable.slug })
-      .from(layoutsTable);
-    const have = new Set(existingLayouts.map((r) => r.slug));
-    const toInsert = BUILTIN_LAYOUTS.filter((l) => !have.has(l.slug)).map((l) => ({
-      slug: l.slug,
-      nameAl: l.nameAl,
-      nameEn: l.nameEn,
-      previewIcon: l.previewIcon,
-      gridDefinitionJson: JSON.stringify({ cells: l.cells, category: l.category }),
-      isActive: true,
-    }));
-    if (toInsert.length > 0) {
+      .from(layoutsTable)
+      .limit(1);
+    if (existingLayouts.length === 0) {
+      const toInsert = BUILTIN_LAYOUTS.map((l) => ({
+        slug: l.slug,
+        nameAl: l.nameAl,
+        nameEn: l.nameEn,
+        previewIcon: l.previewIcon,
+        gridDefinitionJson: JSON.stringify({ cells: l.cells, category: l.category }),
+        isActive: true,
+      }));
       await db.insert(layoutsTable).values(toInsert);
-      logger.info({ inserted: toInsert.length, total: BUILTIN_LAYOUTS.length }, "Seeded built-in layouts");
+      logger.info({ inserted: toInsert.length }, "Seeded built-in layouts");
     }
     const retired = await db
       .update(layoutsTable)

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { resolvePublicImageSrc } from './categoryImages';
 
 const MAX_ENTRIES = 64;
 const inflight = new Map<string, Promise<HTMLImageElement>>();
@@ -23,9 +24,10 @@ export function peekCachedImage(src: string): HTMLImageElement | undefined {
 }
 
 export function loadCachedImage(src: string): Promise<HTMLImageElement> {
-  const hit = peekCachedImage(src);
+  const url = resolvePublicImageSrc(src) || src;
+  const hit = peekCachedImage(url);
   if (hit) return Promise.resolve(hit);
-  const pending = inflight.get(src);
+  const pending = inflight.get(url);
   if (pending) return pending;
 
   const next = new Promise<HTMLImageElement>((resolve, reject) => {
@@ -33,47 +35,48 @@ export function loadCachedImage(src: string): Promise<HTMLImageElement> {
     // Same-origin /api uploads do not need CORS. Forcing anonymous here made
     // Konva drop photos in the editor and Creative Studio when CORP/CORS
     // headers were missing on the file response.
-    const absolute = /^https?:\/\//i.test(src);
-    const sameOrigin = !absolute || (typeof window !== 'undefined' && src.startsWith(window.location.origin));
+    const absolute = /^https?:\/\//i.test(url);
+    const sameOrigin = !absolute || (typeof window !== 'undefined' && url.startsWith(window.location.origin));
     if (!sameOrigin) img.crossOrigin = 'anonymous';
     img.decoding = 'async';
     img.onload = () => {
-      inflight.delete(src);
-      touch(src, img);
+      inflight.delete(url);
+      touch(url, img);
       resolve(img);
     };
     img.onerror = () => {
-      inflight.delete(src);
+      inflight.delete(url);
       reject(new Error('image load failed'));
     };
-    img.src = src;
+    img.src = url;
   });
-  inflight.set(src, next);
+  inflight.set(url, next);
   return next;
 }
 
 /** Shared decoded bitmap for Konva — same photo is not decoded again per slot. */
 export function useCachedImage(src?: string | null): HTMLImageElement | undefined {
+  const url = src ? (resolvePublicImageSrc(src) || src) : '';
   const [img, setImg] = useState<HTMLImageElement | undefined>(() =>
-    src ? peekCachedImage(src) : undefined,
+    url ? peekCachedImage(url) : undefined,
   );
 
   useEffect(() => {
-    if (!src) {
+    if (!url) {
       setImg(undefined);
       return;
     }
-    const cached = peekCachedImage(src);
+    const cached = peekCachedImage(url);
     if (cached) {
       setImg(cached);
       return;
     }
     let cancelled = false;
-    loadCachedImage(src)
+    loadCachedImage(url)
       .then((el) => { if (!cancelled) setImg(el); })
       .catch(() => { if (!cancelled) setImg(undefined); });
     return () => { cancelled = true; };
-  }, [src]);
+  }, [url]);
 
   return img;
 }

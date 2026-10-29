@@ -2,6 +2,10 @@
 #   Dockerfile path = Dockerfile
 #   Custom Start    = /app/boot-api.sh
 #   (clear any old START_APP=… or pnpm start command in the dashboard)
+#
+# Persist uploads across deploys: attach a volume to this service mounted at
+# /data. boot-api.sh sets DATA_DIR=/data when that folder exists. Album photos,
+# category covers, Design Studio images, and print PDFs are stored there.
 
 [build]
 builder = "DOCKERFILE"

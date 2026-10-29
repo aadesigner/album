@@ -24,7 +24,7 @@ export function ensureSchema(): void {
     throw new Error(`Could not find lib/db (tried: ${candidates.join(", ")})`);
   }
 
-  logger.info({ dbDir }, "Pushing database schema with drizzle-kit");
+  logger.info({ dbDir }, "Syncing database schema with drizzle-kit (additive; does not truncate tables)");
 
   // On Windows, pnpm is a .cmd shim — execFileSync("pnpm") fails with ENOENT.
   const pnpmBin = process.platform === "win32" ? "pnpm.cmd" : "pnpm";

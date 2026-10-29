@@ -35,7 +35,7 @@ Albanian-language photobook SaaS — customers pick a category/style/size, desig
 
 - Auth is phone-number based, not email: users register/login with a phone number; a synthetic `${phone}@ph.local` email is stored internally so JWT/session code didn't need to change. See `.agents/memory/phone-auth.md`.
 - The Konva page editor's design themes (`DESIGN_METAS` in `src/lib/designMeta.ts`) are hardcoded in the frontend, not driven by the `templates` DB table — the `templates`/`layouts`/`subcategories` tables exist for admin CRUD/future use but aren't queried by the customer-facing wizard today (only `categories`, `book_sizes`, and `app_settings` are).
-- File uploads (`artifacts/api-server/src/routes/uploads.ts`) are stored on local disk (`./uploads`), not object storage — carried over from the original implementation. This won't survive redeploys on ephemeral hosts; mount a persistent volume at `./uploads` or migrate to an object storage service (S3, R2, etc.) if persistence across deploys is required.
+- File uploads live on disk under `DATA_DIR` (album photos, category covers, Design Studio images, print PDFs). On Railway, mount a volume at `/data` on the API service — boot sets `DATA_DIR=/data` when that folder exists. Without a volume, a new deploy wipes the files even though Postgres still has the URLs. Catalog seed is insert-only (it will not overwrite layouts, book prices, or visual-editor JSON).
 - Ordering has no online payment — checkout hands off to a pre-filled WhatsApp message (`+355688755833`) for manual order confirmation.
 
 ## Product

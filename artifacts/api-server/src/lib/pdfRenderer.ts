@@ -4,6 +4,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { logger } from "./logger";
+import { uploadFilePathCandidates } from "./dataDir";
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 
@@ -288,14 +289,7 @@ function designAssetDirs(): string[] {
  * built-in /designs/* cover art.
  */
 function resolveUploadFile(filename: string, uploadsDir: string): string | null {
-  const candidates = [
-    path.join(uploadsDir, filename),
-    path.join(process.cwd(), "uploads", filename),
-  ];
-  if (process.env.DATA_DIR) {
-    candidates.push(path.join(process.env.DATA_DIR, "uploads", filename));
-  }
-  for (const filePath of candidates) {
+  for (const filePath of uploadFilePathCandidates(filename, uploadsDir)) {
     if (fs.existsSync(filePath)) return filePath;
   }
   return null;

@@ -66,6 +66,21 @@ describe("mergeEditorLayouts", () => {
     ]);
     expect(merged.some((l) => l.id === "hidden-grid")).toBe(false);
   });
+
+  it("hides a builtin the admin deactivated so a deploy does not resurrect it", () => {
+    const merged = mergeEditorLayouts([
+      {
+        slug: "full",
+        nameAl: "Fshehur",
+        nameEn: "Hidden full",
+        gridDefinitionJson: JSON.stringify({
+          cells: [{ x: 0, y: 0, w: 1, h: 1, type: "photo" }],
+        }),
+        isActive: false,
+      },
+    ]);
+    expect(merged.some((l) => l.id === "full")).toBe(false);
+  });
 });
 
 describe("parseAdminLayoutZones", () => {

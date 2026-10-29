@@ -6,6 +6,7 @@ import {
 } from '@/lib/designs';
 import { isStrokeOnlyShape, shapePathForElement } from '@/lib/shapes';
 import { useEditorFontsReady, ensureEditorFonts, normalizeEditorFont, isEditorSingleCutFont } from '@/lib/editorFonts';
+import { resolvePublicImageSrc } from '@/lib/categoryImages';
 
 function thumbFontFamily(ff?: string): string {
   return normalizeEditorFont(ff);
@@ -79,7 +80,7 @@ export const PageThumb = React.memo(function PageThumb({
           const key = (el as EditorElement).id ?? i;
           if (el.type === 'background') {
             if (el.src) {
-              return <img key={key} src={el.src} alt="" loading={priority ? 'eager' : 'lazy'} decoding="async" referrerPolicy="no-referrer" style={{
+              return <img key={key} src={resolvePublicImageSrc(el.src) || el.src} alt="" loading={priority ? 'eager' : 'lazy'} decoding="async" referrerPolicy="no-referrer" style={{
                 position: 'absolute', inset: 0, width: '100%', height: '100%',
                 objectFit: 'cover',
                 objectPosition: `${(el.cropFocusX ?? 0.5) * 100}% ${(el.cropFocusY ?? 0.5) * 100}%`,
@@ -111,7 +112,7 @@ export const PageThumb = React.memo(function PageThumb({
                 }}
               >
                 <img
-                  src={el.src}
+                  src={resolvePublicImageSrc(el.src) || el.src}
                   alt=""
                   loading={priority ? 'eager' : 'lazy'}
                   decoding="async"
