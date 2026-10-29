@@ -125,7 +125,11 @@ export default function AdminSettings() {
       maxOrdersPerDay:             s?.maxOrdersPerDay             || 15,
       maxConcurrentPdfGenerations: s?.maxConcurrentPdfGenerations || 6,
       maxUploadFileSizeMb:         s?.maxUploadFileSizeMb         || 25,
-      allowedUploadMimeTypes:      (s?.allowedUploadMimeTypes || ['image/jpeg','image/png','image/webp','image/gif']).join(', '),
+      allowedUploadMimeTypes: Array.isArray(s?.allowedUploadMimeTypes)
+        ? s.allowedUploadMimeTypes.join(', ')
+        : (typeof s?.allowedUploadMimeTypes === 'string' && s.allowedUploadMimeTypes.trim()
+          ? s.allowedUploadMimeTypes
+          : 'image/jpeg, image/png, image/webp, image/gif'),
       offerBarEnabled:    s?.offerBarEnabled    ?? OFFER_BAR_DEFAULTS.enabled,
       offerBarTextAl:     s?.offerBarTextAl     || OFFER_BAR_DEFAULTS.textAl,
       offerBarTextEn:     s?.offerBarTextEn     || OFFER_BAR_DEFAULTS.textEn,
@@ -212,8 +216,7 @@ export default function AdminSettings() {
         maxOrdersPerDay:             Number(values.maxOrdersPerDay),
         maxConcurrentPdfGenerations: Number(values.maxConcurrentPdfGenerations),
         maxUploadFileSizeMb:         Number(values.maxUploadFileSizeMb),
-        allowedUploadMimeTypes:      String(values.allowedUploadMimeTypes || '')
-          .split(',').map((t: string) => t.trim()).filter(Boolean),
+        allowedUploadMimeTypes: String(values.allowedUploadMimeTypes || ''),
         hiddenDesignIds: Array.from(hiddenIds),
         offerBarEnabled:    Boolean(values.offerBarEnabled),
         offerBarTextAl:     String(values.offerBarTextAl || ''),

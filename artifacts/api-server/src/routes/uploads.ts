@@ -79,10 +79,6 @@ const SHARP_FORMAT_TO_MIME: Record<string, string> = {
 
 /** Source formats we convert to JPEG/PNG for the editor and print PDF. */
 const CONVERTIBLE_FORMATS = new Set(Object.keys(SHARP_FORMAT_TO_MIME));
-/** These are photos. An admin MIME typo must never block them. */
-const ALWAYS_ACCEPT_FORMATS = new Set([
-  "jpeg", "png", "webp", "gif", "heif", "avif", "tiff", "bmp",
-]);
 
 // Uploaded photos only need to look good on screen while editing and be
 // sharp enough to print later; nothing in this app needs the original
@@ -186,24 +182,6 @@ router.post(
         { size: req.file.size, mime: req.file.mimetype, name: req.file.originalname, detectedFormat },
         "Rejected upload: could not identify image bytes",
       );
-      fs.unlink(req.file.path, () => {});
-      res.status(400).json({ error: "This file is not a valid or allowed image type." });
-      return;
-    }
-
-    const convertedOutput = detectedFormat === "png" || detectedFormat === "gif"
-      ? "image/png"
-      : "image/jpeg";
-    const allow = settings.allowedUploadMimeTypes || [];
-    const sourceAllowed = allow.includes(detectedMime)
-      || (allow.includes("image/jpg") && detectedMime === "image/jpeg");
-    const outputAllowed = allow.includes(convertedOutput) || allow.includes("image/jpg");
-    if (
-      !ALWAYS_ACCEPT_FORMATS.has(detectedFormat)
-      && !sourceAllowed
-      && !outputAllowed
-    ) {
-      logger.warn({ detectedFormat, detectedMime, allow }, "Rejected upload: not in allowlist");
       fs.unlink(req.file.path, () => {});
       res.status(400).json({ error: "This file is not a valid or allowed image type." });
       return;

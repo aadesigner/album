@@ -21,6 +21,10 @@ import {
   SECURITY_SETTINGS_KEY_MAP,
   invalidateSecuritySettingsCache,
   parseAllowedUploadMimeTypes,
+  parseJsonArray,
+  parseJsonObject,
+  serializeAllowedUploadMimeTypes,
+  JSON_SETTING_JS_KEYS,
   type SecuritySettings,
 } from "../lib/securitySettings";
 import { OFFER_BAR_KEY_MAP, normalizeOfferBarWrite, readOfferBarSettings } from "../lib/offerBarSettings";
@@ -1142,12 +1146,9 @@ router.get(
     const rows = await db.select().from(appSettingsTable);
     const map: Record<string, string> = {};
     for (const row of rows) map[row.key] = row.value;
-    let hiddenDesignIds: string[] = [];
-    try { hiddenDesignIds = JSON.parse(map["hidden_design_ids"] || "[]"); } catch { hiddenDesignIds = []; }
-    let designOverrides: Record<string, unknown> = {};
-    try { designOverrides = JSON.parse(map["design_overrides"] || "{}"); } catch { designOverrides = {}; }
-    let customDesigns: unknown[] = [];
-    try { customDesigns = JSON.parse(map["custom_designs"] || "[]"); } catch { customDesigns = []; }
+    const hiddenDesignIds = parseJsonArray(map["hidden_design_ids"]).map(String);
+    const designOverrides = parseJsonObject(map["design_overrides"]);
+    const customDesigns = parseJsonArray(map["custom_designs"]);
     const adminNotes = parseAdminNotes(map["admin_notes"]);
 
     res.json({
@@ -1214,11 +1215,20 @@ router.patch(
         const offerValue = normalizeOfferBarWrite(jsKey, raw);
         let value: string;
         if (jsKey === "allowedUploadMimeTypes") {
-          value = parseAllowedUploadMimeTypes(raw).join(", ");
+          value = serializeAllowedUploadMimeTypes(raw);
         } else if (offerValue !== null) value = offerValue;
-        else if (typeof raw === "string") value = raw;
-        else if (Array.isArray(raw) || (raw && typeof raw === "object")) value = JSON.stringify(raw);
-        else value = String(raw);
+        else if (JSON_SETTING_JS_KEYS.has(jsKey)) {
+          if (typeof raw === "string") {
+            value = raw;
+          } else {
+            value = JSON.stringify(raw);
+          }
+        } else if (typeof raw === "string") value = raw;
+        else if (Array.isArray(raw) || (raw && typeof raw === "object")) {
+          // Unknown arrays/objects stay JSON. Comma-list keys must be handled above
+          // so a later `.split(",")` cannot see `["image/jpeg"]`.
+          value = JSON.stringify(raw);
+        } else value = String(raw);
 
         // Soft QA limits for custom cover designs
         if (jsKey === "customDesigns") {
@@ -1305,12 +1315,9 @@ router.patch(
     const rows2 = await db.select().from(appSettingsTable);
     const map2: Record<string, string> = {};
     for (const row of rows2) map2[row.key] = row.value;
-    let hiddenDesignIds2: string[] = [];
-    try { hiddenDesignIds2 = JSON.parse(map2["hidden_design_ids"] || "[]"); } catch { hiddenDesignIds2 = []; }
-    let designOverrides2: Record<string, unknown> = {};
-    try { designOverrides2 = JSON.parse(map2["design_overrides"] || "{}"); } catch { designOverrides2 = {}; }
-    let customDesigns2: unknown[] = [];
-    try { customDesigns2 = JSON.parse(map2["custom_designs"] || "[]"); } catch { customDesigns2 = []; }
+    const hiddenDesignIds2 = parseJsonArray(map2["hidden_design_ids"]).map(String);
+    const designOverrides2 = parseJsonObject(map2["design_overrides"]);
+    const customDesigns2 = parseJsonArray(map2["custom_designs"]);
     const adminNotes2 = parseAdminNotes(map2["admin_notes"]);
 
     res.json({

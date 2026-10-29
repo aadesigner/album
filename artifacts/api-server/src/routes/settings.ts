@@ -4,6 +4,7 @@ import { bookSizesTable, layoutsTable, appSettingsTable } from "@workspace/db-ts
 import { eq } from "drizzle-orm";
 import { readOfferBarSettings } from "../lib/offerBarSettings";
 import { setPublicCatalogCache, setNoStoreCache } from "../lib/httpCache";
+import { parseJsonArray, parseJsonObject } from "../lib/securitySettingsShared";
 
 const router: IRouter = Router();
 
@@ -41,12 +42,9 @@ router.get("/settings", async (_req, res): Promise<void> => {
     map[row.key] = row.value;
   }
 
-  let hiddenDesignIds: string[] = [];
-  try { hiddenDesignIds = JSON.parse(map["hidden_design_ids"] || "[]"); } catch { hiddenDesignIds = []; }
-  let designOverrides: Record<string, unknown> = {};
-  try { designOverrides = JSON.parse(map["design_overrides"] || "{}"); } catch { designOverrides = {}; }
-  let customDesigns: unknown[] = [];
-  try { customDesigns = JSON.parse(map["custom_designs"] || "[]"); } catch { customDesigns = []; }
+  const hiddenDesignIds = parseJsonArray(map["hidden_design_ids"]).map(String);
+  const designOverrides = parseJsonObject(map["design_overrides"]);
+  const customDesigns = parseJsonArray(map["custom_designs"]);
 
   res.json({
     whatsappNumber: map["whatsapp_number"] || "+355688755833",

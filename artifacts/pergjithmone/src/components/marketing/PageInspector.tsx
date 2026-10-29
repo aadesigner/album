@@ -193,7 +193,7 @@ function ImageFields({
         <Upload size={13} /> {uploading ? 'Uploading…' : 'Upload image'}
         <input
           type="file"
-          accept="image/*"
+          accept="image/*,.heic,.heif,.avif"
           className="hidden"
           disabled={uploading}
           onChange={(e) => {

@@ -1856,7 +1856,7 @@ function InlinePhotoPicker({photos,onSelect,onUploadAndPlace,uploading,onClose,l
           )}
         </div>
 
-        <input ref={fileRef} type="file" accept="image/*" style={{display:'none'}}
+        <input ref={fileRef} type="file" accept="image/*,.heic,.heif,.avif" style={{display:'none'}}
           onChange={e=>{if(e.target.files?.[0]){onUploadAndPlace(e.target.files[0]);e.target.value='';}}}/>
       </div>
     </div>

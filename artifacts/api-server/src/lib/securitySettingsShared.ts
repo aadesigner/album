@@ -79,40 +79,100 @@ const MIME_ALIASES: Record<string, string> = {
   bmp: "image/bmp",
 };
 
-/**
- * Admin Settings saves this field as a JSON array. The uploader used to
- * split that string on commas, so `["image/jpeg", ...]` never matched
- * `image/jpeg` and every real photo was rejected.
- */
-export function parseAllowedUploadMimeTypes(raw: unknown): string[] {
+/** JSON arrays, comma lists, or the leftover `"["image/jpeg"` tokens from a bad split. */
+export function parseStringList(raw: unknown): string[] {
   let parts: string[] = [];
   if (Array.isArray(raw)) {
     parts = raw.map((v) => String(v ?? ""));
   } else if (typeof raw === "string") {
     const trimmed = raw.trim();
-    if (!trimmed) return [...SECURITY_SETTINGS_DEFAULTS.allowedUploadMimeTypes];
+    if (!trimmed) return [];
     if (trimmed.startsWith("[")) {
       try {
-        const parsed = JSON.parse(trimmed);
+        let parsed: unknown = JSON.parse(trimmed);
+        if (typeof parsed === "string") {
+          try { parsed = JSON.parse(parsed); } catch { /* keep */ }
+        }
         if (Array.isArray(parsed)) parts = parsed.map((v) => String(v ?? ""));
+        else parts = trimmed.split(",");
       } catch {
         parts = trimmed.split(",");
       }
     } else {
       parts = trimmed.split(",");
     }
-  } else {
-    return [...SECURITY_SETTINGS_DEFAULTS.allowedUploadMimeTypes];
   }
-
   const out: string[] = [];
   for (const part of parts) {
-    const token = part.trim().toLowerCase().replace(/^["']+|["']+$/g, "");
+    const token = part
+      .trim()
+      .replace(/^\[+\s*/, "")
+      .replace(/\s*\]+$/, "")
+      .replace(/^["']+|["']+$/g, "")
+      .trim();
+    if (token) out.push(token);
+  }
+  return out;
+}
+
+export function parseJsonArray(raw: string | undefined | null): unknown[] {
+  if (raw == null) return [];
+  const trimmed = String(raw).trim();
+  if (!trimmed) return [];
+  try {
+    let parsed: unknown = JSON.parse(trimmed);
+    if (typeof parsed === "string") {
+      try { parsed = JSON.parse(parsed); } catch { /* keep string */ }
+    }
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function parseJsonObject(raw: string | undefined | null): Record<string, unknown> {
+  if (raw == null) return {};
+  const trimmed = String(raw).trim();
+  if (!trimmed) return {};
+  try {
+    let parsed: unknown = JSON.parse(trimmed);
+    if (typeof parsed === "string") {
+      try { parsed = JSON.parse(parsed); } catch { /* keep */ }
+    }
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+    return {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Admin Settings used to JSON.stringify this array, then the uploader split
+ * on commas — `["image/jpeg"]` never matched `image/jpeg`.
+ */
+export function parseAllowedUploadMimeTypes(raw: unknown): string[] {
+  const out: string[] = [];
+  for (const part of parseStringList(raw)) {
+    const token = part.toLowerCase();
     if (!token) continue;
     out.push(MIME_ALIASES[token] || token);
   }
   return out.length > 0 ? [...new Set(out)] : [...SECURITY_SETTINGS_DEFAULTS.allowedUploadMimeTypes];
 }
+
+/** Always a comma list in Postgres — never a JSON array. */
+export function serializeAllowedUploadMimeTypes(raw: unknown): string {
+  return parseAllowedUploadMimeTypes(raw).join(", ");
+}
+
+export const JSON_SETTING_JS_KEYS = new Set([
+  "hiddenDesignIds",
+  "designOverrides",
+  "customDesigns",
+  "adminNotes",
+]);
 
 export const SECURITY_SETTINGS_KEY_MAP: Record<keyof SecuritySettings, string> = {
   rateLimitGeneralWindowMs: "rate_limit_general_window_ms",

@@ -1269,7 +1269,7 @@ export default function AlbumAI() {
                   }`}
                 >
                   <input
-                    ref={fileInputRef} type="file" accept="image/*" multiple className="hidden"
+                    ref={fileInputRef} type="file" accept="image/*,.heic,.heif,.avif" multiple className="hidden"
                     disabled={!bookCreationEnabled}
                     onChange={e => { if (e.target.files) addFiles(e.target.files); e.target.value = ''; }}
                   />
