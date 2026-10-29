@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   bi, img, getAt, setAt, mergePageContent, txt, imgSrc, sanitizePageContent,
   isPageSlug, pageSettingKey, stringifyPageContent, preparePageContentForSave,
-  fetchPublishedPage, MAX_PAGE_JSON_CHARS,
+  fetchPublishedPage, textStyle, MAX_PAGE_JSON_CHARS,
 } from './marketingPages';
 import { PAGE_DEFAULTS } from './marketingPages.defaults';
 
@@ -36,6 +36,22 @@ describe('marketingPages helpers', () => {
     expect((getAt(merged, 'hero.headline') as { font?: string }).font).toBe('Georgia, serif');
     expect(txt(merged, 'hero.cta', 'en')).toBe('Create your album');
     expect((merged as Record<string, unknown>).extraUnknown).toBeUndefined();
+  });
+
+  it('merges light text style tokens and maps them to CSS', () => {
+    const defaults = { title: bi('A', 'B') };
+    const merged = mergePageContent(defaults, {
+      title: { sq: 'A', en: 'B', leading: 'relaxed', shadow: 'soft', weight: 'medium', italic: 'on', tracking: 'wide' },
+    });
+    const node = getAt(merged, 'title') as { leading?: string; shadow?: string };
+    expect(node.leading).toBe('relaxed');
+    expect(node.shadow).toBe('soft');
+    const css = textStyle(merged, 'title');
+    expect(css.lineHeight).toBe(1.7);
+    expect(css.boxShadow).toMatch(/18px/);
+    expect(css.fontWeight).toBe(500);
+    expect(css.fontStyle).toBe('italic');
+    expect(css.letterSpacing).toBe('0.06em');
   });
 
   it('merge does not wipe a section when saved array is empty', () => {

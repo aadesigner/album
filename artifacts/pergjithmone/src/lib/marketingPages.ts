@@ -46,6 +46,11 @@ export type BiText = {
   size?: 'sm' | 'md' | 'lg' | 'xl';
   align?: 'left' | 'center' | 'right';
   space?: 'sm' | 'md' | 'lg';
+  weight?: 'normal' | 'medium' | 'semibold';
+  italic?: 'on' | 'off';
+  leading?: 'tight' | 'snug' | 'normal' | 'relaxed';
+  tracking?: 'tight' | 'normal' | 'wide';
+  shadow?: 'none' | 'soft' | 'strong';
 };
 
 export type ImgRef = { src: string };
@@ -71,7 +76,7 @@ export function isImgRef(v: unknown): v is ImgRef {
     && typeof (v as ImgRef).src === 'string';
 }
 
-const STYLE_KEYS = ['font', 'size', 'align', 'space'] as const;
+const STYLE_KEYS = ['font', 'size', 'align', 'space', 'weight', 'italic', 'leading', 'tracking', 'shadow'] as const;
 
 export function getAt(obj: unknown, path: string): unknown {
   const parts = path.split('.').filter(Boolean);
@@ -146,15 +151,57 @@ const SPACE_PAD: Record<string, string> = {
   lg: 'py-24 md:py-32',
 };
 
-export function textStyle(content: unknown, path: string): {
+const LEADING: Record<NonNullable<BiText['leading']>, number> = {
+  tight: 1.15,
+  snug: 1.3,
+  normal: 1.5,
+  relaxed: 1.7,
+};
+
+const TRACKING: Record<NonNullable<BiText['tracking']>, string> = {
+  tight: '-0.02em',
+  normal: '0',
+  wide: '0.06em',
+};
+
+const WEIGHT: Record<NonNullable<BiText['weight']>, number> = {
+  normal: 400,
+  medium: 500,
+  semibold: 600,
+};
+
+const SHADOW: Record<NonNullable<BiText['shadow']>, string> = {
+  none: 'none',
+  soft: '0 6px 18px rgba(20,12,16,0.12)',
+  strong: '0 14px 32px rgba(20,12,16,0.22)',
+};
+
+export type TextStyle = {
   fontFamily?: string;
   textAlign?: 'left' | 'center' | 'right';
-} {
+  fontWeight?: number;
+  fontStyle?: 'italic' | 'normal';
+  lineHeight?: number;
+  letterSpacing?: string;
+  boxShadow?: string;
+  borderRadius?: number;
+};
+
+export function textStyle(content: unknown, path: string): TextStyle {
   const v = getAt(content, path);
   if (!isBiText(v)) return {};
-  const style: { fontFamily?: string; textAlign?: 'left' | 'center' | 'right' } = {};
+  const style: TextStyle = {};
   if (v.font) style.fontFamily = v.font;
   if (v.align) style.textAlign = v.align;
+  if (v.weight && WEIGHT[v.weight]) style.fontWeight = WEIGHT[v.weight];
+  if (v.italic === 'on') style.fontStyle = 'italic';
+  if (v.italic === 'off') style.fontStyle = 'normal';
+  if (v.leading && LEADING[v.leading]) style.lineHeight = LEADING[v.leading];
+  if (v.tracking && TRACKING[v.tracking] != null) style.letterSpacing = TRACKING[v.tracking];
+  if (v.shadow && SHADOW[v.shadow]) {
+    style.boxShadow = SHADOW[v.shadow];
+    if (v.shadow !== 'none') style.borderRadius = 8;
+  }
   return style;
 }
 

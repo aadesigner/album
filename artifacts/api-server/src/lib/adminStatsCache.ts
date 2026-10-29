@@ -173,6 +173,22 @@ export function resolveStatsRange(range: AdminStatsRange, now = new Date()): Ran
   }
 }
 
+/** Same-length window immediately before `bounds` — fair “vs prior period”. */
+export function previousStatsRange(bounds: RangeBounds): { start: Date; end: Date } {
+  const ms = Math.max(0, bounds.end.getTime() - bounds.start.getTime());
+  return {
+    start: new Date(bounds.start.getTime() - ms),
+    end: bounds.start,
+  };
+}
+
+/** Percent change. `null` when there is no baseline (prev is 0 and curr > 0). */
+export function pctChange(curr: number, prev: number): number | null {
+  if (!Number.isFinite(curr) || !Number.isFinite(prev)) return null;
+  if (prev === 0) return curr === 0 ? 0 : null;
+  return Math.round(((curr - prev) / prev) * 1000) / 10;
+}
+
 type CacheEntry = { expires: number; payload: unknown };
 
 const cache = new Map<AdminStatsRange, CacheEntry>();
@@ -195,6 +211,33 @@ export function setCachedAdminStats(range: AdminStatsRange, payload: unknown): v
 /** Drop all period caches after order/user mutations. */
 export function invalidateAdminStatsCache(): void {
   cache.clear();
+  pulseCache = null;
+  pulseInflight = null;
+}
+
+const PULSE_TTL_MS = 45_000;
+let pulseCache: CacheEntry | null = null;
+let pulseInflight: Promise<unknown> | null = null;
+
+export async function getOrComputeAdminPulse(
+  compute: () => Promise<unknown>,
+  opts?: { refresh?: boolean },
+): Promise<{ payload: unknown; hit: boolean }> {
+  if (!opts?.refresh && pulseCache && Date.now() <= pulseCache.expires) {
+    return { payload: pulseCache.payload, hit: true };
+  }
+  if (opts?.refresh) pulseCache = null;
+
+  if (!pulseInflight) {
+    pulseInflight = (async () => {
+      const payload = await compute();
+      pulseCache = { expires: Date.now() + PULSE_TTL_MS, payload };
+      return payload;
+    })().finally(() => {
+      pulseInflight = null;
+    });
+  }
+  return { payload: await pulseInflight, hit: false };
 }
 
 export function adminStatsCacheMeta(range: AdminStatsRange): {

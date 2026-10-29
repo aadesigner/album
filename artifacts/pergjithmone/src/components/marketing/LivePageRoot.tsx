@@ -58,7 +58,7 @@ export function LivePageRoot({
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const [enabled, setEnabled] = useState(isLiveAdminEdit);
-  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [inspectorOpen, setInspectorOpen] = useState(() => isLiveAdminEdit());
   const [preview, setPreview] = useState<'desktop' | 'mobile'>('desktop');
 
   const { data, isFetched } = useQuery({
@@ -72,7 +72,16 @@ export function LivePageRoot({
   const setMode = useCallback((on: boolean) => {
     setLiveAdminEdit(on);
     setEnabled(on);
-    if (!on) setPreview('desktop');
+    if (on) {
+      setInspectorOpen(true);
+    } else {
+      setPreview('desktop');
+      setInspectorOpen(false);
+    }
+  }, []);
+
+  const openInspector = useCallback(() => {
+    setInspectorOpen(true);
   }, []);
 
   const ready = isFetched || data !== undefined;
@@ -101,7 +110,7 @@ export function LivePageRoot({
 
   if (editing) {
     return (
-      <PageEditorProvider slug={slug} initial={data?.content} key={slug}>
+      <PageEditorProvider slug={slug} initial={data?.content} key={slug} onSelect={openInspector}>
         {page}
       </PageEditorProvider>
     );
@@ -285,8 +294,7 @@ function AdminModeChrome({
   const railStyle: React.CSSProperties = {
     position: 'fixed',
     right: 12,
-    top: '46%',
-    transform: 'translateY(-50%)',
+    bottom: 'max(16px, env(safe-area-inset-bottom, 0px))',
     zIndex: 80,
     background: '#1a1a1a',
     border: '1px solid rgba(255,255,255,0.1)',
@@ -301,9 +309,9 @@ function AdminModeChrome({
           className="fixed z-[70] overflow-y-auto border shadow-xl"
           style={{
             top: 12,
-            right: 60,
-            bottom: 12,
-            width: 'min(22rem, calc(100vw - 80px))',
+            right: 12,
+            bottom: 72,
+            width: 'min(22rem, calc(100vw - 24px))',
             borderColor: ADMIN.line,
             background: ADMIN.card,
             borderRadius: 16,
@@ -342,7 +350,7 @@ function AdminModeChrome({
         </button>
       ) : (
         <div
-          className="flex flex-col items-center gap-0.5 p-1 rounded-full"
+          className="flex items-center gap-0.5 p-1 rounded-full max-w-[calc(100vw-24px)] overflow-x-auto"
           style={railStyle}
           role="toolbar"
           aria-label={sq ? 'Redaktimi i faqes' : 'Page editing'}
@@ -418,7 +426,7 @@ function AdminModeChrome({
       {saveError && (
         <div
           className="fixed z-[81] flex items-center gap-2 rounded-xl px-3 py-2 text-[12px] shadow-lg max-w-[16rem]"
-          style={{ right: 60, top: '46%', transform: 'translateY(-50%)', background: '#FDECEC', color: '#9B1C1C' }}
+          style={{ right: 12, bottom: 72, background: '#FDECEC', color: '#9B1C1C' }}
         >
           <AlertTriangle size={13} /> {saveError}
         </div>

@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { Link, useLocation } from 'wouter';
 import {
@@ -6,6 +7,7 @@ import {
   Grid, Ruler, Settings, LogOut, X, Sparkles, ExternalLink, ShieldAlert, Check, Palette,
   FileText,
 } from 'lucide-react';
+import { authFetch } from '@/lib/authFetch';
 import {
   ADMIN_PALETTES,
   DEFAULT_ADMIN_PALETTE_ID,
@@ -56,6 +58,32 @@ const navGroups = (['Overview', 'Catalog', 'System'] as const).map((title) => ({
   title,
   items: navItems.filter((i) => i.group === title),
 }));
+
+type AdminPulse = {
+  pending: number;
+  pendingRevenue: number;
+  confirmed: number;
+  printing: number;
+  shipped: number;
+  todayOrders: number;
+  todayVisitors: number;
+};
+
+function useAdminPulse(enabled = true) {
+  return useQuery({
+    queryKey: ['admin-pulse'],
+    enabled,
+    queryFn: async () => {
+      const r = await authFetch('/api/admin/stats/pulse');
+      if (!r.ok) throw new Error('Failed to load pulse');
+      return r.json() as Promise<AdminPulse>;
+    },
+    staleTime: 45_000,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
+}
 
 /** Compact theme menu — dropdown (desktop) / dropup (mobile). Live type + color cards. */
 function ThemeSwitcher({
@@ -299,6 +327,7 @@ function Sidebar({
 }) {
   const { user, logout } = useAuth();
   const [location] = useLocation();
+  const { data: pulse } = useAdminPulse();
   const isMobile = variant === 'mobile';
   const initials = (user?.name || (user as any)?.phone || 'A')
     .split(' ')
@@ -394,6 +423,7 @@ function Sidebar({
             <div className={isMobile ? 'space-y-1' : 'space-y-0.5'}>
               {group.items.map(({ href, label, Icon }) => {
                 const isActive = location === href || (href !== '/heyadmin' && location.startsWith(href));
+                const badge = href === '/heyadmin/porosi' ? pulse?.pending : 0;
                 return (
                   <Link
                     key={href}
@@ -408,8 +438,6 @@ function Sidebar({
                       borderRadius: theme.radius,
                       ...(isActive
                         ? {
-                            // Stay on the rail (not a white chip) so dark-sidebar
-                            // palettes keep light type readable.
                             background: theme.sidebarActive,
                             color: theme.sidebarTextActive,
                             boxShadow: `inset 3px 0 0 ${theme.accent}`,
@@ -427,7 +455,7 @@ function Sidebar({
                       className={`flex items-center justify-center shrink-0 ${isMobile ? 'w-9 h-9' : 'w-7 h-7'}`}
                       style={{
                         borderRadius: `calc(${theme.radius} - 4px)`,
-                        background: isActive ? theme.accentSoft : 'transparent',
+                        background: isActive ? `${theme.accent}22` : 'transparent',
                         color: isActive ? theme.accent : theme.sidebarText,
                       }}
                     >
@@ -438,6 +466,14 @@ function Sidebar({
                       />
                     </span>
                     <span className="truncate flex-1" style={{ fontFamily: theme.fontSans }}>{label}</span>
+                    {!!badge && (
+                      <span
+                        className="min-w-[1.15rem] h-[1.15rem] px-1 flex items-center justify-center text-[9px] font-bold text-white shrink-0"
+                        style={{ background: theme.accent, borderRadius: '999px' }}
+                      >
+                        {badge > 99 ? '99+' : badge}
+                      </span>
+                    )}
                   </Link>
                 );
               })}
@@ -450,6 +486,24 @@ function Sidebar({
         className={`relative ${isMobile ? 'p-3 pb-[max(0.85rem,env(safe-area-inset-bottom))]' : 'p-3'}`}
         style={{ borderTop: `1px solid ${theme.sidebarLine}` }}
       >
+        {pulse && (
+          <div
+            className={`mb-3 ${isMobile ? 'px-1' : 'px-1'}`}
+            style={{ color: isMobile ? theme.muted : theme.sidebarText }}
+          >
+            <p className="text-[10px] leading-relaxed" style={{ opacity: 0.9 }}>
+              <span className="font-semibold" style={{ color: isMobile ? theme.ink : theme.sidebarTextActive }}>
+                {pulse.todayVisitors}
+              </span>
+              {' '}today ·{' '}
+              <span className="font-semibold" style={{ color: isMobile ? theme.ink : theme.sidebarTextActive }}>
+                {pulse.pending}
+              </span>
+              {' '}to print
+              {pulse.printing ? ` · ${pulse.printing} printing` : ''}
+            </p>
+          </div>
+        )}
         <div
           className={`flex items-center gap-3 mb-3 ${isMobile ? 'p-3' : 'px-1'}`}
           style={isMobile ? {
@@ -525,10 +579,11 @@ function Sidebar({
 }
 
 /** Premium hamburger → X morph for the mobile top bar. */
-function MenuToggle({ open, onClick, theme }: {
+function MenuToggle({ open, onClick, theme, badge = 0 }: {
   open: boolean;
   onClick: () => void;
   theme: AdminTokens;
+  badge?: number;
 }) {
   return (
     <button
@@ -573,6 +628,14 @@ function MenuToggle({ open, onClick, theme }: {
           }}
         />
       </span>
+      {!open && badge > 0 && (
+        <span
+          className="absolute -top-1 -right-1 min-w-[1.05rem] h-[1.05rem] px-1 flex items-center justify-center text-[9px] font-bold text-white"
+          style={{ background: theme.accent, borderRadius: '999px', boxShadow: `0 0 0 2px ${theme.card}` }}
+        >
+          {badge > 9 ? '9+' : badge}
+        </span>
+      )}
     </button>
   );
 }
@@ -581,6 +644,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
   const [location] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { data: pulse } = useAdminPulse(user?.role === 'admin');
   const [paletteId, setPaletteIdState] = useState<AdminPaletteId>(DEFAULT_ADMIN_PALETTE_ID);
   const [ready, setReady] = useState(false);
   const shellRef = useRef<HTMLDivElement>(null);
@@ -602,6 +666,15 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setSidebarOpen(false);
   }, [location]);
+
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSidebarOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [sidebarOpen]);
 
   // Lock body scroll while the mobile drawer is open.
   useEffect(() => {
@@ -691,7 +764,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
       >
         {/* Desktop: left rail */}
         <aside
-          className="w-[14.25rem] fixed inset-y-0 left-0 z-30 hidden lg:block"
+          className="w-[15rem] fixed inset-y-0 left-0 z-30 hidden lg:block"
           style={{ borderRight: `1px solid ${theme.sidebarLine}` }}
         >
           <Sidebar theme={theme} variant="desktop" />
@@ -731,7 +804,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
           />
         </aside>
 
-        <main className="flex-1 lg:ml-[14.25rem] min-h-[100dvh] flex flex-col min-w-0 relative">
+        <main className="flex-1 lg:ml-[15rem] min-h-[100dvh] flex flex-col min-w-0 relative">
           {/* Desktop: sticky theme control, top-right — floats so pages keep full width */}
           {!hideThemeSwitcher && (
             <div
@@ -801,6 +874,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
                 open={sidebarOpen}
                 onClick={() => setSidebarOpen((v) => !v)}
                 theme={theme}
+                badge={pulse?.pending || 0}
               />
             </div>
           </header>

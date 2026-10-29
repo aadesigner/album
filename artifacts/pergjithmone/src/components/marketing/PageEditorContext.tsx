@@ -43,10 +43,12 @@ export function PageEditorScope({
 export function PageEditorProvider({
   slug,
   initial,
+  onSelect,
   children,
 }: {
   slug: PageSlug;
   initial?: unknown;
+  onSelect?: (path: string, kind: FieldKind) => void;
   children: React.ReactNode;
 }) {
   const [content, setContent] = useState<Record<string, unknown>>(
@@ -64,7 +66,8 @@ export function PageEditorProvider({
   const select = useCallback((path: string, kind: FieldKind = 'text') => {
     setSelected(path);
     setSelectedKind(kind);
-  }, []);
+    onSelect?.(path, kind);
+  }, [onSelect]);
 
   const patch = useCallback((path: string, value: unknown) => {
     const present = contentRef.current;

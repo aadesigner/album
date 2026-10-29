@@ -163,6 +163,99 @@ function BiTextFields({ path }: { path: string }) {
           </select>
         </div>
       </div>
+      <ChipRow
+        label="Weight"
+        value={value.weight || ''}
+        options={[
+          { id: '', label: 'Auto' },
+          { id: 'normal', label: 'Regular' },
+          { id: 'medium', label: 'Medium' },
+          { id: 'semibold', label: 'Semibold' },
+        ]}
+        onChange={(weight) => set({ weight: (weight || undefined) as BiText['weight'] })}
+      />
+      <ChipRow
+        label="Italic"
+        value={value.italic || ''}
+        options={[
+          { id: '', label: 'Auto' },
+          { id: 'off', label: 'Off' },
+          { id: 'on', label: 'On' },
+        ]}
+        onChange={(italic) => set({ italic: (italic || undefined) as BiText['italic'] })}
+      />
+      <ChipRow
+        label="Line height"
+        value={value.leading || ''}
+        options={[
+          { id: '', label: 'Auto' },
+          { id: 'tight', label: 'Tight' },
+          { id: 'snug', label: 'Snug' },
+          { id: 'normal', label: 'Normal' },
+          { id: 'relaxed', label: 'Relaxed' },
+        ]}
+        onChange={(leading) => set({ leading: (leading || undefined) as BiText['leading'] })}
+      />
+      <ChipRow
+        label="Tracking"
+        value={value.tracking || ''}
+        options={[
+          { id: '', label: 'Auto' },
+          { id: 'tight', label: 'Tight' },
+          { id: 'normal', label: 'Normal' },
+          { id: 'wide', label: 'Wide' },
+        ]}
+        onChange={(tracking) => set({ tracking: (tracking || undefined) as BiText['tracking'] })}
+      />
+      <ChipRow
+        label="Box shadow"
+        value={value.shadow || ''}
+        options={[
+          { id: '', label: 'Auto' },
+          { id: 'none', label: 'None' },
+          { id: 'soft', label: 'Soft' },
+          { id: 'strong', label: 'Strong' },
+        ]}
+        onChange={(shadow) => set({ shadow: (shadow || undefined) as BiText['shadow'] })}
+      />
+    </div>
+  );
+}
+
+function ChipRow({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: Array<{ id: string; label: string }>;
+  onChange: (id: string) => void;
+}) {
+  return (
+    <div>
+      <p className="text-[11px] font-semibold uppercase tracking-wide mb-1.5" style={{ color: ADMIN.muted }}>{label}</p>
+      <div className="flex flex-wrap gap-1">
+        {options.map((opt) => {
+          const on = value === opt.id;
+          return (
+            <button
+              key={opt.id || 'auto'}
+              type="button"
+              onClick={() => onChange(opt.id)}
+              className="px-2 py-1 rounded-full text-[11px] font-semibold border"
+              style={{
+                borderColor: on ? ADMIN.blush : ADMIN.line,
+                background: on ? ADMIN.blushSoft : 'transparent',
+                color: ADMIN.ink,
+              }}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

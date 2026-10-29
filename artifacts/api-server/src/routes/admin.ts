@@ -35,9 +35,12 @@ import {
   ADMIN_STATS_TZ,
   STATS_TTL_MS,
   adminStatsCacheMeta,
+  getOrComputeAdminPulse,
   getOrComputeAdminStats,
   invalidateAdminStatsCache,
   isAdminStatsRange,
+  pctChange,
+  previousStatsRange,
   resolveStatsRange,
   type AdminStatsRange,
 } from "../lib/adminStatsCache";
@@ -129,14 +132,20 @@ router.get("/admin/stats", requireAdmin, async (req, res): Promise<void> => {
       const now = new Date();
       const bounds = resolveStatsRange(range, now);
       const { start, end, grain, label: rangeLabel } = bounds;
+      const prev = previousStatsRange(bounds);
 
       const earnedStatuses = inArray(ordersTable.status, ["shipped", "delivered"]);
       const activeOrder = ne(ordersTable.status, "cancelled");
+      const openStatuses = inArray(ordersTable.status, ["pending", "confirmed", "printing", "shipped"]);
       const orderAmountSql = sql<number>`coalesce(nullif(${ordersTable.priceLek}, 0), ${projectsTable.totalPriceLek}, 0)`;
 
       const inCreatedRange = and(
         gte(ordersTable.createdAt, start),
         lt(ordersTable.createdAt, end),
+      );
+      const inPrevCreatedRange = and(
+        gte(ordersTable.createdAt, prev.start),
+        lt(ordersTable.createdAt, prev.end),
       );
       const inEarnedRange = and(
         gte(ordersTable.updatedAt, start),
@@ -146,6 +155,11 @@ router.get("/admin/stats", requireAdmin, async (req, res): Promise<void> => {
         notHiddenUser,
         gte(usersTable.createdAt, start),
         lt(usersTable.createdAt, end),
+      );
+      const inPrevUserRange = and(
+        notHiddenUser,
+        gte(usersTable.createdAt, prev.start),
+        lt(usersTable.createdAt, prev.end),
       );
       const inProjectRange = and(
         gte(projectsTable.createdAt, start),
@@ -166,7 +180,6 @@ router.get("/admin/stats", requireAdmin, async (req, res): Promise<void> => {
         [usersCount],
         [ordersCount],
         [projectsCount],
-        [pendingCount],
         [ordersInRange],
         [revenueAll],
         [revenueRange],
@@ -174,15 +187,24 @@ router.get("/admin/stats", requireAdmin, async (req, res): Promise<void> => {
         [earnedRange],
         [usersInRange],
         [projectsInRange],
-        [visitorsRange],
-        [wpClicksRange],
+        trafficRange,
+        trafficPrev,
         [wpClicksTotal],
         statusRows,
+        livePipelineRows,
         recentOrders,
         recentUsers,
         chartRows,
         regRows,
         orderChartRows,
+        [ordersPrev],
+        [usersPrev],
+        [draftsAll],
+        [draftsPeriod],
+        [buyersRange],
+        [fulfillment],
+        repeatRows,
+        topSizeRows,
       ] = await Promise.all([
         db.select({ count: count() }).from(usersTable).where(notHiddenUser),
         db.select({ count: count() }).from(ordersTable)
@@ -193,16 +215,15 @@ router.get("/admin/stats", requireAdmin, async (req, res): Promise<void> => {
           .where(notHiddenUser),
         db.select({ count: count() }).from(ordersTable)
           .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
-          .where(and(notHiddenUser, eq(ordersTable.status, "pending"))),
-        db.select({ count: count() }).from(ordersTable)
-          .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
           .where(and(notHiddenUser, activeOrder, inCreatedRange)),
         db.select({ total: sql<number>`coalesce(sum(${orderAmountSql}), 0)` })
           .from(ordersTable)
           .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
           .leftJoin(projectsTable, eq(ordersTable.projectId, projectsTable.id))
           .where(and(notHiddenUser, activeOrder)),
-        db.select({ total: sql<number>`coalesce(sum(${orderAmountSql}), 0)` })
+        db.select({
+          total: sql<number>`coalesce(sum(${orderAmountSql}), 0)`,
+        })
           .from(ordersTable)
           .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
           .leftJoin(projectsTable, eq(ordersTable.projectId, projectsTable.id))
@@ -221,15 +242,20 @@ router.get("/admin/stats", requireAdmin, async (req, res): Promise<void> => {
         db.select({ count: count() }).from(projectsTable)
           .innerJoin(usersTable, eq(projectsTable.userId, usersTable.id))
           .where(and(notHiddenUser, inProjectRange)),
-        db.select({ count: sql<number>`count(distinct ip)` }).from(siteAnalyticsTable).where(sql`
-          ${siteAnalyticsTable.event} = 'page_view'
-          AND ${siteAnalyticsTable.createdAt} >= ${start}
-          AND ${siteAnalyticsTable.createdAt} < ${end}
+        db.execute(sql`
+          SELECT
+            count(distinct ip) FILTER (WHERE event = 'page_view') AS visitors,
+            count(*) FILTER (WHERE event = 'page_view') AS page_views,
+            count(*) FILTER (WHERE event = 'wp_click') AS wp_clicks
+          FROM site_analytics
+          WHERE created_at >= ${start} AND created_at < ${end}
         `),
-        db.select({ count: count() }).from(siteAnalyticsTable).where(sql`
-          ${siteAnalyticsTable.event} = 'wp_click'
-          AND ${siteAnalyticsTable.createdAt} >= ${start}
-          AND ${siteAnalyticsTable.createdAt} < ${end}
+        db.execute(sql`
+          SELECT
+            count(distinct ip) FILTER (WHERE event = 'page_view') AS visitors,
+            count(*) FILTER (WHERE event = 'wp_click') AS wp_clicks
+          FROM site_analytics
+          WHERE created_at >= ${prev.start} AND created_at < ${prev.end}
         `),
         db.select({ count: count() }).from(siteAnalyticsTable).where(sql`${siteAnalyticsTable.event} = 'wp_click'`),
         db
@@ -242,6 +268,17 @@ router.get("/admin/stats", requireAdmin, async (req, res): Promise<void> => {
           .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
           .leftJoin(projectsTable, eq(ordersTable.projectId, projectsTable.id))
           .where(and(notHiddenUser, inCreatedRange))
+          .groupBy(ordersTable.status),
+        db
+          .select({
+            status: ordersTable.status,
+            count: count(),
+            revenue: sql<number>`coalesce(sum(${orderAmountSql}), 0)`,
+          })
+          .from(ordersTable)
+          .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
+          .leftJoin(projectsTable, eq(ordersTable.projectId, projectsTable.id))
+          .where(and(notHiddenUser, openStatuses))
           .groupBy(ordersTable.status),
         db
           .select({
@@ -311,18 +348,85 @@ router.get("/admin/stats", requireAdmin, async (req, res): Promise<void> => {
           GROUP BY bucket
           ORDER BY bucket ASC
         `),
+        db.select({
+          count: count(),
+          total: sql<number>`coalesce(sum(${orderAmountSql}), 0)`,
+        })
+          .from(ordersTable)
+          .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
+          .leftJoin(projectsTable, eq(ordersTable.projectId, projectsTable.id))
+          .where(and(notHiddenUser, activeOrder, inPrevCreatedRange)),
+        db.select({ count: count() }).from(usersTable).where(inPrevUserRange),
+        db.select({ count: count() }).from(projectsTable)
+          .innerJoin(usersTable, eq(projectsTable.userId, usersTable.id))
+          .where(and(notHiddenUser, eq(projectsTable.status, "draft"))),
+        db.select({ count: count() }).from(projectsTable)
+          .innerJoin(usersTable, eq(projectsTable.userId, usersTable.id))
+          .where(and(notHiddenUser, eq(projectsTable.status, "draft"), inProjectRange)),
+        db.select({ count: sql<number>`count(distinct ${ordersTable.userId})` })
+          .from(ordersTable)
+          .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
+          .where(and(notHiddenUser, activeOrder, inCreatedRange)),
+        db.select({
+          hours: sql<number>`coalesce(avg(extract(epoch from (${ordersTable.updatedAt} - ${ordersTable.createdAt})) / 3600.0), 0)`,
+        })
+          .from(ordersTable)
+          .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
+          .where(and(notHiddenUser, earnedStatuses, inEarnedRange)),
+        db.execute(sql`
+          SELECT count(*)::int AS count FROM (
+            SELECT o.user_id
+            FROM orders o
+            INNER JOIN users u ON u.id = o.user_id
+            WHERE u.is_hidden = false
+              AND o.status <> 'cancelled'
+              AND o.created_at >= ${start} AND o.created_at < ${end}
+            GROUP BY o.user_id
+            HAVING count(*) > 1
+          ) t
+        `),
+        db
+          .select({
+            label: bookSizesTable.label,
+            count: count(),
+            revenue: sql<number>`coalesce(sum(${orderAmountSql}), 0)`,
+          })
+          .from(ordersTable)
+          .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
+          .innerJoin(projectsTable, eq(ordersTable.projectId, projectsTable.id))
+          .innerJoin(bookSizesTable, eq(projectsTable.bookSizeId, bookSizesTable.id))
+          .where(and(notHiddenUser, activeOrder, inCreatedRange))
+          .groupBy(bookSizesTable.id, bookSizesTable.label)
+          .orderBy(desc(count()))
+          .limit(4),
       ]);
 
       const toNum = (v: unknown) => {
         const n = Number(v);
         return Number.isFinite(n) ? n : 0;
       };
+      const firstRow = (exec: { rows?: unknown[] } | unknown[]) => {
+        const rows = Array.isArray(exec) ? exec : exec.rows || [];
+        return (rows[0] || {}) as Record<string, unknown>;
+      };
 
+      const traffic = firstRow(trafficRange);
+      const trafficWas = firstRow(trafficPrev);
       const ordersN = toNum(ordersInRange.count);
       const revenueN = toNum(revenueRange.total);
-      const visitorsN = toNum(visitorsRange.count);
+      const visitorsN = toNum(traffic.visitors);
+      const wpN = toNum(traffic.wp_clicks);
+      const pageViewsN = toNum(traffic.page_views);
+      const newUsersN = toNum(usersInRange.count);
+      const prevVisitors = toNum(trafficWas.visitors);
+      const prevWp = toNum(trafficWas.wp_clicks);
+      const prevOrdersN = toNum(ordersPrev.count);
+      const prevRevenueN = toNum(ordersPrev.total);
+      const prevUsersN = toNum(usersPrev.count);
       const avgOrderValue = ordersN > 0 ? Math.round(revenueN / ordersN) : 0;
       const conversionRate = visitorsN > 0 ? Math.round((ordersN / visitorsN) * 1000) / 10 : 0;
+      const uniqueBuyers = toNum(buyersRange.count);
+      const repeatCustomers = toNum(firstRow(repeatRows).count);
 
       const ordersByStatus: Record<string, { count: number; revenue: number }> = {};
       for (const row of statusRows) {
@@ -331,6 +435,20 @@ router.get("/admin/stats", requireAdmin, async (req, res): Promise<void> => {
           revenue: toNum(row.revenue),
         };
       }
+
+      const pipeline: Record<string, { count: number; revenue: number }> = {
+        pending: { count: 0, revenue: 0 },
+        confirmed: { count: 0, revenue: 0 },
+        printing: { count: 0, revenue: 0 },
+        shipped: { count: 0, revenue: 0 },
+      };
+      for (const row of livePipelineRows) {
+        pipeline[row.status] = {
+          count: toNum(row.count),
+          revenue: toNum(row.revenue),
+        };
+      }
+      const pendingOrders = pipeline.pending.count;
 
       return {
         range,
@@ -344,26 +462,52 @@ router.get("/admin/stats", requireAdmin, async (req, res): Promise<void> => {
         totalUsers: usersCount.count,
         totalOrders: ordersCount.count,
         totalProjects: projectsCount.count,
-        pendingOrders: toNum(pendingCount.count),
+        pendingOrders,
         revenue: toNum(revenueAll.total),
         earned: toNum(earnedAll.total),
         wpClicksTotal: toNum(wpClicksTotal.count),
+        pipeline,
+        draftProjects: toNum(draftsAll.count),
         // Period-scoped
         visitors: visitorsN,
-        wpClicks: toNum(wpClicksRange.count),
-        newUsers: toNum(usersInRange.count),
+        pageViews: pageViewsN,
+        wpClicks: wpN,
+        newUsers: newUsersN,
         newProjects: toNum(projectsInRange.count),
         orders: ordersN,
         revenuePeriod: revenueN,
         earnedPeriod: toNum(earnedRange.total),
         avgOrderValue,
         conversionRate,
+        uniqueBuyers,
+        repeatCustomers,
+        draftProjectsPeriod: toNum(draftsPeriod.count),
+        fulfillmentHours: Math.round(toNum(fulfillment.hours) * 10) / 10,
+        topSizes: topSizeRows.map((r) => ({
+          label: r.label,
+          orders: toNum(r.count),
+          revenue: toNum(r.revenue),
+        })),
+        prev: {
+          visitors: prevVisitors,
+          wpClicks: prevWp,
+          orders: prevOrdersN,
+          revenue: prevRevenueN,
+          newUsers: prevUsersN,
+        },
+        deltas: {
+          visitors: pctChange(visitorsN, prevVisitors),
+          wpClicks: pctChange(wpN, prevWp),
+          orders: pctChange(ordersN, prevOrdersN),
+          revenue: pctChange(revenueN, prevRevenueN),
+          newUsers: pctChange(newUsersN, prevUsersN),
+        },
         ordersByStatus,
         visitorsToday: range === "today" ? visitorsN : undefined,
         visitorsWeek: range === "week" ? visitorsN : undefined,
         visitorsMonth: range === "month" ? visitorsN : undefined,
-        usersToday: range === "today" ? toNum(usersInRange.count) : undefined,
-        usersWeek: range === "week" ? toNum(usersInRange.count) : undefined,
+        usersToday: range === "today" ? newUsersN : undefined,
+        usersWeek: range === "week" ? newUsersN : undefined,
         ordersThisMonth: range === "month" ? ordersN : undefined,
         revenueMonth: range === "month" ? revenueN : undefined,
         earnedMonth: range === "month" ? toNum(earnedRange.total) : undefined,
@@ -392,6 +536,77 @@ router.get("/admin/stats", requireAdmin, async (req, res): Promise<void> => {
 
   res.setHeader("X-Admin-Stats-Cache", hit ? "HIT" : "MISS");
   res.json(body);
+});
+
+// GET /admin/stats/pulse — tiny live ops snapshot for the sidebar (45s cache).
+router.get("/admin/stats/pulse", requireAdmin, async (req, res): Promise<void> => {
+  const refresh =
+    req.query.refresh === "1" ||
+    req.query.refresh === "true" ||
+    req.query.refresh === "yes";
+
+  const { payload, hit } = await getOrComputeAdminPulse(async () => {
+    const today = resolveStatsRange("today");
+    const orderAmountSql = sql<number>`coalesce(nullif(${ordersTable.priceLek}, 0), ${projectsTable.totalPriceLek}, 0)`;
+    const openStatuses = inArray(ordersTable.status, ["pending", "confirmed", "printing", "shipped"]);
+
+    const [liveRows, [todayOrders], traffic] = await Promise.all([
+      db
+        .select({
+          status: ordersTable.status,
+          count: count(),
+          revenue: sql<number>`coalesce(sum(${orderAmountSql}), 0)`,
+        })
+        .from(ordersTable)
+        .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
+        .leftJoin(projectsTable, eq(ordersTable.projectId, projectsTable.id))
+        .where(and(notHiddenUser, openStatuses))
+        .groupBy(ordersTable.status),
+      db.select({ count: count() }).from(ordersTable)
+        .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
+        .where(and(
+          notHiddenUser,
+          ne(ordersTable.status, "cancelled"),
+          gte(ordersTable.createdAt, today.start),
+          lt(ordersTable.createdAt, today.end),
+        )),
+      db.execute(sql`
+        SELECT count(distinct ip) FILTER (WHERE event = 'page_view') AS visitors
+        FROM site_analytics
+        WHERE event = 'page_view'
+          AND created_at >= ${today.start} AND created_at < ${today.end}
+      `),
+    ]);
+
+    const toNum = (v: unknown) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : 0;
+    };
+    const pipeline: Record<string, { count: number; revenue: number }> = {
+      pending: { count: 0, revenue: 0 },
+      confirmed: { count: 0, revenue: 0 },
+      printing: { count: 0, revenue: 0 },
+      shipped: { count: 0, revenue: 0 },
+    };
+    for (const row of liveRows) {
+      pipeline[row.status] = { count: toNum(row.count), revenue: toNum(row.revenue) };
+    }
+    const trafficRow = ((traffic as { rows?: Array<Record<string, unknown>> }).rows || [])[0] || {};
+
+    return {
+      pending: pipeline.pending.count,
+      pendingRevenue: pipeline.pending.revenue,
+      confirmed: pipeline.confirmed.count,
+      printing: pipeline.printing.count,
+      shipped: pipeline.shipped.count,
+      todayOrders: toNum(todayOrders.count),
+      todayVisitors: toNum(trafficRow.visitors),
+      updatedAt: new Date().toISOString(),
+    };
+  }, { refresh });
+
+  res.setHeader("X-Admin-Pulse-Cache", hit ? "HIT" : "MISS");
+  res.json(payload);
 });
 
 // GET /admin/users

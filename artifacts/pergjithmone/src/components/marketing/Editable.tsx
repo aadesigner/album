@@ -25,7 +25,7 @@ export function Editable({
   const autoStyle = kind === 'text' ? fields?.style(path) : undefined;
   const autoSize = kind === 'text' ? fields?.sizeClass(path) : '';
   if (!editor) {
-    const hasAuto = !!(autoStyle?.fontFamily || autoStyle?.textAlign || autoSize || className || style);
+    const hasAuto = !!((autoStyle && Object.keys(autoStyle).length) || autoSize || className || style);
     if (!hasAuto) return <>{children}</>;
     return (
       <Tag className={[className, autoSize].filter(Boolean).join(' ') || undefined} style={{ ...autoStyle, ...style }}>

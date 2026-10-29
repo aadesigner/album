@@ -4,6 +4,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import {
   type PageSlug, type FieldKind,
   fetchPublishedPage, mergePageContent, txt, imgSrc, listAt, hiddenAt, textStyle, textSizeClass, spaceClass,
+  type TextStyle,
 } from '@/lib/marketingPages';
 import { PAGE_DEFAULTS } from '@/lib/marketingPages.defaults';
 import { usePageEditorOptional } from './PageEditorContext';
@@ -17,7 +18,7 @@ type PageFields = {
   img: (path: string, fallback?: string) => string;
   list: <T = unknown>(path: string) => T[];
   hidden: (path: string) => boolean;
-  style: (path: string) => { fontFamily?: string; textAlign?: 'left' | 'center' | 'right' };
+  style: (path: string) => TextStyle;
   sizeClass: (path: string) => string;
   space: (path: string, fallback?: string) => string;
 };
