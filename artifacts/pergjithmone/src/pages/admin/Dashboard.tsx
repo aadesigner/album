@@ -108,7 +108,7 @@ function Delta({ value, theme }: { value: number | null | undefined; theme: Admi
   return (
     <span
       className="inline-flex items-center gap-0.5 text-[10px] font-semibold"
-      style={{ color: up ? theme.success : theme.accentDeep }}
+      style={{ color: up ? theme.accentDeep : theme.muted }}
     >
       {up ? <ArrowUpRight size={11} /> : <ArrowDownRight size={11} />}
       {Math.abs(value)}% vs prior
@@ -131,8 +131,8 @@ function StatCard({
   const accents = {
     default: theme.accent,
     accent: theme.accent,
-    success: theme.success,
-    warm: '#C4A574',
+    success: theme.accentDeep,
+    warm: theme.accentDeep,
   };
   const accent = accents[tone];
   return (
@@ -142,7 +142,7 @@ function StatCard({
         background: theme.card,
         border: `1px solid ${theme.line}`,
         borderRadius: theme.radius,
-        boxShadow: '0 1px 0 rgba(255,255,255,0.7) inset, 0 8px 24px rgba(40,16,28,0.045)',
+        boxShadow: theme.cardShadow,
       }}
     >
       <div className="absolute inset-x-0 top-0 h-[2px]" style={{ background: accent }} />

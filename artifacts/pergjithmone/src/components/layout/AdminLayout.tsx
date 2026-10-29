@@ -131,35 +131,25 @@ function ThemeSwitcher({
         aria-label={`Theme: ${active.name}`}
         className="group flex items-center gap-2.5 pl-1.5 pr-3 py-1.5 transition-all active:scale-[0.98] focus:outline-none"
         style={{
-          background: `linear-gradient(135deg, ${theme.card} 0%, ${theme.accentSoft}88 100%)`,
+          background: theme.card,
           border: `1px solid ${theme.line}`,
           borderRadius: theme.radius,
           boxShadow: open
             ? `0 10px 32px rgba(40,20,30,0.12), 0 0 0 1px ${theme.accent}40`
-            : '0 6px 20px rgba(40,20,30,0.07)',
-          backdropFilter: 'blur(12px)',
+            : theme.cardShadow,
         }}
       >
         <span
-          className="relative w-8 h-8 overflow-hidden shrink-0 flex"
+          className="relative w-8 h-8 overflow-hidden shrink-0 flex items-center justify-center"
           style={{
             borderRadius: `calc(${theme.radius} - 4px)`,
-            boxShadow: `inset 0 0 0 1px ${theme.line}, 0 2px 6px ${theme.accent}22`,
+            background: active.tokens.accent,
+            color: active.tokens.accentOn,
+            fontFamily: active.tokens.fontSerif,
+            boxShadow: `inset 0 0 0 1px ${theme.line}`,
           }}
         >
-          <span className="w-[32%] h-full" style={{ background: active.swatches[0] }} />
-          <span className="flex-1 h-full" style={{ background: active.swatches[1] }} />
-          <span className="w-[30%] h-full" style={{ background: active.swatches[2] }} />
-          <span
-            className="absolute inset-0 flex items-center justify-center text-[11px] font-semibold text-white"
-            style={{
-              background: `${active.tokens.accent}cc`,
-              fontFamily: active.tokens.fontSerif,
-              textShadow: '0 1px 2px rgba(0,0,0,0.2)',
-            }}
-          >
-            Aa
-          </span>
+          <span className="text-[12px] font-semibold leading-none">Aa</span>
         </span>
         <span className="hidden sm:flex flex-col items-start min-w-0 leading-none gap-1">
           <span
@@ -242,31 +232,31 @@ function ThemeSwitcher({
                   }}
                 >
                   <div
-                    className="h-11 flex items-end justify-between px-2.5 pb-1.5 pt-2"
+                    className="h-12 flex items-end justify-between px-2.5 pb-1.5 pt-2"
                     style={{
-                      background: p.tokens.sidebarWash,
+                      background: p.tokens.accent,
                     }}
                   >
                     <span
                       className="text-[22px] leading-none font-semibold"
-                      style={{ color: p.tokens.sidebarTextActive, fontFamily: p.tokens.fontSerif }}
+                      style={{ color: p.tokens.accentOn, fontFamily: p.tokens.fontSerif }}
                     >
                       Aa
                     </span>
                     {isActive && (
                       <span
                         className="w-5 h-5 rounded-full flex items-center justify-center shrink-0"
-                        style={{ background: p.tokens.accent }}
+                        style={{ background: p.tokens.accentOn, color: p.tokens.accent }}
                       >
-                        <Check size={11} strokeWidth={3} className="text-white" />
+                        <Check size={11} strokeWidth={3} />
                       </span>
                     )}
                     {isStandard && !isActive && (
                       <span
                         className="text-[8px] font-bold tracking-wider uppercase px-1.5 py-0.5"
                         style={{
-                          background: p.tokens.accent,
-                          color: '#fff',
+                          background: p.tokens.accentOn,
+                          color: p.tokens.accent,
                           borderRadius: '999px',
                         }}
                       >
@@ -287,19 +277,10 @@ function ThemeSwitcher({
                     >
                       {p.tokens.typePair}
                     </p>
-                    <div className="flex gap-1 mt-2">
-                      {p.swatches.map((c, i) => (
-                        <span
-                          key={i}
-                          className="h-1.5 flex-1"
-                          style={{
-                            background: c,
-                            borderRadius: '999px',
-                            boxShadow: `inset 0 0 0 1px ${p.tokens.line}`,
-                          }}
-                        />
-                      ))}
-                    </div>
+                    <div
+                      className="h-1.5 mt-2 rounded-full"
+                      style={{ background: p.tokens.accent }}
+                    />
                   </div>
                 </button>
               );
@@ -364,9 +345,10 @@ function Sidebar({
       >
         <div className="flex items-center gap-3 min-w-0">
           <div
-            className={`${isMobile ? 'w-11 h-11' : 'w-10 h-10'} flex items-center justify-center shrink-0 text-white shadow-sm`}
+            className={`${isMobile ? 'w-11 h-11' : 'w-10 h-10'} flex items-center justify-center shrink-0 shadow-sm`}
             style={{
-              background: `linear-gradient(145deg, ${theme.accent} 0%, ${theme.accentDeep} 100%)`,
+              background: theme.accent,
+              color: theme.accentOn,
               borderRadius: theme.radius,
             }}
           >
@@ -468,8 +450,8 @@ function Sidebar({
                     <span className="truncate flex-1" style={{ fontFamily: theme.fontSans }}>{label}</span>
                     {!!badge && (
                       <span
-                        className="min-w-[1.15rem] h-[1.15rem] px-1 flex items-center justify-center text-[9px] font-bold text-white shrink-0"
-                        style={{ background: theme.accent, borderRadius: '999px' }}
+                        className="min-w-[1.15rem] h-[1.15rem] px-1 flex items-center justify-center text-[9px] font-bold shrink-0"
+                        style={{ background: theme.accent, color: theme.accentOn, borderRadius: '999px' }}
                       >
                         {badge > 99 ? '99+' : badge}
                       </span>
@@ -514,9 +496,10 @@ function Sidebar({
           } : undefined}
         >
           <div
-            className={`${isMobile ? 'w-10 h-10' : 'w-9 h-9'} flex items-center justify-center text-xs font-semibold shrink-0 text-white`}
+            className={`${isMobile ? 'w-10 h-10' : 'w-9 h-9'} flex items-center justify-center text-xs font-semibold shrink-0`}
             style={{
-              background: `linear-gradient(145deg, ${theme.accent}, ${theme.accentDeep})`,
+              background: theme.accent,
+              color: theme.accentOn,
               borderRadius: '999px',
             }}
           >
@@ -566,7 +549,7 @@ function Sidebar({
             }`}
             style={{
               borderRadius: theme.radius,
-              ...(isMobile ? { background: theme.accent } : { color: theme.accent }),
+              ...(isMobile ? { background: theme.accent, color: theme.accentOn } : { color: theme.accent }),
             }}
           >
             <LogOut size={15} />
@@ -594,7 +577,7 @@ function MenuToggle({ open, onClick, theme, badge = 0 }: {
       className="relative w-11 h-11 flex items-center justify-center transition-transform active:scale-95 shrink-0"
       style={{
         background: open ? theme.accent : theme.card,
-        color: open ? '#fff' : theme.ink,
+        color: open ? theme.accentOn : theme.ink,
         border: open ? 'none' : `1px solid ${theme.line}`,
         borderRadius: theme.radius,
         boxShadow: open
@@ -631,7 +614,7 @@ function MenuToggle({ open, onClick, theme, badge = 0 }: {
       {!open && badge > 0 && (
         <span
           className="absolute -top-1 -right-1 min-w-[1.05rem] h-[1.05rem] px-1 flex items-center justify-center text-[9px] font-bold text-white"
-          style={{ background: theme.accent, borderRadius: '999px', boxShadow: `0 0 0 2px ${theme.card}` }}
+          style={{ background: theme.accent, color: theme.accentOn, borderRadius: '999px', boxShadow: `0 0 0 2px ${theme.card}` }}
         >
           {badge > 9 ? '9+' : badge}
         </span>
@@ -754,7 +737,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
         ref={shellRef}
         className="min-h-[100dvh] flex admin-shell"
         style={{
-          background: theme.bg,
+          background: theme.stageWash || theme.bg,
           fontFamily: theme.fontSans,
           ['--admin-font-serif' as string]: theme.fontSerif,
           ['--admin-font-sans' as string]: theme.fontSans,
@@ -765,7 +748,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
         {/* Desktop: left rail */}
         <aside
           className="w-[15rem] fixed inset-y-0 left-0 z-30 hidden lg:block"
-          style={{ borderRight: `1px solid ${theme.sidebarLine}` }}
+          style={{ borderRight: `1px solid ${theme.sidebarLine}`, boxShadow: `4px 0 24px ${theme.accent}14` }}
         >
           <Sidebar theme={theme} variant="desktop" />
         </aside>
@@ -836,9 +819,10 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
             <div className="flex items-center gap-2.5">
               <div className="flex items-center gap-2.5 min-w-0 flex-1">
                 <div
-                  className="w-9 h-9 flex items-center justify-center shrink-0 text-white font-semibold text-sm shadow-sm"
+                  className="w-9 h-9 flex items-center justify-center shrink-0 font-semibold text-sm shadow-sm"
                   style={{
-                    background: `linear-gradient(145deg, ${theme.accent}, ${theme.accentDeep})`,
+                    background: theme.accent,
+                    color: theme.accentOn,
                     borderRadius: theme.radius,
                     fontFamily: theme.fontSerif,
                   }}
@@ -880,10 +864,20 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
           </header>
 
           <div
-            className="flex-1 min-w-0 admin-content"
+            className="flex-1 min-w-0 admin-content relative"
             key={paletteId}
             style={{ fontFamily: theme.fontSans }}
           >
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0 z-0 opacity-[0.22]"
+              style={{
+                backgroundImage: `radial-gradient(${theme.accent}40 0.55px, transparent 0.7px)`,
+                backgroundSize: '11px 11px',
+                maskImage: 'linear-gradient(180deg, rgba(0,0,0,0.45), transparent 78%)',
+                WebkitMaskImage: 'linear-gradient(180deg, rgba(0,0,0,0.45), transparent 78%)',
+              }}
+            />
             <style>{`
               .admin-shell {
                 --admin-font-serif: ${theme.fontSerif};
@@ -902,7 +896,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
                 font-family: var(--admin-font-serif) !important;
               }
             `}</style>
-            {children}
+            <div className="relative z-[1]">{children}</div>
           </div>
 
           <AdminStickyNotes />

@@ -41,8 +41,8 @@ export default function DashboardCharts({
               <stop offset="95%" stopColor={theme.accent} stopOpacity={0} />
             </linearGradient>
             <linearGradient id="gWa" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor={theme.success} stopOpacity={0.2} />
-              <stop offset="95%" stopColor={theme.success} stopOpacity={0} />
+              <stop offset="5%" stopColor={theme.accentDeep} stopOpacity={0.22} />
+              <stop offset="95%" stopColor={theme.accentDeep} stopOpacity={0} />
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke={theme.line} vertical={false} />
@@ -50,7 +50,7 @@ export default function DashboardCharts({
           <YAxis tick={{ fontSize: 9, fill: theme.muted }} axisLine={false} tickLine={false} allowDecimals={false} />
           <Tooltip contentStyle={tip} />
           <Area type="monotone" dataKey="visitors" name="Visitors" stroke={theme.accent} strokeWidth={2} fill="url(#gVis)" dot={false} />
-          <Area type="monotone" dataKey="wp_clicks" name="WA clicks" stroke={theme.success} strokeWidth={2} fill="url(#gWa)" dot={false} />
+          <Area type="monotone" dataKey="wp_clicks" name="WA clicks" stroke={theme.accentDeep} strokeWidth={2} fill="url(#gWa)" dot={false} />
         </AreaChart>
       </ResponsiveContainer>
     );
@@ -65,7 +65,7 @@ export default function DashboardCharts({
         <YAxis yAxisId="r" orientation="right" hide />
         <Tooltip contentStyle={tip} />
         <Bar yAxisId="l" dataKey="orders" name="Orders" fill={theme.accent} radius={[4, 4, 0, 0]} />
-        <Bar yAxisId="r" dataKey="revenue" name="Revenue (L)" fill="#C4A574" radius={[4, 4, 0, 0]} opacity={0.55} />
+        <Bar yAxisId="r" dataKey="revenue" name="Revenue (L)" fill={theme.accentDeep} radius={[4, 4, 0, 0]} opacity={0.5} />
       </BarChart>
     </ResponsiveContainer>
   );
