@@ -257,8 +257,9 @@ function LivingAlbumBook({
     }
   }, [coverEls]);
 
-  const spineD = size === 'hero' ? 26 : 14;
-  const pageBlock = size === 'hero' ? 16 : 9;
+  // Slim hardcover album — not a thick novel. Pages sit flush with the cover.
+  const spineD = size === 'hero' ? 10 : 6;
+  const pageBlock = size === 'hero' ? 6 : 4;
 
   const onMove = (e: React.MouseEvent) => {
     if (!interactive || reduced || !wrapRef.current) return;
@@ -286,10 +287,10 @@ function LivingAlbumBook({
       style={{
         // Gutter only — keeps spine/pages outside the hero overflow clip.
         // Cover size lives on the inner 3:4 box so padding cannot squash it.
-        paddingTop: size === 'hero' ? 14 : 8,
-        paddingBottom: size === 'hero' ? 28 : 16,
-        paddingLeft: spineD + 14,
-        paddingRight: pageBlock + 18,
+        paddingTop: size === 'hero' ? 12 : 6,
+        paddingBottom: size === 'hero' ? 22 : 12,
+        paddingLeft: spineD + 10,
+        paddingRight: pageBlock + 10,
         perspective: size === 'hero' ? 1180 : 900,
         perspectiveOrigin: '38% 42%',
         touchAction: 'manipulation',
@@ -297,7 +298,7 @@ function LivingAlbumBook({
     >
       <div
         aria-hidden
-        className="absolute left-1/2 -translate-x-1/2 bottom-[2%] w-[80%] h-[12%] rounded-[100%] blur-2xl opacity-40"
+        className="absolute left-1/2 -translate-x-1/2 bottom-[2%] w-[70%] h-[8%] rounded-[100%] blur-2xl opacity-22"
         style={{ background: size === 'hero'
           ? 'radial-gradient(ellipse, rgba(42, 34, 24, 0.10), transparent 72%)'
           : 'radial-gradient(ellipse, rgba(42,34,24,0.18), transparent 72%)' }}
@@ -333,7 +334,7 @@ function LivingAlbumBook({
             rotateX: usePointerTilt ? rotX : 0,
           }}
         >
-          {/* Spine (left edge — facing viewer when yawed) */}
+          {/* Spine — thin album board, same height as the cover */}
           <div
             aria-hidden
             style={{
@@ -342,55 +343,34 @@ function LivingAlbumBook({
               width: spineD, height: '100%',
               transformOrigin: 'right center',
               transform: 'rotateY(-90deg)',
-              background: `linear-gradient(to right, ${style.spine}33, ${style.spine}, ${style.spine}aa)`,
-              borderRadius: '3px 0 0 3px',
+              background: `linear-gradient(to right, ${style.spine}55, ${style.spine}, ${style.spine}cc)`,
+              borderRadius: 0,
               boxShadow: 'none',
               overflow: 'hidden',
             }}
-          >
-            <div style={{
-              position: 'absolute', inset: 0,
-              background: 'linear-gradient(to right, rgba(0,0,0,0.18), rgba(0,0,0,0.02))',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <span style={{
-                writingMode: 'vertical-rl',
-                fontSize: size === 'hero' ? 8 : 6,
-                letterSpacing: '0.28em',
-                textTransform: 'uppercase',
-                color: 'rgba(255,255,255,0.38)',
-                fontWeight: 600,
-              }}>
-                përgjithmonë
-              </span>
-            </div>
-          </div>
+          />
 
-          {/* Page stack (right edge depth) — few leaves for a slim album */}
+          {/* Page edges — flush with the cover, no inset, no paper shadow */}
           <div
             aria-hidden
             style={{
               position: 'absolute',
-              right: -pageBlock, top: '1.5%',
-              width: pageBlock, height: '97%',
+              right: -pageBlock, top: 0,
+              width: pageBlock, height: '100%',
               transformOrigin: 'left center',
               transform: 'rotateY(90deg)',
-              background: 'linear-gradient(to left, #b0aaa0, #f7f3eb 55%, #ebe6dc)',
+              background: 'linear-gradient(to left, #f3eee6, #fffdf9 40%, #faf7f2)',
               boxShadow: 'none',
               overflow: 'hidden',
             }}
           >
-            {Array.from({ length: 7 }).map((_, i) => (
+            {Array.from({ length: 4 }).map((_, i) => (
               <div key={i} style={{
                 position: 'absolute', left: 0, right: 0,
-                top: `${(i / 7) * 100}%`, height: 1,
-                background: i % 2 === 0 ? 'rgba(0,0,0,0.10)' : 'rgba(0,0,0,0.04)',
+                top: `${((i + 1) / 5) * 100}%`, height: 1,
+                background: 'rgba(255,255,255,0.7)',
               }} />
             ))}
-            <div style={{
-              position: 'absolute', inset: 0,
-              background: 'linear-gradient(to right, rgba(0,0,0,0.06), transparent 70%)',
-            }} />
           </div>
 
           {/* Cover face */}
@@ -399,12 +379,11 @@ function LivingAlbumBook({
             style={{
               position: 'absolute',
               inset: 0,
-              borderRadius: '0 5px 5px 0',
+              borderRadius: '0 3px 3px 0',
               overflow: 'hidden',
-              boxShadow:
-                '0 22px 48px rgba(42,34,24,0.22), 8px 18px 28px rgba(42,34,24,0.10), inset 0 0 0 1px rgba(255,255,255,0.18)',
+              boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.16)',
               background: coverBg,
-              transform: 'translateZ(1px)',
+              transform: 'translateZ(0.5px)',
             }}
           >
             <AnimatePresence mode="wait" initial={false}>
@@ -469,10 +448,10 @@ function LivingAlbumBook({
             style={{
               position: 'absolute',
               inset: 0,
-              borderRadius: '0 5px 5px 0',
-              background: `linear-gradient(135deg, ${style.spine}ee, #14110e)`,
-              transform: `translateZ(-${pageBlock + 2}px)`,
-              boxShadow: 'inset 0 0 24px rgba(0,0,0,0.4)',
+              borderRadius: '0 3px 3px 0',
+              background: style.spine,
+              transform: `translateZ(-${pageBlock}px)`,
+              boxShadow: 'none',
             }}
           />
         </motion.div>
