@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Upload, X, Loader2 } from 'lucide-react';
 import { uploadErrorMessage, uploadImageToApi } from '@/lib/uploadImage';
+import { resolvePublicImageSrc } from '@/lib/categoryImages';
 
 /**
  * Cover-image uploader for admin forms.
@@ -27,7 +28,7 @@ export function ImageUploadInput({
   const [broken, setBroken] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const displaySrc = value || fallbackPreview || '';
+  const displaySrc = resolvePublicImageSrc(value) || fallbackPreview || '';
   const showingFallback = !value && !!fallbackPreview;
 
   const handleFile = async (file: File) => {

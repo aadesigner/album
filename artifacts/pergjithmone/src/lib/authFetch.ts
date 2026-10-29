@@ -21,6 +21,13 @@ export async function authFetch(
   isRetry = false,
 ): Promise<Response> {
   const headers = new Headers(init.headers);
+  // Browser must set multipart boundary itself — a preset Content-Type
+  // makes multer see an empty body and every photo upload fails.
+  const isFormData = typeof FormData !== 'undefined' && init.body instanceof FormData;
+  if (isFormData) {
+    headers.delete('Content-Type');
+    headers.delete('content-type');
+  }
   const token = hooks ? await hooks.ensureToken() : null;
   if (token && !headers.has('Authorization') && !headers.has('authorization')) {
     headers.set('Authorization', `Bearer ${token}`);

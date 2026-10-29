@@ -39,4 +39,22 @@ describe('imageCache', () => {
     expect(again).toBe(img);
     vi.unstubAllGlobals();
   });
+
+  it('does not force CORS on same-origin upload URLs', async () => {
+    let created: { crossOrigin: string } | null = null;
+    class FakeImage {
+      crossOrigin = '';
+      decoding = '';
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      set src(_v: string) {
+        created = this;
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+    vi.stubGlobal('Image', FakeImage);
+    await loadCachedImage('/api/uploads/files/a.jpg');
+    expect(created?.crossOrigin).toBe('');
+    vi.unstubAllGlobals();
+  });
 });

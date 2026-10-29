@@ -26,4 +26,19 @@ describe('authFetch', () => {
     const retryHeaders = new Headers(fetchMock.mock.calls[1][1].headers);
     expect(retryHeaders.get('Authorization')).toBe('Bearer fresh');
   });
+
+  it('does not set Content-Type on FormData so the multipart boundary is kept', async () => {
+    setAuthFetchHooks({
+      ensureToken: async () => 'tok',
+      onUnauthorized: async () => false,
+    });
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ url: '/api/uploads/files/a.jpg' }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const fd = new FormData();
+    fd.append('file', new Blob(['x'], { type: 'image/jpeg' }), 'a.jpg');
+    await authFetch('/api/uploads/image', { method: 'POST', body: fd });
+    const sent = new Headers(fetchMock.mock.calls[0][1].headers);
+    expect(sent.get('content-type')).toBeNull();
+    expect(sent.get('Authorization')).toBe('Bearer tok');
+  });
 });

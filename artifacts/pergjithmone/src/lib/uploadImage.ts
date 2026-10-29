@@ -28,6 +28,9 @@ export async function uploadImageToApi(file: File, _token?: string | null): Prom
   const r = await authFetch('/api/uploads/image', {
     method: 'POST',
     body: fd,
+    ...(typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
+      ? { signal: AbortSignal.timeout(120_000) }
+      : {}),
   });
   const raw = await r.text().catch(() => '');
   if (!r.ok) {
@@ -65,6 +68,14 @@ export function uploadErrorMessage(err: unknown, lang: 'sq' | 'en'): string {
     return lang === 'sq'
       ? 'Fotoja është shumë e madhe. Provoni një version më të vogël.'
       : 'That photo is too large. Try a smaller version.';
+  }
+  if (
+    /abort|timeout|timed out/i.test(raw)
+    || (typeof DOMException !== 'undefined' && err instanceof DOMException && err.name === 'TimeoutError')
+  ) {
+    return lang === 'sq'
+      ? 'Ngarkimi zgjati shumë. Provoni një foto më të vogël ose lidhjen e rrjetit.'
+      : 'Upload timed out. Try a smaller photo or check your connection.';
   }
   return lang === 'sq'
     ? 'Ngarkimi dështoi. Provoni përsëri ose një foto tjetër (JPG / PNG).'

@@ -242,6 +242,8 @@ router.get("/uploads/files/:filename", (req, res): void => {
   // Filenames are content-addressed (timestamp + random suffix) and never
   // reused for different content, so it's safe to cache these aggressively.
   res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+  res.setHeader("Access-Control-Allow-Origin", "*");
   res.sendFile(filePath);
 });
 

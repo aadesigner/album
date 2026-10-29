@@ -4,6 +4,7 @@
  * and proxies other /api/* calls to API_URL.
  */
 import http from "node:http";
+import https from "node:https";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -72,16 +73,22 @@ function sendFile(res, filePath) {
     .pipe(res);
 }
 
-function readBody(req) {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    req.on("data", (c) => chunks.push(c));
-    req.on("end", () => resolve(Buffer.concat(chunks)));
-    req.on("error", reject);
-  });
-}
+const HOP_BY_HOP = new Set([
+  "connection",
+  "keep-alive",
+  "proxy-authenticate",
+  "proxy-authorization",
+  "te",
+  "trailer",
+  "upgrade",
+]);
 
-async function proxyApi(req, res, pathname, search) {
+/**
+ * Stream /api to api-server. Photo uploads are multipart; buffering them in
+ * fetch() and dropping Content-Length corrupted the file bytes so sharp
+ * rejected every image from the editor, studio, and category forms.
+ */
+function proxyApi(req, res, pathname, search) {
   if (!apiUrl) {
     sendJson(res, 503, {
       error: "API_URL is not set on the frontend service. Point it at api-server.",
@@ -89,81 +96,66 @@ async function proxyApi(req, res, pathname, search) {
     return;
   }
 
-  const target = `${apiUrl}${pathname}${search}`;
+  let target;
+  try {
+    target = new URL(`${apiUrl}${pathname}${search}`);
+  } catch {
+    sendJson(res, 502, { error: "API_URL is invalid", apiUrl });
+    return;
+  }
+
   const headers = {};
   for (const [key, value] of Object.entries(req.headers)) {
     if (value == null) continue;
     const lower = key.toLowerCase();
-    // Drop hop-by-hop + encoding: node fetch decompresses gzip for us, so we
-    // must not ask for / forward content-encoding or the browser gets corrupt bodies.
-    if (
-      lower === "host" ||
-      lower === "connection" ||
-      lower === "content-length" ||
-      lower === "transfer-encoding" ||
-      lower === "keep-alive" ||
-      lower === "accept-encoding"
-    ) {
-      continue;
-    }
+    if (HOP_BY_HOP.has(lower) || lower === "host") continue;
     headers[key] = Array.isArray(value) ? value.join(",") : value;
   }
-  headers.host = new URL(apiUrl).host;
-  // Prefer plain responses from upstream when possible.
-  headers["accept-encoding"] = "identity";
+  headers.host = target.host;
 
+  const lib = target.protocol === "https:" ? https : http;
   const method = req.method || "GET";
-  const body =
-    method === "GET" || method === "HEAD" ? undefined : await readBody(req);
-
-  try {
-    const upstream = await fetch(target, {
+  const upstream = lib.request(
+    {
+      protocol: target.protocol,
+      hostname: target.hostname,
+      port: target.port || (target.protocol === "https:" ? 443 : 80),
+      path: `${target.pathname}${target.search}`,
       method,
       headers,
-      body,
-      redirect: "manual",
-    });
+      timeout: 120_000,
+    },
+    (upRes) => {
+      const outHeaders = { ...upRes.headers };
+      delete outHeaders.connection;
+      delete outHeaders["keep-alive"];
+      res.writeHead(upRes.statusCode || 502, outHeaders);
+      upRes.pipe(res);
+    },
+  );
 
-    // node fetch already decompresses; never forward content-encoding / length.
-    const outHeaders = {};
-    const setCookies = [];
-    upstream.headers.forEach((value, key) => {
-      const lower = key.toLowerCase();
-      if (
-        lower === "transfer-encoding" ||
-        lower === "connection" ||
-        lower === "content-encoding" ||
-        lower === "content-length" ||
-        lower === "set-cookie"
-      ) {
-        return;
-      }
-      outHeaders[key] = value;
-    });
-    if (typeof upstream.headers.getSetCookie === "function") {
-      setCookies.push(...upstream.headers.getSetCookie());
-    } else {
-      const single = upstream.headers.get("set-cookie");
-      if (single) setCookies.push(single);
-    }
-
-    const buf = Buffer.from(await upstream.arrayBuffer());
-    outHeaders["content-length"] = String(buf.byteLength);
-    if (setCookies.length === 1) {
-      outHeaders["set-cookie"] = setCookies[0];
-    } else if (setCookies.length > 1) {
-      outHeaders["set-cookie"] = setCookies;
-    }
-    res.writeHead(upstream.status, outHeaders);
-    res.end(buf);
-  } catch (err) {
+  upstream.on("timeout", () => {
+    upstream.destroy();
+    if (!res.headersSent) sendJson(res, 504, { error: "API timeout while uploading or loading." });
+  });
+  upstream.on("error", (err) => {
     console.error("[proxy]", method, pathname, err?.message || err);
-    sendJson(res, 502, {
-      error: "Bad gateway — could not reach API_URL",
-      detail: String(err?.message || err),
-      apiUrl,
-    });
-  }
+    if (!res.headersSent) {
+      sendJson(res, 502, {
+        error: "Bad gateway — could not reach API_URL",
+        detail: String(err?.message || err),
+        apiUrl,
+      });
+    } else {
+      res.end();
+    }
+  });
+
+  req.on("error", (err) => {
+    console.error("[proxy:req]", method, pathname, err?.message || err);
+    upstream.destroy();
+  });
+  req.pipe(upstream);
 }
 
 function resolveStatic(pathname) {
@@ -207,7 +199,7 @@ const server = http.createServer((req, res) => {
       }
 
       if (url.pathname.startsWith("/api/") || url.pathname === "/api") {
-        await proxyApi(req, res, url.pathname, url.search);
+        proxyApi(req, res, url.pathname, url.search);
         return;
       }
 
@@ -237,6 +229,9 @@ const server = http.createServer((req, res) => {
   })();
 });
 
+server.requestTimeout = 0;
+server.headersTimeout = 120_000;
+server.timeout = 0;
 server.listen(port, "0.0.0.0", () => {
   console.log(`[pergjithmone] listening on 0.0.0.0:${port}`);
 });

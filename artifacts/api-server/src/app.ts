@@ -23,7 +23,13 @@ const proxyHops = Number(process.env.TRUST_PROXY_HOPS);
 app.set("trust proxy", Number.isFinite(proxyHops) && proxyHops >= 0 ? proxyHops : 1);
 
 // ── Security headers (CSP disabled — handled by frontend CDN) ──────────────
-app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+  // Uploaded photos are drawn onto Konva canvases (editor + Creative Studio).
+  // same-origin CORP made those <img crossorigin> loads fail.
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+}));
 
 // ── Response compression ───────────────────────────────────────────────────
 app.use(compression());

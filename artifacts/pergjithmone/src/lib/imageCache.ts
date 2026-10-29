@@ -30,7 +30,12 @@ export function loadCachedImage(src: string): Promise<HTMLImageElement> {
 
   const next = new Promise<HTMLImageElement>((resolve, reject) => {
     const img = new Image();
-    img.crossOrigin = 'anonymous';
+    // Same-origin /api uploads do not need CORS. Forcing anonymous here made
+    // Konva drop photos in the editor and Creative Studio when CORP/CORS
+    // headers were missing on the file response.
+    const absolute = /^https?:\/\//i.test(src);
+    const sameOrigin = !absolute || (typeof window !== 'undefined' && src.startsWith(window.location.origin));
+    if (!sameOrigin) img.crossOrigin = 'anonymous';
     img.decoding = 'async';
     img.onload = () => {
       inflight.delete(src);
