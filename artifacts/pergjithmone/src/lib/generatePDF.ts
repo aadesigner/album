@@ -276,7 +276,7 @@ async function renderPage(elements: PdfElement[], canvasH: number): Promise<stri
 
     // ── Text ───────────────────────────────────────────────────────────────
     else if (el.type === 'text' && el.text) {
-      // Match KonvaText: padding=6, verticalAlign=top, wrap=word, letterSpacing.
+      // Match KonvaText: padding=6, wrap=word, letterSpacing, verticalAlign.
       const pad       = 6;
       const fontSize  = el.fontSize  ?? 20;
       const lh        = el.lineHeight ?? 1.2;
@@ -284,6 +284,7 @@ async function renderPage(elements: PdfElement[], canvasH: number): Promise<stri
       const style     = el.fontStyle  ?? 'normal';
       const color     = el.fill       ?? '#1a1a1a';
       const alignment = el.align      ?? 'center';
+      const vAlign    = el.verticalAlign || 'top';
       const letterSpacing = el.letterSpacing ?? 0;
 
       const isBold   = style.includes('bold');
@@ -294,8 +295,10 @@ async function renderPage(elements: PdfElement[], canvasH: number): Promise<stri
       ctx.textBaseline = 'top';
 
       const maxW = Math.max(1, el.w - pad * 2);
+      const innerH = Math.max(0, el.h - pad * 2);
       const lines = wrapLines(ctx, el.text, maxW, letterSpacing);
       const lineH = fontSize * lh;
+      const textH = lines.length * lineH;
 
       ctx.save();
       ctx.beginPath();
@@ -303,6 +306,8 @@ async function renderPage(elements: PdfElement[], canvasH: number): Promise<stri
       ctx.clip();
 
       let startY = el.y + pad;
+      if (vAlign === 'middle') startY = el.y + pad + Math.max(0, (innerH - textH) / 2);
+      if (vAlign === 'bottom') startY = el.y + el.h - pad - textH;
       for (const line of lines) {
         if (startY >= el.y + el.h) break;
         const lineW = measureLineWidth(ctx, line, letterSpacing);

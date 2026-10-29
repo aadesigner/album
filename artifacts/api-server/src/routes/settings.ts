@@ -3,7 +3,7 @@ import { db } from "@workspace/db-tsconfig";
 import { bookSizesTable, layoutsTable, appSettingsTable } from "@workspace/db-tsconfig";
 import { eq } from "drizzle-orm";
 import { readOfferBarSettings } from "../lib/offerBarSettings";
-import { setPublicCatalogCache } from "../lib/httpCache";
+import { setPublicCatalogCache, setNoStoreCache } from "../lib/httpCache";
 
 const router: IRouter = Router();
 
@@ -25,7 +25,7 @@ router.get("/book-sizes", async (_req, res): Promise<void> => {
 
 // GET /layouts
 router.get("/layouts", async (_req, res): Promise<void> => {
-  setPublicCatalogCache(res);
+  setNoStoreCache(res);
   const layouts = await db
     .select()
     .from(layoutsTable)

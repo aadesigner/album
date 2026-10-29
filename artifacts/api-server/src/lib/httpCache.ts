@@ -4,3 +4,8 @@ import type { Response } from "express";
 export function setPublicCatalogCache(res: Response): void {
   res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
 }
+
+/** Admin-edited catalogs (layouts) must show up as soon as they are saved. */
+export function setNoStoreCache(res: Response): void {
+  res.setHeader("Cache-Control", "no-store");
+}

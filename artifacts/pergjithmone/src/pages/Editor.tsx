@@ -72,7 +72,7 @@ import {
   designFrontElements, designBackElements, buildDesignCatalog, parseCustomDesigns,
   type EditorElement, type DE, type DesignDef, type LayoutZone, type LayoutDef, type DesignOverrides,
 } from '@/lib/designs';
-import { mergeEditorLayouts } from '@/lib/editorLayouts';
+import { mergeEditorLayouts, layoutZoneToElement } from '@/lib/editorLayouts';
 import { isStrokeOnlyShape, shapePathForElement } from '@/lib/shapes';
 import { getEmptyInnerPageNumbers } from '@/lib/pageContent';
 import { PageThumb, DesignCatalogThumb } from '@/components/PageThumb';
@@ -819,7 +819,7 @@ function KTxtEl({el,onSelect,onChange,onStartEdit,onGestureStart,onDragActive,on
         fontFamily={family}
         fill={el.fill || '#1a1a1a'}
         align={el.align || 'center'}
-        verticalAlign="top"
+        verticalAlign={el.verticalAlign || 'top'}
         fontStyle={style}
         lineHeight={el.lineHeight ?? 1.2}
         letterSpacing={el.letterSpacing ?? 0}
@@ -3731,12 +3731,10 @@ export default function Editor() {
   const applyLayout=useCallback((layoutId:string)=>{
     if (isOrdered || !activePageId) return;
     const layout=editorLayouts.find(l=>l.id===layoutId); if(!layout) return;
-    const newEls:EditorElement[]=layout.zones.map((z,i)=>({
-      id:`${layoutId}-${i}-${Date.now()}`,rotation:z.rotation??0,
-      x:z.x*DESIGN_W,y:z.y*canvasH,w:z.w*DESIGN_W,h:z.h*canvasH,
-      ...(z.type==='photo'
-        ?{type:'placeholder' as const}
-        :{type:'text' as const,text:lang==='sq'?'Shto tekstin tënd...':'Your text here...',fontSize:18,fill:'#333',align:'center' as const,fontFamily:'Georgia, serif'}),
+    const ts=Date.now();
+    const newEls:EditorElement[]=layout.zones.map((z,i)=>layoutZoneToElement(z,canvasH,{
+      id:`${layoutId}-${i}-${ts}`,
+      lang,
     }));
     updatePage(activePageId,newEls); setSelectedId(null);
   },[activePageId,lang,updatePage,canvasH,editorLayouts,isOrdered]);

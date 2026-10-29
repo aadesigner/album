@@ -359,6 +359,7 @@ function ZoneCanvas({
                 width: `${z.w * 100}%`,
                 height: `${z.h * 100}%`,
                 transform: z.rotation ? `rotate(${z.rotation}deg)` : undefined,
+                transformOrigin: 'center center',
                 zIndex: active ? 10 : 1,
               }}
               onPointerDown={e => startMove(i, e)}

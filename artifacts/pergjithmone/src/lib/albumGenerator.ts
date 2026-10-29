@@ -22,6 +22,7 @@ import {
   type LayoutDef,
   type EditorElement,
 } from './designs';
+import { layoutZoneToElement } from './editorLayouts';
 
 function rand(): number {
   if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
@@ -698,33 +699,19 @@ function elementsForLayout(
 
   const zoneEls: DE[] = [];
   layout.zones.forEach((z, i) => {
-    const base = {
-      x: z.x * DESIGN_W,
-      y: z.y * canvasH,
-      w: z.w * DESIGN_W,
-      h: z.h * canvasH,
-      rotation: z.rotation ?? 0,
-    };
+    const { id: _id, ...mapped } = layoutZoneToElement(z, canvasH, { id: '_', text: '' });
     if (z.type === 'photo') {
       const url = urlByIndex.get(i);
       if (!url) return;
       zoneEls.push({
-        ...base,
+        ...mapped,
         type: 'image',
         src: url,
         cropZoom: PHOTO_CORNER_ZOOM,
       });
       return;
     }
-    zoneEls.push({
-      ...base,
-      type: 'text',
-      text: '',
-      fontSize: Math.round(Math.min(base.w, base.h) * 0.12) || 16,
-      fill: '#6A6A6A',
-      align: 'center',
-      fontFamily: 'Georgia, serif',
-    });
+    zoneEls.push({ ...mapped, text: '' });
   });
 
   const paperBg: DE = {
