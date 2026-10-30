@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { readOfferBarSettings } from "../lib/offerBarSettings";
 import { setPublicCatalogCache, setNoStoreCache } from "../lib/httpCache";
 import { parseJsonArray, parseJsonObject } from "../lib/securitySettingsShared";
+import { parseEditorElements } from "../lib/editorElements";
 
 const router: IRouter = Router();
 
@@ -45,6 +46,7 @@ router.get("/settings", async (_req, res): Promise<void> => {
   const hiddenDesignIds = parseJsonArray(map["hidden_design_ids"]).map(String);
   const designOverrides = parseJsonObject(map["design_overrides"]);
   const customDesigns = parseJsonArray(map["custom_designs"]);
+  const editorElements = parseEditorElements(parseJsonArray(map["editor_elements"]));
 
   res.json({
     whatsappNumber: map["whatsapp_number"] || "+355688755833",
@@ -63,6 +65,7 @@ router.get("/settings", async (_req, res): Promise<void> => {
     hiddenDesignIds,
     designOverrides,
     customDesigns,
+    editorElements,
     requireLoginForPdf: map["require_login_for_pdf"] === "true",
     pendingBooksLimitEnabled: map["pending_books_limit_enabled"] !== "false",
     pendingBooksLimit: parseInt(map["pending_books_limit"] || "10", 10),

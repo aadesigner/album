@@ -14,6 +14,7 @@ import {
   blankCoverElements, newCustomDesignId,
   getCanvasHeight, fitDesignToCanvas, unfitDesignFromCanvas,
   imageFrameCoverFit,
+  fitAddedTextFrame,
   type CustomDesignRecord, type DesignDef, type DesignOverrides, type EditorElement, type DE,
   PHOTO_CORNER_ZOOM, coverCropRect, imageFrameFocusFromOffset, minPhotoAdjustZoom,
 } from '@/lib/designs';
@@ -1339,13 +1340,23 @@ export default function AdminDesignStudio() {
 
   const addText = () => {
     const h = canvasHRef.current;
+    const text = 'New text';
+    const fontSize = 32;
+    const fontFamily = "'Londrina Solid', cursive";
+    const box = fitAddedTextFrame({ text, fontSize, fontFamily });
     const el: EditorElement = {
       id: `tx-${Date.now()}`,
       type: 'text',
-      text: 'New text',
-      x: 60, y: Math.round(h * 0.32), w: DESIGN_W - 120, h: 60, rotation: 0,
-      fontSize: 32, fill: '#1A1A1A', align: 'center',
-      fontFamily: "'Londrina Solid', cursive",
+      text,
+      x: Math.round((DESIGN_W - box.w) / 2),
+      y: Math.round(h * 0.32),
+      w: box.w,
+      h: box.h,
+      rotation: 0,
+      fontSize,
+      fill: '#1A1A1A',
+      align: 'center',
+      fontFamily,
     };
     setDraft(prev => [...prev, el]);
     setSelectedId(el.id);

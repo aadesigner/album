@@ -28,6 +28,7 @@ import {
   type SecuritySettings,
 } from "../lib/securitySettings";
 import { OFFER_BAR_KEY_MAP, normalizeOfferBarWrite, readOfferBarSettings } from "../lib/offerBarSettings";
+import { parseEditorElements, EDITOR_ELEMENTS_MAX } from "../lib/editorElements";
 import { invalidateIpBlocklistCache } from "../lib/ipBlocklist";
 import { queueProjectPdfGeneration, deleteProjectPdfFile } from "../lib/generateProjectPdf";
 import { logger } from "../lib/logger";
@@ -1364,6 +1365,7 @@ router.get(
     const hiddenDesignIds = parseJsonArray(map["hidden_design_ids"]).map(String);
     const designOverrides = parseJsonObject(map["design_overrides"]);
     const customDesigns = parseJsonArray(map["custom_designs"]);
+    const editorElements = parseEditorElements(parseJsonArray(map["editor_elements"]));
     const adminNotes = parseAdminNotes(map["admin_notes"]);
 
     res.json({
@@ -1383,6 +1385,7 @@ router.get(
       hiddenDesignIds,
       designOverrides,
       customDesigns,
+      editorElements,
       adminNotes,
       requireLoginForPdf: map["require_login_for_pdf"] === "true",
       pendingBooksLimitEnabled: map["pending_books_limit_enabled"] !== "false",
@@ -1415,6 +1418,7 @@ router.patch(
       hiddenDesignIds: "hidden_design_ids",
       designOverrides: "design_overrides",
       customDesigns: "custom_designs",
+      editorElements: "editor_elements",
       adminNotes: "admin_notes",
       requireLoginForPdf: "require_login_for_pdf",
       pendingBooksLimitEnabled: "pending_books_limit_enabled",
@@ -1476,6 +1480,21 @@ router.patch(
           value = JSON.stringify(list);
         }
 
+        if (jsKey === "editorElements") {
+          let list: unknown[] = [];
+          try {
+            list = typeof raw === "string" ? JSON.parse(raw) : (Array.isArray(raw) ? raw : []);
+          } catch {
+            res.status(400).json({ error: "editorElements must be a JSON array" });
+            return;
+          }
+          if (list.length > EDITOR_ELEMENTS_MAX) {
+            res.status(400).json({ error: `Too many editor elements (max ${EDITOR_ELEMENTS_MAX})` });
+            return;
+          }
+          value = JSON.stringify(parseEditorElements(list));
+        }
+
         if (jsKey === "adminNotes") {
           let list: unknown[] = [];
           try {
@@ -1533,6 +1552,7 @@ router.patch(
     const hiddenDesignIds2 = parseJsonArray(map2["hidden_design_ids"]).map(String);
     const designOverrides2 = parseJsonObject(map2["design_overrides"]);
     const customDesigns2 = parseJsonArray(map2["custom_designs"]);
+    const editorElements2 = parseEditorElements(parseJsonArray(map2["editor_elements"]));
     const adminNotes2 = parseAdminNotes(map2["admin_notes"]);
 
     res.json({
@@ -1552,6 +1572,7 @@ router.patch(
       hiddenDesignIds: hiddenDesignIds2,
       designOverrides: designOverrides2,
       customDesigns: customDesigns2,
+      editorElements: editorElements2,
       adminNotes: adminNotes2,
       requireLoginForPdf: map2["require_login_for_pdf"] === "true",
       pendingBooksLimitEnabled: map2["pending_books_limit_enabled"] !== "false",

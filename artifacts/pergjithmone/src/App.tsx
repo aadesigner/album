@@ -67,6 +67,7 @@ const AdminBookSizes  = lazyRetry(() => import('@/pages/admin/BookSizes'));
 const AdminSettings   = lazyRetry(() => import('@/pages/admin/Settings'));
 const AdminSecurity   = lazyRetry(() => import('@/pages/admin/Security'));
 const AdminDesignStudio = lazyRetry(() => import('@/pages/admin/DesignStudio'));
+const AdminEditorElements = lazyRetry(() => import('@/pages/admin/EditorElements'));
 const AdminSitePages = lazyRetry(() => import('@/pages/admin/SitePages'));
 
 // ── Page loader ───────────────────────────────────────────────────────────
@@ -252,6 +253,9 @@ function Router() {
           </Route>
           <Route path="/heyadmin/dizajne">
             <ProtectedRoute requireAdmin><AdminDesignStudio /></ProtectedRoute>
+          </Route>
+          <Route path="/heyadmin/elemente">
+            <ProtectedRoute requireAdmin><AdminEditorElements /></ProtectedRoute>
           </Route>
           <Route path="/heyadmin/site/:page">
             <ProtectedRoute requireAdmin><AdminSitePages /></ProtectedRoute>

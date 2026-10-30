@@ -19,6 +19,64 @@ export const DESIGN_W = 600;
 export const DESIGN_H = 800;
 export const PAPER_COLOR = '#FEFDF9';
 
+/** Matches KonvaText `padding={6}` in the album / studio editors. */
+const ADDED_TEXT_PAD = 6;
+
+/**
+ * Default frame for a newly added text block: hug the glyphs with a small
+ * slack so the transformer is usable, instead of a near-full-page rectangle.
+ */
+export function fitAddedTextFrame(opts: {
+  text: string;
+  fontSize: number;
+  fontFamily?: string;
+  fontStyle?: string;
+  letterSpacing?: number;
+  lineHeight?: number;
+  maxWidth?: number;
+}): { w: number; h: number } {
+  const fs = Math.max(8, Number(opts.fontSize) || 20);
+  const lh = opts.lineHeight ?? 1.2;
+  const family = opts.fontFamily || 'Georgia, serif';
+  const style = opts.fontStyle || 'normal';
+  const ls = opts.letterSpacing || 0;
+  const text = opts.text || ' ';
+  const lines = text.split('\n');
+  let maxLine = fs * 0.58 * Math.max(...lines.map((l) => [...l].length), 1);
+  if (typeof document !== 'undefined') {
+    try {
+      const ctx = document.createElement('canvas').getContext('2d');
+      if (ctx) {
+        ctx.font = `${style} ${fs}px ${family}`;
+        maxLine = Math.max(
+          ...lines.map((line) => {
+            if (!line) return 0;
+            if (!ls) return ctx.measureText(line).width;
+            let w = 0;
+            const chars = [...line];
+            for (let i = 0; i < chars.length; i++) {
+              w += ctx.measureText(chars[i]).width;
+              if (i < chars.length - 1) w += ls;
+            }
+            return w;
+          }),
+          0,
+        );
+      }
+    } catch {
+      /* keep fallback */
+    }
+  }
+  const pad = ADDED_TEXT_PAD * 2;
+  const slackX = Math.max(8, Math.round(fs * 0.28));
+  const slackY = Math.max(2, Math.round(fs * 0.12));
+  const maxW = opts.maxWidth ?? DESIGN_W - 24;
+  return {
+    w: Math.min(maxW, Math.max(40, Math.ceil(maxLine + pad + slackX))),
+    h: Math.max(24, Math.ceil(lines.length * fs * lh + pad + slackY)),
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Per-book canvas geometry — see file header. Elements are always authored/
 // stored in absolute "canvas pixels" (x,y,w,h in canvas units, not 0-1
@@ -156,6 +214,8 @@ export interface EditorElement {
   cropZoom?: number;
   /** How the bitmap fills its box — landmark cutouts use `contain`. */
   objectFit?: 'cover' | 'contain';
+  /** Admin PNG/JPG decoration — move/scale only, never photo-crop. */
+  sticker?: boolean;
   /**
    * CSS / canvas blend. Landmark gold-on-black PNGs use `screen` so the
    * black plate disappears on colored covers (no blank band under the graphic).

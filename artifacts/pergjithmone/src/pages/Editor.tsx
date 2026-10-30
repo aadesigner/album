@@ -5,7 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, ShoppingBag, LayoutTemplate, Image as ImageIcon, Type,
   Trash2, Check, X, Plus, Camera, Lock, Loader2, Wand2, Box, Undo2,
-  Palette, Droplets,
+  Palette, Droplets, Sticker,
 } from 'lucide-react';
 import { Link, useRoute } from 'wouter';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -68,10 +68,12 @@ import {
   DESIGN_W, DESIGN_H, LAYOUTS, DESIGNS, CATEGORY_LABELS, LAYOUT_CATEGORY_LABELS,
   getCanvasHeight, scaleElementsToCanvas, fitDesignToCanvas,
   BLANK_STARTER_ID, blankFrontCoverElements, blankBackCoverElements,
-  coverCropRect, imageFrameCoverFit, imageFrameContainFit, imageFrameFocusFromOffset, PHOTO_CORNER_ZOOM, minPhotoAdjustZoom,
+  coverCropRect, imageFrameCoverFit, imageFrameContainFit, imageFrameFocusFromOffset, PHOTO_CORNER_ZOOM, minPhotoAdjustZoom, fitAddedTextFrame,
   designFrontElements, designBackElements, buildDesignCatalog, parseCustomDesigns,
   type EditorElement, type DE, type DesignDef, type LayoutZone, type LayoutDef, type DesignOverrides,
 } from '@/lib/designs';
+import { parseEditorElements, makeStickerElement, type EditorElementAsset } from '@/lib/editorElements';
+import { resolvePublicImageSrc } from '@/lib/categoryImages';
 import { mergeEditorLayouts, layoutZoneToElement } from '@/lib/editorLayouts';
 import { isStrokeOnlyShape, shapePathForElement } from '@/lib/shapes';
 import { getEmptyInnerPageNumbers } from '@/lib/pageContent';
@@ -122,11 +124,14 @@ type GuideState = { v: boolean; h: boolean } | null;
 
 /** MIME used when dragging a library photo onto a layout slot. */
 const PHOTO_DRAG_MIME = 'application/x-album-photo';
+/** MIME used when dragging an admin decoration onto the page. */
+const ELEMENT_DRAG_MIME = 'application/x-album-element';
 
 /** Topmost placeholder/image frame under a design-space point (AABB). */
 function findPhotoDropTarget(els: EditorElement[], x: number, y: number): EditorElement | null {
   for (let i = els.length - 1; i >= 0; i--) {
     const e = els[i];
+    if (e.sticker) continue;
     if (e.type !== 'placeholder' && e.type !== 'image') continue;
     if (x >= e.x && x <= e.x + e.w && y >= e.y && y <= e.y + e.h) return e;
   }
@@ -135,11 +140,22 @@ function findPhotoDropTarget(els: EditorElement[], x: number, y: number): Editor
 
 function dataTransferHasPhoto(dt: DataTransfer | null): boolean {
   if (!dt) return false;
-  return Array.from(dt.types).some(t => t === PHOTO_DRAG_MIME || t === 'text/uri-list');
+  const types = Array.from(dt.types);
+  if (types.includes(ELEMENT_DRAG_MIME)) return false;
+  return types.some(t => t === PHOTO_DRAG_MIME || t === 'text/uri-list');
+}
+
+function dataTransferHasElement(dt: DataTransfer | null): boolean {
+  if (!dt) return false;
+  return Array.from(dt.types).includes(ELEMENT_DRAG_MIME);
 }
 
 function readPhotoDragUrl(dt: DataTransfer): string {
   return dt.getData(PHOTO_DRAG_MIME) || dt.getData('text/uri-list') || dt.getData('text/plain') || '';
+}
+
+function readElementDragUrl(dt: DataTransfer): string {
+  return dt.getData(ELEMENT_DRAG_MIME) || '';
 }
 
 
@@ -861,7 +877,7 @@ function KPlaceholderEl({el,isSelected,isDropTarget,onSelect,onOpenPhotos,shapeR
 // Page Canvas
 // ─────────────────────────────────────────────────────────────────────────────
 
-function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos,onDelete,onGestureStart,onElementDragActive,onPageSwipe,editRequestId,onEditRequestHandled,onDropPhoto,isActive,pageW,pageH,canvasH,shapeRefs,side,isMobile}: {
+function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos,onDelete,onGestureStart,onElementDragActive,onPageSwipe,editRequestId,onEditRequestHandled,onDropPhoto,onDropSticker,isActive,pageW,pageH,canvasH,shapeRefs,side,isMobile}: {
   page:PageDef; elements:EditorElement[]; selectedId:string|null;
   onSelectId:(id:string|null)=>void; onChangeEl:(id:string,c:Partial<EditorElement>)=>void;
   onOpenPhotos?:()=>void; onDelete?:()=>void; onGestureStart?:()=>void;
@@ -870,6 +886,7 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
   editRequestId?:string|null; onEditRequestHandled?:()=>void;
   /** Place a library photo into the layout slot under the drop point. */
   onDropPhoto?:(url:string, targetId:string)=>void;
+  onDropSticker?:(url:string, x:number, y:number)=>void;
   isActive:boolean; pageW:number; pageH:number; canvasH:number;
   shapeRefs:React.MutableRefObject<Record<string,any>>; side:'left'|'right'|'solo'; isMobile?:boolean;
 }) {
@@ -1090,8 +1107,15 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
     <div
       ref={wrapRef}
       style={{position:'relative',width:pageW,height:pageH,flexShrink:0}}
-      onDragOver={onDropPhoto ? (e) => {
-        if (!dataTransferHasPhoto(e.dataTransfer)) return;
+      onDragOver={(onDropPhoto || onDropSticker) ? (e) => {
+        if (dataTransferHasElement(e.dataTransfer)) {
+          if (!onDropSticker) return;
+          e.preventDefault();
+          e.stopPropagation();
+          e.dataTransfer.dropEffect = 'copy';
+          return;
+        }
+        if (!onDropPhoto || !dataTransferHasPhoto(e.dataTransfer)) return;
         e.preventDefault();
         e.stopPropagation();
         e.dataTransfer.dropEffect = 'copy';
@@ -1100,8 +1124,18 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
       onDragLeave={onDropPhoto ? (e) => {
         if (!wrapRef.current?.contains(e.relatedTarget as Node)) setDropTargetId(null);
       } : undefined}
-      onDrop={onDropPhoto ? (e) => {
-        if (!dataTransferHasPhoto(e.dataTransfer)) return;
+      onDrop={(onDropPhoto || onDropSticker) ? (e) => {
+        if (dataTransferHasElement(e.dataTransfer)) {
+          e.preventDefault();
+          e.stopPropagation();
+          setDropTargetId(null);
+          const url = readElementDragUrl(e.dataTransfer).trim();
+          if (!url || !onDropSticker) return;
+          const { x, y } = clientToDesign(e.clientX, e.clientY);
+          onDropSticker(url, x, y);
+          return;
+        }
+        if (!onDropPhoto || !dataTransferHasPhoto(e.dataTransfer)) return;
         e.preventDefault();
         e.stopPropagation();
         const url = readPhotoDragUrl(e.dataTransfer).trim();
@@ -1155,7 +1189,7 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
                   shapeRefs={shapeRefs} canvasH={canvasH}
                   photoAdjust={photoAdjustId===el.id}
                   onTogglePhotoAdjust={()=>{
-                    if (el.objectFit === 'contain') return;
+                    if (el.objectFit === 'contain' || el.sticker) return;
                     setPhotoAdjustId(cur => cur===el.id ? null : el.id);
                     onSelectId(el.id);
                   }}
@@ -1189,10 +1223,13 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
             dash={[6,5]} listening={false} opacity={0.9} visible={false}/>
           <Transformer ref={trRef} rotateEnabled resizeEnabled
             rotationSnaps={[0,45,90,135,180,225,270,315]}
+            keepRatio={!!elements.find(e => e.id === selectedId)?.sticker}
             enabledAnchors={
               (selectedId && elements.find(e => e.id === selectedId)?.type === 'text')
                 // Text: width/height box only — corners scale the typeface and jump the box.
                 ? ['middle-left', 'middle-right', 'top-center', 'bottom-center']
+                : elements.find(e => e.id === selectedId)?.sticker
+                  ? ['top-left','top-right','bottom-left','bottom-right']
                 : ['top-left','top-center','top-right','middle-left','middle-right','bottom-left','bottom-center','bottom-right']
             }
             boundBoxFunc={(old:any,nw:any)=>{
@@ -1367,6 +1404,14 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
               <button onMouseDown={e=>{e.preventDefault();onChangeEl(editId,{lineHeight:Math.min(3.0,parseFloat(((toolbarEl?.lineHeight??1.2)+0.1).toFixed(1)))});}}
                 style={{width:20,height:20,borderRadius:5,border:'1px solid #e8e8e8',background:'#fafafa',cursor:'pointer',fontSize:12,color:'#555',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>+</button>
               <span style={{width:1,height:18,background:'#e8e8e8',flexShrink:0}}/>
+              {/* Letter spacing */}
+              <span style={{fontSize:9,color:'#999',flexShrink:0,fontFamily:'Georgia,serif'}} title={chipLang==='sq'?'Hapësira e shkronjave':'Letter spacing'}>AV</span>
+              <button onMouseDown={e=>{e.preventDefault();onChangeEl(editId,{letterSpacing:Math.max(-8,(toolbarEl?.letterSpacing??0)-1)});}}
+                style={{width:20,height:20,borderRadius:5,border:'1px solid #e8e8e8',background:'#fafafa',cursor:'pointer',fontSize:12,color:'#555',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>−</button>
+              <span style={{fontSize:10,color:'#444',minWidth:18,textAlign:'center',flexShrink:0}}>{toolbarEl?.letterSpacing??0}</span>
+              <button onMouseDown={e=>{e.preventDefault();onChangeEl(editId,{letterSpacing:Math.min(24,(toolbarEl?.letterSpacing??0)+1)});}}
+                style={{width:20,height:20,borderRadius:5,border:'1px solid #e8e8e8',background:'#fafafa',cursor:'pointer',fontSize:12,color:'#555',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>+</button>
+              <span style={{width:1,height:18,background:'#e8e8e8',flexShrink:0}}/>
               {/* Opacity */}
               <span style={{fontSize:9,color:'#999',whiteSpace:'nowrap',flexShrink:0}}>{Math.round((toolbarEl?.opacity??1)*100)}%</span>
               <input type="range" min={10} max={100} step={5}
@@ -1395,7 +1440,7 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
         const isImg = sel.type === 'image' && !!sel.src;
         const adjusting = photoAdjustId === sel.id;
         // Landmark/contain cutouts can't pan; everything else can (cropZoom unlocks corners).
-        const adjustDisabled = !isImg || sel.objectFit === 'contain';
+        const adjustDisabled = !isImg || sel.objectFit === 'contain' || !!sel.sticker;
         const barLeft = Math.max(4, Math.min(sel.x * scX, pageW - 200));
         const barTop = Math.min(pageH - 40, (sel.y + sel.h) * scY + 8);
         return (
@@ -1413,7 +1458,7 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
                 }}
               >✕</button>
             </div>
-            {isImg && (
+            {isImg && !sel.sticker && (
               <div
                 style={{
                   position:'absolute', left: barLeft, top: barTop,
@@ -1607,7 +1652,7 @@ function LockedPageView({pageW,pageH,role,side}: {pageW:number;pageH:number;role
 // Spread View — realistic book
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SpreadView = React.memo(function SpreadView({spread,spreadContent,selectedId,activeSide,onActiveSide,onSelectId,onChangeEl,onOpenPhotos,onDelete,onGestureStart,onElementDragActive,onPageSwipe,editRequestId,onEditRequestHandled,onDropPhoto,pageW,pageH,canvasH,shapeRefs,isMobile,readOnly}: {
+const SpreadView = React.memo(function SpreadView({spread,spreadContent,selectedId,activeSide,onActiveSide,onSelectId,onChangeEl,onOpenPhotos,onDelete,onGestureStart,onElementDragActive,onPageSwipe,editRequestId,onEditRequestHandled,onDropPhoto,onDropSticker,pageW,pageH,canvasH,shapeRefs,isMobile,readOnly}: {
   spread:SpreadDef; spreadContent:Record<number,EditorElement[]>;
   selectedId:string|null; activeSide:'left'|'right'; onActiveSide:(s:'left'|'right')=>void;
   onSelectId:(id:string|null)=>void; onChangeEl:(pid:number,eid:string,c:Partial<EditorElement>)=>void;
@@ -1616,6 +1661,7 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
   onPageSwipe?:(dir:1|-1)=>void;
   editRequestId?:string|null; onEditRequestHandled?:()=>void;
   onDropPhoto?:(pageId:number, url:string, targetId:string)=>void;
+  onDropSticker?:(pageId:number, url:string, x:number, y:number)=>void;
   pageW:number; pageH:number; canvasH:number;
   shapeRefs:React.MutableRefObject<Record<string,any>>; isMobile?:boolean;
   readOnly?:boolean;
@@ -1659,6 +1705,10 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
           onActiveSide(side);
           onDropPhoto(page.dbId, url, targetId);
         }}
+        onDropSticker={readOnly || !onDropSticker ? undefined : (url, x, y) => {
+          onActiveSide(side);
+          onDropSticker(page.dbId, url, x, y);
+        }}
         isActive={activeSide===side} pageW={pageW} pageH={pageH} canvasH={canvasH} shapeRefs={shapeRefs} side={side} isMobile={isMobile}/>
     </div>;
   };
@@ -1688,6 +1738,9 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
               onEditRequestHandled={onEditRequestHandled}
               onDropPhoto={readOnly || !onDropPhoto ? undefined : (url, targetId) => {
                 onDropPhoto(soloPage.dbId, url, targetId);
+              }}
+              onDropSticker={readOnly || !onDropSticker ? undefined : (url, x, y) => {
+                onDropSticker(soloPage.dbId, url, x, y);
               }}
               isActive={true} pageW={pageW} pageH={pageH} canvasH={canvasH} shapeRefs={shapeRefs} side="solo" isMobile={isMobile}/>
           </div>
@@ -1730,6 +1783,10 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
                 onDropPhoto={readOnly || !onDropPhoto ? undefined : (url, targetId) => {
                   onActiveSide(activeSide);
                   onDropPhoto(page.dbId, url, targetId);
+                }}
+                onDropSticker={readOnly || !onDropSticker ? undefined : (url, x, y) => {
+                  onActiveSide(activeSide);
+                  onDropSticker(page.dbId, url, x, y);
                 }}
                 isActive={true} pageW={pageW} pageH={pageH} canvasH={canvasH} shapeRefs={shapeRefs} side="solo" isMobile={true}/>
           }
@@ -2604,9 +2661,57 @@ function DesignsPanel({onApply, lang, designs}: {
 // Desktop Sidebar
 // ─────────────────────────────────────────────────────────────────────────────
 
-function Sidebar({tab,onTab,photos,onUpload,uploading,onAddPhoto,onAddText,onLayout,onApplyDesign,selectedId,onDelete,lang,designs,layouts,showDesigns}: {
+function EditorArtGrid({
+  items, lang, onAdd, cols = 3, onPicked,
+}: {
+  items: EditorElementAsset[];
+  lang: 'sq' | 'en';
+  onAdd: (url: string) => void;
+  cols?: number;
+  onPicked?: () => void;
+}) {
+  if (items.length === 0) {
+    return (
+      <p className="text-[11px] text-neutral-400 leading-snug py-2">
+        {lang === 'sq'
+          ? 'Nuk ka ende dekorime. Administratori i ngarkon nga paneli.'
+          : 'No decorations yet. An admin uploads them from the dashboard.'}
+      </p>
+    );
+  }
+  return (
+    <div className={`grid gap-1.5 ${cols === 3 ? 'grid-cols-3' : 'grid-cols-2'}`}>
+      {items.map(it => (
+        <button
+          key={it.id}
+          type="button"
+          title={it.name || undefined}
+          onClick={() => { onAdd(it.src); onPicked?.(); }}
+          draggable
+          onDragStart={e => {
+            e.dataTransfer.setData(ELEMENT_DRAG_MIME, it.src);
+            e.dataTransfer.effectAllowed = 'copy';
+          }}
+          className="aspect-square rounded-lg overflow-hidden border border-neutral-200 hover:border-neutral-700 hover:scale-105 transition-all cursor-grab active:cursor-grabbing"
+          style={{ background: 'repeating-conic-gradient(#F3F0EA 0% 25%, #FAF8F4 0% 50%) 50% / 12px 12px' }}
+        >
+          <img
+            src={resolvePublicImageSrc(it.src) || it.src}
+            alt={it.name || ''}
+            className="w-full h-full object-contain p-1 pointer-events-none"
+            draggable={false}
+          />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Sidebar({tab,onTab,photos,onUpload,uploading,onAddPhoto,onAddText,onAddSticker,editorElements,onLayout,onApplyDesign,selectedId,onDelete,lang,designs,layouts,showDesigns}: {
   tab:SideTab; onTab:(t:SideTab)=>void; photos:string[]; onUpload:(f:File)=>void; uploading:boolean;
-  onAddPhoto:(url:string)=>void; onAddText:(s?:{fontSize?:number;fontStyle?:string;align?:'left'|'center'|'right'})=>void; onLayout:(id:string)=>void;
+  onAddPhoto:(url:string)=>void; onAddText:(s?:{fontSize?:number;fontStyle?:string;align?:'left'|'center'|'right'})=>void;
+  onAddSticker:(url:string)=>void; editorElements: EditorElementAsset[];
+  onLayout:(id:string)=>void;
   onApplyDesign:(d:DesignDef)=>void; selectedId:string|null; onDelete:()=>void; lang:'sq'|'en';
   designs: DesignDef[];
   layouts: LayoutDef[];
@@ -2618,7 +2723,7 @@ function Sidebar({tab,onTab,photos,onUpload,uploading,onAddPhoto,onAddText,onLay
     ...(showDesigns ? [{id:'designs' as const, Icon:Wand2, label:lang==='sq'?'Dizajne':'Designs'}] : []),
     {id:'layouts' as const, Icon:LayoutTemplate, label:lang==='sq'?'Paraqitje':'Layout'},
     {id:'photos' as const, Icon:ImageIcon, label:lang==='sq'?'Foto':'Photos'},
-    {id:'text' as const, Icon:Type, label:lang==='sq'?'Tekst':'Text'},
+    {id:'text' as const, Icon:Type, label:lang==='sq'?'Tekst / Art':'Text / Art'},
   ]);
   return (
     <div className="w-64 flex-shrink-0 bg-white border-r border-neutral-200 flex flex-col h-full">
@@ -2708,6 +2813,10 @@ function Sidebar({tab,onTab,photos,onUpload,uploading,onAddPhoto,onAddText,onLay
                 </div>
               </button>
             ))}
+            <p className="text-[9px] uppercase tracking-widest text-neutral-400 pt-3 mb-2.5 flex items-center gap-1.5">
+              <Sticker size={11}/>{lang==='sq'?'Elemente':'Elements'}
+            </p>
+            <EditorArtGrid items={editorElements} lang={lang} onAdd={onAddSticker}/>
           </div>
         )}
       </div>
@@ -2727,9 +2836,10 @@ function Sidebar({tab,onTab,photos,onUpload,uploading,onAddPhoto,onAddText,onLay
 // Mobile Bottom Sheet
 // ─────────────────────────────────────────────────────────────────────────────
 
-function MobileSheet({tab,show,onClose,photos,onUpload,uploading,onAddPhoto,onLayout,onAddText,onApplyDesign,lang,designs,layouts,showDesigns}: {
+function MobileSheet({tab,show,onClose,photos,onUpload,uploading,onAddPhoto,onLayout,onAddText,onAddSticker,editorElements,onApplyDesign,lang,designs,layouts,showDesigns}: {
   tab:SideTab; show:boolean; onClose:()=>void; photos:string[]; onUpload:(f:File)=>void; uploading:boolean;
   onAddPhoto:(url:string)=>void; onLayout:(id:string)=>void; onAddText:(s?:{fontSize?:number;fontStyle?:string;align?:'left'|'center'|'right'})=>void;
+  onAddSticker:(url:string)=>void; editorElements: EditorElementAsset[];
   onApplyDesign:(d:DesignDef)=>void; lang:'sq'|'en';
   designs: DesignDef[];
   layouts: LayoutDef[];
@@ -2740,7 +2850,7 @@ function MobileSheet({tab,show,onClose,photos,onUpload,uploading,onAddPhoto,onLa
     tab==='designs'  ? (lang==='sq'?'Dizajne':'Designs')   :
     tab==='layouts'  ? (lang==='sq'?'Paraqitje':'Layouts') :
     tab==='photos'   ? (lang==='sq'?'Foto':'Photos')       :
-    (lang==='sq'?'Tekst':'Text');
+    (lang==='sq'?'Tekst / Art':'Text / Art');
   return (
     <AnimatePresence>
       {show && <>
@@ -2821,20 +2931,26 @@ function MobileSheet({tab,show,onClose,photos,onUpload,uploading,onAddPhoto,onLa
               </div>
             )}
             {tab==='text' && (
-              <div className="grid grid-cols-2 gap-2">
-                {([
-                  {lbl:lang==='sq'?'Titull':'Title',       size:36, fs:'bold',   al:'center' as const},
-                  {lbl:lang==='sq'?'Nëntitull':'Subtitle', size:22, fs:'italic', al:'center' as const},
-                  {lbl:lang==='sq'?'Paragraf':'Body',      size:16, fs:'normal', al:'left'   as const},
-                  {lbl:lang==='sq'?'Epigraf':'Caption',    size:11, fs:'normal', al:'center' as const},
-                ]).map(t=>(
-                  <button key={t.lbl} onClick={()=>{onAddText({fontSize:t.size,fontStyle:t.fs,align:t.al});onClose();}}
-                    className="flex flex-col items-center gap-1.5 px-2 py-3 border border-neutral-200 rounded-xl active:bg-neutral-50 transition-all">
-                    <span className="text-neutral-800"
-                      style={{fontSize:Math.min(t.size,28),fontStyle:t.fs==='italic'?'italic':'normal',fontWeight:t.fs==='bold'?'bold':'normal',fontFamily:'Georgia, serif',lineHeight:1}}>Aa</span>
-                    <span className="text-[10px] text-neutral-500 font-medium">{t.lbl}</span>
-                  </button>
-                ))}
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    {lbl:lang==='sq'?'Titull':'Title',       size:36, fs:'bold',   al:'center' as const},
+                    {lbl:lang==='sq'?'Nëntitull':'Subtitle', size:22, fs:'italic', al:'center' as const},
+                    {lbl:lang==='sq'?'Paragraf':'Body',      size:16, fs:'normal', al:'left'   as const},
+                    {lbl:lang==='sq'?'Epigraf':'Caption',    size:11, fs:'normal', al:'center' as const},
+                  ]).map(t=>(
+                    <button key={t.lbl} onClick={()=>{onAddText({fontSize:t.size,fontStyle:t.fs,align:t.al});onClose();}}
+                      className="flex flex-col items-center gap-1.5 px-2 py-3 border border-neutral-200 rounded-xl active:bg-neutral-50 transition-all">
+                      <span className="text-neutral-800"
+                        style={{fontSize:Math.min(t.size,28),fontStyle:t.fs==='italic'?'italic':'normal',fontWeight:t.fs==='bold'?'bold':'normal',fontFamily:'Georgia, serif',lineHeight:1}}>Aa</span>
+                      <span className="text-[10px] text-neutral-500 font-medium">{t.lbl}</span>
+                    </button>
+                  ))}
+                </div>
+                <div>
+                  <p className="text-[9px] uppercase tracking-widest text-neutral-400 mb-2">{lang==='sq'?'Elemente':'Elements'}</p>
+                  <EditorArtGrid items={editorElements} lang={lang} onAdd={onAddSticker} cols={3} onPicked={onClose}/>
+                </div>
               </div>
             )}
           </div>
@@ -3461,7 +3577,7 @@ export default function Editor() {
     // this callback to be recreated on every element edit, breaking memo).
     const els=liveContent.current[activePageId]??[];
     // Replace selected image (reset crop focus for the new asset).
-    const selImg=els.find(e=>e.id===selectedId&&e.type==='image'&&!!e.src);
+    const selImg=els.find(e=>e.id===selectedId&&e.type==='image'&&!!e.src&&!e.sticker);
     if (selImg){
       updatePage(activePageId,els.map(e=>e.id===selImg.id
         ?{...e,src:url,cropFocusX:0.5,cropFocusY:0.5,cropZoom:PHOTO_CORNER_ZOOM}
@@ -3489,7 +3605,7 @@ export default function Editor() {
     if (isOrdered || !url) return;
     const els=liveContent.current[pageId]??[];
     const target=els.find(e=>e.id===targetId);
-    if (!target || (target.type!=='placeholder' && target.type!=='image')) return;
+    if (!target || target.sticker || (target.type!=='placeholder' && target.type!=='image')) return;
     updatePage(pageId, els.map(e=>e.id===targetId
       ?{...e, type:'image' as const, src:url, cropFocusX:0.5, cropFocusY:0.5, cropZoom:PHOTO_CORNER_ZOOM}
       :e));
@@ -3655,6 +3771,10 @@ export default function Editor() {
   const designOverrides = ((appSettings as any)?.designOverrides || {}) as DesignOverrides;
   const customDesigns = parseCustomDesigns((appSettings as any)?.customDesigns);
   const hiddenDesignIds: string[] = (appSettings as any)?.hiddenDesignIds || [];
+  const catalogElements = useMemo(
+    () => parseEditorElements((appSettings as any)?.editorElements),
+    [appSettings],
+  );
   const designsCatalog = useMemo(() => {
     const all = buildDesignCatalog(designOverrides, customDesigns);
     if (!hiddenDesignIds.length) return all;
@@ -3718,26 +3838,48 @@ export default function Editor() {
 
   const addText=useCallback((style?:{fontSize?:number;fontStyle?:string;align?:'left'|'center'|'right'})=>{
     if (isOrdered || !activePageId) return;
+    const text=lang==='sq'?'Shto tekstin tënd...':'Your text here...';
+    const fontSize=style?.fontSize??22;
+    const fontFamily='Georgia, serif';
+    const fontStyle=style?.fontStyle??'normal';
+    const box=fitAddedTextFrame({text,fontSize,fontFamily,fontStyle});
     const el:EditorElement={id:`txt-${Date.now()}`,type:'text',
-      text:lang==='sq'?'Shto tekstin tënd...':'Your text here...',
-      x:60,y:canvasH/2-40,w:DESIGN_W-120,h:100,rotation:0,
-      fontSize:style?.fontSize??22,fontFamily:'Georgia, serif',fill:'#1a1a1a',
-      align:style?.align??'center',fontStyle:style?.fontStyle??'normal'};
+      text,x:Math.round((DESIGN_W-box.w)/2),y:Math.round(canvasH/2-box.h/2),
+      w:box.w,h:box.h,rotation:0,
+      fontSize,fontFamily,fill:'#1a1a1a',
+      align:style?.align??'center',fontStyle};
     const els=liveContent.current[activePageId]??[];
     updatePage(activePageId,[...els,el]);
     setSelectedId(el.id);
     setEditRequestId(el.id);
   },[activePageId,lang,updatePage,canvasH,isOrdered]);
 
+  const addSticker=useCallback((url:string, at?: {x:number;y:number})=>{
+    if (isOrdered || !activePageId || !url) return;
+    const els=liveContent.current[activePageId]??[];
+    const el=makeStickerElement(url, canvasH, at);
+    updatePage(activePageId,[...els,el]);
+    setSelectedId(el.id);
+  },[activePageId,updatePage,canvasH,isOrdered]);
+
+  const placeStickerOnPage=useCallback((pageId:number, url:string, x:number, y:number)=>{
+    if (isOrdered || !url) return;
+    const els=liveContent.current[pageId]??[];
+    const el=makeStickerElement(url, canvasH, { x, y });
+    updatePage(pageId,[...els,el]);
+    setSelectedId(el.id);
+  },[updatePage,canvasH,isOrdered]);
+
   const applyLayout=useCallback((layoutId:string)=>{
     if (isOrdered || !activePageId) return;
     const layout=editorLayouts.find(l=>l.id===layoutId); if(!layout) return;
     const ts=Date.now();
+    const keepStickers=(liveContent.current[activePageId]??[]).filter(e=>e.sticker);
     const newEls:EditorElement[]=layout.zones.map((z,i)=>layoutZoneToElement(z,canvasH,{
       id:`${layoutId}-${i}-${ts}`,
       lang,
     }));
-    updatePage(activePageId,newEls); setSelectedId(null);
+    updatePage(activePageId,[...newEls, ...keepStickers]); setSelectedId(null);
   },[activePageId,lang,updatePage,canvasH,editorLayouts,isOrdered]);
 
   const applyDesign=useCallback((design:DesignDef)=>{
@@ -4083,7 +4225,8 @@ export default function Editor() {
       <div className="flex flex-1 overflow-hidden min-h-0">
         {!isMobile && !isOrdered && (
           <Sidebar tab={tab} onTab={setTab} photos={photos} onUpload={upload} uploading={uploading}
-            onAddPhoto={addPhoto} onAddText={addText} onLayout={applyLayout} onApplyDesign={requestApplyDesign}
+            onAddPhoto={addPhoto} onAddText={addText} onAddSticker={addSticker} editorElements={catalogElements}
+            onLayout={applyLayout} onApplyDesign={requestApplyDesign}
             selectedId={selectedIsBackground ? null : selectedId} onDelete={deleteSelected} lang={lang}
             designs={designsCatalog} layouts={editorLayouts} showDesigns={isCoverPage}/>
         )}
@@ -4263,6 +4406,7 @@ export default function Editor() {
                   onPageSwipe={isMobile ? onPageSwipe : undefined}
                   editRequestId={editRequestId} onEditRequestHandled={clearEditRequest}
                   onDropPhoto={isOrdered ? undefined : placePhotoInTarget}
+                  onDropSticker={isOrdered ? undefined : placeStickerOnPage}
                   pageW={pageW} pageH={pageH} canvasH={canvasH} shapeRefs={shapeRefs} isMobile={isMobile}
                   readOnly={isOrdered}/>
               ) : <p className="text-neutral-400 text-sm">No pages found</p>}
@@ -4301,7 +4445,7 @@ export default function Editor() {
                 ...(isCoverPage ? [{id:'designs' as const, Icon:Wand2, label:lang==='sq'?'Dizajne':'Style'}] : []),
                 {id:'layouts' as const, Icon:LayoutTemplate, label:lang==='sq'?'Paraqitje':'Layout'},
                 {id:'photos' as const, Icon:ImageIcon, label:lang==='sq'?'Foto':'Photos'},
-                {id:'text' as const, Icon:Type, label:lang==='sq'?'Tekst':'Text'},
+                {id:'text' as const, Icon:Type, label:lang==='sq'?'Tekst / Art':'Text / Art'},
               ]).map(({id,Icon,label})=>(
                 <button key={id} onClick={()=>{setTab(id);setShowSheet(true);}}
                   className={`flex flex-col items-center gap-0.5 flex-1 py-1.5 rounded-xl text-[10px] transition-colors ${tab===id&&showSheet?'text-neutral-900 bg-neutral-100':'text-neutral-400'}`}>
@@ -4320,6 +4464,7 @@ export default function Editor() {
       {isMobile && !isOrdered && <MobileSheet tab={tab} show={showSheet} onClose={()=>setShowSheet(false)}
         photos={photos} onUpload={upload} uploading={uploading}
         onAddPhoto={addPhoto} onLayout={applyLayout} onAddText={addText}
+        onAddSticker={addSticker} editorElements={catalogElements}
         onApplyDesign={requestApplyDesign} lang={lang} designs={designsCatalog} layouts={editorLayouts}
         showDesigns={isCoverPage}/>}
 

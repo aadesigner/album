@@ -179,6 +179,7 @@ export const JSON_SETTING_JS_KEYS = new Set([
   "designOverrides",
   "customDesigns",
   "adminNotes",
+  "editorElements",
 ]);
 
 export const SECURITY_SETTINGS_KEY_MAP: Record<keyof SecuritySettings, string> = {

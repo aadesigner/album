@@ -5,7 +5,7 @@ import { Link, useLocation } from 'wouter';
 import {
   LayoutDashboard, Users, ShoppingBag, FolderOpen, Image,
   Grid, Ruler, Settings, LogOut, X, Sparkles, ExternalLink, ShieldAlert, Check, Palette,
-  FileText,
+  FileText, Sticker,
 } from 'lucide-react';
 import { authFetch } from '@/lib/authFetch';
 import {
@@ -45,6 +45,7 @@ const navItems = [
   { href: '/heyadmin/porosi',    label: 'Orders',        Icon: ShoppingBag,     group: 'Overview' },
   { href: '/heyadmin/perdorues', label: 'Users',         Icon: Users,           group: 'Overview' },
   { href: '/heyadmin/dizajne',   label: 'Design Studio', Icon: Sparkles,        group: 'Catalog' },
+  { href: '/heyadmin/elemente',  label: 'Text / Elements', Icon: Sticker,       group: 'Catalog' },
   { href: '/heyadmin/site',      label: 'Site pages',    Icon: FileText,        group: 'Catalog' },
   { href: '/heyadmin/kategori',  label: 'Categories',    Icon: FolderOpen,      group: 'Catalog' },
   { href: '/heyadmin/template',  label: 'Templates',     Icon: Image,           group: 'Catalog' },

@@ -18,6 +18,7 @@ import {
   blankCoverElements,
   DESIGNS,
   TRAVEL_LAYOUT_REV,
+  fitAddedTextFrame,
 } from "./designs";
 
 // ── getCanvasHeight ────────────────────────────────────────────────────────────
@@ -296,5 +297,23 @@ describe("designCatalogFace", () => {
       kind: "photo",
       src: "/designs/vienna-cover-thumb.jpg",
     });
+  });
+});
+
+describe("fitAddedTextFrame", () => {
+  it("hugs short copy instead of spanning the canvas", () => {
+    const box = fitAddedTextFrame({ text: "New text", fontSize: 32 });
+    expect(box.w).toBeLessThan(DESIGN_W / 2);
+    expect(box.h).toBeLessThan(80);
+    expect(box.w).toBeGreaterThan(40);
+    expect(box.h).toBeGreaterThanOrEqual(24);
+  });
+
+  it("grows with font size and stays under the page width", () => {
+    const small = fitAddedTextFrame({ text: "Hi", fontSize: 12 });
+    const large = fitAddedTextFrame({ text: "Hi", fontSize: 48 });
+    expect(large.w).toBeGreaterThan(small.w);
+    expect(large.h).toBeGreaterThan(small.h);
+    expect(large.w).toBeLessThanOrEqual(DESIGN_W - 24);
   });
 });
