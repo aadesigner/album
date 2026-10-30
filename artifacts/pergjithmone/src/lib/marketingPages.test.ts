@@ -48,10 +48,24 @@ describe('marketingPages helpers', () => {
     expect(node.shadow).toBe('soft');
     const css = textStyle(merged, 'title');
     expect(css.lineHeight).toBe(1.7);
-    expect(css.boxShadow).toMatch(/18px/);
+    expect(css.boxShadow).toBeUndefined();
+    expect(css.textShadow).toMatch(/8px/);
     expect(css.fontWeight).toBe(500);
     expect(css.fontStyle).toBe('italic');
-    expect(css.letterSpacing).toBe('0.06em');
+    expect(css.letterSpacing).toBe('0.04em');
+  });
+
+  it('maps closer/wider tracking and glyph shadow without a container box-shadow', () => {
+    const defaults = { title: bi('A', 'B') };
+    const merged = mergePageContent(defaults, {
+      title: { sq: 'A', en: 'B', tracking: 'tighter', shadow: 'hard', color: '#C45A78', transform: 'uppercase' },
+    });
+    const css = textStyle(merged, 'title');
+    expect(css.letterSpacing).toBe('-0.05em');
+    expect(css.textShadow).toMatch(/2px 0/);
+    expect(css.boxShadow).toBeUndefined();
+    expect(css.color).toBe('#C45A78');
+    expect(css.textTransform).toBe('uppercase');
   });
 
   it('merge does not wipe a section when saved array is empty', () => {

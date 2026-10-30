@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AdminLayout, ADMIN } from '@/components/layout/AdminLayout';
 import {
   useGetAdminSettings, useUpdateAdminSettings,
@@ -6,7 +6,7 @@ import {
 } from '@workspace/api-client-react-tsconfig';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, Trash2, Sticker, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Loader2, Search, Upload } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
@@ -15,7 +15,7 @@ import { ACCEPT_SAFE_IMAGES } from '@/lib/acceptedImages';
 import { resolvePublicImageSrc } from '@/lib/categoryImages';
 import { parseEditorElements, EDITOR_ELEMENTS_MAX, type EditorElementAsset } from '@/lib/editorElements';
 
-const CHECKER = 'repeating-conic-gradient(#E8E4DC 0% 25%, #FAF7F2 0% 50%) 50% / 16px 16px';
+const CHECKER = 'repeating-conic-gradient(#E8E4DC 0% 25%, #FAF7F2 0% 50%) 50% / 14px 14px';
 
 export default function AdminEditorElements() {
   const { data: settings } = useGetAdminSettings();
@@ -25,12 +25,20 @@ export default function AdminEditorElements() {
   const { getToken } = useAuth();
   const fileRef = useRef<HTMLInputElement>(null);
   const [items, setItems] = useState<EditorElementAsset[]>([]);
+  const [query, setQuery] = useState('');
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
 
   useEffect(() => {
     setItems(parseEditorElements((settings as any)?.editorElements));
   }, [settings]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter(it => (it.name || '').toLowerCase().includes(q) || it.src.toLowerCase().includes(q));
+  }, [items, query]);
 
   const persist = async (next: EditorElementAsset[]) => {
     setSaving(true);
@@ -75,6 +83,7 @@ export default function AdminEditorElements() {
         });
       }
       await persist([...added, ...items]);
+      toast({ title: added.length === 1 ? 'Element uploaded' : `${added.length} elements uploaded` });
     } catch (e) {
       toast({
         title: 'Upload failed',
@@ -92,27 +101,48 @@ export default function AdminEditorElements() {
 
   const saveName = (id: string) => {
     const item = items.find(it => it.id === id);
-    if (!item) return;
+    const saved = parseEditorElements((settings as any)?.editorElements);
+    const prev = saved.find(it => it.id === id);
+    if (!item || item.name === (prev?.name || '')) return;
     void persist(items);
+  };
+
+  const remove = (id: string) => {
+    const item = items.find(it => it.id === id);
+    if (!item) return;
+    if (!window.confirm(`Remove “${item.name || 'this element'}”? Clients will no longer see it in the editor.`)) return;
+    void persist(items.filter(x => x.id !== id));
+  };
+
+  const takeDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+    if (e.dataTransfer.files?.length) void onFiles(e.dataTransfer.files);
   };
 
   return (
     <AdminLayout>
-      <div className="max-w-5xl">
-        <div className="flex flex-wrap items-start justify-between gap-4 mb-8">
+      <div
+        className="max-w-5xl"
+        onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(false); }}
+        onDrop={takeDrop}
+      >
+        <div className="mb-6 flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4">
           <div>
-            <p className="text-[10px] uppercase tracking-[0.18em] font-semibold mb-1" style={{ color: ADMIN.muted }}>
+            <p className="text-[10px] font-semibold tracking-[0.18em] uppercase mb-1.5" style={{ color: ADMIN.blush }}>
               Catalog
             </p>
-            <h1 className="font-serif text-3xl font-semibold" style={{ color: ADMIN.ink }}>
+            <h1 className="text-3xl font-serif font-semibold mb-1" style={{ color: ADMIN.ink }}>
               Text / Elements
             </h1>
-            <p className="text-sm mt-2 max-w-xl" style={{ color: ADMIN.muted }}>
-              Upload PNG or JPG decorations. Clients pick them in the album editor under Text / Art
-              and move them on the page like a photo — without crop or adjust.
+            <p className="text-sm max-w-xl" style={{ color: ADMIN.muted }}>
+              PNG and JPG decorations for the album editor. Transparent PNGs stay see-through
+              on the page — hearts, frames, bows, seasonal art.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <input
               ref={fileRef}
               type="file"
@@ -126,47 +156,83 @@ export default function AdminEditorElements() {
             />
             <Button
               type="button"
+              className="gap-2 rounded-2xl text-white hover:opacity-90"
+              style={{ background: ADMIN.blush }}
               onClick={() => fileRef.current?.click()}
               disabled={uploading || saving}
-              style={{ background: ADMIN.ink, color: '#fff' }}
             >
-              {uploading ? <Loader2 size={14} className="animate-spin mr-1.5" /> : <Plus size={14} className="mr-1.5" />}
+              {uploading ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
               Upload PNG / JPG
             </Button>
           </div>
         </div>
 
-        {items.length === 0 ? (
+        <div className="mb-5 flex flex-col sm:flex-row gap-2.5 sm:items-center">
+          <div className="relative flex-1 min-w-0">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: ADMIN.muted }} />
+            <Input
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="Search by name…"
+              className="pl-8 h-10 rounded-xl"
+            />
+          </div>
+          <p className="text-xs shrink-0 tabular-nums" style={{ color: ADMIN.muted }}>
+            {items.length} / {EDITOR_ELEMENTS_MAX}
+            {saving ? ' · Saving' : ''}
+            {uploading ? ' · Uploading' : ''}
+          </p>
+        </div>
+
+        {dragOver && (
           <div
-            className="rounded-2xl border border-dashed px-6 py-16 text-center"
+            className="mb-4 rounded-2xl border-2 border-dashed px-4 py-6 text-center text-sm font-medium"
+            style={{ borderColor: ADMIN.blush, background: ADMIN.blushSoft, color: ADMIN.blushDeep }}
+          >
+            Drop PNG or JPG files to add them
+          </div>
+        )}
+
+        {items.length === 0 ? (
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="w-full rounded-2xl border border-dashed px-6 py-16 text-center transition-colors"
             style={{ borderColor: ADMIN.line, background: ADMIN.card }}
           >
-            <Sticker size={28} className="mx-auto mb-3" style={{ color: ADMIN.muted }} />
+            <div
+              className="w-12 h-12 rounded-2xl mx-auto mb-3 flex items-center justify-center"
+              style={{ background: ADMIN.blushSoft }}
+            >
+              {uploading ? <Loader2 size={20} className="animate-spin" style={{ color: ADMIN.blushDeep }} /> : <Upload size={20} style={{ color: ADMIN.blushDeep }} />}
+            </div>
             <p className="text-sm font-medium" style={{ color: ADMIN.ink }}>No decorations yet</p>
-            <p className="text-xs mt-1" style={{ color: ADMIN.muted }}>
-              Hearts, frames, bows, seasonal art — transparent PNGs work best.
+            <p className="text-xs mt-1.5 max-w-sm mx-auto" style={{ color: ADMIN.muted }}>
+              Drop files here or click to upload. Use a transparent PNG so the album page shows through.
             </p>
-          </div>
+          </button>
+        ) : filtered.length === 0 ? (
+          <p className="text-sm py-12 text-center" style={{ color: ADMIN.muted }}>No elements match that search.</p>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-            {items.map(it => (
+            {filtered.map(it => (
               <div
                 key={it.id}
-                className="rounded-2xl border overflow-hidden"
+                className="rounded-2xl border overflow-hidden group"
                 style={{ borderColor: ADMIN.line, background: ADMIN.card, boxShadow: ADMIN.cardShadow }}
               >
                 <div className="relative aspect-square" style={{ background: CHECKER }}>
                   <img
                     src={resolvePublicImageSrc(it.src) || it.src}
                     alt={it.name || ''}
-                    className="absolute inset-0 w-full h-full object-contain p-3"
+                    className="absolute inset-0 w-full h-full object-contain p-4"
                     draggable={false}
                   />
                   <button
                     type="button"
-                    onClick={() => void persist(items.filter(x => x.id !== it.id))}
-                    className="absolute top-2 right-2 w-8 h-8 rounded-full inline-flex items-center justify-center text-white"
-                    style={{ background: 'rgba(180,40,40,0.9)' }}
+                    onClick={() => remove(it.id)}
+                    className="absolute top-2 right-2 w-8 h-8 rounded-full inline-flex items-center justify-center text-white opacity-90 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                    style={{ background: 'rgba(180,40,40,0.92)' }}
                     title="Remove"
                   >
                     <Trash2 size={13} />
@@ -177,16 +243,14 @@ export default function AdminEditorElements() {
                     value={it.name}
                     onChange={e => rename(it.id, e.target.value)}
                     onBlur={() => saveName(it.id)}
+                    onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                     placeholder="Label (optional)"
-                    className="h-8 text-xs"
+                    className="h-8 text-xs rounded-lg"
                   />
                 </div>
               </div>
             ))}
           </div>
-        )}
-        {saving && (
-          <p className="text-xs mt-4" style={{ color: ADMIN.muted }}>Saving…</p>
         )}
       </div>
     </AdminLayout>

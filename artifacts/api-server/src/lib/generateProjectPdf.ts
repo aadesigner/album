@@ -5,7 +5,7 @@ import { projectsTable, projectPagesTable, bookSizesTable } from "@workspace/db-
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
 import { ensureDataDirs, pdfsDir, uploadsDir } from "./dataDir";
-import { renderProjectPdf, type PdfRenderPage } from "./pdfRenderer";
+import { renderProjectPdf, parsePageElements, type PdfRenderPage } from "./pdfRenderer";
 import { getSecuritySettings } from "./securitySettings";
 
 ensureDataDirs();
@@ -77,22 +77,6 @@ async function loadRenderInput(projectId: number): Promise<{
     .where(eq(projectPagesTable.projectId, projectId));
 
   const renderPages: PdfRenderPage[] = pages.map((p) => {
-    let elements: PdfRenderPage["elements"] = [];
-    try {
-      let parsed: unknown = p.contentJson ? JSON.parse(p.contentJson) : [];
-      // Tolerate accidental double-encoding from older clients.
-      if (typeof parsed === "string") {
-        try { parsed = JSON.parse(parsed); } catch { /* keep string */ }
-      }
-      if (Array.isArray(parsed)) {
-        elements = parsed as PdfRenderPage["elements"];
-      } else if (parsed && typeof parsed === "object" && Array.isArray((parsed as { elements?: unknown }).elements)) {
-        // Some older drafts wrapped the array as { elements: [...] }.
-        elements = (parsed as { elements: PdfRenderPage["elements"] }).elements;
-      }
-    } catch {
-      // Malformed content on a single page shouldn't abort the whole PDF.
-    }
     return {
       pageNumber: p.pageNumber,
       role:
@@ -101,7 +85,7 @@ async function loadRenderInput(projectId: number): Promise<{
           : p.pageType === "inside_back_cover"
             ? "locked_right"
             : p.pageType,
-      elements,
+      elements: parsePageElements(p.contentJson),
     };
   });
 

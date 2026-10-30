@@ -96,6 +96,59 @@ function getCanvasHeight(bookWidthCm: number, bookHeightCm: number): number {
   return Math.round(DESIGN_W * (bookHeightCm / bookWidthCm));
 }
 
+/**
+ * Physical photobook order. Never sort by pageNumber alone — extra spreads
+ * reuse numbers that already belong to inside/back covers, which used to
+ * shove the back cover into the middle and leave white sheets everywhere.
+ */
+const PRINT_ROLE_RANK: Record<string, number> = {
+  front_cover: 0,
+  locked_left: 1,
+  inside_cover: 1,
+  inner: 2,
+  content: 2,
+  locked_right: 3,
+  inside_back_cover: 3,
+  back_cover: 4,
+};
+
+export function sortPrintPages<T extends { role: string; pageNumber?: number }>(pages: T[]): T[] {
+  return [...pages].sort((a, b) => {
+    const ra = PRINT_ROLE_RANK[a.role] ?? 2;
+    const rb = PRINT_ROLE_RANK[b.role] ?? 2;
+    if (ra !== rb) return ra - rb;
+    return (a.pageNumber ?? 0) - (b.pageNumber ?? 0);
+  });
+}
+
+/** DB default is "{}", older clients double-encoded, some wrapped `{ elements }`. */
+export function parsePageElements(raw: unknown): PdfRenderElement[] {
+  let parsed: unknown = raw;
+  if (parsed == null || parsed === "") return [];
+  if (typeof parsed === "string") {
+    const trimmed = parsed.trim();
+    if (!trimmed || trimmed === "{}" || trimmed === "null") return [];
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch {
+      return [];
+    }
+  }
+  if (typeof parsed === "string") {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      return [];
+    }
+  }
+  if (Array.isArray(parsed)) return parsed as PdfRenderElement[];
+  if (parsed && typeof parsed === "object") {
+    const els = (parsed as { elements?: unknown }).elements;
+    if (Array.isArray(els)) return els as PdfRenderElement[];
+  }
+  return [];
+}
+
 // Print resolution: 300 DPI — standard for photo-book print output.
 const PRINT_DPI = 300;
 const CM_TO_INCH = 1 / 2.54;
@@ -392,9 +445,9 @@ async function renderPageToCanvas(
   ensureFonts();
   const canvas = createCanvas(outW, outH);
   const ctx = canvas.getContext("2d");
-  const scaleX = outW / DESIGN_W;
-  const scaleY = outH / canvasH;
-  ctx.scale(scaleX, scaleY);
+  // Same scale on both axes — independent x/y scales used to squash square books.
+  const scale = outW / DESIGN_W;
+  ctx.scale(scale, scale);
 
   ctx.fillStyle = PAPER_COLOR;
   ctx.fillRect(0, 0, DESIGN_W, canvasH);
@@ -421,6 +474,7 @@ async function renderPageToCanvas(
           canvasH,
           el.cropFocusX ?? 0.5,
           el.cropFocusY ?? 0.5,
+          el.cropZoom ?? 1,
         );
         ctx.drawImage(
           wallpaper,
@@ -571,12 +625,17 @@ export async function renderProjectPdf(params: {
     throw new Error(`Invalid book size for PDF: ${bookWidthCm}×${bookHeightCm} cm`);
   }
 
-  const outW = Math.round(bookWidthCm * CM_TO_INCH * PRINT_DPI);
-  const outH = Math.round(bookHeightCm * CM_TO_INCH * PRINT_DPI);
+  // One scale from physical width so square/portrait pages never squash.
+  // Height follows the same design-canvas aspect the editor used.
   const canvasH = getCanvasHeight(bookWidthCm, bookHeightCm);
+  const scale = (bookWidthCm * CM_TO_INCH * PRINT_DPI) / DESIGN_W;
+  const outW = Math.max(1, Math.round(DESIGN_W * scale));
+  const outH = Math.max(1, Math.round(canvasH * scale));
 
-  const ordered = [...pages].sort((a, b) => (a.pageNumber ?? 0) - (b.pageNumber ?? 0));
-  const toRender = ordered.filter((p) => p.role !== "locked_left" && p.role !== "locked_right");
+  // Keep inside covers in the file so duplex imposition matches the bound book
+  // (front | lining | inners… | lining | back). Skipping them used to shift
+  // every spread by one and print designed pages onto the wrong sheet.
+  const toRender = sortPrintPages(pages);
 
   if (toRender.length === 0) {
     throw new Error("No printable pages found for PDF");
@@ -602,7 +661,7 @@ export async function renderProjectPdf(params: {
 
   for (const page of toRender) {
     const canvas = await renderPageToCanvas(page, outW, outH, canvasH, uploadsDir);
-    const jpegBuffer = canvas.toBuffer("image/jpeg", PRINT_JPEG_QUALITY);
+    const jpegBuffer = canvas.toBuffer("image/jpeg", { quality: PRINT_JPEG_QUALITY });
     const jpegImage = await pdf.embedJpg(jpegBuffer);
     const pdfPage = pdf.addPage([pageWidthPt, pageHeightPt]);
     pdfPage.drawImage(jpegImage, { x: 0, y: 0, width: pageWidthPt, height: pageHeightPt });

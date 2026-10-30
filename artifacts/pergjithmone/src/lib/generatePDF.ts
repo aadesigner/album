@@ -349,9 +349,16 @@ export async function generatePDF(
   const { ensureEditorFonts } = await import('./editorFonts');
   await ensureEditorFonts();
 
-  // Include all pages except the locked inside cover
-  const ordered = [...pages].sort((a, b) => (a.pageNumber ?? 0) - (b.pageNumber ?? 0));
-  const toRender = ordered.filter(p => p.role !== 'locked_left' && p.role !== 'locked_right');
+  const roleRank: Record<string, number> = {
+    front_cover: 0, locked_left: 1, inside_cover: 1, inner: 2,
+    locked_right: 3, inside_back_cover: 3, back_cover: 4,
+  };
+  const toRender = [...pages].sort((a, b) => {
+    const ra = roleRank[a.role] ?? 2;
+    const rb = roleRank[b.role] ?? 2;
+    if (ra !== rb) return ra - rb;
+    return (a.pageNumber ?? 0) - (b.pageNumber ?? 0);
+  });
 
   // Physical PDF page size follows the project's real book dimensions
   // (cm → mm) instead of a fixed 3:4 fallback, so square/other-ratio books
@@ -359,10 +366,11 @@ export async function generatePDF(
   const pdfWMm = bookSize?.widthCm ? bookSize.widthCm * 10 : FALLBACK_PDF_W_MM;
   const pdfHMm = bookSize?.heightCm ? bookSize.heightCm * 10 : FALLBACK_PDF_H_MM;
   const canvasH = getCanvasHeight(bookSize?.widthCm, bookSize?.heightCm);
+  const orientation = pdfHMm >= pdfWMm ? 'portrait' : 'landscape';
 
   const { default: jsPDF } = await import('jspdf');
   const pdf = new jsPDF({
-    orientation: 'portrait',
+    orientation,
     unit: 'mm',
     format: [pdfWMm, pdfHMm],
   });
@@ -372,7 +380,7 @@ export async function generatePDF(
 
     const dataURL = await renderPage(toRender[i].elements, canvasH);
 
-    if (i > 0) pdf.addPage([pdfWMm, pdfHMm], 'portrait');
+    if (i > 0) pdf.addPage([pdfWMm, pdfHMm], orientation);
     pdf.addImage(dataURL, 'JPEG', 0, 0, pdfWMm, pdfHMm);
   }
 

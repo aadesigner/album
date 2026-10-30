@@ -46,11 +46,14 @@ export type BiText = {
   size?: 'sm' | 'md' | 'lg' | 'xl';
   align?: 'left' | 'center' | 'right';
   space?: 'sm' | 'md' | 'lg';
-  weight?: 'normal' | 'medium' | 'semibold';
+  weight?: 'normal' | 'medium' | 'semibold' | 'bold';
   italic?: 'on' | 'off';
   leading?: 'tight' | 'snug' | 'normal' | 'relaxed';
-  tracking?: 'tight' | 'normal' | 'wide';
-  shadow?: 'none' | 'soft' | 'strong';
+  tracking?: 'tighter' | 'tight' | 'normal' | 'wide' | 'wider' | 'widest';
+  shadow?: 'none' | 'soft' | 'hard' | 'glow';
+  color?: string;
+  transform?: 'none' | 'uppercase' | 'lowercase';
+  dim?: 'off' | 'soft' | 'faint';
 };
 
 export type ImgRef = { src: string };
@@ -76,7 +79,7 @@ export function isImgRef(v: unknown): v is ImgRef {
     && typeof (v as ImgRef).src === 'string';
 }
 
-const STYLE_KEYS = ['font', 'size', 'align', 'space', 'weight', 'italic', 'leading', 'tracking', 'shadow'] as const;
+const STYLE_KEYS = ['font', 'size', 'align', 'space', 'weight', 'italic', 'leading', 'tracking', 'shadow', 'color', 'transform', 'dim'] as const;
 
 export function getAt(obj: unknown, path: string): unknown {
   const parts = path.split('.').filter(Boolean);
@@ -159,21 +162,33 @@ const LEADING: Record<NonNullable<BiText['leading']>, number> = {
 };
 
 const TRACKING: Record<NonNullable<BiText['tracking']>, string> = {
+  tighter: '-0.05em',
   tight: '-0.02em',
   normal: '0',
-  wide: '0.06em',
+  wide: '0.04em',
+  wider: '0.08em',
+  widest: '0.14em',
 };
 
 const WEIGHT: Record<NonNullable<BiText['weight']>, number> = {
   normal: 400,
   medium: 500,
   semibold: 600,
+  bold: 700,
 };
 
+/** Glyph shadow only — never box-shadow on the editable wrapper. */
 const SHADOW: Record<NonNullable<BiText['shadow']>, string> = {
   none: 'none',
-  soft: '0 6px 18px rgba(20,12,16,0.12)',
-  strong: '0 14px 32px rgba(20,12,16,0.22)',
+  soft: '0 1px 1px rgba(20,12,16,0.28), 0 2px 8px rgba(20,12,16,0.16)',
+  hard: '0 2px 0 rgba(20,12,16,0.45)',
+  glow: '0 0 18px rgba(255,255,255,0.7), 0 1px 2px rgba(20,12,16,0.35)',
+};
+
+const DIM: Record<NonNullable<BiText['dim']>, number> = {
+  off: 1,
+  soft: 0.78,
+  faint: 0.52,
 };
 
 export type TextStyle = {
@@ -183,9 +198,13 @@ export type TextStyle = {
   fontStyle?: 'italic' | 'normal';
   lineHeight?: number;
   letterSpacing?: string;
-  boxShadow?: string;
-  borderRadius?: number;
+  textShadow?: string;
+  color?: string;
+  textTransform?: 'none' | 'uppercase' | 'lowercase';
+  opacity?: number;
 };
+
+const HEX = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
 export function textStyle(content: unknown, path: string): TextStyle {
   const v = getAt(content, path);
@@ -198,10 +217,14 @@ export function textStyle(content: unknown, path: string): TextStyle {
   if (v.italic === 'off') style.fontStyle = 'normal';
   if (v.leading && LEADING[v.leading]) style.lineHeight = LEADING[v.leading];
   if (v.tracking && TRACKING[v.tracking] != null) style.letterSpacing = TRACKING[v.tracking];
-  if (v.shadow && SHADOW[v.shadow]) {
-    style.boxShadow = SHADOW[v.shadow];
-    if (v.shadow !== 'none') style.borderRadius = 8;
+  const rawShadow = v.shadow as string | undefined;
+  const shadowToken = (rawShadow === 'strong' ? 'hard' : rawShadow) as BiText['shadow'] | undefined;
+  if (shadowToken && SHADOW[shadowToken] != null) style.textShadow = SHADOW[shadowToken];
+  if (v.color && HEX.test(v.color)) style.color = v.color;
+  if (v.transform === 'uppercase' || v.transform === 'lowercase' || v.transform === 'none') {
+    style.textTransform = v.transform;
   }
+  if (v.dim && DIM[v.dim] != null) style.opacity = DIM[v.dim];
   return style;
 }
 

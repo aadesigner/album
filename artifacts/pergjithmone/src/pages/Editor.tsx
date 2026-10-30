@@ -613,6 +613,9 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
         onDragActive?.(true, { keepTransformer: true });
       }}
       onTransform={(e: any) => {
+        // Stickers: let Konva scale the group live. Baking width every tick
+        // while keepRatio resets scaleX/Y — that's the resize flicker.
+        if (el.sticker) return;
         bakeImageFrame(e.target, e.target.scaleX(), e.target.scaleY());
       }}
       onTransformEnd={(e: any) => {
@@ -713,10 +716,13 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
         height={ih}
         perfectDrawEnabled={false}
         listening={false}
+        imageSmoothingEnabled
         globalCompositeOperation={(el.mixBlendMode as GlobalCompositeOperation | undefined) || undefined}
       />
-      {/* Stroke inside the group so it tracks during drag/resize */}
-      {(isSelected || isDropTarget) && (
+      {/* Stroke inside the group so it tracks during drag/resize.
+          Stickers skip it — Transformer already draws the box, and a second
+          rect at stale el.w/el.h flickers while scaling. */}
+      {(isSelected || isDropTarget) && !el.sticker && (
         <Rect
           width={el.w}
           height={el.h}
@@ -1042,19 +1048,23 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
     stageRef.current.getLayers?.().forEach((layer: any) => layer.batchDraw?.());
   }, [fontsReady]);
 
+  const selectedMeta = selectedId ? elements.find(e => e.id === selectedId) : null;
+  const selectedType = selectedMeta?.type ?? null;
+  const selectedIsSticker = !!selectedMeta?.sticker;
   useEffect(()=>{
     if (!trRef.current) return;
-    const sel = selectedId ? elements.find(e => e.id === selectedId) : null;
     // Backgrounds use their own dock panel — never attach the Transformer.
     // While Adjust-photo is active, detach too: Transformer would still move the
     // frame even though Group.draggable is false (classic builder crop mode).
     const adjusting = !!(photoAdjustId && photoAdjustId === selectedId);
-    const node = (isActive && selectedId && selectedId !== editId && sel && sel.type !== 'background' && !adjusting)
+    const node = (isActive && selectedId && selectedId !== editId && selectedType && selectedType !== 'background' && !adjusting)
       ? shapeRefs.current[selectedId]
       : null;
     trRef.current.nodes(node ? [node] : []);
     trRef.current.getLayer()?.batchDraw();
-  },[isActive,selectedId,editId,shapeRefs,elements,photoAdjustId,imgCanPan]);
+    // Do not depend on the full `elements` array — re-attaching on every
+    // resize commit is what made stickers flicker while scaling.
+  },[isActive,selectedId,selectedType,editId,shapeRefs,photoAdjustId,imgCanPan]);
 
   const editEl=editId?elements.find(e=>e.id===editId):null;
 
@@ -1221,14 +1231,14 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
             dash={[6,5]} listening={false} opacity={0.9} visible={false}/>
           <Line ref={guideHRef} points={[0, canvasH/2, DESIGN_W, canvasH/2]} stroke="#C09A55" strokeWidth={1}
             dash={[6,5]} listening={false} opacity={0.9} visible={false}/>
-          <Transformer ref={trRef} rotateEnabled resizeEnabled
+          <Transformer ref={trRef} rotateEnabled resizeEnabled flipEnabled={false}
             rotationSnaps={[0,45,90,135,180,225,270,315]}
-            keepRatio={!!elements.find(e => e.id === selectedId)?.sticker}
+            keepRatio={selectedIsSticker}
             enabledAnchors={
-              (selectedId && elements.find(e => e.id === selectedId)?.type === 'text')
+              selectedType === 'text'
                 // Text: width/height box only — corners scale the typeface and jump the box.
                 ? ['middle-left', 'middle-right', 'top-center', 'bottom-center']
-                : elements.find(e => e.id === selectedId)?.sticker
+                : selectedIsSticker
                   ? ['top-left','top-right','bottom-left','bottom-right']
                 : ['top-left','top-center','top-right','middle-left','middle-right','bottom-left','bottom-center','bottom-right']
             }
@@ -3752,9 +3762,24 @@ export default function Editor() {
       if (token) headers['Authorization']=`Bearer ${token}`;
       const innerPages=project.pages.filter((p:any)=>p.pageType==='inner');
       const maxInner=innerPages.reduce((m:number,p:any)=>Math.max(m,p.pageNumber),0);
+      const nextA=maxInner+1;
+      const nextB=maxInner+2;
+      const insideBack=project.pages.find((p:any)=>p.pageType==='inside_back_cover');
+      const back=project.pages.find((p:any)=>p.pageType==='back_cover');
+      // Move linings/back past the new inners so PDF sort never collides.
+      if (insideBack) {
+        await fetch(`/api/projects/${projectId}/pages/${insideBack.id}`,{
+          method:'PATCH',headers,body:JSON.stringify({pageNumber:nextB+1}),
+        });
+      }
+      if (back) {
+        await fetch(`/api/projects/${projectId}/pages/${back.id}`,{
+          method:'PATCH',headers,body:JSON.stringify({pageNumber:nextB+2}),
+        });
+      }
       await Promise.all([
-        fetch(`/api/projects/${projectId}/pages`,{method:'POST',headers,body:JSON.stringify({pageNumber:maxInner+1,pageType:'inner'})}),
-        fetch(`/api/projects/${projectId}/pages`,{method:'POST',headers,body:JSON.stringify({pageNumber:maxInner+2,pageType:'inner'})}),
+        fetch(`/api/projects/${projectId}/pages`,{method:'POST',headers,body:JSON.stringify({pageNumber:nextA,pageType:'inner'})}),
+        fetch(`/api/projects/${projectId}/pages`,{method:'POST',headers,body:JSON.stringify({pageNumber:nextB,pageType:'inner'})}),
       ]);
       const result = await refetchProject();
       // Build spreads from freshly fetched data so we jump to the correct index
@@ -3814,12 +3839,26 @@ export default function Editor() {
       const remaining=project.pages
         .filter((p:any)=>p.pageType==='inner'&&!ids.includes(p.id))
         .sort((a:any,b:any)=>a.pageNumber-b.pageNumber);
+      const patchHeaders={...headers,'Content-Type':'application/json'};
       await Promise.all(remaining.map((p:any,i:number)=>
         fetch(`/api/projects/${projectId}/pages/${p.id}`,{
-          method:'PATCH',headers:{...headers,'Content-Type':'application/json'},
-          body:JSON.stringify({pageNumber:i+1}),
+          method:'PATCH',headers:patchHeaders,
+          body:JSON.stringify({pageNumber:i+2}),
         })
       ));
+      const lastInner=remaining.length+1;
+      const insideBack=project.pages.find((p:any)=>p.pageType==='inside_back_cover');
+      const back=project.pages.find((p:any)=>p.pageType==='back_cover');
+      if (insideBack) {
+        await fetch(`/api/projects/${projectId}/pages/${insideBack.id}`,{
+          method:'PATCH',headers:patchHeaders,body:JSON.stringify({pageNumber:lastInner+1}),
+        });
+      }
+      if (back) {
+        await fetch(`/api/projects/${projectId}/pages/${back.id}`,{
+          method:'PATCH',headers:patchHeaders,body:JSON.stringify({pageNumber:lastInner+2}),
+        });
+      }
       const result=await refetchProject();
       const freshPages=(result.data as any)?.pages??[];
       const freshSpreads=buildSpreads(freshPages,lang);

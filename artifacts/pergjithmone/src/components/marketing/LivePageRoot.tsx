@@ -318,14 +318,19 @@ function AdminModeChrome({
             padding: 16,
           }}
         >
-          <div className="flex items-center justify-between mb-3">
-            <p className="font-serif text-[15px] font-semibold" style={{ color: ADMIN.ink }}>
-              {meta?.label || 'Page'}
-            </p>
+          <div className="flex items-start justify-between mb-3 gap-2">
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-[0.16em] font-semibold" style={{ color: ADMIN.muted }}>
+                {sq ? 'Fushat' : 'Fields'}
+              </p>
+              <p className="font-serif text-[16px] font-semibold truncate" style={{ color: ADMIN.ink }}>
+                {meta?.label || 'Page'}
+              </p>
+            </div>
             <button
               type="button"
               onClick={() => onInspectorOpenChange(false)}
-              className="p-1 rounded-md"
+              className="p-1 rounded-md shrink-0"
               style={{ color: ADMIN.muted }}
               aria-label={sq ? 'Mbyll' : 'Close'}
             >

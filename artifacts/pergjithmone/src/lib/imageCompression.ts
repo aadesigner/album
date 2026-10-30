@@ -89,10 +89,13 @@ export async function compressImageFile(file: File): Promise<File> {
   // leave them alone and let the size-limit check below gate them instead.
   const keepGif = fileLooksLike(file, 'image/gif', /\.gif$/i);
   const keepPng = fileLooksLike(file, 'image/png', /\.png$/i);
+  const keepWebp = fileLooksLike(file, 'image/webp', /\.webp$/i);
   if (!isLikelyImageFile(file) || keepGif) {
     if (file.size > HARD_LIMIT_BYTES) throw new ImageTooLargeError(file.size);
     return file;
   }
+  // Stickers / logos: never flatten alpha through a JPEG round-trip.
+  if ((keepPng || keepWebp) && file.size <= HARD_LIMIT_BYTES) return file;
 
   let source: ImageBitmap | HTMLImageElement;
   try {
@@ -117,13 +120,14 @@ export async function compressImageFile(file: File): Promise<File> {
   const canvas = document.createElement('canvas');
   canvas.width = targetW;
   canvas.height = targetH;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { alpha: true });
   if (!ctx) return file;
+  ctx.clearRect(0, 0, targetW, targetH);
   ctx.drawImage(source as any, 0, 0, targetW, targetH);
   if ('close' in source) (source as ImageBitmap).close();
 
-  // Keep PNG as PNG (covers, logos, graphics). Photos without alpha become JPEG.
-  const hasAlpha = keepPng && (await pngHasAlpha(canvas, ctx));
+  // Keep PNG/WebP with alpha as PNG. Photos without alpha become JPEG.
+  const hasAlpha = (keepPng || keepWebp) && (await pngHasAlpha(canvas, ctx));
   let mime = keepPng || hasAlpha ? 'image/png' : 'image/jpeg';
   let ext = keepPng || hasAlpha ? 'png' : 'jpg';
 
