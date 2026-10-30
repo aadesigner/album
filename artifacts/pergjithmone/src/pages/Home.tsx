@@ -277,13 +277,24 @@ function LivingAlbumBook({
   const usePointerTilt = interactive && !reduced && hovering;
   const idleClass = size === 'hero' ? 'book-idle-yaw' : 'book-idle-yaw-starter';
 
+  const bookFade = {
+    duration: 0.55,
+    ease: [0.22, 1, 0.36, 1] as const,
+  };
+
   return (
-    <div
+    <AnimatePresence mode="wait" initial={false}>
+    <motion.div
+      key={style.key}
       ref={wrapRef}
       onMouseMove={onMove}
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={onLeave}
       className={`relative mx-auto ${!reduced ? 'book-float' : ''}`}
+      initial={reduced ? { opacity: 1 } : { opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={reduced ? { opacity: 1 } : { opacity: 0 }}
+      transition={bookFade}
       style={{
         // Gutter only — keeps spine/pages outside the hero overflow clip.
         // Cover size lives on the inner 3:4 box so padding cannot squash it.
@@ -386,42 +397,33 @@ function LivingAlbumBook({
               transform: 'translateZ(0.5px)',
             }}
           >
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.div
-                key={style.designId}
-                initial={reduced ? { opacity: 1 } : { opacity: 1, rotateY: 8, scale: 1.02 }}
-                animate={{ opacity: 1, rotateY: 0, scale: 1 }}
-                exit={reduced ? { opacity: 0 } : { opacity: 0, rotateY: -12, scale: 0.98 }}
-                transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-                style={{ position: 'absolute', inset: 0, transformOrigin: 'left center' }}
-              >
-                {coverEls.length > 0 && coverSize.w > 0 ? (
-                  <PageThumb
-                    elements={coverEls}
-                    width={coverSize.w}
-                    height={coverSize.h}
-                    canvasH={canvasH}
-                    fit="cover"
-                    background={coverBg}
-                    priority
-                  />
-                ) : (
-                  <img
-                    src={style.img}
-                    alt=""
-                    draggable={false}
-                    loading="eager"
-                    decoding="async"
-                    referrerPolicy="no-referrer"
-                    style={{
-                      position: 'absolute', inset: 0,
-                      width: '100%', height: '100%',
-                      objectFit: 'cover', display: 'block',
-                    }}
-                  />
-                )}
-              </motion.div>
-            </AnimatePresence>
+            <div style={{ position: 'absolute', inset: 0 }}>
+              {coverEls.length > 0 && coverSize.w > 0 ? (
+                <PageThumb
+                  elements={coverEls}
+                  width={coverSize.w}
+                  height={coverSize.h}
+                  canvasH={canvasH}
+                  fit="cover"
+                  background={coverBg}
+                  priority
+                />
+              ) : (
+                <img
+                  src={style.img}
+                  alt=""
+                  draggable={false}
+                  loading="eager"
+                  decoding="async"
+                  referrerPolicy="no-referrer"
+                  style={{
+                    position: 'absolute', inset: 0,
+                    width: '100%', height: '100%',
+                    objectFit: 'cover', display: 'block',
+                  }}
+                />
+              )}
+            </div>
 
             <div
               aria-hidden
@@ -457,7 +459,8 @@ function LivingAlbumBook({
         </motion.div>
       </div>
       </div>
-    </div>
+    </motion.div>
+    </AnimatePresence>
   );
 }
 
@@ -812,9 +815,9 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
           {/* 3D book — first on mobile so the hero reads as one composition */}
           <div className="order-1 md:order-2 md:col-start-2 md:row-start-1 flex flex-col items-center md:items-end justify-center pt-4 pb-2 md:py-0 md:pl-0 md:pr-2">
             <motion.div
-              initial={reduced ? false : { y: 28, scale: 0.94 }}
+              initial={reduced ? false : { opacity: 0, y: 20, scale: 0.96 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+              transition={{ duration: 0.75, ease: [0.16, 1, 0.3, 1] }}
               className="relative"
             >
               <div
