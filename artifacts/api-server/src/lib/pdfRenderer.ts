@@ -116,13 +116,26 @@ function isLandmarkPng(src?: string | null): boolean {
   return !!src && /\/designs\/(?:eiffel-tower|sagrada-familia)\.png(?:$|[?#])/i.test(src);
 }
 
-function coverImageBlend(el: { src?: string; mixBlendMode?: string; sticker?: boolean }): "screen" | undefined {
-  if (el.sticker) return undefined;
-  return isLandmarkPng(el.src) ? "screen" : undefined;
+function coverImageLetterbox(el: { src?: string; objectFit?: string; mixBlendMode?: string }): boolean {
+  return el.objectFit === "contain" || isLandmarkPng(el.src);
 }
 
-function coverImageLetterbox(el: { src?: string; objectFit?: string; mixBlendMode?: string }): boolean {
-  return el.objectFit === "contain" || coverImageBlend(el) === "screen";
+function knockOutBlack(img: Image): Canvas | Image {
+  try {
+    const c = createCanvas(img.width, img.height);
+    const g = c.getContext("2d");
+    g.drawImage(img, 0, 0);
+    const id = g.getImageData(0, 0, img.width, img.height);
+    const d = id.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const lum = Math.max(d[i], d[i + 1], d[i + 2]);
+      d[i + 3] = Math.round((d[i + 3] * lum) / 255);
+    }
+    g.putImageData(id, 0, 0);
+    return c;
+  } catch {
+    return img;
+  }
 }
 
 /**
@@ -447,8 +460,8 @@ function resolveImageSource(
 async function loadPageImages(
   elements: PdfRenderElement[],
   uploadsDir: string,
-): Promise<Map<string, Image>> {
-  const cache = new Map<string, Image>();
+): Promise<Map<string, Image | Canvas>> {
+  const cache = new Map<string, Image | Canvas>();
   const jobs = elements
     .filter((e) => (e.type === "image" || e.type === "background") && e.src)
     .map(async (e) => {
@@ -457,11 +470,11 @@ async function loadPageImages(
       try {
         const resolved = resolveImageSource(src, uploadsDir);
         if (!resolved) return;
-        if (resolved.kind === "file") {
-          cache.set(src, await loadImage(resolved.path));
-        } else {
-          cache.set(src, await loadImage(resolved.url));
-        }
+        let img: Image | Canvas = resolved.kind === "file"
+          ? await loadImage(resolved.path)
+          : await loadImage(resolved.url);
+        if (isLandmarkPng(src)) img = knockOutBlack(img as Image);
+        cache.set(src, img);
       } catch (err) {
         logger.warn({ err, src }, "PDF render: failed to load page image");
       }
@@ -549,8 +562,6 @@ async function renderPageToCanvas(
     } else if (el.type === "image" && el.src) {
       const img = images.get(el.src);
       if (img) {
-        const blend = coverImageBlend(el);
-        if (blend) ctx.globalCompositeOperation = blend;
         ctx.save();
         ctx.beginPath();
         ctx.rect(el.x, el.y, el.w, el.h);

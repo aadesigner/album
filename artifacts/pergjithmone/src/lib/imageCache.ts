@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { resolvePublicImageSrc } from './categoryImages';
+import { isLandmarkPng, knockOutBlackToAlpha } from './designs';
 
 const MAX_ENTRIES = 64;
 const inflight = new Map<string, Promise<HTMLImageElement>>();
@@ -67,10 +68,22 @@ export function loadCachedImage(src: string): Promise<HTMLImageElement> {
       if (!fallback) throw err;
       return decodeHtmlImage(fallback, imageLoadNeedsCors(fallback));
     })
-    .then((img) => {
+    .then(async (img) => {
       inflight.delete(url);
-      touch(url, img);
-      return img;
+      let out = img;
+      if (isLandmarkPng(src) || isLandmarkPng(url)) {
+        const cut = knockOutBlackToAlpha(img);
+        if (cut) {
+          out = await new Promise<HTMLImageElement>((resolve) => {
+            const next = new Image();
+            next.onload = () => resolve(next);
+            next.onerror = () => resolve(img);
+            next.src = cut.toDataURL('image/png');
+          });
+        }
+      }
+      touch(url, out);
+      return out;
     })
     .catch((err) => {
       inflight.delete(url);

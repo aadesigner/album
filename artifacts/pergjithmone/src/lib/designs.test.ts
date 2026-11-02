@@ -18,6 +18,7 @@ import {
   restoreCoverGraphics,
   sanitizeImageBlend,
   coverImageBlend,
+  applyBlackAsAlpha,
   konvaOpacity,
   clampElementPos,
   boundBoxToPage,
@@ -294,7 +295,7 @@ describe("designCatalogFace", () => {
     expect(designFrontElements(d).some((e) => e.text === "BARCELONA")).toBe(true);
   });
 
-  it("puts the Eiffel landmark back when a Design Studio save dropped it", () => {
+  it("does not put the Eiffel back after Design Studio removed it", () => {
     const d = DESIGNS.find((x) => x.id === "paris-pink")!;
     expect(designFrontElements(d).some((e) => e.src?.includes("eiffel-tower"))).toBe(true);
     const [patched] = applyDesignOverrides(
@@ -310,7 +311,7 @@ describe("designCatalogFace", () => {
     );
     const els = designFrontElements(patched);
     expect(els.some((e) => e.text === "PARIS")).toBe(true);
-    expect(els.some((e) => e.src?.includes("eiffel-tower") && e.mixBlendMode === "screen")).toBe(true);
+    expect(els.some((e) => e.src?.includes("eiffel-tower"))).toBe(false);
   });
 
   it("puts the city photo back when a travel save kept type but dropped the picture", () => {
@@ -350,21 +351,31 @@ describe("designCatalogFace", () => {
     expect(photo?.objectFit).toBe("cover");
   });
 
-  it("keeps screen-blend on the Eiffel PNG", () => {
+  it("strips screen-blend from the Eiffel PNG so gold stays opaque", () => {
     const cleaned = sanitizeImageBlend({
       src: "/designs/eiffel-tower.png",
       mixBlendMode: "screen",
       objectFit: "contain",
     });
-    expect(cleaned.mixBlendMode).toBe("screen");
+    expect(cleaned.mixBlendMode).toBeUndefined();
+    expect(cleaned.objectFit).toBe("contain");
   });
 
-  it("screens landmark PNGs even when mixBlendMode was dropped", () => {
-    expect(coverImageBlend({ src: "/designs/eiffel-tower.png" })).toBe("screen");
-    expect(coverImageBlend({ src: "/designs/sagrada-familia.png" })).toBe("screen");
+  it("never applies screen-blend on cover images", () => {
+    expect(coverImageBlend({ src: "/designs/eiffel-tower.png" })).toBeUndefined();
+    expect(coverImageBlend({ src: "/designs/sagrada-familia.png" })).toBeUndefined();
     expect(coverImageBlend({ src: "/designs/rome-cover-thumb.jpg", mixBlendMode: "screen" })).toBeUndefined();
     expect(coverImageBlend({ src: "/designs/baby-ador-graphic.png" })).toBeUndefined();
-    expect(coverImageBlend({ src: "/designs/eiffel-tower.png", sticker: true })).toBeUndefined();
+  });
+
+  it("turns black landmark pixels into alpha", () => {
+    const data = new Uint8ClampedArray([
+      0, 0, 0, 255,
+      200, 160, 40, 255,
+    ]);
+    applyBlackAsAlpha(data);
+    expect(data[3]).toBe(0);
+    expect(data[7]).toBe(200);
   });
 
   it("omits full Konva opacity so clipped groups stay solid", () => {

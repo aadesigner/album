@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   DESIGN_W, DESIGN_H, PAPER_COLOR,
-  designCatalogFace, coverImageBlend,
+  designCatalogFace, isLandmarkPng,
   type DesignDef, type EditorElement,
 } from '@/lib/designs';
 import { isStrokeOnlyShape, shapePathForElement } from '@/lib/shapes';
@@ -106,7 +106,7 @@ export const PageThumb = React.memo(function PageThumb({
                   position: 'absolute', left: el.x, top: el.y, width: el.w, height: el.h,
                   overflow: 'hidden',
                   opacity: el.opacity ?? 1,
-                  mixBlendMode: coverImageBlend(el),
+                  mixBlendMode: isLandmarkPng(el.src) ? 'screen' : undefined,
                   transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
                   transformOrigin: 'top left',
                   pointerEvents: 'none',

@@ -313,8 +313,8 @@ export interface EditorElement {
   /** Admin PNG/JPG decoration — move/scale only, never photo-crop. */
   sticker?: boolean;
   /**
-   * CSS / canvas blend. Landmark gold-on-black PNGs use `screen` so the
-   * black plate disappears on colored covers (no blank band under the graphic).
+   * CSS / canvas blend. Landmarks no longer use screen — black is knocked
+   * out to alpha so the gold stays fully opaque.
    */
   mixBlendMode?: string;
   text?: string; fontSize?: number; fontFamily?: string;
@@ -407,20 +407,48 @@ export function konvaOpacity(opacity?: number): number | undefined {
 }
 
 export function sanitizeImageBlend<T extends { src?: string; mixBlendMode?: string; objectFit?: string }>(el: T): T {
-  if (el.mixBlendMode !== 'screen' || isLandmarkPng(el.src)) return el;
+  if (el.mixBlendMode !== 'screen') return el;
   const next: T = { ...el, mixBlendMode: undefined };
-  if (next.objectFit === 'contain') next.objectFit = 'cover';
+  if (next.objectFit === 'contain' && !isLandmarkPng(el.src)) next.objectFit = 'cover';
   return next;
 }
 
-/** Landmark cutouts screen; stickers and other PNGs draw at full opacity. */
-export function coverImageBlend(el: { src?: string; mixBlendMode?: string; sticker?: boolean }): 'screen' | undefined {
-  if (el.sticker) return undefined;
-  return isLandmarkPng(el.src) ? 'screen' : undefined;
+/** Screen-blend is no longer used on covers (it faded the gold). */
+export function coverImageBlend(_el?: { src?: string; mixBlendMode?: string; sticker?: boolean }): 'screen' | undefined {
+  return undefined;
 }
 
 export function coverImageLetterbox(el: { src?: string; objectFit?: string; mixBlendMode?: string }): boolean {
-  return el.objectFit === 'contain' || coverImageBlend(el) === 'screen';
+  return el.objectFit === 'contain' || isLandmarkPng(el.src);
+}
+
+/** Map near-black pixels to alpha so gold landmarks draw solid, not screened. */
+export function applyBlackAsAlpha(data: Uint8ClampedArray | Uint8Array): void {
+  for (let i = 0; i < data.length; i += 4) {
+    const lum = Math.max(data[i], data[i + 1], data[i + 2]);
+    data[i + 3] = Math.round((data[i + 3] * lum) / 255);
+  }
+}
+
+export function knockOutBlackToAlpha(img: HTMLImageElement): HTMLCanvasElement | null {
+  if (typeof document === 'undefined') return null;
+  const w = img.naturalWidth || img.width;
+  const h = img.naturalHeight || img.height;
+  if (!w || !h) return null;
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const ctx = c.getContext('2d');
+  if (!ctx) return null;
+  try {
+    ctx.drawImage(img, 0, 0);
+    const id = ctx.getImageData(0, 0, w, h);
+    applyBlackAsAlpha(id.data);
+    ctx.putImageData(id, 0, 0);
+    return c;
+  } catch {
+    return null;
+  }
 }
 
 export function restoreLandmarkGraphics<T extends { type?: string; src?: string; objectFit?: string; mixBlendMode?: string }>(
@@ -431,24 +459,18 @@ export function restoreLandmarkGraphics<T extends { type?: string; src?: string;
   const bySrc = new Map(
     builtin.filter((e) => isLandmarkGraphic(e) && e.src).map((e) => [e.src as string, e]),
   );
-  const withBlend = saved.map((el) => {
+  // Never re-insert a landmark the admin deleted — only tidy blend on ones still present.
+  return saved.map((el) => {
     const b = el.src ? bySrc.get(el.src) : undefined;
     if (!b) return sanitizeImageBlend(el);
     return sanitizeImageBlend({
       ...el,
-      objectFit: b.objectFit || el.objectFit || 'contain',
-      mixBlendMode: 'screen',
+      objectFit: el.objectFit || b.objectFit || 'contain',
     });
   });
-  const srcs = new Set(withBlend.map((e) => e.src).filter(Boolean) as string[]);
-  const extra = builtin.filter((e) => isLandmarkGraphic(e) && e.src && !srcs.has(e.src));
-  if (!extra.length) return withBlend;
-  const bg = withBlend.findIndex((e) => e.type === 'background');
-  const at = bg >= 0 ? bg + 1 : 0;
-  return [...withBlend.slice(0, at), ...extra, ...withBlend.slice(at)];
 }
 
-/** Re-attach city photos / landmarks a Design Studio save dropped, and drop illegal screen-blend. */
+/** Fill blank city-photo slots a save dropped. Do not re-insert deleted landmarks. */
 export function restoreCoverGraphics<T extends { type?: string; src?: string; objectFit?: string; mixBlendMode?: string }>(
   saved: T[],
   builtin: T[],
@@ -1028,7 +1050,6 @@ export const DESIGNS: DesignDef[] = [
       BG('#FEC5D7'),
       IMG('/designs/eiffel-tower.png', 36, 148, DESIGN_W - 72, 620, {
         objectFit: 'contain',
-        mixBlendMode: 'screen',
       }),
       TX('PARIS', 8, 22, DESIGN_W - 16, 78, {
         fontSize: 88, fill: '#FFFFFF', align: 'center',
@@ -1052,7 +1073,6 @@ export const DESIGNS: DesignDef[] = [
       BG('#A83442'),
       IMG('/designs/sagrada-familia.png', 36, 148, DESIGN_W - 72, 620, {
         objectFit: 'contain',
-        mixBlendMode: 'screen',
       }),
       TX('BARCELONA', 8, 22, DESIGN_W - 16, 78, {
         fontSize: 64, fill: '#FCB426', align: 'center',

@@ -34,13 +34,8 @@ function isLandmarkPng(src?: string | null): boolean {
   return !!src && /\/designs\/(?:eiffel-tower|sagrada-familia)\.png(?:$|[?#])/i.test(src);
 }
 
-function coverImageBlend(el: { src?: string; mixBlendMode?: string; sticker?: boolean }): 'screen' | undefined {
-  if (el.sticker) return undefined;
-  return isLandmarkPng(el.src) ? 'screen' : undefined;
-}
-
 function coverImageLetterbox(el: { src?: string; objectFit?: string; mixBlendMode?: string }): boolean {
-  return el.objectFit === 'contain' || coverImageBlend(el) === 'screen';
+  return el.objectFit === 'contain' || isLandmarkPng(el.src);
 }
 
 /** Physical PDF page + raster that shares its aspect (no squash onto the page). */
@@ -278,8 +273,6 @@ async function renderPage(elements: PdfElement[], canvasH: number, outW: number,
     else if (el.type === 'image' && el.src) {
       const img = imgCache.get(imageUrl(el.src));
       if (img) {
-        const blend = coverImageBlend(el);
-        if (blend) ctx.globalCompositeOperation = blend;
         ctx.save();
         ctx.beginPath();
         ctx.rect(el.x, el.y, el.w, el.h);
