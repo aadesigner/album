@@ -180,6 +180,7 @@ export const JSON_SETTING_JS_KEYS = new Set([
   "customDesigns",
   "adminNotes",
   "editorElements",
+  "webTheme",
 ]);
 
 export const SECURITY_SETTINGS_KEY_MAP: Record<keyof SecuritySettings, string> = {

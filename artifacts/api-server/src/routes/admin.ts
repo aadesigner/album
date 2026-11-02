@@ -29,6 +29,7 @@ import {
 } from "../lib/securitySettings";
 import { OFFER_BAR_KEY_MAP, normalizeOfferBarWrite, readOfferBarSettings } from "../lib/offerBarSettings";
 import { CLARITY_KEY_MAP, normalizeClarityWrite, readClaritySettings } from "../lib/claritySettings";
+import { readWebThemeSettings, normalizeWebThemeWrite } from "../lib/webThemeSettings";
 import { parseEditorElements, EDITOR_ELEMENTS_MAX } from "../lib/editorElements";
 import { invalidateIpBlocklistCache } from "../lib/ipBlocklist";
 import { queueProjectPdfGeneration, deleteProjectPdfFile } from "../lib/generateProjectPdf";
@@ -1397,6 +1398,7 @@ router.get(
       dataRoot,
       ...readOfferBarSettings(map),
       ...readClaritySettings(map),
+      ...readWebThemeSettings(map),
       ...readSecuritySettings(map),
     });
   },
@@ -1429,6 +1431,7 @@ router.patch(
       requireLoginForPdf: "require_login_for_pdf",
       pendingBooksLimitEnabled: "pending_books_limit_enabled",
       pendingBooksLimit: "pending_books_limit",
+      webTheme: "web_theme",
       ...OFFER_BAR_KEY_MAP,
       ...CLARITY_KEY_MAP,
       ...SECURITY_SETTINGS_KEY_MAP,
@@ -1443,6 +1446,8 @@ router.patch(
         let value: string;
         if (jsKey === "allowedUploadMimeTypes") {
           value = serializeAllowedUploadMimeTypes(raw);
+        } else if (jsKey === "webTheme") {
+          value = normalizeWebThemeWrite(raw);
         } else if (offerValue !== null) value = offerValue;
         else if (clarityValue !== null) value = clarityValue;
         else if (JSON_SETTING_JS_KEYS.has(jsKey)) {
@@ -1590,6 +1595,7 @@ router.patch(
       pendingBooksLimit: parseInt(map2["pending_books_limit"] || "10", 10),
       ...readOfferBarSettings(map2),
       ...readClaritySettings(map2),
+      ...readWebThemeSettings(map2),
       ...readSecuritySettings(map2),
     });
 

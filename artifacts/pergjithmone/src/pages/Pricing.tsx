@@ -163,18 +163,25 @@ function PricingView() {
                     </span>
                   </div>
 
-                  {/* Features */}
+                  {/* Features — count comes from CMS (admin Web Theme / live editor) */}
                   <ul className="space-y-3 mb-8">
-                    {plan.features.map((_, fi) => (
-                      <li key={fi} className="flex items-start gap-3">
-                        <div className="w-4 h-4 rounded-full bg-neutral-900 flex items-center justify-center shrink-0 mt-0.5">
-                          <Check size={9} className="text-white" strokeWidth={3}/>
-                        </div>
-                        <span className="text-[13px] text-neutral-600">
-                          <Editable path={`plans.${i}.features.${fi}`}>{p.txt(`plans.${i}.features.${fi}`)}</Editable>
-                        </span>
-                      </li>
-                    ))}
+                    {(p.list(`plans.${i}.features`).length
+                      ? p.list(`plans.${i}.features`)
+                      : plan.features
+                    ).map((_, fi) => {
+                      const label = p.txt(`plans.${i}.features.${fi}`);
+                      if (!label.trim()) return null;
+                      return (
+                        <li key={fi} className="flex items-start gap-3">
+                          <div className="w-4 h-4 rounded-full bg-neutral-900 flex items-center justify-center shrink-0 mt-0.5">
+                            <Check size={9} className="text-white" strokeWidth={3}/>
+                          </div>
+                          <span className="text-[13px] text-neutral-600">
+                            <Editable path={`plans.${i}.features.${fi}`}>{label}</Editable>
+                          </span>
+                        </li>
+                      );
+                    })}
                   </ul>
 
                   <Link href="/krijo">

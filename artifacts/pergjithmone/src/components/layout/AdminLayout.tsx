@@ -5,7 +5,7 @@ import { Link, useLocation } from 'wouter';
 import {
   LayoutDashboard, Users, ShoppingBag, FolderOpen, Image,
   Grid, Ruler, Settings, LogOut, X, Sparkles, ExternalLink, ShieldAlert, Check, Palette,
-  FileText, Sticker,
+  FileText, Sticker, ChevronDown, Paintbrush,
 } from 'lucide-react';
 import { authFetch } from '@/lib/authFetch';
 import {
@@ -46,19 +46,53 @@ const navItems = [
   { href: '/heyadmin/perdorues', label: 'Users',         Icon: Users,           group: 'Overview' },
   { href: '/heyadmin/dizajne',   label: 'Design Studio', Icon: Sparkles,        group: 'Catalog' },
   { href: '/heyadmin/elemente',  label: 'Text / Elements', Icon: Sticker,       group: 'Catalog' },
-  { href: '/heyadmin/site',      label: 'Site pages',    Icon: FileText,        group: 'Catalog' },
   { href: '/heyadmin/kategori',  label: 'Categories',    Icon: FolderOpen,      group: 'Catalog' },
   { href: '/heyadmin/template',  label: 'Templates',     Icon: Image,           group: 'Catalog' },
   { href: '/heyadmin/layout',    label: 'Layouts',       Icon: Grid,            group: 'Catalog' },
   { href: '/heyadmin/madhesia',  label: 'Book Sizes',    Icon: Ruler,           group: 'Catalog' },
+  { href: '/heyadmin/site',      label: 'Site pages',    Icon: FileText,        group: 'Website' },
+  { href: '/heyadmin/tema',      label: 'Web Theme',     Icon: Paintbrush,      group: 'Website' },
   { href: '/heyadmin/siguria',   label: 'Security',      Icon: ShieldAlert,     group: 'System' },
   { href: '/heyadmin/cilesimet', label: 'Settings',      Icon: Settings,        group: 'System' },
 ] as const;
 
-const navGroups = (['Overview', 'Catalog', 'System'] as const).map((title) => ({
+type NavGroupTitle = typeof navItems[number]['group'];
+
+const NAV_GROUP_ORDER: NavGroupTitle[] = ['Overview', 'Catalog', 'Website', 'System'];
+
+const navGroups = NAV_GROUP_ORDER.map((title) => ({
   title,
   items: navItems.filter((i) => i.group === title),
 }));
+
+const SIDEBAR_OPEN_KEY = 'admin-nav-open-groups';
+
+function readOpenGroups(activeGroup: NavGroupTitle): Record<NavGroupTitle, boolean> {
+  const base: Record<NavGroupTitle, boolean> = {
+    Overview: false,
+    Catalog: false,
+    Website: false,
+    System: false,
+  };
+  base[activeGroup] = true;
+  try {
+    const raw = sessionStorage.getItem(SIDEBAR_OPEN_KEY);
+    if (!raw) return base;
+    const parsed = JSON.parse(raw) as Partial<Record<NavGroupTitle, boolean>>;
+    for (const g of NAV_GROUP_ORDER) {
+      if (typeof parsed[g] === 'boolean') base[g] = parsed[g]!;
+    }
+    base[activeGroup] = true;
+  } catch { /* ignore */ }
+  return base;
+}
+
+function groupForLocation(location: string): NavGroupTitle {
+  const match = navItems.find(
+    (i) => location === i.href || (i.href !== '/heyadmin' && location.startsWith(i.href)),
+  );
+  return match?.group ?? 'Overview';
+}
 
 type AdminPulse = {
   pending: number;
@@ -81,7 +115,6 @@ function useAdminPulse(enabled = true) {
     },
     staleTime: 45_000,
     refetchInterval: 90_000,
-    refetchOnWindowFocus: false,
     refetchOnWindowFocus: false,
     retry: 1,
   });
@@ -312,6 +345,28 @@ function Sidebar({
   const [location] = useLocation();
   const { data: pulse } = useAdminPulse();
   const isMobile = variant === 'mobile';
+  const activeGroup = groupForLocation(location);
+  const [openGroups, setOpenGroups] = useState<Record<NavGroupTitle, boolean>>(() =>
+    readOpenGroups(activeGroup),
+  );
+
+  useEffect(() => {
+    setOpenGroups((prev) => {
+      if (prev[activeGroup]) return prev;
+      const next = { ...prev, [activeGroup]: true };
+      try { sessionStorage.setItem(SIDEBAR_OPEN_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }, [activeGroup]);
+
+  const toggleGroup = (title: NavGroupTitle) => {
+    setOpenGroups((prev) => {
+      const next = { ...prev, [title]: !prev[title] };
+      try { sessionStorage.setItem(SIDEBAR_OPEN_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  };
+
   const initials = (user?.name || (user as any)?.phone || 'A')
     .split(' ')
     .map((w: string) => w[0])
@@ -395,75 +450,121 @@ function Sidebar({
         )}
       </div>
 
-      <nav className={`relative flex-1 overflow-y-auto overscroll-contain ${isMobile ? 'py-3.5 px-3.5' : 'py-3 px-2.5'}`}>
-        {navGroups.map((group) => (
-          <div key={group.title} className={isMobile ? 'mb-4' : 'mb-3.5'}>
-            <p
-              className={`font-semibold tracking-[0.18em] uppercase ${isMobile ? 'px-3 mb-2.5 text-[9px]' : 'px-3 mb-2 text-[9px]'}`}
-              style={{ color: theme.sidebarText, opacity: 0.45, fontFamily: theme.fontSans }}
-            >
-              {group.title}
-            </p>
-            <div className={isMobile ? 'space-y-1' : 'space-y-0.5'}>
-              {group.items.map(({ href, label, Icon }) => {
-                const isActive = location === href || (href !== '/heyadmin' && location.startsWith(href));
-                const badge = href === '/heyadmin/porosi' ? pulse?.pending : 0;
-                return (
-                  <Link
-                    key={href}
-                    href={href}
-                    onClick={onClose}
-                    className={`flex items-center gap-2.5 font-medium transition-all duration-200 ${
-                      isMobile
-                        ? 'px-3 py-2.5 text-[13px]'
-                        : 'px-2.5 py-2 text-[12.5px]'
-                    }`}
-                    style={{
-                      borderRadius: theme.radius,
-                      ...(isActive
-                        ? {
-                            background: theme.sidebarActive,
-                            color: theme.sidebarTextActive,
-                            boxShadow: `inset 3px 0 0 ${theme.accent}`,
-                          }
-                        : { color: theme.sidebarText }),
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isActive) e.currentTarget.style.background = theme.sidebarHover;
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isActive) e.currentTarget.style.background = 'transparent';
-                    }}
+      <nav className={`relative flex-1 overflow-y-auto overscroll-contain ${isMobile ? 'py-3 px-3' : 'py-2.5 px-2'}`}>
+        {navGroups.map((group) => {
+          const open = openGroups[group.title];
+          const groupHasActive = group.items.some(
+            (i) => location === i.href || (i.href !== '/heyadmin' && location.startsWith(i.href)),
+          );
+          const pendingInGroup = group.items.some((i) => i.href === '/heyadmin/porosi')
+            ? (pulse?.pending || 0)
+            : 0;
+          return (
+            <div key={group.title} className={isMobile ? 'mb-1.5' : 'mb-1'}>
+              <button
+                type="button"
+                onClick={() => toggleGroup(group.title)}
+                aria-expanded={open}
+                className={`w-full flex items-center gap-2 font-semibold tracking-[0.14em] uppercase transition-colors ${
+                  isMobile ? 'px-2.5 py-2.5 text-[10px]' : 'px-2 py-2 text-[9.5px]'
+                }`}
+                style={{
+                  borderRadius: theme.radius,
+                  color: groupHasActive ? theme.sidebarTextActive : theme.sidebarText,
+                  background: open ? `${theme.sidebarHover}` : 'transparent',
+                  opacity: groupHasActive ? 1 : 0.72,
+                  fontFamily: theme.fontSans,
+                }}
+              >
+                <span className="flex-1 text-left truncate">{group.title}</span>
+                {!!pendingInGroup && !open && (
+                  <span
+                    className="min-w-[1.05rem] h-[1.05rem] px-1 flex items-center justify-center text-[8px] font-bold"
+                    style={{ background: theme.accent, color: theme.accentOn, borderRadius: '999px' }}
                   >
-                    <span
-                      className={`flex items-center justify-center shrink-0 ${isMobile ? 'w-9 h-9' : 'w-7 h-7'}`}
-                      style={{
-                        borderRadius: `calc(${theme.radius} - 4px)`,
-                        background: isActive ? `${theme.accent}22` : 'transparent',
-                        color: isActive ? theme.accent : theme.sidebarText,
-                      }}
-                    >
-                      <Icon
-                        size={isMobile ? 17 : 15}
-                        strokeWidth={isActive ? 2.35 : 1.75}
-                        className="shrink-0"
-                      />
-                    </span>
-                    <span className="truncate flex-1" style={{ fontFamily: theme.fontSans }}>{label}</span>
-                    {!!badge && (
-                      <span
-                        className="min-w-[1.15rem] h-[1.15rem] px-1 flex items-center justify-center text-[9px] font-bold shrink-0"
-                        style={{ background: theme.accent, color: theme.accentOn, borderRadius: '999px' }}
-                      >
-                        {badge > 99 ? '99+' : badge}
-                      </span>
-                    )}
-                  </Link>
-                );
-              })}
+                    {pendingInGroup > 99 ? '99+' : pendingInGroup}
+                  </span>
+                )}
+                <ChevronDown
+                  size={14}
+                  strokeWidth={2.25}
+                  className="shrink-0 transition-transform duration-200"
+                  style={{
+                    transform: open ? 'rotate(0deg)' : 'rotate(-90deg)',
+                    opacity: 0.7,
+                  }}
+                />
+              </button>
+              <div
+                className="overflow-hidden transition-[grid-template-rows] duration-200"
+                style={{ display: 'grid', gridTemplateRows: open ? '1fr' : '0fr' }}
+              >
+                <div className="min-h-0">
+                  <div className={`${isMobile ? 'space-y-0.5 pb-1.5 pt-0.5' : 'space-y-0.5 pb-1 pt-0.5'}`}>
+                    {group.items.map(({ href, label, Icon }) => {
+                      const isActive = location === href || (href !== '/heyadmin' && location.startsWith(href));
+                      const badge = href === '/heyadmin/porosi' ? pulse?.pending : 0;
+                      return (
+                        <Link
+                          key={href}
+                          href={href}
+                          onClick={onClose}
+                          className={`flex items-center gap-2 font-medium transition-all duration-200 ${
+                            isMobile
+                              ? 'px-2.5 py-2 text-[13px]'
+                              : 'px-2 py-1.5 text-[12.5px]'
+                          }`}
+                          style={{
+                            borderRadius: theme.radius,
+                            ...(isActive
+                              ? {
+                                  background: theme.sidebarActive,
+                                  color: theme.sidebarTextActive,
+                                  boxShadow: `inset 3px 0 0 ${theme.accent}`,
+                                }
+                              : { color: theme.sidebarText }),
+                          }}
+                          onMouseEnter={(e) => {
+                            if (!isActive) e.currentTarget.style.background = theme.sidebarHover;
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!isActive) e.currentTarget.style.background = 'transparent';
+                          }}
+                        >
+                          <span
+                            className={`flex items-center justify-center shrink-0 ${isMobile ? 'w-8 h-8' : 'w-6.5 h-6.5'}`}
+                            style={{
+                              width: isMobile ? 32 : 26,
+                              height: isMobile ? 32 : 26,
+                              borderRadius: `calc(${theme.radius} - 4px)`,
+                              background: isActive ? `${theme.accent}22` : 'transparent',
+                              color: isActive ? theme.accent : theme.sidebarText,
+                            }}
+                          >
+                            <Icon
+                              size={isMobile ? 16 : 14}
+                              strokeWidth={isActive ? 2.35 : 1.75}
+                              className="shrink-0"
+                            />
+                          </span>
+                          <span className="truncate flex-1" style={{ fontFamily: theme.fontSans }}>{label}</span>
+                          {!!badge && (
+                            <span
+                              className="min-w-[1.15rem] h-[1.15rem] px-1 flex items-center justify-center text-[9px] font-bold shrink-0"
+                              style={{ background: theme.accent, color: theme.accentOn, borderRadius: '999px' }}
+                            >
+                              {badge > 99 ? '99+' : badge}
+                            </span>
+                          )}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </nav>
 
       <div

@@ -91,6 +91,8 @@ const PROTECTED_SETTING_KEYS = new Set([
   "hidden_design_ids",
   "editor_elements",
   "admin_notes",
+  // Navbar/footer theme JSON — admin-owned; never seed-overwrite on redeploy.
+  "web_theme",
 ]);
 
 export async function seedCatalog(): Promise<void> {

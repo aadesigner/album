@@ -4,6 +4,7 @@ import { bookSizesTable, layoutsTable, appSettingsTable } from "@workspace/db-ts
 import { eq } from "drizzle-orm";
 import { readOfferBarSettings } from "../lib/offerBarSettings";
 import { readClaritySettings } from "../lib/claritySettings";
+import { readWebThemeSettings } from "../lib/webThemeSettings";
 import { setPublicCatalogCache, setNoStoreCache } from "../lib/httpCache";
 import { parseJsonArray, parseJsonObject } from "../lib/securitySettingsShared";
 import { parseEditorElements } from "../lib/editorElements";
@@ -72,6 +73,7 @@ router.get("/settings", async (_req, res): Promise<void> => {
     pendingBooksLimit: parseInt(map["pending_books_limit"] || "10", 10),
     ...readOfferBarSettings(map),
     ...readClaritySettings(map),
+    ...readWebThemeSettings(map),
   });
 });
 

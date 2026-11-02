@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Link, useLocation } from 'wouter';
 import { ChevronDown, FolderOpen, UserRound, Shield, LogOut } from 'lucide-react';
 import { useGetAppSettings, type User } from '@workspace/api-client-react-tsconfig';
 import { offerBarCopy, parseOfferBar } from '@/lib/offerBar';
+import { fillBackground, webThemeFromSettings } from '@/lib/webTheme';
 import { OfferBarStrip } from './OfferBarStrip';
 import { ChromeLock } from './ChromeLock';
 import { usePageEditorOptional } from '@/components/marketing/PageEditorContext';
@@ -90,6 +91,21 @@ export function Navbar() {
   const [scrolled, setScrolled] = React.useState(false);
   const [loc] = useLocation();
   const accountRef = React.useRef<HTMLDivElement>(null);
+  const { data: appSettings } = useGetAppSettings();
+  const theme = useMemo(
+    () => webThemeFromSettings(appSettings as Record<string, unknown> | undefined),
+    [appSettings],
+  );
+  const navBg = fillBackground(theme.navBgMode, theme.navBg, theme.navBgTo);
+  const isGlass = theme.navStyle === 'glass';
+  const isEditorial = theme.navStyle === 'editorial';
+  const isPills = theme.navStyle === 'pills';
+  const isSolid = theme.navStyle === 'solid';
+  const lightInk = theme.navStyle === 'classic' || theme.navStyle === 'editorial' || theme.navStyle === 'pills'
+    ? !(theme.navBgMode === 'solid' && /^#(0|1|2|3|4|5)/i.test(theme.navBg))
+    : false;
+  // Heuristic: dark backgrounds → treat as inverted chrome
+  const inverted = isGlass || isSolid || (!lightInk && (isGlass || /^#(0|1|2)/i.test(theme.navBg)));
 
   const name = userDisplayName(user);
   const initials = userInitials(user);
@@ -149,42 +165,119 @@ export function Navbar() {
       {/* ── Sticky bar ── */}
       <nav
         className="sticky top-0 z-50 w-full transition-all duration-300"
+        data-nav-style={theme.navStyle}
         style={{
-          background: 'rgba(255,255,255,0.97)',
-          backdropFilter: 'blur(16px)',
-          WebkitBackdropFilter: 'blur(16px)',
-          boxShadow: scrolled ? '0 2px 28px rgba(0,0,0,0.07)' : 'none',
+          background: isGlass
+            ? (theme.navBgMode === 'gradient'
+              ? fillBackground('gradient', `${theme.navBg}d8`, `${theme.navBgTo}c0`)
+              : `${theme.navBg}d8`)
+            : navBg,
+          backdropFilter: isGlass || theme.navStyle === 'classic' ? 'blur(16px)' : undefined,
+          WebkitBackdropFilter: isGlass || theme.navStyle === 'classic' ? 'blur(16px)' : undefined,
+          boxShadow: scrolled
+            ? (inverted ? '0 8px 28px rgba(0,0,0,0.28)' : '0 2px 28px rgba(0,0,0,0.07)')
+            : (isEditorial ? `inset 0 -1px 0 ${theme.navMuted}33` : 'none'),
+          borderBottom: isPills ? 'none' : undefined,
         }}
       >
         <ChromeLock />
         <div
-          className="max-w-7xl mx-auto px-4 md:px-10 h-[64px] md:h-[72px] flex items-center justify-between"
+          className={`max-w-7xl mx-auto px-4 md:px-10 flex items-center justify-between ${
+            isEditorial ? 'h-[72px] md:h-[80px]' : isPills ? 'h-[68px] md:h-[76px]' : 'h-[64px] md:h-[72px]'
+          }`}
         >
-          {/* Logo — cropped wordmark (logo-full.png is a padded 500² square) */}
+          {/* Logo */}
           <Link href="/" className="flex items-center shrink-0 z-50">
-            <img
-              src="/logo-nav.png"
-              alt="Përgjithmonë"
-              className="h-[30px] md:h-[36px] w-auto"
-              style={{ objectFit: 'contain', objectPosition: 'left center', display: 'block' }}
-            />
+            {isEditorial ? (
+              <span
+                className="leading-none tracking-tight"
+                style={{
+                  fontFamily: 'Georgia, "Times New Roman", serif',
+                  fontStyle: 'italic',
+                  fontSize: 'clamp(20px, 2.4vw, 26px)',
+                  fontWeight: 500,
+                  color: theme.navText,
+                }}
+              >
+                Përgjithmonë
+              </span>
+            ) : isPills ? (
+              <span
+                className="px-3.5 py-1.5 text-[13px] font-semibold rounded-full"
+                style={{ background: theme.navAccent, color: theme.navAccentOn }}
+              >
+                Përgjithmonë
+              </span>
+            ) : inverted ? (
+              <span
+                className="text-[14px] md:text-[15px] font-semibold tracking-[0.04em]"
+                style={{ color: theme.navText }}
+              >
+                Përgjithmonë
+              </span>
+            ) : (
+              <img
+                src="/logo-nav.png"
+                alt="Përgjithmonë"
+                className="h-[30px] md:h-[36px] w-auto"
+                style={{ objectFit: 'contain', objectPosition: 'left center', display: 'block' }}
+              />
+            )}
           </Link>
 
           {/* Desktop center nav */}
-          <div className="hidden md:flex items-center gap-7">
+          <div className={`hidden md:flex items-center ${isPills ? 'gap-1.5' : isEditorial ? 'gap-6' : 'gap-7'}`}>
             {navLinks.map(item => {
               const active = loc === item.href;
+              if (isPills) {
+                return (
+                  <Link key={item.href} href={item.href}>
+                    <span
+                      className="px-3.5 py-1.5 text-[12px] font-medium rounded-full transition-colors"
+                      style={{
+                        background: active ? `${theme.navText}14` : 'transparent',
+                        color: active ? theme.navText : theme.navMuted,
+                      }}
+                    >
+                      {item.label}
+                    </span>
+                  </Link>
+                );
+              }
+              if (isEditorial) {
+                return (
+                  <Link key={item.href} href={item.href} className="group relative py-1">
+                    <span
+                      className="text-[13.5px] transition-colors duration-200"
+                      style={{
+                        color: active ? theme.navText : theme.navMuted,
+                        fontFamily: 'Georgia, "Times New Roman", serif',
+                      }}
+                    >
+                      {item.label}
+                    </span>
+                  </Link>
+                );
+              }
               return (
                 <Link key={item.href} href={item.href} className="group relative py-1.5">
-                  <span className={`text-[12px] uppercase tracking-[0.12em] font-medium transition-colors duration-200 ${
-                    active ? 'text-neutral-900' : 'text-neutral-400 group-hover:text-neutral-800'
-                  }`}>
+                  <span
+                    className="text-[12px] uppercase tracking-[0.12em] font-medium transition-colors duration-200"
+                    style={{ color: active ? theme.navText : theme.navMuted }}
+                  >
                     {item.label}
                   </span>
-                  <span className="absolute bottom-0 left-0 h-px bg-neutral-900 transition-all duration-300"
-                    style={{ width: active ? '100%' : '0%' }} aria-hidden />
+                  <span
+                    className="absolute bottom-0 left-0 h-px transition-all duration-300"
+                    style={{ width: active ? '100%' : '0%', background: theme.navText }}
+                    aria-hidden
+                  />
                   {!active && (
-                    <span className="absolute bottom-0 left-0 h-px bg-neutral-200 w-0 group-hover:w-full transition-all duration-300" aria-hidden />
+                    <span
+                      className="absolute bottom-0 left-0 h-px w-0 group-hover:w-full transition-all duration-300"
+                      style={{ background: `${theme.navMuted}66` }}
+                      aria-hidden
+                    />
                   )}
                 </Link>
               );
@@ -194,7 +287,10 @@ export function Navbar() {
           {/* Desktop right */}
           <div className="hidden md:flex items-center gap-5">
             {/* Language toggle pill */}
-            <div className="flex items-center gap-0.5 bg-neutral-100 rounded-full p-0.5">
+            <div
+              className="flex items-center gap-0.5 rounded-full p-0.5"
+              style={{ background: inverted ? `${theme.navText}18` : `${theme.navText}0F` }}
+            >
               {([
                 { code: 'sq' as const, flag: 'https://flagcdn.com/20x15/al.png', label: 'SQ' },
                 { code: 'en' as const, flag: 'https://flagcdn.com/20x15/gb.png', label: 'EN' },
@@ -204,17 +300,22 @@ export function Navbar() {
                   onClick={() => setLang(code)}
                   className="transition-all duration-200 rounded-full px-2.5 py-1 flex items-center gap-1.5"
                   style={{
-                    background: lang === code ? '#fff' : 'transparent',
-                    boxShadow: lang === code ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
+                    background: lang === code ? (inverted ? theme.navAccent : '#fff') : 'transparent',
+                    boxShadow: lang === code && !inverted ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
                   }}
                 >
                   <img src={flag} alt={code} style={{ width: 16, height: 12, objectFit: 'cover', borderRadius: 1, display: 'block' }} />
-                  <span className={`text-[11.5px] font-semibold tracking-wider transition-colors ${lang === code ? 'text-neutral-800' : 'text-neutral-400'}`}>{label}</span>
+                  <span
+                    className="text-[11.5px] font-semibold tracking-wider transition-colors"
+                    style={{ color: lang === code ? (inverted ? theme.navAccentOn : theme.navText) : theme.navMuted }}
+                  >
+                    {label}
+                  </span>
                 </button>
               ))}
             </div>
 
-            <span className="h-4 w-px bg-neutral-200 shrink-0" aria-hidden />
+            <span className="h-4 w-px shrink-0" style={{ background: `${theme.navMuted}55` }} aria-hidden />
 
             {isAuthenticated ? (
               <div className="relative" ref={accountRef}>
@@ -238,15 +339,17 @@ export function Navbar() {
                   }}
                 >
                   <AccountMonogram initials={initials} size={30} />
-                  <span className="text-[13px] font-medium text-neutral-800 truncate leading-none tracking-[-0.01em]">
+                  <span
+                    className="text-[13px] font-medium truncate leading-none tracking-[-0.01em]"
+                    style={{ color: theme.navText }}
+                  >
                     {name}
                   </span>
                   <ChevronDown
                     size={13}
                     strokeWidth={2}
-                    className={`shrink-0 transition-transform duration-200 ${
-                      accountOpen ? 'rotate-180 text-neutral-600' : 'text-neutral-400 group-hover:text-neutral-500'
-                    }`}
+                    className={`shrink-0 transition-transform duration-200 ${accountOpen ? 'rotate-180' : ''}`}
+                    style={{ color: theme.navMuted }}
                     aria-hidden
                   />
                 </button>
@@ -378,14 +481,31 @@ export function Navbar() {
               <div className="flex items-center gap-4">
                 <Link
                   href="/hyr"
-                  className="text-[12px] uppercase tracking-[0.12em] font-medium text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer"
+                  className={`font-medium transition-colors cursor-pointer ${
+                    isEditorial
+                      ? 'text-[13px]'
+                      : 'text-[12px] uppercase tracking-[0.12em]'
+                  }`}
+                  style={{ color: theme.navMuted }}
                 >
                   {t('nav.login')}
                 </Link>
                 <Link href="/krijo">
-                  <button className="flex items-center gap-1.5 px-5 py-2.5 bg-neutral-900 text-white text-[12px] uppercase tracking-[0.14em] font-semibold rounded-full hover:bg-neutral-700 active:scale-95 transition-all duration-150 cursor-pointer">
+                  <button
+                    className={`flex items-center gap-1.5 px-5 py-2.5 font-semibold active:scale-95 transition-all duration-150 cursor-pointer ${
+                      isEditorial
+                        ? 'text-[13px] rounded-none border-b-2 px-1 py-1 bg-transparent'
+                        : 'text-[12px] uppercase tracking-[0.14em] rounded-full'
+                    }`}
+                    style={
+                      isEditorial
+                        ? { color: theme.navAccent, borderColor: theme.navAccent, background: 'transparent' }
+                        : { background: theme.navAccent, color: theme.navAccentOn }
+                    }
+                  >
                     {lang === 'sq' ? 'Krijo Album' : 'Create Book'}
-                    <span className="opacity-60 text-[13px] leading-none">↗</span>
+                    {!isEditorial && <span className="opacity-60 text-[13px] leading-none">↗</span>}
+                    {isEditorial && <span aria-hidden> →</span>}
                   </button>
                 </Link>
               </div>
@@ -400,20 +520,22 @@ export function Navbar() {
             aria-expanded={isOpen}
           >
             <span
-              className="block h-[1.5px] bg-neutral-900 rounded-full transition-all duration-300"
+              className="block h-[1.5px] rounded-full transition-all duration-300"
               style={{
                 width: 18,
+                background: theme.navText,
                 transform: isOpen ? 'translateY(6.5px) rotate(45deg)' : 'none',
               }}
             />
             <span
-              className="block h-[1.5px] bg-neutral-900 rounded-full transition-all duration-200"
-              style={{ width: 18, opacity: isOpen ? 0 : 1 }}
+              className="block h-[1.5px] rounded-full transition-all duration-200"
+              style={{ width: 18, background: theme.navText, opacity: isOpen ? 0 : 1 }}
             />
             <span
-              className="block h-[1.5px] bg-neutral-900 rounded-full transition-all duration-300"
+              className="block h-[1.5px] rounded-full transition-all duration-300"
               style={{
                 width: 18,
+                background: theme.navText,
                 transform: isOpen ? 'translateY(-6.5px) rotate(-45deg)' : 'none',
               }}
             />

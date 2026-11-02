@@ -94,7 +94,7 @@ const PAPER_TEXTURE = `url("data:image/svg+xml,<svg viewBox='0 0 300 300' xmlns=
 /** Survives React Strict Mode remount so wizard design isn't applied twice / lost. */
 const consumedWizardDesignKeys = new Set<string>();
 
-type OverflowOpts = { allowOverflow?: boolean };
+type OverflowOpts = { allowOverflow?: boolean; minOverlap?: number };
 
 function dragBoundBox(
   pos: { x: number; y: number },
@@ -144,8 +144,40 @@ function pageDragBound(
 
 /** Free photos & stickers may hang off / grow past the page. */
 const IMG_OVERFLOW: OverflowOpts = { allowOverflow: true };
+const FREE_PHOTO_OVERFLOW: OverflowOpts = { allowOverflow: true, minOverlap: 48 };
 
 type GuideState = { v: boolean; h: boolean } | null;
+
+function isOuterCoverRole(role: PageRole | string | null | undefined): boolean {
+  return role === 'front_cover' || role === 'back_cover';
+}
+
+/** Movable uploaded photo on front/back cover (not a layout slot). */
+function makeFreePhotoElement(
+  url: string,
+  canvasH: number,
+  at?: { x: number; y: number },
+): EditorElement {
+  const w = 500;
+  const h = Math.max(160, Math.round(340 * canvasH / DESIGN_H));
+  let x = at ? Math.round(at.x - w / 2) : Math.round((DESIGN_W - w) / 2);
+  let y = at ? Math.round(at.y - h / 2) : Math.round(canvasH * 0.18);
+  const b = clampElementPos({ x, y }, w, h, canvasH, 0, FREE_PHOTO_OVERFLOW);
+  return {
+    id: `img-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    type: 'image',
+    src: url,
+    x: b.x,
+    y: b.y,
+    w,
+    h,
+    rotation: 0,
+    cropFocusX: 0.5,
+    cropFocusY: 0.5,
+    cropZoom: 1,
+    opacity: 1,
+  };
+}
 
 /** MIME used when dragging a library photo onto a layout slot. */
 const PHOTO_DRAG_MIME = 'application/x-album-photo';
@@ -163,40 +195,18 @@ function findPhotoDropTarget(els: EditorElement[], x: number, y: number): Editor
   return null;
 }
 
-/** Default free-photo frame — never full-bleed (that locks drag to 0,0). */
-function freePhotoFrameSize(canvasH: number) {
-  const w = Math.min(500, Math.round(DESIGN_W * 0.72));
-  const h = Math.round(w * (3 / 4));
-  const maxH = Math.max(120, canvasH - 80);
-  if (h <= maxH) return { w, h };
-  return { w: Math.round(maxH * (4 / 3)), h: maxH };
+/** True when the page already has a photo layout (slots / placeholders). */
+function pageHasPhotoLayout(els: EditorElement[]): boolean {
+  return els.some(e =>
+    e.type === 'placeholder'
+    || (e.type === 'image' && !e.sticker && isLayoutSlotFrame(e)),
+  );
 }
 
-function makeFreePhotoElement(
-  url: string,
-  canvasH: number,
-  at?: { x: number; y: number },
-): EditorElement {
-  const { w, h } = freePhotoFrameSize(canvasH);
-  const x = at
-    ? Math.min(Math.max(0, Math.round(at.x - w / 2)), Math.max(0, DESIGN_W - w))
-    : Math.round((DESIGN_W - w) / 2);
-  const y = at
-    ? Math.min(Math.max(0, Math.round(at.y - h / 2)), Math.max(0, canvasH - h))
-    : Math.round((canvasH - h) / 2);
-  return {
-    id: `img-${Date.now()}`,
-    type: 'image',
-    src: url,
-    x, y, w, h,
-    rotation: 0,
-    cropFocusX: 0.5,
-    cropFocusY: 0.5,
-    cropZoom: 1,
-    opacity: 1,
-    slotLocked: false,
-  };
-}
+const DEFAULT_TEXT_SEEDS = new Set([
+  'Your text here...',
+  'Shto tekstin tënd...',
+]);
 
 function dataTransferHasPhoto(dt: DataTransfer | null): boolean {
   if (!dt) return false;
@@ -410,18 +420,33 @@ function KShapeEl({el,isSelected,onSelect,onChange,onGestureStart,onDragActive,o
 }) {
   const kind = el.shapeKind || 'rect';
   const strokeOnly = isStrokeOnlyShape(kind);
-  const path = shapePathForElement(kind, el.w, el.h, el.cornerRadius);
   const transformStartRef = useRef({ w: el.w, h: el.h });
+  const gestureActiveRef = useRef(false);
+  const livePos = useRef({ x: el.x, y: el.y });
+  const liveSize = useRef({ w: el.w, h: el.h, rotation: el.rotation || 0 });
+  if (!gestureActiveRef.current) {
+    livePos.current = { x: el.x, y: el.y };
+    liveSize.current = { w: el.w, h: el.h, rotation: el.rotation || 0 };
+  }
+  const path = shapePathForElement(kind, liveSize.current.w, liveSize.current.h, el.cornerRadius);
   // Soft scrims / overlays (city cover vignettes) — visible but not selectable.
   const decorative = (el.opacity ?? 1) < 0.5 && !(el.strokeWidth);
   // Transparent fills must still hit-test — otherwise clicks fall through to the cover bg.
   const visualFill = el.fill && el.fill !== 'transparent' ? el.fill : undefined;
   const hitFill = visualFill || 'rgba(0,0,0,0.001)';
+  const endGesture = useCallback(() => {
+    requestAnimationFrame(() => {
+      gestureActiveRef.current = false;
+      onDragActive?.(false);
+      onGuides?.(null);
+    });
+  }, [onDragActive, onGuides]);
   return (
     <Group
       ref={(n:any)=>{if(n && !decorative) shapeRefs.current[el.id]=n;}}
-      x={el.x} y={el.y} width={el.w} height={el.h}
-      rotation={el.rotation} opacity={konvaOpacity(el.opacity)}
+      x={livePos.current.x} y={livePos.current.y}
+      width={liveSize.current.w} height={liveSize.current.h}
+      rotation={liveSize.current.rotation} opacity={konvaOpacity(el.opacity)}
       perfectDrawEnabled={false}
       listening={!decorative}
       onMouseDown={(e:any)=>{ if (decorative) return; e.cancelBubble=true; onSelect(); }}
@@ -431,15 +456,28 @@ function KShapeEl({el,isSelected,onSelect,onChange,onGestureStart,onDragActive,o
       draggable={isSelected && !decorative}
       dragDistance={4}
       dragBoundFunc={function (this: any, pos: any) {
-        return pageDragBound(this, pos, el.w, el.h, canvasH, el.rotation, onGuides);
+        const { w, h, rotation } = liveSize.current;
+        return pageDragBound(this, pos, w, h, canvasH, rotation, onGuides);
       }}
-      onDragStart={()=>{onGestureStart?.();onDragActive?.(true,{keepTransformer:true});}}
+      onDragStart={()=>{
+        gestureActiveRef.current = true;
+        onGestureStart?.();
+        onDragActive?.(true,{keepTransformer:true});
+      }}
+      onDragMove={(e:any)=>{
+        livePos.current = { x: e.target.x(), y: e.target.y() };
+      }}
       onDragEnd={(e:any)=>{
-        const b=dragBoundWithGuides({x:e.target.x(),y:e.target.y()},el.w,el.h,canvasH,el.rotation);
-        e.target.position({x:b.x,y:b.y}); onChange({x:b.x,y:b.y}); onDragActive?.(false); onGuides?.(null);
+        const { w, h, rotation } = liveSize.current;
+        const b=dragBoundWithGuides({x:e.target.x(),y:e.target.y()},w,h,canvasH,rotation);
+        e.target.position({x:b.x,y:b.y});
+        livePos.current = { x: b.x, y: b.y };
+        onChange({x:b.x,y:b.y});
+        endGesture();
       }}
       onTransformStart={()=>{
-        transformStartRef.current={w:el.w,h:el.h};
+        gestureActiveRef.current = true;
+        transformStartRef.current={w:liveSize.current.w,h:liveSize.current.h};
         onGestureStart?.();onDragActive?.(true,{keepTransformer:true});
       }}
       onTransformEnd={(e:any)=>{
@@ -451,11 +489,13 @@ function KShapeEl({el,isSelected,onSelect,onChange,onGestureStart,onDragActive,o
         const nh=Math.max(10, transformStartRef.current.h * sy);
         const b=dragBoundBox({x:n.x(),y:n.y()},nw,nh,canvasH,n.rotation());
         n.position(b); n.width(nw); n.height(nh);
+        livePos.current = { x: b.x, y: b.y };
+        liveSize.current = { w: nw, h: nh, rotation: n.rotation() };
         onChange({...b,w:nw,h:nh,rotation:n.rotation()});
-        onDragActive?.(false); onGuides?.(null);
+        endGesture();
       }}
     >
-      <Rect width={el.w} height={el.h} fill="rgba(0,0,0,0.001)" listening={!decorative} perfectDrawEnabled={false}/>
+      <Rect width={liveSize.current.w} height={liveSize.current.h} fill="rgba(0,0,0,0.001)" listening={!decorative} perfectDrawEnabled={false}/>
       <KonvaPath
         data={path}
         fill={strokeOnly ? undefined : hitFill}
@@ -484,6 +524,15 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
 }) {
   const img = useCachedImage(el.src);
   const transformStartRef = useRef({ w: el.w, h: el.h });
+  // Live geometry — parent re-renders mid-drag must not snap Konva back to stale props.
+  const gestureActiveRef = useRef(false);
+  const livePos = useRef({ x: el.x, y: el.y });
+  const liveSize = useRef({ w: el.w, h: el.h, rotation: el.rotation || 0 });
+  if (!gestureActiveRef.current) {
+    livePos.current = { x: el.x, y: el.y };
+    liveSize.current = { w: el.w, h: el.h, rotation: el.rotation || 0 };
+  }
+  const overflowOpts = isLayoutSlotFrame(el) ? IMG_OVERFLOW : FREE_PHOTO_OVERFLOW;
 
   // Sticky focus while / right after pan — avoids snap-back when React commits lag behind Konva.
   const [liveFocus, setLiveFocus] = useState<{ x: number; y: number } | null>(null);
@@ -496,10 +545,12 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
   }, [el.cropFocusX, el.cropFocusY, el.cropZoom, el.src]);
 
   const letterbox = coverImageLetterbox(el);
+  const frameW = liveSize.current.w;
+  const frameH = liveSize.current.h;
   const fit = img
     ? (letterbox
-        ? imageFrameContainFit(bitmapWidth(img), bitmapHeight(img), el.w, el.h)
-        : imageFrameCoverFit(bitmapWidth(img), bitmapHeight(img), el.w, el.h, focusX, focusY, cropZoom))
+        ? imageFrameContainFit(bitmapWidth(img), bitmapHeight(img), frameW, frameH)
+        : imageFrameCoverFit(bitmapWidth(img), bitmapHeight(img), frameW, frameH, focusX, focusY, cropZoom))
     : null;
   // Cover photos can always enter Adjust (we bump cropZoom to unlock corners).
   const canPan = letterbox ? false : (img ? true : !!fit?.canPan);
@@ -538,6 +589,15 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
     const container = stage?.container?.() as HTMLElement | undefined;
     if (container) container.style.cursor = cursor;
   };
+
+  const endGesture = useCallback(() => {
+    // Let React commit size/pos before unlocking — avoids one-frame snap to old props.
+    requestAnimationFrame(() => {
+      gestureActiveRef.current = false;
+      onDragActive?.(false);
+      onGuides?.(null);
+    });
+  }, [onDragActive, onGuides]);
 
   const bakeImageFrame = (n: any, sx: number, sy: number) => {
     const nw = Math.max(20, transformStartRef.current.w * sx);
@@ -584,36 +644,47 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
     n.getSelfRect = () => ({
       x: 0,
       y: 0,
-      width: Math.max(1, n.width() || el.w || 1),
-      height: Math.max(1, n.height() || el.h || 1),
+      width: Math.max(1, n.width() || liveSize.current.w || 1),
+      height: Math.max(1, n.height() || liveSize.current.h || 1),
     });
   };
 
   if (!img || !fit) return (
     <Group
       ref={bindImageNode}
-      x={el.x} y={el.y} width={el.w} height={el.h} rotation={el.rotation}
-      draggable={isSelected}
+      x={livePos.current.x} y={livePos.current.y}
+      width={liveSize.current.w} height={liveSize.current.h}
+      rotation={liveSize.current.rotation}
+      draggable={isSelected && !frameLocked}
       dragDistance={3}
       dragBoundFunc={function (this: any, pos: any) {
-        return pageDragBound(this, pos, el.w, el.h, canvasH, el.rotation, onGuides, IMG_OVERFLOW);
+        const { w, h, rotation } = liveSize.current;
+        return pageDragBound(this, pos, w, h, canvasH, rotation, onGuides, overflowOpts);
       }}
       onMouseDown={(e: any) => { e.cancelBubble = true; onSelect(); }}
       onTouchStart={(e: any) => { e.cancelBubble = true; onSelect(); }}
       onClick={(e: any) => { e.cancelBubble = true; onSelect(); }}
       onTap={(e: any) => { e.cancelBubble = true; onSelect(); }}
-      onDragStart={() => { onGestureStart?.(); onDragActive?.(true, { keepTransformer: true }); }}
+      onDragStart={() => {
+        gestureActiveRef.current = true;
+        onGestureStart?.();
+        onDragActive?.(true, { keepTransformer: true });
+      }}
+      onDragMove={(e: any) => {
+        livePos.current = { x: e.target.x(), y: e.target.y() };
+      }}
       onDragEnd={(e: any) => {
-        const b = dragBoundWithGuides({ x: e.target.x(), y: e.target.y() }, el.w, el.h, canvasH, el.rotation, IMG_OVERFLOW);
+        const { w, h, rotation } = liveSize.current;
+        const b = dragBoundWithGuides({ x: e.target.x(), y: e.target.y() }, w, h, canvasH, rotation, overflowOpts);
         e.target.position({ x: b.x, y: b.y });
+        livePos.current = { x: b.x, y: b.y };
         onChange({ x: b.x, y: b.y });
-        onDragActive?.(false);
-        onGuides?.(null);
+        endGesture();
       }}
     >
-      <Rect width={el.w} height={el.h} fill="#D0C8BC" cornerRadius={2} />
+      <Rect width={liveSize.current.w} height={liveSize.current.h} fill="#D0C8BC" cornerRadius={2} />
       {isSelected && (
-        <Rect width={el.w} height={el.h} stroke="#2563EB" strokeWidth={2.5} listening={false} cornerRadius={2} />
+        <Rect width={liveSize.current.w} height={liveSize.current.h} stroke="#2563EB" strokeWidth={2.5} listening={false} cornerRadius={2} />
       )}
     </Group>
   );
@@ -625,15 +696,15 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
   return (
     <Group
       ref={bindImageNode}
-      x={el.x}
-      y={el.y}
-      width={el.w}
-      height={el.h}
-      rotation={el.rotation}
+      x={livePos.current.x}
+      y={livePos.current.y}
+      width={liveSize.current.w}
+      height={liveSize.current.h}
+      rotation={liveSize.current.rotation}
       clipX={0}
       clipY={0}
-      clipWidth={el.w}
-      clipHeight={el.h}
+      clipWidth={liveSize.current.w}
+      clipHeight={liveSize.current.h}
       opacity={konvaOpacity(el.opacity)}
       {...(landmarkBlend ? { globalCompositeOperation: landmarkBlend } : {})}
       onMouseDown={(e: any) => { e.cancelBubble = true; onSelect(); }}
@@ -653,23 +724,30 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
       draggable={moveFrame}
       dragDistance={3}
       dragBoundFunc={function (this: any, pos: any) {
-        return pageDragBound(this, pos, el.w, el.h, canvasH, el.rotation, onGuides, IMG_OVERFLOW);
+        const { w, h, rotation } = liveSize.current;
+        return pageDragBound(this, pos, w, h, canvasH, rotation, onGuides, overflowOpts);
       }}
       onDragStart={() => {
+        gestureActiveRef.current = true;
         setStageCursor('move');
         onGestureStart?.();
         onDragActive?.(true, { keepTransformer: true });
       }}
+      onDragMove={(e: any) => {
+        livePos.current = { x: e.target.x(), y: e.target.y() };
+      }}
       onDragEnd={(e: any) => {
-        const b = dragBoundWithGuides({ x: e.target.x(), y: e.target.y() }, el.w, el.h, canvasH, el.rotation, IMG_OVERFLOW);
+        const { w, h, rotation } = liveSize.current;
+        const b = dragBoundWithGuides({ x: e.target.x(), y: e.target.y() }, w, h, canvasH, rotation, overflowOpts);
         e.target.position({ x: b.x, y: b.y });
+        livePos.current = { x: b.x, y: b.y };
         onChange({ x: b.x, y: b.y });
-        onDragActive?.(false);
-        onGuides?.(null);
         setStageCursor(moveFrame ? 'move' : 'default');
+        endGesture();
       }}
       onTransformStart={() => {
-        transformStartRef.current = { w: el.w, h: el.h };
+        gestureActiveRef.current = true;
+        transformStartRef.current = { w: liveSize.current.w, h: liveSize.current.h };
         onGestureStart?.();
         onDragActive?.(true, { keepTransformer: true });
       }}
@@ -680,16 +758,17 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
         const sx = Math.abs(n.scaleX()) || 1;
         const sy = Math.abs(n.scaleY()) || 1;
         const { nw, nh } = bakeImageFrame(n, sx, sy);
-        const b = dragBoundBox({ x: n.x(), y: n.y() }, nw, nh, canvasH, n.rotation(), IMG_OVERFLOW);
+        const b = dragBoundBox({ x: n.x(), y: n.y() }, nw, nh, canvasH, n.rotation(), overflowOpts);
         n.position(b);
+        livePos.current = { x: b.x, y: b.y };
+        liveSize.current = { w: nw, h: nh, rotation: n.rotation() };
         onChange({ ...b, w: nw, h: nh, rotation: n.rotation() });
-        onDragActive?.(false);
-        onGuides?.(null);
+        endGesture();
       }}
     >
       <Rect
-        width={el.w}
-        height={el.h}
+        width={liveSize.current.w}
+        height={liveSize.current.h}
         fill="rgba(0,0,0,0.001)"
         listening={true}
         draggable={panInside}
@@ -700,6 +779,7 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
         onDragStart={(e: any) => {
           if (!panInside) return;
           e.cancelBubble = true;
+          gestureActiveRef.current = true;
           setPanning(true);
           setStageCursor('grabbing');
           onGestureStart?.();
@@ -752,9 +832,8 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
             cropFocusY: next.cropFocusY,
           });
           setPanning(false);
-          onDragActive?.(false);
-          onGuides?.(null);
           setStageCursor(panInside ? 'grab' : 'default');
+          endGesture();
         }}
       />
       <KonvaImage
@@ -772,8 +851,8 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
           rect at stale el.w/el.h flickers while scaling. */}
       {(isSelected || isDropTarget) && !el.sticker && (
         <Rect
-          width={el.w}
-          height={el.h}
+          width={liveSize.current.w}
+          height={liveSize.current.h}
           stroke={isDropTarget ? '#0D9488' : adjustingVisual ? '#0D9488' : '#2563EB'}
           strokeWidth={2.5}
           listening={false}
@@ -800,6 +879,21 @@ function KTxtEl({el,onSelect,onChange,onStartEdit,onGestureStart,onDragActive,on
   const minH = Math.max(24, (el.fontSize || 20) * (el.lineHeight ?? 1.2) + 12);
   // Snapshot size at transform start — Konva scale is always relative to that.
   const transformStartRef = useRef({ w: el.w, h: el.h });
+  const gestureActiveRef = useRef(false);
+  const livePos = useRef({ x: el.x, y: el.y });
+  const liveSize = useRef({ w: el.w, h: el.h, rotation: el.rotation || 0 });
+  if (!gestureActiveRef.current) {
+    livePos.current = { x: el.x, y: el.y };
+    liveSize.current = { w: el.w, h: el.h, rotation: el.rotation || 0 };
+  }
+
+  const endGesture = useCallback(() => {
+    requestAnimationFrame(() => {
+      gestureActiveRef.current = false;
+      onDragActive?.(false);
+      onGuides?.(null);
+    });
+  }, [onDragActive, onGuides]);
 
   const bakeTextFrame = (n: any, sx: number, sy: number) => {
     const nw = Math.max(40, transformStartRef.current.w * sx);
@@ -814,6 +908,7 @@ function KTxtEl({el,onSelect,onChange,onStartEdit,onGestureStart,onDragActive,on
         c.height(nh);
       }
     });
+    liveSize.current = { ...liveSize.current, w: nw, h: nh };
     return { nw, nh };
   };
 
@@ -822,11 +917,11 @@ function KTxtEl({el,onSelect,onChange,onStartEdit,onGestureStart,onDragActive,on
   return (
     <Group
       ref={(n: any) => { if (n) shapeRefs.current[el.id] = n; }}
-      x={el.x}
-      y={el.y}
-      width={el.w}
-      height={el.h}
-      rotation={el.rotation}
+      x={livePos.current.x}
+      y={livePos.current.y}
+      width={liveSize.current.w}
+      height={liveSize.current.h}
+      rotation={liveSize.current.rotation}
       draggable={isSelected && !isEditing}
       dragDistance={3}
       onMouseDown={(e: any) => { e.cancelBubble = true; if (!isEditing) onSelect(); }}
@@ -836,18 +931,28 @@ function KTxtEl({el,onSelect,onChange,onStartEdit,onGestureStart,onDragActive,on
       onDblClick={(e: any) => { e.cancelBubble = true; onStartEdit(); }}
       onDblTap={(e: any) => { e.cancelBubble = true; onStartEdit(); }}
       dragBoundFunc={function (this: any, pos: any) {
-        return pageDragBound(this, pos, el.w, el.h, canvasH, el.rotation, onGuides);
+        const { w, h, rotation } = liveSize.current;
+        return pageDragBound(this, pos, w, h, canvasH, rotation, onGuides);
       }}
-      onDragStart={() => { onGestureStart?.(); onDragActive?.(true, { keepTransformer: true }); }}
+      onDragStart={() => {
+        gestureActiveRef.current = true;
+        onGestureStart?.();
+        onDragActive?.(true, { keepTransformer: true });
+      }}
+      onDragMove={(e: any) => {
+        livePos.current = { x: e.target.x(), y: e.target.y() };
+      }}
       onDragEnd={(e: any) => {
-        const b = dragBoundWithGuides({ x: e.target.x(), y: e.target.y() }, el.w, el.h, canvasH, el.rotation);
+        const { w, h, rotation } = liveSize.current;
+        const b = dragBoundWithGuides({ x: e.target.x(), y: e.target.y() }, w, h, canvasH, rotation);
         e.target.position({ x: b.x, y: b.y });
+        livePos.current = { x: b.x, y: b.y };
         onChange({ x: b.x, y: b.y });
-        onDragActive?.(false);
-        onGuides?.(null);
+        endGesture();
       }}
       onTransformStart={() => {
-        transformStartRef.current = { w: el.w, h: el.h };
+        gestureActiveRef.current = true;
+        transformStartRef.current = { w: liveSize.current.w, h: liveSize.current.h };
         onGestureStart?.();
         onDragActive?.(true, { keepTransformer: true });
       }}
@@ -871,19 +976,20 @@ function KTxtEl({el,onSelect,onChange,onStartEdit,onGestureStart,onDragActive,on
         });
         const b = dragBoundBox({ x: n.x(), y: n.y() }, nw, nh, canvasH, n.rotation());
         n.position(b);
+        livePos.current = { x: b.x, y: b.y };
+        liveSize.current = { w: nw, h: nh, rotation: n.rotation() };
         onChange({ ...b, w: nw, h: nh, rotation: n.rotation() });
-        onDragActive?.(false);
-        onGuides?.(null);
+        endGesture();
       }}
     >
-      <Rect width={el.w} height={el.h} fill="rgba(0,0,0,0.001)" />
+      <Rect width={liveSize.current.w} height={liveSize.current.h} fill="rgba(0,0,0,0.001)" />
       <KonvaText
         key={`txt-${el.id}-f${fontEpoch ?? 0}`}
         text={el.text || 'Double-tap to edit'}
         x={0}
         y={0}
-        width={el.w}
-        height={el.h}
+        width={liveSize.current.w}
+        height={liveSize.current.h}
         fontSize={el.fontSize || 20}
         fontFamily={family}
         fill={el.fill || '#1a1a1a'}
@@ -929,18 +1035,21 @@ function KPlaceholderEl({el,isSelected,isDropTarget,onSelect,onOpenPhotos,shapeR
 // Page Canvas
 // ─────────────────────────────────────────────────────────────────────────────
 
-function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos,onDelete,onGestureStart,onElementDragActive,onPageSwipe,editRequestId,onEditRequestHandled,onDropPhoto,onDropFiles,onDropSticker,isActive,pageW,pageH,canvasH,shapeRefs,side,isMobile}: {
+function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos,onDelete,onGestureStart,onElementDragActive,onPageSwipe,editRequestId,onEditRequestHandled,onDropPhoto,onDropFiles,onDropSticker,onRequestLayout,needsLayout,isActive,pageW,pageH,canvasH,shapeRefs,side,isMobile}: {
   page:PageDef; elements:EditorElement[]; selectedId:string|null;
   onSelectId:(id:string|null)=>void; onChangeEl:(id:string,c:Partial<EditorElement>)=>void;
   onOpenPhotos?:()=>void; onDelete?:()=>void; onGestureStart?:()=>void;
   onElementDragActive?:(active:boolean)=>void;
   onPageSwipe?:(dir:1|-1)=>void;
   editRequestId?:string|null; onEditRequestHandled?:()=>void;
-  /** Place a library photo into a slot, or freely on the page when targetId is null. */
+  /** Place a library photo into a layout slot only (targetId required for photos). */
   onDropPhoto?:(url:string, targetId:string|null, at:{x:number;y:number})=>void;
-  /** Desktop / Finder drop — upload then place like onDropPhoto. */
+  /** Desktop / Finder drop — upload then place into a layout slot. */
   onDropFiles?:(files:File[], targetId:string|null, at:{x:number;y:number})=>void;
   onDropSticker?:(url:string, x:number, y:number)=>void;
+  /** Inner blank page — prompt user to pick a layout. */
+  onRequestLayout?:()=>void;
+  needsLayout?:boolean;
   isActive:boolean; pageW:number; pageH:number; canvasH:number;
   shapeRefs:React.MutableRefObject<Record<string,any>>; side:'left'|'right'|'solo'; isMobile?:boolean;
 }) {
@@ -948,13 +1057,15 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
   const stageRef = useRef<any>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const scX = pageW/DESIGN_W, scY = pageH/canvasH;
-  // Extra stage margin so resize handles can be dragged past the page edge.
-  const PAGE_BLEED = 120;
+  // Extra stage margin so resize handles can drag past the page edge.
+  // Keep it modest on mobile so the paper doesn't feel like it "slides away".
+  const PAGE_BLEED = isMobile ? 36 : 96;
   const bleedPxX = PAGE_BLEED * scX;
   const bleedPxY = PAGE_BLEED * scY;
   const stageW = pageW + 2 * bleedPxX;
   const stageH = pageH + 2 * bleedPxY;
   const {lang: chipLang} = useLanguage();
+  const textSeedRef = useRef(false);
   const [dropTargetId, setDropTargetId] = useState<string|null>(null);
 
   const [editId,setEditId]=useState<string|null>(null);
@@ -1012,8 +1123,16 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
     const patch: Partial<EditorElement> = {};
     if (family !== el.fontFamily) patch.fontFamily = family;
     if (style !== (el.fontStyle || 'normal')) patch.fontStyle = style;
+    const isSeed = DEFAULT_TEXT_SEEDS.has((el.text || '').trim());
+    // Clear premade copy immediately so the first keystroke starts from empty
+    // (mobile select-all is unreliable).
+    if (isSeed) patch.text = '';
     if (Object.keys(patch).length) onChangeEl(el.id, patch);
-    setEditId(el.id); setEditText(el.text||''); editMinHRef.current=el.h; onSelectId(el.id);
+    textSeedRef.current = isSeed;
+    setEditId(el.id);
+    setEditText(isSeed ? '' : (el.text || ''));
+    editMinHRef.current = el.h;
+    onSelectId(el.id);
   },[onSelectId,onChangeEl]);
 
   const commitEdit=useCallback(()=>{
@@ -1021,9 +1140,18 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
       if(prev) onChangeEl(prev,{text:editText});
       return null;
     });
+    textSeedRef.current = false;
   },[editText,onChangeEl]);
 
-  useEffect(()=>{ if(editId) setTimeout(()=>textareaRef.current?.focus(),30); },[editId]);
+  useEffect(()=>{
+    if (!editId) return;
+    const t = window.setTimeout(() => {
+      const ta = textareaRef.current;
+      if (!ta) return;
+      ta.focus({ preventScroll: true });
+    }, 30);
+    return () => window.clearTimeout(t);
+  }, [editId]);
 
   // Leaving an image clears photo-adjust mode.
   useEffect(()=>{
@@ -1082,7 +1210,11 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
       const stage=stageRef.current;
       el=(stage?.container?.() as HTMLElement|undefined)??null;
       if(!el){ requestAnimationFrame(attach); return; }
-      el.style.touchAction='pan-y';
+      // none — browser page pan while dragging photos was moving the whole paper.
+      el.style.touchAction='none';
+      el.style.background='transparent';
+      el.style.userSelect='none';
+      el.style.webkitUserSelect='none';
       el.addEventListener('touchstart',onStart,{passive:true});
       el.addEventListener('touchend',onEnd,{passive:true});
       el.addEventListener('touchcancel',onCancel,{passive:true});
@@ -1171,10 +1303,12 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
     setDropTargetId(hit?.id ?? null);
   }, [clientToDesign, elements, onDropPhoto]);
 
+  // Clip stage bleed so (1) mobile scroll parents don't pan the "paper" sideways
+  // and (2) desktop left-page canvas can't paint a dark band over the spine/right page.
   return (
     <div
       ref={wrapRef}
-      style={{position:'relative',width:pageW,height:pageH,flexShrink:0,overflow:'visible'}}
+      style={{position:'relative',width:pageW,height:pageH,flexShrink:0,overflow:'hidden',touchAction:'none',isolation:'isolate'}}
       onDragOver={(onDropPhoto || onDropFiles || onDropSticker) ? (e) => {
         if (dataTransferHasElement(e.dataTransfer)) {
           if (!onDropSticker) return;
@@ -1238,17 +1372,12 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
         height={stageH}
         scaleX={scX}
         scaleY={scY}
-        style={{ position: 'absolute', left: -bleedPxX, top: -bleedPxY }}
+        style={{ position: 'absolute', left: -bleedPxX, top: -bleedPxY, background: 'transparent' }}
         pixelRatio={Math.min(window.devicePixelRatio ?? 1, isMobile ? 1.5 : 2)}
         onMouseDown={(e:any)=>{if(e.target===e.target.getStage()){if(editId)commitEdit();onSelectId(null);}}}
         onTouchStart={(e:any)=>{if(e.target===e.target.getStage()){if(editId)commitEdit();onSelectId(null);}}}>
         <Layer x={PAGE_BLEED} y={PAGE_BLEED}>
-          {/* Dim bleed so overhanging art is visible while editing */}
-          <Rect
-            x={-PAGE_BLEED} y={-PAGE_BLEED}
-            width={DESIGN_W + 2 * PAGE_BLEED} height={canvasH + 2 * PAGE_BLEED}
-            fill="rgba(40,32,24,0.06)" listening={false}
-          />
+          {/* Paper only inside the page — bleed stays transparent (avoids a dark spine strip). */}
           <Rect x={0} y={0} width={DESIGN_W} height={canvasH} fill={PAPER_COLOR} listening={false}/>
           {elements.map(el => {
             if (el.type === 'background') {
@@ -1377,23 +1506,22 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
         >
           {/* Nearly-transparent textarea — design shows through */}
           <textarea ref={textareaRef} value={editText}
+            placeholder={chipLang==='sq'?'Shto tekstin tënd...':'Your text here...'}
             onChange={e=>{
-              setEditText(e.target.value);
+              if (textSeedRef.current) textSeedRef.current = false;
+              const next = e.target.value;
+              setEditText(next);
               const ta=e.target; ta.style.height='auto'; ta.style.height=ta.scrollHeight+'px';
-              // Grow (or shrink back toward the template size) the actual
-              // design element to fit the content — otherwise text typed
-              // past the original box height overflows invisibly once you
-              // commit, instead of the box expanding to show it.
               const newH=Math.max(editMinHRef.current,ta.scrollHeight/scY);
               if (Math.abs(newH-editEl!.h)>0.5) onChangeEl(editId!,{h:newH});
-              // The box can grow past the visible canvas area — scroll it
-              // into view so newly typed lines don't disappear below the fold.
-              ta.scrollIntoView({block:'nearest'});
             }}
             onKeyDown={e=>{
-              if(e.key==='Escape'){e.preventDefault();setEditId(null);}
+              if(e.key==='Escape'){e.preventDefault();setEditId(null);textSeedRef.current=false;}
               if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){e.preventDefault();commitEdit();}
             }}
+            enterKeyHint="done"
+            autoCapitalize="sentences"
+            autoCorrect="on"
             style={{
               position:'absolute', pointerEvents:'all',
               left:editEl.x*scX, top:editEl.y*scY,
@@ -1412,6 +1540,9 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
               opacity: editEl.opacity ?? 1,
               resize:'none', outline:'none',
               boxSizing:'border-box', overflow:'hidden',
+              WebkitUserSelect:'text', userSelect:'text',
+              WebkitOverflowScrolling:'touch',
+              caretColor: editEl.fill || '#1a1a1a',
             }}
           />
 
@@ -1542,6 +1673,23 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
         </div>
       )}
 
+      {/* Blank inner page — ask for a layout before photos */}
+      {isActive && needsLayout && onRequestLayout && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onRequestLayout(); }}
+          className="absolute inset-0 z-20 flex items-center justify-center"
+          style={{ background: 'rgba(20,16,12,0.04)' }}
+        >
+          <span
+            className="pointer-events-none text-center px-6 text-sm md:text-base font-medium tracking-wide"
+            style={{ color: 'rgba(80,70,60,0.45)' }}
+          >
+            {chipLang === 'sq' ? 'Shto paraqitje' : 'Add a layout'}
+          </span>
+        </button>
+      )}
+
       {/* ── Image / text chrome — delete + opacity + Move / Adjust-photo ── */}
       {isActive && selectedId && !editId && (()=>{
         const sel=elements.find(e=>e.id===selectedId&&(e.type==='image'||e.type==='text'||e.type==='placeholder'||e.type==='shape'));
@@ -1550,6 +1698,7 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
         const by=Math.max(sel.y*scY-14, 4);
         const isImg = sel.type === 'image' && !!sel.src;
         const adjusting = photoAdjustId === sel.id;
+        const slotLocked = isLayoutSlotFrame(sel);
         // Landmark/contain cutouts can't pan; everything else can (cropZoom unlocks corners).
         const adjustDisabled = !isImg || coverImageLetterbox(sel) || !!sel.sticker;
         const barLeft = Math.max(4, Math.min(sel.x * scX, pageW - 220));
@@ -1557,6 +1706,7 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
         const opacityPct = Math.round((sel.opacity ?? 1) * 100);
         return (
           <div ref={deleteBtnRef} style={{position:'absolute',inset:0,zIndex:45,pointerEvents:'none'}}>
+            {!slotLocked && (
             <div style={{position:'absolute',left:bx-14,top:by-14,pointerEvents:'all',display:'flex',gap:5}}>
               <button
                 onMouseDown={e=>{e.stopPropagation();e.preventDefault();onDelete?.();}}
@@ -1570,6 +1720,7 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
                 }}
               >✕</button>
             </div>
+            )}
             <div
               style={{
                 position:'absolute', left: barLeft, top: barTop,
@@ -1785,7 +1936,7 @@ function LockedPageView({pageW,pageH,role,side}: {pageW:number;pageH:number;role
 // Spread View — realistic book
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SpreadView = React.memo(function SpreadView({spread,spreadContent,selectedId,activeSide,onActiveSide,onSelectId,onChangeEl,onOpenPhotos,onDelete,onGestureStart,onElementDragActive,onPageSwipe,editRequestId,onEditRequestHandled,onDropPhoto,onDropFiles,onDropSticker,pageW,pageH,canvasH,shapeRefs,isMobile,readOnly}: {
+const SpreadView = React.memo(function SpreadView({spread,spreadContent,selectedId,activeSide,onActiveSide,onSelectId,onChangeEl,onOpenPhotos,onDelete,onGestureStart,onElementDragActive,onPageSwipe,editRequestId,onEditRequestHandled,onDropPhoto,onDropFiles,onDropSticker,onRequestLayout,pageW,pageH,canvasH,shapeRefs,isMobile,readOnly}: {
   spread:SpreadDef; spreadContent:Record<number,EditorElement[]>;
   selectedId:string|null; activeSide:'left'|'right'; onActiveSide:(s:'left'|'right')=>void;
   onSelectId:(id:string|null)=>void; onChangeEl:(pid:number,eid:string,c:Partial<EditorElement>)=>void;
@@ -1796,6 +1947,7 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
   onDropPhoto?:(pageId:number, url:string, targetId:string|null, at:{x:number;y:number})=>void;
   onDropFiles?:(pageId:number, files:File[], targetId:string|null, at:{x:number;y:number})=>void;
   onDropSticker?:(pageId:number, url:string, x:number, y:number)=>void;
+  onRequestLayout?:()=>void;
   pageW:number; pageH:number; canvasH:number;
   shapeRefs:React.MutableRefObject<Record<string,any>>; isMobile?:boolean;
   readOnly?:boolean;
@@ -1823,8 +1975,13 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
     if (!page) return <div style={{width:pageW,height:pageH,flexShrink:0,background:'#EAE5DC'}}/>;
     const locked=page.role==='locked_left'||page.role==='locked_right';
     if (locked) return <LockedPageView pageW={pageW} pageH={pageH} role={page.role} side={side}/>;
-    return <div style={{cursor:'default'}} onClick={()=>onActiveSide(side)}>
-      <PageCanvas page={page} elements={spreadContent[page.dbId]??[]}
+    const pageEls = spreadContent[page.dbId]??[];
+    const needsLayout = !readOnly && page.role === 'inner' && !pageHasPhotoLayout(pageEls);
+    return <div style={{cursor:'default'}} onClick={()=>{
+      onActiveSide(side);
+      if (needsLayout) onRequestLayout?.();
+    }}>
+      <PageCanvas page={page} elements={pageEls}
         selectedId={readOnly ? null : selectedId}
         onSelectId={readOnly ? ()=>{} : (id)=>{ onActiveSide(side); onSelectId(id); }}
         onChangeEl={readOnly ? ()=>{} : (eid,c)=>onChangeEl(page.dbId,eid,c)}
@@ -1847,6 +2004,8 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
           onActiveSide(side);
           onDropSticker(page.dbId, url, x, y);
         }}
+        onRequestLayout={readOnly ? undefined : onRequestLayout}
+        needsLayout={needsLayout}
         isActive={activeSide===side} pageW={pageW} pageH={pageH} canvasH={canvasH} shapeRefs={shapeRefs} side={side} isMobile={isMobile}/>
     </div>;
   };
@@ -1861,9 +2020,9 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
           boxShadow: '0 12px 40px rgba(40,32,20,0.12), 0 2px 8px rgba(40,32,20,0.06)',
           outline: '1px solid rgba(0,0,0,0.08)',
           outlineOffset: 0,
-          overflow: 'visible',
+          overflow: 'hidden',
         }}>
-          <div style={{cursor:'default', overflow: 'visible'}} onClick={()=>onActiveSide(isBackCover ? 'left' : 'right')}>
+          <div style={{cursor:'default', overflow: 'hidden'}} onClick={()=>onActiveSide(isBackCover ? 'left' : 'right')}>
             <PageCanvas page={soloPage} elements={spreadContent[soloPage.dbId]??[]}
               selectedId={readOnly ? null : selectedId}
               onSelectId={readOnly ? ()=>{} : onSelectId}
@@ -1896,25 +2055,27 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
     const page = activeSide === 'left' ? spread.left : spread.right;
     if (!page) {
       return (
-        <div style={{width:pageW,height:pageH,background:'#EAE5DC',touchAction:'pan-y'}}
+        <div style={{width:pageW,height:pageH,background:'#EAE5DC',touchAction:'none'}}
           onTouchStart={onDomSwipeStart} onTouchEnd={onDomSwipeEnd}/>
       );
     }
     const locked = page.role === 'locked_left' || page.role === 'locked_right';
+    const pageEls = spreadContent[page.dbId]??[];
+    const needsLayout = !readOnly && page.role === 'inner' && !pageHasPhotoLayout(pageEls);
     return (
       <div className="flex items-center justify-center"
         {...(locked
-          ? {onTouchStart:onDomSwipeStart,onTouchEnd:onDomSwipeEnd,style:{touchAction:'pan-y' as const, overflow:'visible'}}
-          : {style:{ overflow:'visible' }})}>
+          ? {onTouchStart:onDomSwipeStart,onTouchEnd:onDomSwipeEnd,style:{touchAction:'pan-y' as const, overflow:'hidden'}}
+          : {style:{ overflow:'hidden', touchAction:'none' }})}>
         <div style={{
           boxShadow: '0 12px 40px rgba(40,32,20,0.12), 0 2px 8px rgba(40,32,20,0.06)',
           outline: '1px solid rgba(0,0,0,0.08)',
           outlineOffset: 0,
-          overflow: 'visible',
+          overflow: 'hidden',
         }}>
           {locked
             ? <LockedPageView pageW={pageW} pageH={pageH} role={page.role} side={activeSide}/>
-            : <PageCanvas page={page} elements={spreadContent[page.dbId]??[]}
+            : <PageCanvas page={page} elements={pageEls}
                 selectedId={readOnly ? null : selectedId}
                 onSelectId={readOnly ? ()=>{} : id=>{ onActiveSide(activeSide); onSelectId(id); }}
                 onChangeEl={readOnly ? ()=>{} : (eid,c)=>onChangeEl(page.dbId,eid,c)}
@@ -1937,6 +2098,8 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
                   onActiveSide(activeSide);
                   onDropSticker(page.dbId, url, x, y);
                 }}
+                onRequestLayout={readOnly ? undefined : onRequestLayout}
+                needsLayout={needsLayout}
                 isActive={true} pageW={pageW} pageH={pageH} canvasH={canvasH} shapeRefs={shapeRefs} side="solo" isMobile={true}/>
           }
         </div>
@@ -1945,21 +2108,22 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
   }
 
   return (
-    <div className="flex items-center justify-center" style={{ overflow: 'visible' }}>
+    <div className="flex items-center justify-center" style={{ overflow: 'hidden' }}>
       <div style={{
         boxShadow: '0 12px 40px rgba(40,32,20,0.12), 0 2px 8px rgba(40,32,20,0.06)',
-        overflow: 'visible',
+        overflow: 'hidden',
       }}>
         <div style={{
           display: 'flex',
           alignItems: 'stretch',
           outline: '1px solid rgba(0,0,0,0.08)',
           outlineOffset: 0,
-          overflow: 'visible',
+          overflow: 'hidden',
+          isolation: 'isolate',
         }}>
           {renderSide(spread.left,'left')}
-          {/* Centre page divider — hairline only */}
-          <div style={{width:effectiveSpineW,flexShrink:0,background:'#E8E4DC'}}/>
+          {/* Centre page divider — hairline only (no bleed bleed-through) */}
+          <div style={{width:effectiveSpineW,flexShrink:0,background:'#E8E4DC',position:'relative',zIndex:2}}/>
           {renderSide(spread.right,'right')}
         </div>
       </div>
@@ -2856,7 +3020,7 @@ function EditorArtGrid({
   );
 }
 
-function Sidebar({tab,onTab,photos,onUpload,uploading,onAddPhoto,onAddText,onAddSticker,editorElements,onLayout,onApplyDesign,selectedId,onDelete,lang,designs,layouts,showDesigns}: {
+function Sidebar({tab,onTab,photos,onUpload,uploading,onAddPhoto,onAddText,onAddSticker,editorElements,onLayout,onApplyDesign,selectedId,onDelete,lang,designs,layouts,showDesigns,photosOnCover}: {
   tab:SideTab; onTab:(t:SideTab)=>void; photos:string[]; onUpload:(f:File)=>void; uploading:boolean;
   onAddPhoto:(url:string)=>void; onAddText:(s?:{fontSize?:number;fontStyle?:string;align?:'left'|'center'|'right'})=>void;
   onAddSticker:(url:string)=>void; editorElements: EditorElementAsset[];
@@ -2866,6 +3030,8 @@ function Sidebar({tab,onTab,photos,onUpload,uploading,onAddPhoto,onAddText,onAdd
   layouts: LayoutDef[];
   /** Designs apply to outer covers only — hide on inner pages. */
   showDesigns?: boolean;
+  /** True on front/back cover — free photo placement allowed. */
+  photosOnCover?: boolean;
 }) {
   const fileRef=useRef<HTMLInputElement>(null);
   const tabs = ([
@@ -2889,7 +3055,9 @@ function Sidebar({tab,onTab,photos,onUpload,uploading,onAddPhoto,onAddText,onAdd
         {tab==='layouts' && (
           <div className="overflow-y-auto flex-1 p-3">
             <p className="text-[9px] uppercase tracking-widest text-neutral-400 mb-3">
-              {lang==='sq'?'Apliko në faqen aktive':'Apply to active page'}
+              {lang==='sq'
+                ? 'Apliko në faqen aktive — fotot vendosen vetëm në kuadratet e paraqitjes'
+                : 'Apply to the active page — photos only go in layout slots'}
             </p>
             {[...new Set(layouts.map(l=>l.category))].map(cat=>(
               <div key={cat} className="pb-4">
@@ -2928,6 +3096,15 @@ function Sidebar({tab,onTab,photos,onUpload,uploading,onAddPhoto,onAddText,onAdd
               {uploading?<Loader2 size={13} className="animate-spin"/>:<Plus size={13}/>}
               {lang==='sq'?'Ngarko foto · ose tërhiq këtu':'Upload photos · or drop here'}
             </button>
+            <p className="text-[10px] text-neutral-400 leading-snug">
+              {photosOnCover
+                ? (lang==='sq'
+                  ? 'Kliko për të shtuar foton në kopertinë — lëviz dhe ndrysho madhësinë lirisht.'
+                  : 'Tap to place on the cover — move and resize freely.')
+                : (lang==='sq'
+                  ? 'Kliko një foto pastaj një kuadrat të paraqitjes — faqet e brendshme kërkojnë paraqitje.'
+                  : 'Tap a photo, then a layout slot — inside pages need a layout.')}
+            </p>
             {photos.length===0 ? (
               <div className="text-center py-8 text-neutral-300">
                 <Camera size={26} className="mx-auto mb-1.5"/><p className="text-[11px]">{lang==='sq'?'Ende pa foto':'No photos yet'}</p>
@@ -2944,7 +3121,7 @@ function Sidebar({tab,onTab,photos,onUpload,uploading,onAddPhoto,onAddText,onAdd
                       e.dataTransfer.effectAllowed = 'copy';
                     }}
                     className="aspect-square rounded-lg overflow-hidden border border-neutral-200 hover:border-neutral-700 hover:scale-105 transition-all cursor-grab active:cursor-grabbing">
-                    <img src={url} alt="" className="w-full h-full object-cover pointer-events-none" draggable={false}/>
+                      <img src={url} alt="" className="w-full h-full object-cover pointer-events-none" draggable={false}/>
                   </button>
                 ))}
               </div>
@@ -2995,7 +3172,7 @@ function Sidebar({tab,onTab,photos,onUpload,uploading,onAddPhoto,onAddText,onAdd
 // Mobile Bottom Sheet
 // ─────────────────────────────────────────────────────────────────────────────
 
-function MobileSheet({tab,show,onClose,photos,onUpload,uploading,onAddPhoto,onLayout,onAddText,onAddSticker,editorElements,onApplyDesign,lang,designs,layouts,showDesigns}: {
+function MobileSheet({tab,show,onClose,photos,onUpload,uploading,onAddPhoto,onLayout,onAddText,onAddSticker,editorElements,onApplyDesign,lang,designs,layouts,showDesigns,photosOnCover}: {
   tab:SideTab; show:boolean; onClose:()=>void; photos:string[]; onUpload:(f:File)=>void; uploading:boolean;
   onAddPhoto:(url:string)=>void; onLayout:(id:string)=>void; onAddText:(s?:{fontSize?:number;fontStyle?:string;align?:'left'|'center'|'right'})=>void;
   onAddSticker:(url:string)=>void; editorElements: EditorElementAsset[];
@@ -3003,6 +3180,7 @@ function MobileSheet({tab,show,onClose,photos,onUpload,uploading,onAddPhoto,onLa
   designs: DesignDef[];
   layouts: LayoutDef[];
   showDesigns?: boolean;
+  photosOnCover?: boolean;
 }) {
   const fileRef=useRef<HTMLInputElement>(null);
   const sheetTitle =
@@ -3089,6 +3267,15 @@ function MobileSheet({tab,show,onClose,photos,onUpload,uploading,onAddPhoto,onLa
                   {uploading?<Loader2 size={15} className="animate-spin"/>:<Plus size={15}/>}
                   {lang==='sq'?'Ngarko foto · ose tërhiq këtu':'Upload photos · or drop here'}
                 </button>
+                <p className="text-[11px] text-neutral-400 leading-snug px-0.5">
+                  {photosOnCover
+                    ? (lang==='sq'
+                      ? 'Trokit për ta vendosur në kopertinë — lëviz dhe ndrysho madhësinë lirisht.'
+                      : 'Tap to place on the cover — move and resize freely.')
+                    : (lang==='sq'
+                      ? 'Zgjidh një foto pastaj një kuadrat të paraqitjes — faqet e brendshme kërkojnë paraqitje.'
+                      : 'Pick a photo, then a layout slot — inside pages need a layout.')}
+                </p>
                 <div className="grid grid-cols-3 gap-2">
                   {photos.map((url,i)=>(
                     <button key={i} onClick={()=>{onAddPhoto(url);onClose();}}
@@ -3324,6 +3511,7 @@ export default function Editor() {
   const [emptyPagesWarn,setEmptyPagesWarn]=useState<number[]>([]);
   const [show3D,setShow3D]=useState(false);
   const [showSheet,setShowSheet]=useState(false);
+  const [layoutGateOpen,setLayoutGateOpen]=useState(false);
   const [addingSpread,setAddingSpread]=useState(false);
   const [pickerOpen,setPickerOpen]=useState(false);
   const [saveStatus,setSaveStatus]=useState<'saved'|'saving'|'unsaved'>('saved');
@@ -3516,6 +3704,11 @@ export default function Editor() {
 
   const isCoverPage = activePageRole === 'front_cover' || activePageRole === 'back_cover';
 
+  const activeNeedsLayout = useMemo(() => {
+    if (isOrdered || !activePageId || activePageRole !== 'inner') return false;
+    return !pageHasPhotoLayout(pagesContent[activePageId] ?? []);
+  }, [isOrdered, activePageId, activePageRole, pagesContent]);
+
   // Cover ↔ inner: Designs only on outer covers; switch tab when page type changes.
   useEffect(() => {
     if (!activePageRole) return;
@@ -3526,12 +3719,29 @@ export default function Editor() {
     }
   }, [activePageRole]);
 
+  // Inner blank page → force layout picker (desktop dim gate / mobile sheet).
+  useEffect(() => {
+    if (isOrdered) { setLayoutGateOpen(false); return; }
+    if (activeNeedsLayout) {
+      setTab('layouts');
+      if (isMobile) setShowSheet(true);
+      else setLayoutGateOpen(true);
+    } else {
+      setLayoutGateOpen(false);
+    }
+  }, [activeNeedsLayout, isMobile, isOrdered]);
+
   const activeCoverBg = useMemo(() => {
     if (!isCoverPage || !activePageId) return null;
     return (pagesContent[activePageId] ?? []).find(e => e.type === 'background') ?? null;
   }, [isCoverPage, activePageId, pagesContent]);
 
   const selectedIsBackground = !!(activeCoverBg && selectedId === activeCoverBg.id);
+  const selectedIsLayoutSlot = useMemo(() => {
+    if (!selectedId || !activePageId) return false;
+    const el = (pagesContent[activePageId] ?? []).find(e => e.id === selectedId);
+    return !!el && isLayoutSlotFrame(el);
+  }, [selectedId, activePageId, pagesContent]);
 
   // Dock beside the page that owns the cover: back/left → left, front/right → right.
   const coverBgDockSide: 'left' | 'right' =
@@ -3556,9 +3766,42 @@ export default function Editor() {
     setSpreadIdx(i); setSelectedId(null); setActiveSide('right');
   },[]);
 
-  const onElementDragActive=useCallback((_active:boolean)=>{
-    // Page swipe yields via PageCanvas draggingRef while transforming.
+  // Imperative scroll lock — React state here re-rendered the whole canvas mid-drag
+  // and snapped Konva nodes back to stale x/y (stutter).
+  const elementDraggingRef = useRef(false);
+  const touchBlockCleanupRef = useRef<(() => void) | null>(null);
+  const onElementDragActive=useCallback((active:boolean)=>{
+    if (elementDraggingRef.current === active) return;
+    elementDraggingRef.current = active;
+    const canvas = canvasRef.current;
+    if (canvas) {
+      canvas.style.overflowX = 'hidden';
+      canvas.style.overflowY = active ? 'hidden' : 'auto';
+      canvas.style.touchAction = active ? 'none' : 'pan-y';
+    }
+    if (active) {
+      if (touchBlockCleanupRef.current) return;
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      const block = (e: TouchEvent) => { e.preventDefault(); };
+      document.addEventListener('touchmove', block, { passive: false });
+      touchBlockCleanupRef.current = () => {
+        document.body.style.overflow = prevOverflow;
+        document.removeEventListener('touchmove', block);
+        touchBlockCleanupRef.current = null;
+      };
+    } else {
+      touchBlockCleanupRef.current?.();
+    }
   },[]);
+  useEffect(() => () => { touchBlockCleanupRef.current?.(); }, []);
+
+  const openLayoutPicker = useCallback(() => {
+    if (isOrdered) return;
+    setTab('layouts');
+    if (isMobile) setShowSheet(true);
+    else setLayoutGateOpen(true);
+  }, [isOrdered, isMobile]);
 
   // Flat page steps so mobile swipe walks cover → every page → back cover.
   const pageSteps=useMemo(()=>{
@@ -3735,6 +3978,8 @@ export default function Editor() {
     const els = liveContent.current[activePageId]??[];
     const target = els.find(e => e.id === selectedId);
     if (!target || target.type === 'background') return;
+    // Layout photo cells stay — clients can't remove one slot from a 2/3-up grid.
+    if (isLayoutSlotFrame(target)) return;
     updatePage(activePageId, els.filter(e=>e.id!==selectedId));
     setSelectedId(null);
   },[selectedId,activePageId,updatePage,isOrdered]);
@@ -3751,34 +3996,57 @@ export default function Editor() {
     } finally{setUploading(false);}
   },[getToken,lang,isOrdered]);
 
+  const pageRoleById = useMemo(() => {
+    const m = new Map<number, PageRole>();
+    for (const s of spreads) {
+      if (s.left) m.set(s.left.dbId, s.left.role);
+      if (s.right) m.set(s.right.dbId, s.right.role);
+    }
+    return m;
+  }, [spreads]);
+
   const addPhoto=useCallback((url:string)=>{
     if (isOrdered || !activePageId) return;
-    // Read from the live ref to avoid pagesContent in deps (which would cause
-    // this callback to be recreated on every element edit, breaking memo).
     const els=liveContent.current[activePageId]??[];
-    // Replace selected image (reset crop focus for the new asset).
+    const onCover = isOuterCoverRole(activePageRole);
+
+    // Replace selected photo (cover free frame, or layout slot on inners).
     const selImg=els.find(e=>e.id===selectedId&&e.type==='image'&&!!e.src&&!e.sticker);
     if (selImg){
+      if (!onCover && !isLayoutSlotFrame(selImg)) {
+        alert(lang==='sq'
+          ? 'Në faqet e brendshme fotot vendosen vetëm në kuadratë të paraqitjes.'
+          : 'On inside pages, photos go only into layout slots.');
+        return;
+      }
       updatePage(activePageId,els.map(e=>e.id===selImg.id
-        ?{...e,src:url,cropFocusX:0.5,cropFocusY:0.5,cropZoom:1}
+        ?{...e,src:url,cropFocusX:0.5,cropFocusY:0.5,cropZoom:1,
+          ...(isLayoutSlotFrame(selImg) ? {slotLocked:true as const} : {})}
         :e));
       return;
     }
-    // Layout placeholders stay locked to their cell; free photos never go full-bleed.
     const ph=els.find(e=>e.id===selectedId&&e.type==='placeholder')
            ??els.find(e=>e.type==='placeholder');
     if (ph){
       updatePage(activePageId,els.map(e=>e.id===ph.id
-        ?{...e,type:'image' as const,src:url,cropFocusX:0.5,cropFocusY:0.5,cropZoom:1,slotLocked:isLayoutSlotFrame(ph)}
+        ?{...e,type:'image' as const,src:url,cropFocusX:0.5,cropFocusY:0.5,cropZoom:1,slotLocked:true}
         :e));
       setSelectedId(ph.id);
       return;
     }
-    const el = makeFreePhotoElement(url, canvasH);
-    updatePage(activePageId,[...els,el]); setSelectedId(el.id);
-  },[activePageId,selectedId,updatePage,canvasH,isOrdered]);
+    // Front / back cover: place a free movable photo.
+    if (onCover) {
+      const el = makeFreePhotoElement(url, canvasH);
+      updatePage(activePageId, [...els, el]);
+      setSelectedId(el.id);
+      return;
+    }
+    alert(lang==='sq'
+      ? 'Zgjidhni një kuadrat të paraqitjes për të vendosur foton.'
+      : 'Select a layout slot to place the photo.');
+  },[activePageId,activePageRole,selectedId,updatePage,isOrdered,lang,canvasH]);
 
-  /** Drop a library photo onto a layout slot, or freely onto empty page space. */
+  /** Drop a library photo — free on covers; layout slots only on inner pages. */
   const placePhotoInTarget=useCallback((
     pageId: number,
     url: string,
@@ -3787,21 +4055,33 @@ export default function Editor() {
   )=>{
     if (isOrdered || !url) return;
     const els=liveContent.current[pageId]??[];
+    const role = pageRoleById.get(pageId);
+    const onCover = isOuterCoverRole(role);
+
     if (targetId) {
       const target=els.find(e=>e.id===targetId);
-      if (!target || target.sticker || (target.type!=='placeholder' && target.type!=='image')) return;
-      // Only lock when filling a layout cell — free images stay movable.
-      const lock = isLayoutSlotFrame(target);
-      updatePage(pageId, els.map(e=>e.id===targetId
-        ?{...e, type:'image' as const, src:url, cropFocusX:0.5, cropFocusY:0.5, cropZoom:1, slotLocked: lock}
-        :e));
-      setSelectedId(targetId);
+      if (!target || target.sticker) return;
+      if (target.type === 'placeholder' || (target.type === 'image' && (onCover || isLayoutSlotFrame(target)))) {
+        updatePage(pageId, els.map(e=>e.id===targetId
+          ?{...e, type:'image' as const, src:url, cropFocusX:0.5, cropFocusY:0.5, cropZoom:1,
+            ...(isLayoutSlotFrame(target) || target.type === 'placeholder' ? {slotLocked: true as const} : {})}
+          :e));
+        setSelectedId(targetId);
+        return;
+      }
+    }
+
+    if (onCover) {
+      const el = makeFreePhotoElement(url, canvasH, at);
+      updatePage(pageId, [...els, el]);
+      setSelectedId(el.id);
       return;
     }
-    const el = makeFreePhotoElement(url, canvasH, at);
-    updatePage(pageId, [...els, el]);
-    setSelectedId(el.id);
-  },[isOrdered, updatePage, canvasH]);
+
+    alert(lang==='sq'
+      ? 'Lëshoni foton mbi një kuadrat të paraqitjes.'
+      : 'Drop the photo onto a layout slot.');
+  },[isOrdered, updatePage, pageRoleById, canvasH, lang]);
 
   const applyCoverPatch = useCallback((
     patch: Parameters<typeof applyCoverBackground>[2],
@@ -3881,7 +4161,7 @@ export default function Editor() {
     } finally{setUploading(false);}
   },[getToken,addPhoto,lang,isOrdered]);
 
-  /** Desktop drag-and-drop onto a page: upload, add to library, place at drop point. */
+  /** Desktop drop: free place on covers; layout slots only on inner pages. */
   const dropDesktopFiles=useCallback(async(
     pageId: number,
     files: File[],
@@ -3889,14 +4169,20 @@ export default function Editor() {
     at: { x: number; y: number },
   )=>{
     if (isOrdered || !files.length) return;
+    const onCover = isOuterCoverRole(pageRoleById.get(pageId));
+    if (!onCover && !targetId) {
+      alert(lang === 'sq'
+        ? 'Lëshoni foton mbi një kuadrat të paraqitjes.'
+        : 'Drop the photo onto a layout slot.');
+      return;
+    }
     setUploading(true);
     try {
       for (let i = 0; i < files.length; i++) {
         const url = await uploadImageToApi(files[i], getToken());
         setPhotos(prev => [url, ...prev]);
-        const useSlot = i === 0 ? targetId : null;
-        const pos = i === 0 ? at : { x: at.x + i * 28, y: at.y + i * 28 };
-        placePhotoInTarget(pageId, url, useSlot, pos);
+        const pos = { x: at.x + i * 28, y: at.y + i * 28 };
+        placePhotoInTarget(pageId, url, i === 0 ? targetId : null, pos);
       }
     } catch (e) {
       console.error('Desktop drop upload failed', e);
@@ -3904,7 +4190,7 @@ export default function Editor() {
     } finally {
       setUploading(false);
     }
-  }, [getToken, placePhotoInTarget, lang, isOrdered]);
+  }, [getToken, placePhotoInTarget, lang, isOrdered, pageRoleById]);
 
   const reorderSpreads=useCallback(async(fromIdx:number,toIdx:number)=>{
     if (isOrdered || fromIdx===toIdx||!project?.pages) return;
@@ -4124,7 +4410,10 @@ export default function Editor() {
       id:`${layoutId}-${i}-${ts}`,
       lang,
     }));
-    updatePage(activePageId,[...newEls, ...keepStickers]); setSelectedId(null);
+    updatePage(activePageId,[...newEls, ...keepStickers]);
+    setSelectedId(null);
+    setLayoutGateOpen(false);
+    setShowSheet(false);
   },[activePageId,lang,updatePage,canvasH,editorLayouts,isOrdered]);
 
   const applyDesign=useCallback((design:DesignDef)=>{
@@ -4509,7 +4798,7 @@ export default function Editor() {
             onAddPhoto={addPhoto} onAddText={addText} onAddSticker={addSticker} editorElements={catalogElements}
             onLayout={applyLayout} onApplyDesign={requestApplyDesign}
             selectedId={selectedIsBackground ? null : selectedId} onDelete={deleteSelected} lang={lang}
-            designs={designsCatalog} layouts={editorLayouts} showDesigns={isCoverPage}/>
+            designs={designsCatalog} layouts={editorLayouts} showDesigns={isCoverPage} photosOnCover={isCoverPage}/>
         )}
         <div
           className="flex-1 flex flex-col overflow-hidden min-w-0"
@@ -4680,10 +4969,25 @@ export default function Editor() {
               )}
             </AnimatePresence>
             <div ref={canvasRef}
-              className="flex-1 min-h-0 flex items-center justify-center min-w-0"
+              className="flex-1 min-h-0 flex items-center justify-center min-w-0 relative"
               style={isMobile
-                ? {overflow:'auto',padding:'28px 20px',touchAction:'pan-y'}
-                : {padding:'56px 64px',overflow:'auto',display:'flex',alignItems:'center',justifyContent:'center',touchAction:'pan-y'}}>
+                ? {
+                    overflowX: 'hidden',
+                    overflowY: 'auto',
+                    padding: '28px 20px',
+                    touchAction: 'pan-y',
+                    overscrollBehavior: 'none',
+                  }
+                : {
+                    padding: '56px 64px',
+                    overflowX: 'hidden',
+                    overflowY: 'auto',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    touchAction: 'pan-y',
+                    overscrollBehavior: 'contain',
+                  }}>
               {currentSpread ? (
                 <SpreadView spread={currentSpread} spreadContent={spreadContent}
                   selectedId={selectedId} activeSide={activeSide}
@@ -4696,9 +5000,58 @@ export default function Editor() {
                   onDropPhoto={isOrdered ? undefined : placePhotoInTarget}
                   onDropFiles={isOrdered ? undefined : dropDesktopFiles}
                   onDropSticker={isOrdered ? undefined : placeStickerOnPage}
+                  onRequestLayout={isOrdered ? undefined : openLayoutPicker}
                   pageW={pageW} pageH={pageH} canvasH={canvasH} shapeRefs={shapeRefs} isMobile={isMobile}
                   readOnly={isOrdered}/>
               ) : <p className="text-neutral-400 text-sm">No pages found</p>}
+
+              {/* Desktop: dim canvas until an inner page has a layout */}
+              {!isMobile && !isOrdered && layoutGateOpen && activeNeedsLayout && (
+                <div
+                  className="absolute inset-0 z-40 flex items-center justify-center p-6"
+                  style={{ background: 'rgba(20,16,12,0.55)', backdropFilter: 'blur(2px)' }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div
+                    className="w-full max-w-lg max-h-[min(72vh,560px)] overflow-y-auto rounded-2xl bg-white shadow-2xl p-5"
+                    style={{ border: '1px solid rgba(0,0,0,0.06)' }}
+                  >
+                    <p className="text-[10px] uppercase tracking-[0.16em] text-neutral-400 font-semibold mb-1">
+                      {lang === 'sq' ? 'Paraqitje' : 'Layout'}
+                    </p>
+                    <h3 className="text-lg font-semibold text-neutral-900 mb-1">
+                      {lang === 'sq' ? 'Zgjidhni një paraqitje' : 'Choose a layout'}
+                    </h3>
+                    <p className="text-xs text-neutral-500 mb-4 leading-relaxed">
+                      {lang === 'sq'
+                        ? 'Çdo faqe e brendshme duhet një paraqitje para se të shtoni foto.'
+                        : 'Every inside page needs a layout before you can add photos.'}
+                    </p>
+                    {[...new Set(editorLayouts.map(l => l.category))].map(cat => (
+                      <div key={cat} className="mb-4">
+                        <p className="text-[9px] uppercase tracking-widest text-neutral-400 font-semibold mb-2">
+                          {(LAYOUT_CATEGORY_LABELS[cat]?.[lang]) ?? cat}
+                        </p>
+                        <div className="grid grid-cols-3 gap-2">
+                          {editorLayouts.filter(l => l.category === cat).map(l => (
+                            <button
+                              key={l.id}
+                              type="button"
+                              onClick={() => applyLayout(l.id)}
+                              className="flex flex-col items-center gap-1.5 p-2 rounded-xl border border-neutral-200 hover:border-neutral-800 hover:bg-neutral-50 transition-all"
+                            >
+                              <LayoutThumb zones={l.zones} />
+                              <span className="text-[9px] text-neutral-500 text-center leading-tight w-full">
+                                {l.label[lang]}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
             <AnimatePresence initial={false}>
               {!isMobile && !isOrdered && selectedIsBackground && coverBgDockSide === 'right' && (
@@ -4741,8 +5094,9 @@ export default function Editor() {
                   <Icon size={20}/>{label}
                 </button>
               ))}
-              <button onClick={deleteSelected} disabled={!selectedId || selectedIsBackground}
-                className={`flex flex-col items-center gap-0.5 flex-1 py-1.5 rounded-xl text-[10px] transition-colors ${selectedId && !selectedIsBackground?'text-red-400 active:bg-red-50':'text-neutral-200 pointer-events-none'}`}>
+              <button onClick={deleteSelected}
+                disabled={!selectedId || selectedIsBackground || selectedIsLayoutSlot}
+                className={`flex flex-col items-center gap-0.5 flex-1 py-1.5 rounded-xl text-[10px] transition-colors ${selectedId && !selectedIsBackground && !selectedIsLayoutSlot?'text-red-400 active:bg-red-50':'text-neutral-200 pointer-events-none'}`}>
                 <Trash2 size={20}/>{lang==='sq'?'Fshi':'Delete'}
               </button>
             </div>
@@ -4755,7 +5109,7 @@ export default function Editor() {
         onAddPhoto={addPhoto} onLayout={applyLayout} onAddText={addText}
         onAddSticker={addSticker} editorElements={catalogElements}
         onApplyDesign={requestApplyDesign} lang={lang} designs={designsCatalog} layouts={editorLayouts}
-        showDesigns={isCoverPage}/>}
+        showDesigns={isCoverPage} photosOnCover={isCoverPage}/>}
 
       {isMobile && !isOrdered && (
         <CoverBgMobileSheet
