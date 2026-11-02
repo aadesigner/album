@@ -577,9 +577,21 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
     if (!panInside && panning) setPanning(false);
   }, [panInside, panning]);
 
+  /** Transformer must size the frame — not the oversized cover-fit bitmap. */
+  const bindImageNode = (n: any) => {
+    if (!n) return;
+    shapeRefs.current[el.id] = n;
+    n.getSelfRect = () => ({
+      x: 0,
+      y: 0,
+      width: Math.max(1, n.width() || el.w || 1),
+      height: Math.max(1, n.height() || el.h || 1),
+    });
+  };
+
   if (!img || !fit) return (
     <Group
-      ref={(n: any) => { if (n) shapeRefs.current[el.id] = n; }}
+      ref={bindImageNode}
       x={el.x} y={el.y} width={el.w} height={el.h} rotation={el.rotation}
       draggable={isSelected}
       dragDistance={3}
@@ -612,7 +624,7 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
   const landmarkBlend = coverImageBlend(el);
   return (
     <Group
-      ref={(n: any) => { if (n) shapeRefs.current[el.id] = n; }}
+      ref={bindImageNode}
       x={el.x}
       y={el.y}
       width={el.w}
@@ -936,6 +948,12 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
   const stageRef = useRef<any>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const scX = pageW/DESIGN_W, scY = pageH/canvasH;
+  // Extra stage margin so resize handles can be dragged past the page edge.
+  const PAGE_BLEED = 120;
+  const bleedPxX = PAGE_BLEED * scX;
+  const bleedPxY = PAGE_BLEED * scY;
+  const stageW = pageW + 2 * bleedPxX;
+  const stageH = pageH + 2 * bleedPxY;
   const {lang: chipLang} = useLanguage();
   const [dropTargetId, setDropTargetId] = useState<string|null>(null);
 
@@ -1156,7 +1174,7 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
   return (
     <div
       ref={wrapRef}
-      style={{position:'relative',width:pageW,height:pageH,flexShrink:0,overflow:'hidden'}}
+      style={{position:'relative',width:pageW,height:pageH,flexShrink:0,overflow:'visible'}}
       onDragOver={(onDropPhoto || onDropFiles || onDropSticker) ? (e) => {
         if (dataTransferHasElement(e.dataTransfer)) {
           if (!onDropSticker) return;
@@ -1214,11 +1232,23 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
         onDropPhoto(url, hit?.id ?? null, { x, y });
       } : undefined}
     >
-      <Stage ref={stageRef} width={pageW} height={pageH} scaleX={scX} scaleY={scY}
+      <Stage
+        ref={stageRef}
+        width={stageW}
+        height={stageH}
+        scaleX={scX}
+        scaleY={scY}
+        style={{ position: 'absolute', left: -bleedPxX, top: -bleedPxY }}
         pixelRatio={Math.min(window.devicePixelRatio ?? 1, isMobile ? 1.5 : 2)}
         onMouseDown={(e:any)=>{if(e.target===e.target.getStage()){if(editId)commitEdit();onSelectId(null);}}}
         onTouchStart={(e:any)=>{if(e.target===e.target.getStage()){if(editId)commitEdit();onSelectId(null);}}}>
-        <Layer>
+        <Layer x={PAGE_BLEED} y={PAGE_BLEED}>
+          {/* Dim bleed so overhanging art is visible while editing */}
+          <Rect
+            x={-PAGE_BLEED} y={-PAGE_BLEED}
+            width={DESIGN_W + 2 * PAGE_BLEED} height={canvasH + 2 * PAGE_BLEED}
+            fill="rgba(40,32,24,0.06)" listening={false}
+          />
           <Rect x={0} y={0} width={DESIGN_W} height={canvasH} fill={PAPER_COLOR} listening={false}/>
           {elements.map(el => {
             if (el.type === 'background') {
@@ -1305,8 +1335,8 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
               const isText = sel?.type === 'text';
               const minW = isText ? 40 : 10;
               const minH = isText ? 24 : 10;
-              const localOld = pageBoxFromStageBox(old, scX, 0, 0, scY);
-              const localNew = pageBoxFromStageBox(nw, scX, 0, 0, scY);
+              const localOld = pageBoxFromStageBox(old, scX, PAGE_BLEED, PAGE_BLEED, scY);
+              const localNew = pageBoxFromStageBox(nw, scX, PAGE_BLEED, PAGE_BLEED, scY);
               // Images: only enforce min/max size mid-gesture. Clamping x/y here
               // while growing past the page made the transformer stutter.
               if (sel?.type === 'image') {
@@ -1317,7 +1347,7 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
               }
               return stageBoxFromPageBox(
                 boundBoxToPage(localOld, localNew, canvasH, minW, minH),
-                scX, 0, 0, scY,
+                scX, PAGE_BLEED, PAGE_BLEED, scY,
               );
             }}
             padding={4}
@@ -1826,13 +1856,14 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
     const soloPage = isBackCover ? spread.left! : spread.right!;
 
     return (
-      <div className="flex items-center justify-center">
+      <div className="flex items-center justify-center" style={{ overflow: 'visible' }}>
         <div style={{
           boxShadow: '0 12px 40px rgba(40,32,20,0.12), 0 2px 8px rgba(40,32,20,0.06)',
           outline: '1px solid rgba(0,0,0,0.08)',
           outlineOffset: 0,
+          overflow: 'visible',
         }}>
-          <div style={{cursor:'default'}} onClick={()=>onActiveSide(isBackCover ? 'left' : 'right')}>
+          <div style={{cursor:'default', overflow: 'visible'}} onClick={()=>onActiveSide(isBackCover ? 'left' : 'right')}>
             <PageCanvas page={soloPage} elements={spreadContent[soloPage.dbId]??[]}
               selectedId={readOnly ? null : selectedId}
               onSelectId={readOnly ? ()=>{} : onSelectId}
@@ -1872,11 +1903,14 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
     const locked = page.role === 'locked_left' || page.role === 'locked_right';
     return (
       <div className="flex items-center justify-center"
-        {...(locked ? {onTouchStart:onDomSwipeStart,onTouchEnd:onDomSwipeEnd,style:{touchAction:'pan-y' as const}} : {})}>
+        {...(locked
+          ? {onTouchStart:onDomSwipeStart,onTouchEnd:onDomSwipeEnd,style:{touchAction:'pan-y' as const, overflow:'visible'}}
+          : {style:{ overflow:'visible' }})}>
         <div style={{
           boxShadow: '0 12px 40px rgba(40,32,20,0.12), 0 2px 8px rgba(40,32,20,0.06)',
           outline: '1px solid rgba(0,0,0,0.08)',
           outlineOffset: 0,
+          overflow: 'visible',
         }}>
           {locked
             ? <LockedPageView pageW={pageW} pageH={pageH} role={page.role} side={activeSide}/>
@@ -1911,15 +1945,17 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
   }
 
   return (
-    <div className="flex items-center justify-center">
+    <div className="flex items-center justify-center" style={{ overflow: 'visible' }}>
       <div style={{
         boxShadow: '0 12px 40px rgba(40,32,20,0.12), 0 2px 8px rgba(40,32,20,0.06)',
+        overflow: 'visible',
       }}>
         <div style={{
           display: 'flex',
           alignItems: 'stretch',
           outline: '1px solid rgba(0,0,0,0.08)',
           outlineOffset: 0,
+          overflow: 'visible',
         }}>
           {renderSide(spread.left,'left')}
           {/* Centre page divider — hairline only */}
@@ -4646,8 +4682,8 @@ export default function Editor() {
             <div ref={canvasRef}
               className="flex-1 min-h-0 flex items-center justify-center min-w-0"
               style={isMobile
-                ? {overflow:'hidden',padding:'12px',touchAction:'pan-y'}
-                : {padding:'32px 40px',overflowY:'auto',display:'flex',alignItems:'center',justifyContent:'center',touchAction:'pan-y'}}>
+                ? {overflow:'auto',padding:'28px 20px',touchAction:'pan-y'}
+                : {padding:'56px 64px',overflow:'auto',display:'flex',alignItems:'center',justifyContent:'center',touchAction:'pan-y'}}>
               {currentSpread ? (
                 <SpreadView spread={currentSpread} spreadContent={spreadContent}
                   selectedId={selectedId} activeSide={activeSide}

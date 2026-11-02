@@ -377,6 +377,21 @@ export default function Wizard() {
     else if (step > 1) setStep(s => s - 1);
   };
 
+  // After Next/Back, jump to the top so the new step’s title isn’t off-screen.
+  useEffect(() => {
+    const scrollTop = () => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+      const main = document.querySelector('main');
+      if (main instanceof HTMLElement) main.scrollTop = 0;
+    };
+    scrollTop();
+    // AnimatePresence mounts the next step a frame later — scroll again then.
+    const id = requestAnimationFrame(scrollTop);
+    return () => cancelAnimationFrame(id);
+  }, [step]);
+
   const progressSteps = isBlankPath
     ? [
         { num: 1, label: t('wizard.step.category'), activeWhen: 1, doneWhen: (s: number) => s > 1 },

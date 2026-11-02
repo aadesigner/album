@@ -274,10 +274,12 @@ function useStudioDrag(
   onSelect: () => void,
   onChange: (c: Partial<EditorElement>) => void,
   gesture: StudioGesture,
+  opts?: { allowOverflow?: boolean },
 ) {
   const livePos = useRef({ x: el.x, y: el.y });
   const sizeRef = useRef({ w: el.w, h: el.h, rotation: el.rotation || 0 });
   sizeRef.current = { w: el.w, h: el.h, rotation: el.rotation || 0 };
+  const overflowOpts = opts?.allowOverflow ? { allowOverflow: true, minOverlap: 48 } : undefined;
   // Sync from props only when idle — never mid-gesture.
   if (!gesture.active.current) {
     livePos.current = { x: el.x, y: el.y };
@@ -288,13 +290,20 @@ function useStudioDrag(
     y: livePos.current.y,
     draggable: true as const,
     dragDistance: 3,
+    /** Keep refs in sync after resize/rotate before React props catch up. */
+    syncPos: (p: { x: number; y: number; w?: number; h?: number; rotation?: number }) => {
+      livePos.current = { x: p.x, y: p.y };
+      if (p.w != null && p.h != null) {
+        sizeRef.current = { w: p.w, h: p.h, rotation: p.rotation ?? sizeRef.current.rotation };
+      }
+    },
     onMouseDown: (e: any) => { e.cancelBubble = true; onSelect(); },
     onTouchStart: (e: any) => { e.cancelBubble = true; onSelect(); },
     onClick: (e: any) => { e.cancelBubble = true; onSelect(); },
     onTap: (e: any) => { e.cancelBubble = true; onSelect(); },
     dragBoundFunc: function (this: any, pos: { x: number; y: number }) {
       const { w, h, rotation } = sizeRef.current;
-      return clampKonvaDragAbs(this, pos, w, h, canvasH, rotation);
+      return clampKonvaDragAbs(this, pos, w, h, canvasH, rotation, overflowOpts);
     },
     onDragStart: (e: any) => {
       e.cancelBubble = true;
@@ -311,7 +320,9 @@ function useStudioDrag(
     onDragEnd: (e: any) => {
       e.cancelBubble = true;
       const { w, h, rotation } = sizeRef.current;
-      const b = studioDragBound({ x: e.target.x(), y: e.target.y() }, w, h, canvasH, rotation);
+      const b = overflowOpts
+        ? clampElementPos({ x: e.target.x(), y: e.target.y() }, w, h, canvasH, rotation, overflowOpts)
+        : studioDragBound({ x: e.target.x(), y: e.target.y() }, w, h, canvasH, rotation);
       e.target.position(b);
       livePos.current = b;
       onChange(b);
@@ -464,7 +475,7 @@ const StudioImage = React.memo(function StudioImage({ el, selected, onSelect, on
   onExitPhotoAdjust?: () => void;
 }) {
   const img = useHtmlImage(el.src);
-  const drag = useStudioDrag(el, canvasH, onSelect, onChange, gesture);
+  const drag = useStudioDrag(el, canvasH, onSelect, onChange, gesture, { allowOverflow: true });
   const startRef = useRef({ w: el.w, h: el.h });
   const isContain = coverImageLetterbox(el);
   const [liveFocus, setLiveFocus] = useState<{ x: number; y: number } | null>(null);
@@ -538,17 +549,25 @@ const StudioImage = React.memo(function StudioImage({ el, selected, onSelect, on
         if (panInside) return;
         startRef.current = { w: el.w, h: el.h };
         gesture.begin({ keepTransformer: true });
+        gesture.markDirty();
       }}
       onTransformEnd={(e: any) => {
         if (panInside) return;
         const n = e.target;
-        const sx = n.scaleX();
-        const sy = n.scaleY();
-        const s = Math.max(Math.abs(sx), Math.abs(sy)) || 1;
-        n.scaleX(1); n.scaleY(1);
-        const nw = Math.max(20, startRef.current.w * s);
-        const nh = Math.max(20, startRef.current.h * s);
-        const b = studioDragBound({ x: n.x(), y: n.y() }, nw, nh, canvasH, n.rotation());
+        // KeepRatio: sx≈sy. Apply each axis from the live scale (don't max() —
+        // that fought mid-gesture clamps and jumped the box).
+        const sx = Math.abs(n.scaleX()) || 1;
+        const sy = Math.abs(n.scaleY()) || 1;
+        const nw = Math.max(20, startRef.current.w * sx);
+        const nh = Math.max(20, startRef.current.h * sy);
+        n.scaleX(1);
+        n.scaleY(1);
+        // Soft page clamp — may hang past edges; keeps a sliver selectable.
+        const b = clampElementPos(
+          { x: n.x(), y: n.y() },
+          nw, nh, canvasH, n.rotation(),
+          { allowOverflow: true, minOverlap: 48 },
+        );
         n.position(b);
         n.width(nw); n.height(nh);
         n.clip({ x: 0, y: 0, width: nw, height: nh });
@@ -572,8 +591,10 @@ const StudioImage = React.memo(function StudioImage({ el, selected, onSelect, on
             c.width(laidEnd.width); c.height(laidEnd.height); c.x(laidEnd.x); c.y(laidEnd.y);
           }
         });
+        drag.syncPos({ ...b, w: nw, h: nh, rotation: n.rotation() });
         onChange({ ...b, w: nw, h: nh, rotation: n.rotation() });
-        gesture.end();
+        // End after React can commit size — avoids one-frame snap to old props.
+        requestAnimationFrame(() => gesture.end());
       }}
     >
       {/* Frame-sized hit target for Adjust — avoids oversized bitmap stealing neighbor hits. */}
@@ -1052,10 +1073,16 @@ function DesignCanvas({
         }}
       >
         <Layer x={layerX} y={layerY} perfectDrawEnabled={false}>
-          <Group clipX={0} clipY={0} clipWidth={DESIGN_W} clipHeight={canvasH}>
+          {/* No page clip — images may hang into the letterbox while editing. */}
           <Rect
             x={0} y={0} width={DESIGN_W} height={canvasH}
             fill={PAPER_COLOR} listening={false} perfectDrawEnabled={false}
+          />
+          {/* Soft frame so the printable page stays obvious when art overflows. */}
+          <Rect
+            x={0} y={0} width={DESIGN_W} height={canvasH}
+            stroke="rgba(40,20,30,0.12)" strokeWidth={1}
+            listening={false} perfectDrawEnabled={false}
           />
           {elements.map(el => {
             if (el.type === 'background') {
@@ -1113,7 +1140,6 @@ function DesignCanvas({
             }
             return null;
           })}
-          </Group>
           <Rect x={DESIGN_W / 2} y={0} width={1} height={canvasH}
             fill="rgba(201,123,132,0.18)" listening={false} perfectDrawEnabled={false} />
           <Rect x={0} y={canvasH / 2} width={DESIGN_W} height={1}
@@ -1140,6 +1166,14 @@ function DesignCanvas({
               const minH = selected?.type === 'text' ? 24 : selected?.type === 'shape' ? 4 : 16;
               const localOld = pageBoxFromStageBox(oldBox, scale, layerX, layerY);
               const localNew = pageBoxFromStageBox(newBox, scale, layerX, layerY);
+              // Images use keepRatio — clamping w/h independently to the page
+              // fights the Transformer and makes corner-drag feel broken.
+              if (selected?.type === 'image') {
+                const maxEdge = Math.max(DESIGN_W, canvasH) * 4;
+                if (localNew.width < minW || localNew.height < minH) return oldBox;
+                if (localNew.width > maxEdge || localNew.height > maxEdge) return oldBox;
+                return newBox;
+              }
               return stageBoxFromPageBox(
                 boundBoxToPage(localOld, localNew, canvasH, minW, minH),
                 scale, layerX, layerY,

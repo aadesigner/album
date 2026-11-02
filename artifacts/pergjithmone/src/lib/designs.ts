@@ -163,6 +163,7 @@ export function clampKonvaDragAbs(
   h: number,
   canvasH: number,
   rotation = 0,
+  opts?: ClampPosOpts,
 ): KonvaPoint {
   if (!finitePoint(absPos)) {
     const fallback = node?.getAbsolutePosition?.();
@@ -173,7 +174,7 @@ export function clampKonvaDragAbs(
     const fallback = node?.getAbsolutePosition?.();
     return finitePoint(fallback) ? fallback : absPos;
   }
-  const clamped = clampElementPos(local, w, h, canvasH, rotation);
+  const clamped = clampElementPos(local, w, h, canvasH, rotation, opts);
   const abs = konvaLocalToAbs(node, clamped);
   return finitePoint(abs) ? abs : absPos;
 }
