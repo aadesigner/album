@@ -49,8 +49,6 @@ function preloadDesignAssets(designs: DesignDef[]) {
 /** Flex card widths — rows stay centered when they don’t fill the viewport. */
 const WIZARD_CAT_CARD =
   'w-[calc(50%-0.375rem)] sm:w-[calc(33.333%-0.667rem)] lg:w-[calc(25%-0.75rem)] max-w-[240px]';
-const WIZARD_STYLE_CARD =
-  'w-[calc(50%-0.375rem)] sm:w-[calc(33.333%-0.667rem)] md:w-[calc(25%-0.75rem)] lg:w-[calc(20%-0.8rem)] xl:w-[calc(16.666%-0.875rem)] max-w-[200px]';
 const WIZARD_SIZE_CARD =
   'w-[calc(50%-0.375rem)] md:w-[260px] max-w-[300px]';
 
@@ -638,16 +636,15 @@ export default function Wizard() {
                   </p>
                 </div>
 
-                <div className="flex flex-wrap justify-center gap-3.5 md:gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 max-w-2xl md:max-w-3xl mx-auto">
                   {shownDesigns.map((design) => (
-                    <div key={design.id} className={WIZARD_STYLE_CARD}>
-                      <DesignCard
-                        design={design}
-                        isSelected={selectedDesignId === design.id}
-                        lang={lang as 'sq' | 'en'}
-                        onClick={() => handleDesignSelect(design.id)}
-                      />
-                    </div>
+                    <DesignCard
+                      key={design.id}
+                      design={design}
+                      isSelected={selectedDesignId === design.id}
+                      lang={lang as 'sq' | 'en'}
+                      onClick={() => handleDesignSelect(design.id)}
+                    />
                   ))}
                 </div>
                 {shownDesigns.length === 0 && (

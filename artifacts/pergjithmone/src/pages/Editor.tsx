@@ -94,11 +94,14 @@ const PAPER_TEXTURE = `url("data:image/svg+xml,<svg viewBox='0 0 300 300' xmlns=
 /** Survives React Strict Mode remount so wizard design isn't applied twice / lost. */
 const consumedWizardDesignKeys = new Set<string>();
 
+type OverflowOpts = { allowOverflow?: boolean };
+
 function dragBoundBox(
   pos: { x: number; y: number },
   w = 0, h = 0, canvasH = DESIGN_H, rotation = 0,
+  opts?: OverflowOpts,
 ) {
-  return clampElementPos(pos, w, h, canvasH, rotation);
+  return clampElementPos(pos, w, h, canvasH, rotation, opts);
 }
 
 const GUIDE_SNAP_PX = 5;
@@ -107,6 +110,7 @@ const GUIDE_SNAP_PX = 5;
 function dragBoundWithGuides(
   pos: { x: number; y: number },
   w: number, h: number, canvasH: number, rotation = 0,
+  opts?: OverflowOpts,
 ): { x: number; y: number; guideV: boolean; guideH: boolean } {
   let { x, y } = pos;
   const midX = DESIGN_W / 2;
@@ -121,7 +125,7 @@ function dragBoundWithGuides(
     y = midY - h / 2;
     guideH = true;
   }
-  const c = clampElementPos({ x, y }, w, h, canvasH, rotation);
+  const c = clampElementPos({ x, y }, w, h, canvasH, rotation, opts);
   return { x: c.x, y: c.y, guideV, guideH };
 }
 
@@ -130,12 +134,16 @@ function pageDragBound(
   absPos: { x: number; y: number },
   w: number, h: number, canvasH: number, rotation = 0,
   onGuides?: (g: GuideState) => void,
+  opts?: OverflowOpts,
 ) {
   const local = konvaAbsToLocal(node, absPos);
-  const b = dragBoundWithGuides(local, w, h, canvasH, rotation);
+  const b = dragBoundWithGuides(local, w, h, canvasH, rotation, opts);
   onGuides?.({ v: b.guideV, h: b.guideH });
   return konvaLocalToAbs(node, { x: b.x, y: b.y });
 }
+
+/** Free photos & stickers may hang off / grow past the page. */
+const IMG_OVERFLOW: OverflowOpts = { allowOverflow: true };
 
 type GuideState = { v: boolean; h: boolean } | null;
 
@@ -576,7 +584,7 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
       draggable={isSelected}
       dragDistance={3}
       dragBoundFunc={function (this: any, pos: any) {
-        return pageDragBound(this, pos, el.w, el.h, canvasH, el.rotation, onGuides);
+        return pageDragBound(this, pos, el.w, el.h, canvasH, el.rotation, onGuides, IMG_OVERFLOW);
       }}
       onMouseDown={(e: any) => { e.cancelBubble = true; onSelect(); }}
       onTouchStart={(e: any) => { e.cancelBubble = true; onSelect(); }}
@@ -584,7 +592,7 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
       onTap={(e: any) => { e.cancelBubble = true; onSelect(); }}
       onDragStart={() => { onGestureStart?.(); onDragActive?.(true, { keepTransformer: true }); }}
       onDragEnd={(e: any) => {
-        const b = dragBoundWithGuides({ x: e.target.x(), y: e.target.y() }, el.w, el.h, canvasH, el.rotation);
+        const b = dragBoundWithGuides({ x: e.target.x(), y: e.target.y() }, el.w, el.h, canvasH, el.rotation, IMG_OVERFLOW);
         e.target.position({ x: b.x, y: b.y });
         onChange({ x: b.x, y: b.y });
         onDragActive?.(false);
@@ -633,7 +641,7 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
       draggable={moveFrame}
       dragDistance={3}
       dragBoundFunc={function (this: any, pos: any) {
-        return pageDragBound(this, pos, el.w, el.h, canvasH, el.rotation, onGuides);
+        return pageDragBound(this, pos, el.w, el.h, canvasH, el.rotation, onGuides, IMG_OVERFLOW);
       }}
       onDragStart={() => {
         setStageCursor('move');
@@ -641,7 +649,7 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
         onDragActive?.(true, { keepTransformer: true });
       }}
       onDragEnd={(e: any) => {
-        const b = dragBoundWithGuides({ x: e.target.x(), y: e.target.y() }, el.w, el.h, canvasH, el.rotation);
+        const b = dragBoundWithGuides({ x: e.target.x(), y: e.target.y() }, el.w, el.h, canvasH, el.rotation, IMG_OVERFLOW);
         e.target.position({ x: b.x, y: b.y });
         onChange({ x: b.x, y: b.y });
         onDragActive?.(false);
@@ -665,7 +673,7 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
         n.scaleY(1);
         const nw = Math.max(20, n.width() || transformStartRef.current.w);
         const nh = Math.max(20, n.height() || transformStartRef.current.h);
-        const b = dragBoundBox({ x: n.x(), y: n.y() }, nw, nh, canvasH, n.rotation());
+        const b = dragBoundBox({ x: n.x(), y: n.y() }, nw, nh, canvasH, n.rotation(), IMG_OVERFLOW);
         n.position(b);
         n.width(nw);
         n.height(nh);
@@ -1301,13 +1309,15 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
                 : ['top-left','top-center','top-right','middle-left','middle-right','bottom-left','bottom-center','bottom-right']
             }
             boundBoxFunc={(old:any,nw:any)=>{
-              const isText = selectedId && elements.find(e => e.id === selectedId)?.type === 'text';
+              const sel = selectedId ? elements.find(e => e.id === selectedId) : null;
+              const isText = sel?.type === 'text';
               const minW = isText ? 40 : 10;
               const minH = isText ? 24 : 10;
               const localOld = pageBoxFromStageBox(old, scX, 0, 0, scY);
               const localNew = pageBoxFromStageBox(nw, scX, 0, 0, scY);
+              const overflow = sel?.type === 'image' ? IMG_OVERFLOW : undefined;
               return stageBoxFromPageBox(
-                boundBoxToPage(localOld, localNew, canvasH, minW, minH),
+                boundBoxToPage(localOld, localNew, canvasH, minW, minH, overflow),
                 scX, 0, 0, scY,
               );
             }}
@@ -2381,15 +2391,17 @@ function LayoutThumb({ zones }: { zones: LayoutZone[] }) {
   );
 }
 
-function DesignThumb({design,lang,onApply}: {design:DesignDef;lang:'sq'|'en';onApply:()=>void}) {
+function DesignThumb({design,lang,onApply,width=72,height=96}: {
+  design:DesignDef; lang:'sq'|'en'; onApply:()=>void; width?:number; height?:number;
+}) {
   return (
     <button onClick={onApply}
-      className="flex flex-col items-center gap-1.5 group transition-transform hover:scale-105 active:scale-95 outline-none">
+      className="flex flex-col items-center gap-1.5 group transition-transform hover:scale-105 active:scale-95 outline-none w-full">
       <div
         className="relative overflow-hidden rounded-md border border-neutral-200 group-hover:border-neutral-700 shadow-sm transition-all group-hover:shadow-md bg-[#FEFDF9]"
-        style={{ width: 72, height: 96 }}
+        style={{ width, height }}
       >
-        <DesignCatalogThumb design={design} width={72} height={96} />
+        <DesignCatalogThumb design={design} width={width} height={height} />
       </div>
       <span className="text-[9px] text-neutral-500 group-hover:text-neutral-800 transition-colors text-center leading-tight w-full truncate px-1">
         {design.name[lang]}
@@ -2984,12 +2996,19 @@ function MobileSheet({tab,show,onClose,photos,onUpload,uploading,onAddPhoto,onLa
                 </p>
                 {[...new Set(designs.map(d=>d.category))].map(cat=>(
                   <div key={cat}>
-                    <p className="text-[9px] uppercase tracking-widest text-neutral-400 font-semibold mb-2">{cat}</p>
-                    <div className="flex gap-3 overflow-x-auto pb-1">
+                    <p className="text-[9px] uppercase tracking-widest text-neutral-400 font-semibold mb-2">
+                      {(CATEGORY_LABELS[cat]?.[lang]) ?? cat}
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
                       {designs.filter(d=>d.category===cat).map(d=>(
-                        <div key={d.id} className="flex-shrink-0">
-                          <DesignThumb design={d} lang={lang} onApply={()=>onApplyDesign(d)}/>
-                        </div>
+                        <DesignThumb
+                          key={d.id}
+                          design={d}
+                          lang={lang}
+                          width={140}
+                          height={187}
+                          onApply={()=>{ onApplyDesign(d); onClose(); }}
+                        />
                       ))}
                     </div>
                   </div>

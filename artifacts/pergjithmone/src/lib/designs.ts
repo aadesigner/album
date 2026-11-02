@@ -36,6 +36,14 @@ export function rotatedRectAabb(
   return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
 }
 
+/** Options for page clamping — overflow lets frames hang off / grow past the page. */
+export type ClampPosOpts = {
+  /** Allow the frame to extend past page edges (still keeps a sliver on-page). */
+  allowOverflow?: boolean;
+  /** Minimum on-page overlap in design px when allowOverflow is set (default 48). */
+  minOverlap?: number;
+};
+
 /** Keep an element's frame on the album page (drag). */
 export function clampElementPos(
   pos: { x: number; y: number },
@@ -43,8 +51,32 @@ export function clampElementPos(
   h: number,
   canvasH: number,
   rotation = 0,
+  opts?: ClampPosOpts,
 ): { x: number; y: number } {
   const pageH = canvasH > 0 ? canvasH : DESIGN_H;
+
+  // Soft clamp: frame may hang off / be larger than the page, but a strip stays
+  // selectable on the artboard (album builder free photos & stickers).
+  if (opts?.allowOverflow) {
+    const aabb = rotation
+      ? rotatedRectAabb(pos.x, pos.y, w, h, rotation)
+      : { x: pos.x, y: pos.y, w, h };
+    const minO = Math.max(8, opts.minOverlap ?? 48);
+    const ox = Math.min(minO, aabb.w, DESIGN_W);
+    const oy = Math.min(minO, aabb.h, pageH);
+    let dx = 0;
+    let dy = 0;
+    const minX = ox - aabb.w;
+    const maxX = DESIGN_W - ox;
+    const minY = oy - aabb.h;
+    const maxY = pageH - oy;
+    if (aabb.x < minX) dx = minX - aabb.x;
+    else if (aabb.x > maxX) dx = maxX - aabb.x;
+    if (aabb.y < minY) dy = minY - aabb.y;
+    else if (aabb.y > maxY) dy = maxY - aabb.y;
+    return { x: pos.x + dx, y: pos.y + dy };
+  }
+
   if (!rotation) {
     return {
       x: Math.min(Math.max(pos.x, 0), Math.max(0, DESIGN_W - w)),
@@ -209,10 +241,28 @@ export function boundBoxToPage(
   canvasH: number,
   minW: number,
   minH: number,
+  opts?: ClampPosOpts,
 ): PageBoundBox {
   if (newBox.width < minW || newBox.height < minH) return oldBox;
   const pageH = canvasH > 0 ? canvasH : DESIGN_H;
   const rot = newBox.rotation || 0;
+
+  // Free photos / stickers: grow past the page and hang off edges.
+  if (opts?.allowOverflow) {
+    const maxEdge = Math.max(DESIGN_W, pageH) * 4;
+    const width = Math.min(Math.max(newBox.width, minW), maxEdge);
+    const height = Math.min(Math.max(newBox.height, minH), maxEdge);
+    const pos = clampElementPos(
+      { x: newBox.x, y: newBox.y },
+      width,
+      height,
+      canvasH,
+      rot,
+      opts,
+    );
+    return { ...newBox, x: pos.x, y: pos.y, width, height };
+  }
+
   if (rot) {
     const aabb = rotatedRectAabb(newBox.x, newBox.y, newBox.width, newBox.height, rot);
     const ok = aabb.x >= -0.5 && aabb.y >= -0.5

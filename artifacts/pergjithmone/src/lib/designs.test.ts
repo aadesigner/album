@@ -440,6 +440,16 @@ describe("designCatalogFace", () => {
     expect(clampElementPos({ x: 10, y: 760 }, 100, 80, 800)).toEqual({ x: 10, y: 720 });
   });
 
+  it("allows oversized image frames to hang past the page with a visible sliver", () => {
+    const opts = { allowOverflow: true, minOverlap: 48 };
+    // Wider than the page — can slide left of 0
+    expect(clampElementPos({ x: -200, y: 10 }, 900, 400, 800, 0, opts)).toEqual({ x: -200, y: 10 });
+    // Too far left — keep 48px on-page
+    expect(clampElementPos({ x: -900, y: 10 }, 900, 400, 800, 0, opts)).toEqual({ x: 48 - 900, y: 10 });
+    // Too far right
+    expect(clampElementPos({ x: 600, y: 10 }, 200, 100, 800, 0, opts)).toEqual({ x: DESIGN_W - 48, y: 10 });
+  });
+
   it("clamps Konva drag in page space so scaled previews can still move right", () => {
     const node = {
       getStage: () => ({ scaleX: () => 2, scaleY: () => 2 }),
@@ -466,6 +476,20 @@ describe("designCatalogFace", () => {
     expect(next.x).toBe(500);
     expect(next.width).toBe(100);
     expect(next.x + next.width).toBe(DESIGN_W);
+  });
+
+  it("allows image resize past the page when overflow is enabled", () => {
+    const oldBox = { x: 100, y: 100, width: 80, height: 80 };
+    const next = boundBoxToPage(
+      oldBox,
+      { x: -50, y: 40, width: 900, height: 700 },
+      800, 16, 16,
+      { allowOverflow: true, minOverlap: 48 },
+    );
+    expect(next.width).toBe(900);
+    expect(next.height).toBe(700);
+    expect(next.x).toBeLessThan(0);
+    expect(next.x + next.width).toBeGreaterThan(DESIGN_W);
   });
 
   it("restoreCoverGraphics does not refill blank city-photo slots", () => {
