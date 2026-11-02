@@ -117,7 +117,7 @@ function isLandmarkPng(src?: string | null): boolean {
 }
 
 function coverImageBlend(el: { src?: string; mixBlendMode?: string }): "screen" | undefined {
-  return el.mixBlendMode === "screen" && isLandmarkPng(el.src) ? "screen" : undefined;
+  return isLandmarkPng(el.src) ? "screen" : undefined;
 }
 
 function coverImageLetterbox(el: { src?: string; objectFit?: string; mixBlendMode?: string }): boolean {
@@ -344,7 +344,7 @@ function drawSpacedText(
   }
 }
 
-function designAssetDirs(): string[] {
+export function designAssetDirs(): string[] {
   return [
     // Copied next to the bundled dist/ by build.mjs
     path.join(MODULE_DIR, "assets", "designs"),
@@ -357,6 +357,21 @@ function designAssetDirs(): string[] {
     path.join(process.cwd(), "artifacts", "pergjithmone", "public", "designs"),
     path.join(MODULE_DIR, "..", "..", "pergjithmone", "public", "designs"),
   ];
+}
+
+/** Built-in cover art (`rome-cover-thumb.jpg`, Eiffel PNG, …) for HTTP + PDF. */
+export function findDesignAssetFile(filename: string): string | null {
+  const file = String(filename || "").split(/[/\\]/).pop() || "";
+  if (!/^[\w.-]+\.(jpe?g|png|webp|gif)$/i.test(file)) return null;
+  for (const dir of designAssetDirs()) {
+    const candidate = path.join(dir, file);
+    try {
+      if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) return candidate;
+    } catch {
+      // keep looking
+    }
+  }
+  return null;
 }
 
 /**
@@ -390,11 +405,8 @@ function resolveImageSource(
       }
       const designInUrl = pathname.match(/\/designs\/([^/?#]+)/i);
       if (designInUrl) {
-        const file = decodeURIComponent(designInUrl[1]);
-        for (const dir of designAssetDirs()) {
-          const candidate = path.join(dir, file);
-          if (fs.existsSync(candidate)) return { kind: "file", path: candidate };
-        }
+        const found = findDesignAssetFile(decodeURIComponent(designInUrl[1]));
+        if (found) return { kind: "file", path: found };
       }
       // External wallpaper (Unsplash, etc.)
       return { kind: "url", url: src };
@@ -417,10 +429,8 @@ function resolveImageSource(
   const designMatch = pathname.match(/\/designs\/([^/]+)$/i);
   if (designMatch) {
     const file = decodeURIComponent(designMatch[1]);
-    for (const dir of designAssetDirs()) {
-      const candidate = path.join(dir, file);
-      if (fs.existsSync(candidate)) return { kind: "file", path: candidate };
-    }
+    const found = findDesignAssetFile(file);
+    if (found) return { kind: "file", path: found };
     logger.warn({ src, file }, "PDF render: design asset not found");
     return null;
   }

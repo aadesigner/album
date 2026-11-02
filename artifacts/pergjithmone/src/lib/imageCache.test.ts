@@ -58,6 +58,24 @@ describe('imageCache', () => {
     vi.unstubAllGlobals();
   });
 
+  it('does not force CORS on local cover art', async () => {
+    let created: { crossOrigin: string } | null = null;
+    class FakeImage {
+      crossOrigin = '';
+      decoding = '';
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      set src(_v: string) {
+        created = this;
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+    vi.stubGlobal('Image', FakeImage);
+    await loadCachedImage('/designs/rome-cover-thumb.jpg');
+    expect(created?.crossOrigin).toBe('');
+    vi.unstubAllGlobals();
+  });
+
   it('turns localhost upload URLs into same-origin paths', async () => {
     const seen: string[] = [];
     class FakeImage {
@@ -73,6 +91,28 @@ describe('imageCache', () => {
     vi.stubGlobal('Image', FakeImage);
     await loadCachedImage('http://localhost:8787/api/uploads/files/a.jpg');
     expect(seen).toEqual(['/api/uploads/files/a.jpg']);
+    vi.unstubAllGlobals();
+  });
+
+  it('falls back to /api/designs when the static cover 404s', async () => {
+    const seen: string[] = [];
+    class FakeImage {
+      crossOrigin = '';
+      decoding = '';
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      set src(v: string) {
+        seen.push(v);
+        queueMicrotask(() => {
+          if (v.startsWith('/api/designs/')) this.onload?.();
+          else this.onerror?.();
+        });
+      }
+    }
+    vi.stubGlobal('Image', FakeImage);
+    const img = await loadCachedImage('/designs/rome-cover-thumb.jpg');
+    expect(seen).toEqual(['/designs/rome-cover-thumb.jpg', '/api/designs/rome-cover-thumb.jpg']);
+    expect(img).toBeTruthy();
     vi.unstubAllGlobals();
   });
 });

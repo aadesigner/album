@@ -7,6 +7,7 @@ import {
 import { isStrokeOnlyShape, shapePathForElement } from '@/lib/shapes';
 import { useEditorFontsReady, ensureEditorFonts, normalizeEditorFont, isEditorSingleCutFont } from '@/lib/editorFonts';
 import { resolvePublicImageSrc } from '@/lib/categoryImages';
+import { designApiFallback } from '@/lib/imageCache';
 
 function thumbFontFamily(ff?: string): string {
   return normalizeEditorFont(ff);
@@ -117,6 +118,11 @@ export const PageThumb = React.memo(function PageThumb({
                   loading={priority ? 'eager' : 'lazy'}
                   decoding="async"
                   referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    const node = e.currentTarget;
+                    const fb = designApiFallback(node.getAttribute('src') || el.src || '');
+                    if (fb && !node.src.includes('/api/designs/')) node.src = fb;
+                  }}
                   style={{
                     width: '100%', height: '100%', display: 'block',
                     objectFit: el.objectFit === 'contain' ? 'contain' : 'cover',

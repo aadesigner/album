@@ -17,6 +17,7 @@ import {
   applyDesignOverrides,
   restoreCoverGraphics,
   sanitizeImageBlend,
+  coverImageBlend,
   blankCoverElements,
   DESIGNS,
   TRAVEL_LAYOUT_REV,
@@ -353,6 +354,12 @@ describe("designCatalogFace", () => {
       objectFit: "contain",
     });
     expect(cleaned.mixBlendMode).toBe("screen");
+  });
+
+  it("screens landmark PNGs even when mixBlendMode was dropped", () => {
+    expect(coverImageBlend({ src: "/designs/eiffel-tower.png" })).toBe("screen");
+    expect(coverImageBlend({ src: "/designs/sagrada-familia.png" })).toBe("screen");
+    expect(coverImageBlend({ src: "/designs/rome-cover-thumb.jpg", mixBlendMode: "screen" })).toBeUndefined();
   });
 
   it("restoreCoverGraphics fills a blank image slot from the builtin cover", () => {

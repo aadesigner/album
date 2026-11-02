@@ -23,6 +23,7 @@ import { applyCoverBackground, coverBgMode, type CoverBgMode } from '@/lib/cover
 import { uploadErrorMessage, uploadImageToApi } from '@/lib/uploadImage';
 import { ACCEPT_SAFE_IMAGES } from '@/lib/acceptedImages';
 import { resolvePublicImageSrc } from '@/lib/categoryImages';
+import { useCachedImage } from '@/lib/imageCache';
 import { useAuth } from '@/contexts/AuthContext';
 import { DesignCatalogThumb } from '@/components/PageThumb';
 import {
@@ -55,6 +56,32 @@ function previewContainFit(canvasH: number, availW: number, availH: number) {
     layerX: (stageW / scale - DESIGN_W) / 2,
     layerY: (stageH / scale - canvasH) / 2,
   };
+}
+
+function OpacitySlider({
+  value,
+  onChange,
+}: {
+  value?: number;
+  onChange: (opacity: number) => void;
+}) {
+  const pct = Math.round((value ?? 1) * 100);
+  return (
+    <label className="flex items-center gap-2">
+      <span className="text-[10px] font-semibold uppercase w-14 shrink-0" style={{ color: ADMIN.muted }}>
+        Opacity
+      </span>
+      <input
+        type="range" min={0} max={100} step={5} className="flex-1 min-w-0"
+        value={pct}
+        onChange={e => onChange(Number(e.target.value) / 100)}
+        style={{ accentColor: ADMIN.blush }}
+      />
+      <span className="text-[10px] tabular-nums w-8 text-right" style={{ color: ADMIN.ink }}>
+        {pct}
+      </span>
+    </label>
+  );
 }
 
 function pinStudioBackground<T extends { type: string; x: number; y: number; w: number; h: number }>(
@@ -232,17 +259,7 @@ function useStudioDrag(
 }
 
 function useHtmlImage(src?: string) {
-  const [img, setImg] = useState<HTMLImageElement>();
-  useEffect(() => {
-    if (!src) { setImg(undefined); return; }
-    const url = resolvePublicImageSrc(src) || src;
-    const i = new window.Image();
-    i.crossOrigin = 'anonymous';
-    i.onload = () => setImg(i);
-    i.onerror = () => setImg(undefined);
-    i.src = url;
-  }, [src]);
-  return img;
+  return useCachedImage(src);
 }
 
 /** Skip React→Konva prop sync while a gesture is in flight (prevents snap-back). */
@@ -433,6 +450,7 @@ const StudioImage = React.memo(function StudioImage({ el, selected, onSelect, on
     onEnterPhotoAdjust?.();
   };
 
+  const landmarkBlend = coverImageBlend(el);
 
   return (
     <Group
@@ -440,6 +458,7 @@ const StudioImage = React.memo(function StudioImage({ el, selected, onSelect, on
       x={drag.x} y={drag.y} width={el.w} height={el.h} rotation={el.rotation || 0}
       opacity={el.opacity ?? 1}
       clipX={0} clipY={0} clipWidth={el.w} clipHeight={el.h}
+      globalCompositeOperation={landmarkBlend}
       draggable={moveFrame}
       dragDistance={drag.dragDistance}
       dragBoundFunc={drag.dragBoundFunc}
@@ -563,7 +582,6 @@ const StudioImage = React.memo(function StudioImage({ el, selected, onSelect, on
           width={iw} height={ih}
           perfectDrawEnabled={false}
           listening={false}
-          globalCompositeOperation={coverImageBlend(el)}
         />
       )}
       {selected && (
@@ -600,6 +618,7 @@ const StudioShape = React.memo(function StudioShape({ el, onSelect, onChange, sh
     <Group
       ref={(n: any) => bindFrameNode(n, el.id, shapeRefs)}
       x={drag.x} y={drag.y} width={el.w} height={el.h} rotation={el.rotation || 0}
+      opacity={el.opacity ?? 1}
       draggable={drag.draggable}
       dragDistance={drag.dragDistance}
       dragBoundFunc={drag.dragBoundFunc}
@@ -646,7 +665,6 @@ const StudioShape = React.memo(function StudioShape({ el, onSelect, onChange, sh
         data={path}
         fill={strokeOnly ? undefined : hitFill}
         fillRule="evenodd"
-        opacity={el.opacity ?? 1}
         stroke={el.strokeColor || (strokeOnly ? '#1A1A1A' : undefined)}
         strokeWidth={el.strokeWidth || (strokeOnly ? 4 : 0)}
         lineCap="round"
@@ -2390,6 +2408,7 @@ export default function AdminDesignStudio() {
               ) : selected.type === 'text' ? (
                 <div className="space-y-2.5">
                   <p className="text-[11px] font-semibold" style={{ color: ADMIN.ink }}>Type</p>
+                  <OpacitySlider value={selected.opacity} onChange={opacity => onChangeEl(selected.id, { opacity })} />
                   <textarea
                     value={selected.text || ''}
                     onChange={e => onChangeEl(selected.id, { text: e.target.value })}
@@ -2532,6 +2551,7 @@ export default function AdminDesignStudio() {
               ) : selected.type === 'image' ? (
                 <div className="space-y-2.5">
                   <p className="text-[11px] font-semibold" style={{ color: ADMIN.ink }}>Image</p>
+                  <OpacitySlider value={selected.opacity} onChange={opacity => onChangeEl(selected.id, { opacity })} />
                   {selected.src ? (
                     <img src={selected.src} alt="" className="w-full h-28 object-contain rounded-lg bg-neutral-50"
                       style={{ border: `1px solid ${ADMIN.line}` }} />
@@ -2612,6 +2632,7 @@ export default function AdminDesignStudio() {
                   <p className="text-[10px] tabular-nums" style={{ color: ADMIN.muted }}>
                     {Math.round(selected.w)}×{Math.round(selected.h)} · ({Math.round(selected.x)}, {Math.round(selected.y)})
                   </p>
+                  <OpacitySlider value={selected.opacity} onChange={opacity => onChangeEl(selected.id, { opacity })} />
                   <div className="grid grid-cols-3 gap-1">
                     {SHAPE_KINDS.map(kind => {
                       const active = (selected.shapeKind || 'rect') === kind;

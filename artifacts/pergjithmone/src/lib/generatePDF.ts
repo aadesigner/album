@@ -1,5 +1,6 @@
 import { isStrokeOnlyShape, shapePathForElement } from './shapes';
 import { resolvePublicImageSrc } from './categoryImages';
+import { loadCachedImage } from './imageCache';
 
 /**
  * PDF preview generator — renders each photobook page to an off-screen
@@ -34,7 +35,7 @@ function isLandmarkPng(src?: string | null): boolean {
 }
 
 function coverImageBlend(el: { src?: string; mixBlendMode?: string }): 'screen' | undefined {
-  return el.mixBlendMode === 'screen' && isLandmarkPng(el.src) ? 'screen' : undefined;
+  return isLandmarkPng(el.src) ? 'screen' : undefined;
 }
 
 function coverImageLetterbox(el: { src?: string; objectFit?: string; mixBlendMode?: string }): boolean {
@@ -104,12 +105,9 @@ function imageUrl(src: string): string {
 function loadImg(src: string): Promise<HTMLImageElement> {
   const url = imageUrl(src);
   if (imgCache.has(url)) return Promise.resolve(imgCache.get(url)!);
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => { imgCache.set(url, img); resolve(img); };
-    img.onerror = () => reject(new Error(`Failed to load ${url}`));
-    img.src = url;
+  return loadCachedImage(url).then((img) => {
+    imgCache.set(url, img);
+    return img;
   });
 }
 

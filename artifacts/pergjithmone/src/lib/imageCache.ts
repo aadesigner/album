@@ -23,6 +23,33 @@ export function peekCachedImage(src: string): HTMLImageElement | undefined {
   return img;
 }
 
+export function imageLoadNeedsCors(url: string): boolean {
+  const absolute = /^https?:\/\//i.test(url);
+  return absolute && typeof window !== 'undefined' && !url.startsWith(window.location.origin);
+}
+
+export function designApiFallback(url: string): string | null {
+  const path = url.split('?')[0];
+  const m = path.match(/\/designs\/([^/]+)$/i);
+  if (!m) return null;
+  if (path.includes('/api/designs/')) return null;
+  return `/api/designs/${m[1]}`;
+}
+
+function decodeHtmlImage(url: string, withCors: boolean): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    // Same-origin /designs and /api uploads do not need CORS. Forcing
+    // anonymous made Konva paint a grey frame when the static server
+    // omitted Access-Control-Allow-Origin.
+    if (withCors) img.crossOrigin = 'anonymous';
+    img.decoding = 'async';
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('image load failed'));
+    img.src = url;
+  });
+}
+
 export function loadCachedImage(src: string): Promise<HTMLImageElement> {
   const url = resolvePublicImageSrc(src) || src;
   const hit = peekCachedImage(url);
@@ -30,26 +57,25 @@ export function loadCachedImage(src: string): Promise<HTMLImageElement> {
   const pending = inflight.get(url);
   if (pending) return pending;
 
-  const next = new Promise<HTMLImageElement>((resolve, reject) => {
-    const img = new Image();
-    // Same-origin /api uploads do not need CORS. Forcing anonymous here made
-    // Konva drop photos in the editor and Creative Studio when CORP/CORS
-    // headers were missing on the file response.
-    const absolute = /^https?:\/\//i.test(url);
-    const sameOrigin = !absolute || (typeof window !== 'undefined' && url.startsWith(window.location.origin));
-    if (!sameOrigin) img.crossOrigin = 'anonymous';
-    img.decoding = 'async';
-    img.onload = () => {
+  const next = decodeHtmlImage(url, imageLoadNeedsCors(url))
+    .catch((err) => {
+      if (imageLoadNeedsCors(url)) return decodeHtmlImage(url, false);
+      throw err;
+    })
+    .catch((err) => {
+      const fallback = designApiFallback(url);
+      if (!fallback) throw err;
+      return decodeHtmlImage(fallback, imageLoadNeedsCors(fallback));
+    })
+    .then((img) => {
       inflight.delete(url);
       touch(url, img);
-      resolve(img);
-    };
-    img.onerror = () => {
+      return img;
+    })
+    .catch((err) => {
       inflight.delete(url);
-      reject(new Error('image load failed'));
-    };
-    img.src = url;
-  });
+      throw err;
+    });
   inflight.set(url, next);
   return next;
 }

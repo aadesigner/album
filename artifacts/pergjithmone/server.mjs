@@ -60,9 +60,18 @@ function sendJson(res, status, body) {
 function sendFile(res, filePath) {
   const ext = path.extname(filePath).toLowerCase();
   const type = MIME[ext] || "application/octet-stream";
+  const isImage = type.startsWith("image/");
   res.writeHead(200, {
     "Content-Type": type,
     "Cache-Control": ext === ".html" ? "no-cache" : "public, max-age=31536000, immutable",
+    // Cover art is drawn onto Konva canvases. Missing CORS/CORP made
+    // Design Studio paint a grey slot instead of the city photo.
+    ...(isImage
+      ? {
+          "Access-Control-Allow-Origin": "*",
+          "Cross-Origin-Resource-Policy": "cross-origin",
+        }
+      : {}),
   });
   fs.createReadStream(filePath)
     .on("error", (err) => {

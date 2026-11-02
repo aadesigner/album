@@ -173,6 +173,7 @@ const GENERAL_EXEMPT_PREFIXES = [
   "/api/healthz",
   "/api/geo",
   "/api/config",
+  "/api/designs",
 ];
 app.use("/api", (req, res, next) => {
   const path = (req.originalUrl || req.url || "").split("?")[0];

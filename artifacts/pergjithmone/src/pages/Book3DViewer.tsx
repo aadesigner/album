@@ -379,9 +379,9 @@ export function Book3DViewer({
     el.style.transform = `rotateX(${rotXRef.current}deg) rotateY(${rotYRef.current}deg)`;
   }, []);
 
-  // Book dimensions — scale to screen
-  const W = 270;
-  const H = Math.round(W * (canvasH / DESIGN_W)); // ≈ 360 for 3:4 books
+  // Book dimensions — closed 3D cover only (browse/inner pages size themselves).
+  const W = 328;
+  const H = Math.round(W * (canvasH / DESIGN_W)); // ≈ 437 for 3:4 books
   // Keep the block thin — real albums are slim; old formula looked like a brick.
   const D = Math.max(3, Math.min(10, Math.round((project?.pageCount || 20) * 0.16)));
 
@@ -637,7 +637,7 @@ export function Book3DViewer({
           </motion.div>
         ) : (
           <motion.div key="3d" className="relative z-10 flex-1 flex items-center justify-center"
-            style={{ perspective: '1800px', perspectiveOrigin: '50% 48%' }}
+            style={{ perspective: '1580px', perspectiveOrigin: '50% 48%' }}
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             transition={{ duration: 0.18 }}>
 

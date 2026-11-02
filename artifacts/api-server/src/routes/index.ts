@@ -12,6 +12,7 @@ import adminRouter from "./admin";
 import marketingPagesRouter from "./marketingPages";
 import geoRouter from "./geo";
 import analyticsRouter from "./analytics";
+import designsRouter from "./designs";
 
 const router: IRouter = Router();
 
@@ -28,5 +29,6 @@ router.use(marketingPagesRouter);
 router.use(adminRouter);
 router.use(geoRouter);
 router.use(analyticsRouter);
+router.use(designsRouter);
 
 export default router;

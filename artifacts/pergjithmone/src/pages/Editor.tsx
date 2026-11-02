@@ -553,6 +553,7 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
   const { iw, ih, maxOffX, maxOffY, offX, offY } = fit;
   panMaxRef.current = { maxOffX, maxOffY };
 
+  const landmarkBlend = coverImageBlend(el);
   return (
     <Group
       ref={(n: any) => { if (n) shapeRefs.current[el.id] = n; }}
@@ -565,6 +566,8 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
       clipY={0}
       clipWidth={el.w}
       clipHeight={el.h}
+      opacity={el.opacity ?? 1}
+      globalCompositeOperation={landmarkBlend}
       onMouseDown={(e: any) => { e.cancelBubble = true; onSelect(); }}
       onTouchStart={(e: any) => { e.cancelBubble = true; onSelect(); }}
       onClick={(e: any) => { e.cancelBubble = true; onSelect(); }}
@@ -705,7 +708,6 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
         perfectDrawEnabled={false}
         listening={false}
         imageSmoothingEnabled
-        globalCompositeOperation={coverImageBlend(el)}
       />
       {/* Stroke inside the group so it tracks during drag/resize.
           Stickers skip it — Transformer already draws the box, and a second
@@ -1413,7 +1415,7 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
 
             <div style={{display:'flex',alignItems:'center',gap:6,minWidth:0}}>
               <span style={{fontSize:9,color:'#999',whiteSpace:'nowrap',flexShrink:0}}>{Math.round((toolbarEl?.opacity??1)*100)}%</span>
-              <input type="range" min={10} max={100} step={5}
+              <input type="range" min={0} max={100} step={5}
                 value={Math.round((toolbarEl?.opacity??1)*100)}
                 onChange={e=>onChangeEl(editId,{opacity:parseInt(e.target.value)/100})}
                 onBlur={()=>setTimeout(()=>textareaRef.current?.focus(),15)}
@@ -1428,9 +1430,9 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
         </div>
       )}
 
-      {/* ── Image / text chrome — delete + Move / Adjust-photo modes ── */}
+      {/* ── Image / text chrome — delete + opacity + Move / Adjust-photo ── */}
       {isActive && selectedId && !editId && (()=>{
-        const sel=elements.find(e=>e.id===selectedId&&(e.type==='image'||e.type==='text'||e.type==='placeholder'));
+        const sel=elements.find(e=>e.id===selectedId&&(e.type==='image'||e.type==='text'||e.type==='placeholder'||e.type==='shape'));
         if (!sel) return null;
         const bx=Math.min(Math.max((sel.x+sel.w)*scX, 28), pageW-4);
         const by=Math.max(sel.y*scY-14, 4);
@@ -1438,8 +1440,9 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
         const adjusting = photoAdjustId === sel.id;
         // Landmark/contain cutouts can't pan; everything else can (cropZoom unlocks corners).
         const adjustDisabled = !isImg || coverImageLetterbox(sel) || !!sel.sticker;
-        const barLeft = Math.max(4, Math.min(sel.x * scX, pageW - 200));
+        const barLeft = Math.max(4, Math.min(sel.x * scX, pageW - 220));
         const barTop = Math.min(pageH - 40, (sel.y + sel.h) * scY + 8);
+        const opacityPct = Math.round((sel.opacity ?? 1) * 100);
         return (
           <div ref={deleteBtnRef} style={{position:'absolute',inset:0,zIndex:45,pointerEvents:'none'}}>
             <div style={{position:'absolute',left:bx-14,top:by-14,pointerEvents:'all',display:'flex',gap:5}}>
@@ -1455,19 +1458,37 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
                 }}
               >✕</button>
             </div>
-            {isImg && !sel.sticker && (
-              <div
+            <div
+              style={{
+                position:'absolute', left: barLeft, top: barTop,
+                pointerEvents:'all', display:'flex', gap:8, alignItems:'center',
+                padding:'3px 8px 3px 4px', borderRadius:999,
+                background:'rgba(255,255,255,0.96)',
+                border:'1px solid rgba(0,0,0,0.08)',
+                boxShadow:'0 4px 16px rgba(0,0,0,0.14)',
+                maxWidth: pageW - 8,
+              }}
+              onMouseDown={e=>e.stopPropagation()}
+              onPointerDown={e=>e.stopPropagation()}
+            >
+              <label
                 style={{
-                  position:'absolute', left: barLeft, top: barTop,
-                  pointerEvents:'all', display:'flex', gap:4, alignItems:'center',
-                  padding:3, borderRadius:999,
-                  background:'rgba(255,255,255,0.96)',
-                  border:'1px solid rgba(0,0,0,0.08)',
-                  boxShadow:'0 4px 16px rgba(0,0,0,0.14)',
+                  display:'flex', alignItems:'center', gap:6,
+                  fontSize:10, fontWeight:600, color:'#555', whiteSpace:'nowrap',
                 }}
-                onMouseDown={e=>e.stopPropagation()}
-                onPointerDown={e=>e.stopPropagation()}
+                title={chipLang==='sq'?'Tejdukshmëria':'Opacity'}
               >
+                {opacityPct}%
+                <input
+                  type="range" min={0} max={100} step={5}
+                  value={opacityPct}
+                  onChange={e => onChangeEl(sel.id, { opacity: Math.max(0, Math.min(1, Number(e.target.value) / 100)) })}
+                  style={{ width: 78, accentColor: '#1a1a1a' }}
+                />
+              </label>
+            {isImg && !sel.sticker && (
+              <>
+                <span style={{width:1,height:16,background:'#e8e8e8',flexShrink:0}}/>
                 {!isLayoutSlotFrame(sel) && (
                 <button
                   type="button"
@@ -1523,8 +1544,9 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
                     />
                   </label>
                 )}
-              </div>
+              </>
             )}
+            </div>
           </div>
         );
       })()}

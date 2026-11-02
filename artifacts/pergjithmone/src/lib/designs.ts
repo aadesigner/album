@@ -314,9 +314,9 @@ export function sanitizeImageBlend<T extends { src?: string; mixBlendMode?: stri
   return next;
 }
 
-/** Screen-blend only for gold-on-black PNG cutouts — JPEG city photos stay opaque. */
+/** Gold-on-black /designs PNGs always screen — even if a save dropped mixBlendMode. */
 export function coverImageBlend(el: { src?: string; mixBlendMode?: string }): 'screen' | undefined {
-  return el.mixBlendMode === 'screen' && isLandmarkPng(el.src) ? 'screen' : undefined;
+  return isLandmarkPng(el.src) ? 'screen' : undefined;
 }
 
 export function coverImageLetterbox(el: { src?: string; objectFit?: string; mixBlendMode?: string }): boolean {
@@ -336,8 +336,8 @@ export function restoreLandmarkGraphics<T extends { type?: string; src?: string;
     if (!b) return sanitizeImageBlend(el);
     return sanitizeImageBlend({
       ...el,
-      objectFit: el.objectFit || b.objectFit,
-      mixBlendMode: el.mixBlendMode || b.mixBlendMode,
+      objectFit: b.objectFit || el.objectFit || 'contain',
+      mixBlendMode: 'screen',
     });
   });
   const srcs = new Set(withBlend.map((e) => e.src).filter(Boolean) as string[]);
