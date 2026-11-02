@@ -661,23 +661,15 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
         onGestureStart?.();
         onDragActive?.(true, { keepTransformer: true });
       }}
-      onTransform={(e: any) => {
-        // Stickers: let Konva scale the group live. Baking width every tick
-        // while keepRatio resets scaleX/Y — that's the resize flicker.
-        if (el.sticker) return;
-        bakeImageFrame(e.target, e.target.scaleX(), e.target.scaleY());
-      }}
+      // Let Konva scale the group live — baking w/h every tick fights the
+      // Transformer and causes the resize stutter.
       onTransformEnd={(e: any) => {
         const n = e.target;
-        n.scaleX(1);
-        n.scaleY(1);
-        const nw = Math.max(20, n.width() || transformStartRef.current.w);
-        const nh = Math.max(20, n.height() || transformStartRef.current.h);
+        const sx = Math.abs(n.scaleX()) || 1;
+        const sy = Math.abs(n.scaleY()) || 1;
+        const { nw, nh } = bakeImageFrame(n, sx, sy);
         const b = dragBoundBox({ x: n.x(), y: n.y() }, nw, nh, canvasH, n.rotation(), IMG_OVERFLOW);
         n.position(b);
-        n.width(nw);
-        n.height(nh);
-        n.clip({ x: 0, y: 0, width: nw, height: nh });
         onChange({ ...b, w: nw, h: nh, rotation: n.rotation() });
         onDragActive?.(false);
         onGuides?.(null);
@@ -1315,9 +1307,16 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
               const minH = isText ? 24 : 10;
               const localOld = pageBoxFromStageBox(old, scX, 0, 0, scY);
               const localNew = pageBoxFromStageBox(nw, scX, 0, 0, scY);
-              const overflow = sel?.type === 'image' ? IMG_OVERFLOW : undefined;
+              // Images: only enforce min/max size mid-gesture. Clamping x/y here
+              // while growing past the page made the transformer stutter.
+              if (sel?.type === 'image') {
+                const maxEdge = Math.max(DESIGN_W, canvasH) * 4;
+                if (localNew.width < minW || localNew.height < minH) return old;
+                if (localNew.width > maxEdge || localNew.height > maxEdge) return old;
+                return nw;
+              }
               return stageBoxFromPageBox(
-                boundBoxToPage(localOld, localNew, canvasH, minW, minH, overflow),
+                boundBoxToPage(localOld, localNew, canvasH, minW, minH),
                 scX, 0, 0, scY,
               );
             }}
