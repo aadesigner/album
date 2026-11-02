@@ -68,13 +68,14 @@ import {
   DESIGN_W, DESIGN_H, LAYOUTS, DESIGNS, CATEGORY_LABELS, LAYOUT_CATEGORY_LABELS,
   getCanvasHeight, scaleElementsToCanvas, fitDesignToCanvas,
   BLANK_STARTER_ID, blankFrontCoverElements, blankBackCoverElements,
-  coverCropRect, imageFrameCoverFit, imageFrameContainFit, imageFrameFocusFromOffset, PHOTO_CORNER_ZOOM, minPhotoAdjustZoom, fitAddedTextFrame,
+  coverCropRect, imageFrameCoverFit, imageFrameContainFit, imageFrameFocusFromOffset, fitAddedTextFrame,
   designFrontElements, designBackElements, buildDesignCatalog, parseCustomDesigns,
+  coverImageBlend, coverImageLetterbox,
   type EditorElement, type DE, type DesignDef, type LayoutZone, type LayoutDef, type DesignOverrides,
 } from '@/lib/designs';
 import { parseEditorElements, makeStickerElement, type EditorElementAsset } from '@/lib/editorElements';
 import { resolvePublicImageSrc } from '@/lib/categoryImages';
-import { mergeEditorLayouts, layoutZoneToElement } from '@/lib/editorLayouts';
+import { mergeEditorLayouts, layoutZoneToElement, isLayoutSlotFrame } from '@/lib/editorLayouts';
 import { isStrokeOnlyShape, shapePathForElement } from '@/lib/shapes';
 import { getEmptyInnerPageNumbers } from '@/lib/pageContent';
 import { PageThumb, DesignCatalogThumb } from '@/components/PageThumb';
@@ -436,13 +437,14 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
     setLiveFocus(null);
   }, [el.cropFocusX, el.cropFocusY, el.cropZoom, el.src]);
 
+  const letterbox = coverImageLetterbox(el);
   const fit = img
-    ? (el.objectFit === 'contain'
+    ? (letterbox
         ? imageFrameContainFit(img.naturalWidth, img.naturalHeight, el.w, el.h)
         : imageFrameCoverFit(img.naturalWidth, img.naturalHeight, el.w, el.h, focusX, focusY, cropZoom))
     : null;
   // Cover photos can always enter Adjust (we bump cropZoom to unlock corners).
-  const canPan = el.objectFit === 'contain' ? false : (img ? true : !!fit?.canPan);
+  const canPan = letterbox ? false : (img ? true : !!fit?.canPan);
 
   const onCanPanChangeRef = useRef(onCanPanChange);
   onCanPanChangeRef.current = onCanPanChange;
@@ -454,22 +456,12 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
   const onExitPhotoAdjustRef = useRef(onExitPhotoAdjust);
   onExitPhotoAdjustRef.current = onExitPhotoAdjust;
   useEffect(() => {
-    if (photoAdjust && img && el.objectFit === 'contain') onExitPhotoAdjustRef.current?.();
-  }, [photoAdjust, img, el.objectFit]);
+    if (photoAdjust && img && letterbox) onExitPhotoAdjustRef.current?.();
+  }, [photoAdjust, img, letterbox]);
 
-  // Entering Adjust: bump zoom so small 2/3-photo frames still have usable pan travel.
-  const onChangeRef = useRef(onChange);
-  onChangeRef.current = onChange;
-  useEffect(() => {
-    if (!photoAdjust || !img || el.objectFit === 'contain') return;
-    const need = minPhotoAdjustZoom(img.naturalWidth, img.naturalHeight, el.w, el.h);
-    if ((el.cropZoom ?? 1) + 0.001 < need) {
-      onChangeRef.current({ cropZoom: need });
-    }
-  }, [photoAdjust, img, el.w, el.h, el.objectFit, el.cropZoom]);
-
-  const panInside = isSelected && !!photoAdjust && canPan;
-  const moveFrame = isSelected && !panInside;
+  const frameLocked = isLayoutSlotFrame(el);
+  const panInside = isSelected && canPan && (!!photoAdjust || frameLocked);
+  const moveFrame = isSelected && !panInside && !frameLocked;
   const adjustingVisual = panInside;
   // While panning, omit x/y props so React re-renders (autosave, chrome, etc.)
   // don't fight Konva and snap the photo back to the last committed focus.
@@ -500,7 +492,7 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
     // Keep the photo cover-fit in sync while resizing — otherwise the KonvaImage
     // stays at the old iw/ih until transformEnd and the crop snaps.
     const live = img
-      ? (el.objectFit === 'contain'
+      ? (letterbox
           ? imageFrameContainFit(img.naturalWidth, img.naturalHeight, nw, nh)
           : imageFrameCoverFit(
               img.naturalWidth, img.naturalHeight, nw, nh,
@@ -697,10 +689,6 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
           onChange({
             cropFocusX: next.cropFocusX,
             cropFocusY: next.cropFocusY,
-            cropZoom: Math.max(
-              cropZoom,
-              minPhotoAdjustZoom(img.naturalWidth, img.naturalHeight, el.w, el.h),
-            ),
           });
           setPanning(false);
           onDragActive?.(false);
@@ -717,7 +705,7 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
         perfectDrawEnabled={false}
         listening={false}
         imageSmoothingEnabled
-        globalCompositeOperation={(el.mixBlendMode as GlobalCompositeOperation | undefined) || undefined}
+        globalCompositeOperation={coverImageBlend(el)}
       />
       {/* Stroke inside the group so it tracks during drag/resize.
           Stickers skip it — Transformer already draws the box, and a second
@@ -1051,20 +1039,21 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
   const selectedMeta = selectedId ? elements.find(e => e.id === selectedId) : null;
   const selectedType = selectedMeta?.type ?? null;
   const selectedIsSticker = !!selectedMeta?.sticker;
+  const selectedSlotLocked = !!selectedMeta && isLayoutSlotFrame(selectedMeta);
   useEffect(()=>{
     if (!trRef.current) return;
     // Backgrounds use their own dock panel — never attach the Transformer.
     // While Adjust-photo is active, detach too: Transformer would still move the
     // frame even though Group.draggable is false (classic builder crop mode).
     const adjusting = !!(photoAdjustId && photoAdjustId === selectedId);
-    const node = (isActive && selectedId && selectedId !== editId && selectedType && selectedType !== 'background' && !adjusting)
+    const node = (isActive && selectedId && selectedId !== editId && selectedType && selectedType !== 'background' && !adjusting && !selectedSlotLocked)
       ? shapeRefs.current[selectedId]
       : null;
     trRef.current.nodes(node ? [node] : []);
     trRef.current.getLayer()?.batchDraw();
     // Do not depend on the full `elements` array — re-attaching on every
     // resize commit is what made stickers flicker while scaling.
-  },[isActive,selectedId,selectedType,editId,shapeRefs,photoAdjustId,imgCanPan]);
+  },[isActive,selectedId,selectedType,editId,shapeRefs,photoAdjustId,imgCanPan,selectedSlotLocked]);
 
   const editEl=editId?elements.find(e=>e.id===editId):null;
 
@@ -1073,7 +1062,10 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
   const isBold=toolbarStyle.includes('bold');
   const isItalic=toolbarStyle.includes('italic');
   // Prefer beside the text (right, then left) so the panel doesn’t cover it.
-  const PANEL_W=366; const PANEL_H=90; const GAP=8;
+  // Never wider than the white page — a fixed 366px strip used to hang off the canvas.
+  const PANEL_W = Math.min(300, Math.max(216, pageW - 8));
+  const PANEL_H = 168;
+  const GAP = 8;
   const elLeft=toolbarEl?toolbarEl.x*scX:0;
   const elRight=toolbarEl?(toolbarEl.x+toolbarEl.w)*scX:0;
   const elTop=toolbarEl?toolbarEl.y*scY:0;
@@ -1199,7 +1191,7 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
                   shapeRefs={shapeRefs} canvasH={canvasH}
                   photoAdjust={photoAdjustId===el.id}
                   onTogglePhotoAdjust={()=>{
-                    if (el.objectFit === 'contain' || el.sticker) return;
+                    if (coverImageLetterbox(el) || el.sticker) return;
                     setPhotoAdjustId(cur => cur===el.id ? null : el.id);
                     onSelectId(el.id);
                   }}
@@ -1316,14 +1308,13 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
           <div style={{
             position:'absolute', pointerEvents:'all',
             left:panelLeft, top:panelTop, width:PANEL_W,
+            boxSizing:'border-box', overflow:'hidden',
             background:'#ffffff',
             borderRadius:14, border:'1px solid rgba(0,0,0,0.09)',
             boxShadow:'0 16px 48px rgba(0,0,0,0.16),0 2px 8px rgba(0,0,0,0.07)',
-            padding:'9px 11px', display:'flex', flexDirection:'column', gap:7,
+            padding:'8px 9px', display:'flex', flexDirection:'column', gap:6,
           }}>
-            {/* Row 1 — Font · B/I · Align · Size */}
-            <div style={{display:'flex',alignItems:'center',gap:5}}>
-              {/* Font family */}
+            <div style={{display:'flex',alignItems:'center',gap:5,minWidth:0}}>
               <FontPicker
                 value={toolbarEl?.fontFamily}
                 onChange={fontFamily => {
@@ -1331,8 +1322,6 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
                   setTimeout(() => textareaRef.current?.focus(), 20);
                 }}
               />
-              <span style={{width:1,height:20,background:'#e8e8e8',flexShrink:0}}/>
-              {/* Bold */}
               <button onMouseDown={e=>{e.preventDefault();
                 const fam=normalizeEditorFont(toolbarEl?.fontFamily);
                 const script=isEditorSingleCutFont(fam);
@@ -1342,7 +1331,6 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
                 style={{width:28,height:28,borderRadius:7,border:'none',cursor:'pointer',fontWeight:'bold',
                   fontSize:13,flexShrink:0,transition:'all 0.12s',
                   background:isBold?'#1a1a1a':'#f0f0f0',color:isBold?'#fff':'#555'}}>B</button>
-              {/* Italic — disabled for script fonts (no italic cut; Konva falls back) */}
               <button onMouseDown={e=>{e.preventDefault();
                 const fam=normalizeEditorFont(toolbarEl?.fontFamily);
                 if(isEditorSingleCutFont(fam)) return;
@@ -1353,8 +1341,9 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
                   fontStyle:'italic', fontSize:14,flexShrink:0,transition:'all 0.12s',
                   background:isItalic?'#1a1a1a':'#f0f0f0',color:isItalic?'#fff':'#666',
                   opacity:isEditorSingleCutFont(toolbarEl?.fontFamily)?0.4:1}}>I</button>
-              <span style={{width:1,height:20,background:'#e8e8e8',flexShrink:0}}/>
-              {/* Alignment — L / C / R */}
+            </div>
+
+            <div style={{display:'flex',alignItems:'center',gap:4,minWidth:0,flexWrap:'wrap'}}>
               {(['left','center','right'] as const).map(al=>(
                 <button key={al} onMouseDown={e=>{e.preventDefault();onChangeEl(editId,{align:al});}}
                   title={al} style={{width:28,height:28,borderRadius:7,border:'none',cursor:'pointer',
@@ -1368,8 +1357,7 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
                   </svg>
                 </button>
               ))}
-              <span style={{width:1,height:20,background:'#e8e8e8',flexShrink:0}}/>
-              {/* Font size */}
+              <span style={{width:1,height:18,background:'#e8e8e8',flexShrink:0}}/>
               <button onMouseDown={e=>{e.preventDefault();onChangeEl(editId,{fontSize:Math.max(6,(toolbarEl?.fontSize||20)-1)});}}
                 style={{width:24,height:24,borderRadius:6,border:'1px solid #e8e8e8',background:'#fafafa',
                   cursor:'pointer',fontSize:15,color:'#555',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>−</button>
@@ -1383,19 +1371,16 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
                   cursor:'pointer',fontSize:15,color:'#555',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>+</button>
             </div>
 
-            {/* Row 2 — Colors · Line height · Opacity · Done */}
-            <div style={{display:'flex',alignItems:'center',gap:5}}>
-              {/* Preset swatches */}
+            <div style={{display:'flex',flexWrap:'wrap',alignItems:'center',gap:5,minWidth:0}}>
               {TEXT_COLORS.map(c=>(
                 <button key={c} onMouseDown={e=>{e.preventDefault();onChangeEl(editId,{fill:c});}}
                   title={c} style={{
-                    width:18,height:18,borderRadius:'50%',cursor:'pointer',flexShrink:0,
+                    width:16,height:16,borderRadius:'50%',cursor:'pointer',flexShrink:0,
                     background:c,boxSizing:'border-box',
                     border:(toolbarEl?.fill||'#1a1a1a')===c?'2.5px solid #3B82F6':c==='#FFFFFF'?'1.5px solid #ddd':'1.5px solid transparent',
                   }}/>
               ))}
-              {/* Rainbow custom-color trigger */}
-              <div style={{position:'relative',width:18,height:18,flexShrink:0}}>
+              <div style={{position:'relative',width:16,height:16,flexShrink:0}}>
                 <div style={{position:'absolute',inset:0,borderRadius:'50%',
                   background:'conic-gradient(red,yellow,lime,cyan,blue,magenta,red)',
                   border:'1.5px solid #ddd',pointerEvents:'none'}}/>
@@ -1405,36 +1390,38 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
                   onBlur={()=>setTimeout(()=>textareaRef.current?.focus(),15)}
                   style={{opacity:0,position:'absolute',inset:0,width:'100%',height:'100%',cursor:'pointer',padding:0,border:'none'}}/>
               </div>
-              <span style={{width:1,height:18,background:'#e8e8e8',flexShrink:0}}/>
-              {/* Line height */}
-              <span style={{fontSize:9,color:'#999',flexShrink:0}}>↕</span>
-              <button onMouseDown={e=>{e.preventDefault();onChangeEl(editId,{lineHeight:Math.max(0.8,parseFloat(((toolbarEl?.lineHeight??1.2)-0.1).toFixed(1)))});}}
-                style={{width:20,height:20,borderRadius:5,border:'1px solid #e8e8e8',background:'#fafafa',cursor:'pointer',fontSize:12,color:'#555',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>−</button>
-              <span style={{fontSize:10,color:'#444',minWidth:22,textAlign:'center',flexShrink:0}}>{(toolbarEl?.lineHeight??1.2).toFixed(1)}</span>
-              <button onMouseDown={e=>{e.preventDefault();onChangeEl(editId,{lineHeight:Math.min(3.0,parseFloat(((toolbarEl?.lineHeight??1.2)+0.1).toFixed(1)))});}}
-                style={{width:20,height:20,borderRadius:5,border:'1px solid #e8e8e8',background:'#fafafa',cursor:'pointer',fontSize:12,color:'#555',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>+</button>
-              <span style={{width:1,height:18,background:'#e8e8e8',flexShrink:0}}/>
-              {/* Letter spacing */}
-              <span style={{fontSize:9,color:'#999',flexShrink:0,fontFamily:'Georgia,serif'}} title={chipLang==='sq'?'Hapësira e shkronjave':'Letter spacing'}>AV</span>
-              <button onMouseDown={e=>{e.preventDefault();onChangeEl(editId,{letterSpacing:Math.max(-8,(toolbarEl?.letterSpacing??0)-1)});}}
-                style={{width:20,height:20,borderRadius:5,border:'1px solid #e8e8e8',background:'#fafafa',cursor:'pointer',fontSize:12,color:'#555',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>−</button>
-              <span style={{fontSize:10,color:'#444',minWidth:18,textAlign:'center',flexShrink:0}}>{toolbarEl?.letterSpacing??0}</span>
-              <button onMouseDown={e=>{e.preventDefault();onChangeEl(editId,{letterSpacing:Math.min(24,(toolbarEl?.letterSpacing??0)+1)});}}
-                style={{width:20,height:20,borderRadius:5,border:'1px solid #e8e8e8',background:'#fafafa',cursor:'pointer',fontSize:12,color:'#555',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>+</button>
-              <span style={{width:1,height:18,background:'#e8e8e8',flexShrink:0}}/>
-              {/* Opacity */}
+            </div>
+
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6,minWidth:0}}>
+              <div style={{display:'flex',alignItems:'center',gap:4,minWidth:0}}>
+                <span style={{fontSize:9,color:'#999',flexShrink:0}}>↕</span>
+                <button onMouseDown={e=>{e.preventDefault();onChangeEl(editId,{lineHeight:Math.max(0.8,parseFloat(((toolbarEl?.lineHeight??1.2)-0.1).toFixed(1)))});}}
+                  style={{width:22,height:22,borderRadius:5,border:'1px solid #e8e8e8',background:'#fafafa',cursor:'pointer',fontSize:12,color:'#555',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>−</button>
+                <span style={{fontSize:10,color:'#444',minWidth:22,textAlign:'center',flex:1}}>{(toolbarEl?.lineHeight??1.2).toFixed(1)}</span>
+                <button onMouseDown={e=>{e.preventDefault();onChangeEl(editId,{lineHeight:Math.min(3.0,parseFloat(((toolbarEl?.lineHeight??1.2)+0.1).toFixed(1)))});}}
+                  style={{width:22,height:22,borderRadius:5,border:'1px solid #e8e8e8',background:'#fafafa',cursor:'pointer',fontSize:12,color:'#555',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>+</button>
+              </div>
+              <div style={{display:'flex',alignItems:'center',gap:4,minWidth:0}}>
+                <span style={{fontSize:9,color:'#999',flexShrink:0,fontFamily:'Georgia,serif'}} title={chipLang==='sq'?'Hapësira e shkronjave':'Letter spacing'}>AV</span>
+                <button onMouseDown={e=>{e.preventDefault();onChangeEl(editId,{letterSpacing:Math.max(-8,(toolbarEl?.letterSpacing??0)-1)});}}
+                  style={{width:22,height:22,borderRadius:5,border:'1px solid #e8e8e8',background:'#fafafa',cursor:'pointer',fontSize:12,color:'#555',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>−</button>
+                <span style={{fontSize:10,color:'#444',minWidth:16,textAlign:'center',flex:1}}>{toolbarEl?.letterSpacing??0}</span>
+                <button onMouseDown={e=>{e.preventDefault();onChangeEl(editId,{letterSpacing:Math.min(24,(toolbarEl?.letterSpacing??0)+1)});}}
+                  style={{width:22,height:22,borderRadius:5,border:'1px solid #e8e8e8',background:'#fafafa',cursor:'pointer',fontSize:12,color:'#555',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>+</button>
+              </div>
+            </div>
+
+            <div style={{display:'flex',alignItems:'center',gap:6,minWidth:0}}>
               <span style={{fontSize:9,color:'#999',whiteSpace:'nowrap',flexShrink:0}}>{Math.round((toolbarEl?.opacity??1)*100)}%</span>
               <input type="range" min={10} max={100} step={5}
                 value={Math.round((toolbarEl?.opacity??1)*100)}
                 onChange={e=>onChangeEl(editId,{opacity:parseInt(e.target.value)/100})}
                 onBlur={()=>setTimeout(()=>textareaRef.current?.focus(),15)}
-                style={{width:52,accentColor:'#1a1a1a',flexShrink:0}}/>
-              <span style={{flex:1}}/>
-              {/* Done */}
+                style={{flex:1,minWidth:0,accentColor:'#1a1a1a'}}/>
               <button onMouseDown={e=>{e.preventDefault();commitEdit();}}
-                style={{height:28,padding:'0 14px',borderRadius:8,background:'#1a1a1a',color:'#fff',
-                  border:'none',cursor:'pointer',fontSize:11,fontWeight:700,flexShrink:0,letterSpacing:'0.01em'}}>
-                Done ↵
+                style={{height:26,padding:'0 10px',borderRadius:8,background:'#1a1a1a',color:'#fff',
+                  border:'none',cursor:'pointer',fontSize:11,fontWeight:700,flexShrink:0}}>
+                Done
               </button>
             </div>
           </div>
@@ -1450,7 +1437,7 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
         const isImg = sel.type === 'image' && !!sel.src;
         const adjusting = photoAdjustId === sel.id;
         // Landmark/contain cutouts can't pan; everything else can (cropZoom unlocks corners).
-        const adjustDisabled = !isImg || sel.objectFit === 'contain' || !!sel.sticker;
+        const adjustDisabled = !isImg || coverImageLetterbox(sel) || !!sel.sticker;
         const barLeft = Math.max(4, Math.min(sel.x * scX, pageW - 200));
         const barTop = Math.min(pageH - 40, (sel.y + sel.h) * scY + 8);
         return (
@@ -1481,6 +1468,7 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
                 onMouseDown={e=>e.stopPropagation()}
                 onPointerDown={e=>e.stopPropagation()}
               >
+                {!isLayoutSlotFrame(sel) && (
                 <button
                   type="button"
                   onClick={()=>setPhotoAdjustId(null)}
@@ -1494,6 +1482,7 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
                 >
                   {chipLang==='sq'?'Lëviz':'Move'}
                 </button>
+                )}
                 <button
                   type="button"
                   disabled={adjustDisabled}
@@ -1517,7 +1506,7 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
                 >
                   {chipLang==='sq'?'Rregullo foton':'Adjust photo'}
                 </button>
-                {adjusting && (
+                {(adjusting || isLayoutSlotFrame(sel)) && !adjustDisabled && (
                   <label
                     style={{
                       display:'flex', alignItems:'center', gap:6, padding:'0 8px 0 4px',
@@ -2479,11 +2468,7 @@ function CoverBackgroundPanel({
                   <input type="range" min={100} max={300} step={5} className="w-full mt-1 accent-neutral-900"
                     value={Math.round((bg.cropZoom ?? 1) * 100)}
                     onChange={e => onChangeCrop({ cropZoom: Math.max(1, Number(e.target.value) / 100) })}
-                    onPointerDown={() => {
-                      if ((bg.cropZoom ?? 1) < PHOTO_CORNER_ZOOM) {
-                        onChangeCrop({ cropZoom: PHOTO_CORNER_ZOOM });
-                      }
-                    }}
+                    onPointerDown={() => { /* keep current zoom — never bump to 120% */ }}
                   />
                 </label>
               )}
@@ -3590,7 +3575,7 @@ export default function Editor() {
     const selImg=els.find(e=>e.id===selectedId&&e.type==='image'&&!!e.src&&!e.sticker);
     if (selImg){
       updatePage(activePageId,els.map(e=>e.id===selImg.id
-        ?{...e,src:url,cropFocusX:0.5,cropFocusY:0.5,cropZoom:PHOTO_CORNER_ZOOM}
+        ?{...e,src:url,cropFocusX:0.5,cropFocusY:0.5,cropZoom:1}
         :e));
       return;
     }
@@ -3598,15 +3583,15 @@ export default function Editor() {
            ??els.find(e=>e.type==='placeholder');
     if (ph){
       updatePage(activePageId,els.map(e=>e.id===ph.id
-        ?{...e,type:'image' as const,src:url,cropFocusX:0.5,cropFocusY:0.5,cropZoom:PHOTO_CORNER_ZOOM}
+        ?{...e,type:'image' as const,src:url,cropFocusX:0.5,cropFocusY:0.5,cropZoom:1,slotLocked:true}
         :e));
       setSelectedId(null);
       return;
     }
     const hasImages=els.some(e=>e.type==='image');
     const el:EditorElement=hasImages
-      ?{id:`img-${Date.now()}`,type:'image',src:url,x:50,y:Math.round(60*canvasH/DESIGN_H),w:500,h:Math.round(340*canvasH/DESIGN_H),rotation:0,cropFocusX:0.5,cropFocusY:0.5,cropZoom:PHOTO_CORNER_ZOOM}
-      :{id:`img-${Date.now()}`,type:'image',src:url,x:0,y:0,w:DESIGN_W,h:canvasH,rotation:0,cropFocusX:0.5,cropFocusY:0.5,cropZoom:PHOTO_CORNER_ZOOM};
+      ?{id:`img-${Date.now()}`,type:'image',src:url,x:50,y:Math.round(60*canvasH/DESIGN_H),w:500,h:Math.round(340*canvasH/DESIGN_H),rotation:0,cropFocusX:0.5,cropFocusY:0.5,cropZoom:1}
+      :{id:`img-${Date.now()}`,type:'image',src:url,x:0,y:0,w:DESIGN_W,h:canvasH,rotation:0,cropFocusX:0.5,cropFocusY:0.5,cropZoom:1};
     updatePage(activePageId,[...els,el]); setSelectedId(el.id);
   },[activePageId,selectedId,updatePage,canvasH,isOrdered]);
 
@@ -3617,7 +3602,7 @@ export default function Editor() {
     const target=els.find(e=>e.id===targetId);
     if (!target || target.sticker || (target.type!=='placeholder' && target.type!=='image')) return;
     updatePage(pageId, els.map(e=>e.id===targetId
-      ?{...e, type:'image' as const, src:url, cropFocusX:0.5, cropFocusY:0.5, cropZoom:PHOTO_CORNER_ZOOM}
+      ?{...e, type:'image' as const, src:url, cropFocusX:0.5, cropFocusY:0.5, cropZoom:1, slotLocked: target.type==='placeholder' || !!target.slotLocked}
       :e));
     setSelectedId(targetId);
   },[isOrdered, updatePage]);

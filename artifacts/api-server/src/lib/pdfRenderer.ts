@@ -89,11 +89,39 @@ function resolveFontFamily(family?: string): string {
 const DESIGN_W = 600;
 const DESIGN_H = 800;
 const PAPER_COLOR = "#FEFDF9";
+const PRINT_DPI = 300;
+const CM_TO_INCH = 1 / 2.54;
+/** High JPEG quality for print (balance size vs sharpness). */
+const PRINT_JPEG_QUALITY = 94;
 
 /** Mirrors designs.ts getCanvasHeight() — keep formula identical. */
-function getCanvasHeight(bookWidthCm: number, bookHeightCm: number): number {
+export function getCanvasHeight(bookWidthCm: number, bookHeightCm: number): number {
   if (!bookWidthCm || !bookHeightCm) return DESIGN_H;
   return Math.round(DESIGN_W * (bookHeightCm / bookWidthCm));
+}
+
+/** Pixel size of the print raster at 300 DPI — matches the physical page, not a 3:4 fallback. */
+export function printRasterSize(bookWidthCm: number, bookHeightCm: number, dpi = PRINT_DPI): {
+  canvasH: number;
+  outW: number;
+  outH: number;
+} {
+  const canvasH = getCanvasHeight(bookWidthCm, bookHeightCm);
+  const outW = Math.max(1, Math.round(bookWidthCm * CM_TO_INCH * dpi));
+  const outH = Math.max(1, Math.round(bookHeightCm * CM_TO_INCH * dpi));
+  return { canvasH, outW, outH };
+}
+
+function isLandmarkPng(src?: string | null): boolean {
+  return !!src && /\/designs\/[^/?#]+\.png(?:$|[?#])/i.test(src);
+}
+
+function coverImageBlend(el: { src?: string; mixBlendMode?: string }): "screen" | undefined {
+  return el.mixBlendMode === "screen" && isLandmarkPng(el.src) ? "screen" : undefined;
+}
+
+function coverImageLetterbox(el: { src?: string; objectFit?: string; mixBlendMode?: string }): boolean {
+  return el.objectFit === "contain" || coverImageBlend(el) === "screen";
 }
 
 /**
@@ -149,12 +177,6 @@ export function parsePageElements(raw: unknown): PdfRenderElement[] {
   return [];
 }
 
-// Print resolution: 300 DPI — standard for photo-book print output.
-const PRINT_DPI = 300;
-const CM_TO_INCH = 1 / 2.54;
-/** High JPEG quality for print (balance size vs sharpness). */
-const PRINT_JPEG_QUALITY = 94;
-
 export interface PdfRenderElement {
   id: string;
   type: "image" | "text" | "placeholder" | "background" | "shape";
@@ -182,6 +204,7 @@ export interface PdfRenderElement {
   align?: "left" | "center" | "right";
   lineHeight?: number;
   letterSpacing?: number;
+  verticalAlign?: "top" | "middle" | "bottom";
   cropFocusX?: number;
   cropFocusY?: number;
   cropZoom?: number;
@@ -445,9 +468,8 @@ async function renderPageToCanvas(
   ensureFonts();
   const canvas = createCanvas(outW, outH);
   const ctx = canvas.getContext("2d");
-  // Same scale on both axes — independent x/y scales used to squash square books.
-  const scale = outW / DESIGN_W;
-  ctx.scale(scale, scale);
+  // Map the editor canvas (DESIGN_W × canvasH) onto the physical page pixels.
+  ctx.scale(outW / DESIGN_W, outH / Math.max(1, canvasH));
 
   ctx.fillStyle = PAPER_COLOR;
   ctx.fillRect(0, 0, DESIGN_W, canvasH);
@@ -515,18 +537,19 @@ async function renderPageToCanvas(
     } else if (el.type === "image" && el.src) {
       const img = images.get(el.src);
       if (img) {
-        if (el.mixBlendMode === "screen") ctx.globalCompositeOperation = "screen";
+        const blend = coverImageBlend(el);
+        if (blend) ctx.globalCompositeOperation = blend;
         ctx.save();
         ctx.beginPath();
         ctx.rect(el.x, el.y, el.w, el.h);
         ctx.clip();
-        if (el.objectFit === "contain") {
-          const scale = Math.min(
+        if (coverImageLetterbox(el)) {
+          const fit = Math.min(
             el.w / Math.max(1, img.width),
             el.h / Math.max(1, img.height),
           );
-          const dw = img.width * scale;
-          const dh = img.height * scale;
+          const dw = img.width * fit;
+          const dh = img.height * fit;
           const dx = el.x + (el.w - dw) / 2;
           const dy = el.y + (el.h - dh) / 2;
           ctx.drawImage(img, 0, 0, img.width, img.height, dx, dy, dw, dh);
@@ -564,6 +587,7 @@ async function renderPageToCanvas(
       const style = el.fontStyle ?? "normal";
       const color = el.fill ?? "#1a1a1a";
       const alignment = el.align ?? "center";
+      const vAlign = el.verticalAlign || "top";
       const letterSpacing = el.letterSpacing ?? 0;
 
       const isBold = style.includes("bold");
@@ -573,8 +597,10 @@ async function renderPageToCanvas(
       ctx.textBaseline = "top";
 
       const maxW = Math.max(1, el.w - pad * 2);
+      const innerH = Math.max(0, el.h - pad * 2);
       const lines = wrapLines(ctx, el.text, maxW, letterSpacing);
       const lineH = fontSize * lh;
+      const textH = lines.length * lineH;
 
       ctx.save();
       // Clip to the text box like Konva — but leave a tiny bleed so antialiased
@@ -584,6 +610,8 @@ async function renderPageToCanvas(
       ctx.clip();
 
       let startY = el.y + pad;
+      if (vAlign === "middle") startY = el.y + pad + Math.max(0, (innerH - textH) / 2);
+      if (vAlign === "bottom") startY = el.y + el.h - pad - textH;
       for (const line of lines) {
         // Draw any line that still intersects the box (Konva shows partial last lines).
         if (startY >= el.y + el.h) break;
@@ -625,12 +653,9 @@ export async function renderProjectPdf(params: {
     throw new Error(`Invalid book size for PDF: ${bookWidthCm}×${bookHeightCm} cm`);
   }
 
-  // One scale from physical width so square/portrait pages never squash.
-  // Height follows the same design-canvas aspect the editor used.
-  const canvasH = getCanvasHeight(bookWidthCm, bookHeightCm);
-  const scale = (bookWidthCm * CM_TO_INCH * PRINT_DPI) / DESIGN_W;
-  const outW = Math.max(1, Math.round(DESIGN_W * scale));
-  const outH = Math.max(1, Math.round(canvasH * scale));
+  // Raster pixels follow the physical book (cm × 300 DPI) so the JPEG and the
+  // PDF page share the same aspect — no squash from a 3:4 canvas onto a square page.
+  const { canvasH, outW, outH } = printRasterSize(bookWidthCm, bookHeightCm);
 
   // Keep inside covers in the file so duplex imposition matches the bound book
   // (front | lining | inners… | lining | back). Skipping them used to shift

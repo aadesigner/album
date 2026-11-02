@@ -86,7 +86,7 @@ export function layoutZoneToElement(
 ): EditorElement {
   const rect = layoutZoneCanvasRect(z, canvasH);
   if (z.type === 'photo') {
-    return { id: opts.id, type: 'placeholder', ...rect };
+    return { id: opts.id, type: 'placeholder', slotLocked: true, ...rect };
   }
   return {
     id: opts.id,
@@ -100,6 +100,23 @@ export function layoutZoneToElement(
     verticalAlign: 'middle',
     lineHeight: 1.2,
   };
+}
+
+/** Photo cells from a layout — frame stays put; bitmap pans inside. */
+export function isLayoutSlotFrame(el: {
+  id?: string;
+  type?: string;
+  sticker?: boolean;
+  slotLocked?: boolean;
+}): boolean {
+  if (el.sticker) return false;
+  if (el.slotLocked) return true;
+  if (el.type === 'placeholder') return true;
+  if (el.type !== 'image') return false;
+  const id = el.id || '';
+  // Cover applications: `rome-front-12-4-1730…` — never lock those frames.
+  if (/-front-|-back-/.test(id)) return false;
+  return /-\d+-\d{10,}$/.test(id);
 }
 
 function parseSavedCategory(json: string): string | null {

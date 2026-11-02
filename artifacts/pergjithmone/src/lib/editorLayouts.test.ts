@@ -6,6 +6,7 @@ import {
   layoutZoneCanvasRect,
   layoutZoneToElement,
   layoutTextFontSize,
+  isLayoutSlotFrame,
 } from "./editorLayouts";
 
 const twoUp = JSON.stringify({
@@ -115,6 +116,7 @@ describe("layoutZoneToElement", () => {
     expect(el).toMatchObject({
       id: "p1",
       type: "placeholder",
+      slotLocked: true,
       x: 0.1 * DESIGN_W,
       y: 0.2 * canvasH,
       w: 0.5 * DESIGN_W,
@@ -156,5 +158,16 @@ describe("layoutZoneToElement", () => {
     expect(rect.y).toBeCloseTo(y0 + h / 2 - w / 2, 5);
     expect(rect.w).toBe(w);
     expect(rect.h).toBe(h);
+  });
+});
+
+describe("isLayoutSlotFrame", () => {
+  it("locks placeholders and filled layout photos", () => {
+    expect(isLayoutSlotFrame({ type: "placeholder" })).toBe(true);
+    expect(isLayoutSlotFrame({ type: "image", slotLocked: true })).toBe(true);
+    expect(isLayoutSlotFrame({ type: "image", id: "two-up-grid-0-1730123456789" })).toBe(true);
+    expect(isLayoutSlotFrame({ type: "image", id: "img-1730123456789" })).toBe(false);
+    expect(isLayoutSlotFrame({ type: "image", id: "rome-front-12-4-1730123456789" })).toBe(false);
+    expect(isLayoutSlotFrame({ type: "image", id: "two-up-grid-0-1730123456789", sticker: true })).toBe(false);
   });
 });

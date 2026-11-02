@@ -208,10 +208,15 @@ export interface EditorElement {
   cropFocusX?: number;
   cropFocusY?: number;
   /**
-   * Zoom past exact cover-fit (≥1). At 1, overflow is usually one-axis only so
-   * photo corners can't all be framed; ≥~1.15 unlocks 2D pan to every corner.
+   * Zoom past exact cover-fit (≥1). 1 = fill the frame with no extra zoom.
+   * Users can raise this in Adjust; we never force 120%.
    */
   cropZoom?: number;
+  /**
+   * Layout / structure photo slot. The frame stays put; the bitmap pans and
+   * zooms only inside that box.
+   */
+  slotLocked?: boolean;
   /** How the bitmap fills its box — landmark cutouts use `contain`. */
   objectFit?: 'cover' | 'contain';
   /** Admin PNG/JPG decoration — move/scale only, never photo-crop. */
@@ -267,11 +272,12 @@ export function coverCropRect(
  * canPan is true when the photo overflows the frame on either axis.
  */
 /** Minimum zoom so Adjust-photo can reach all four photo corners (2D pan). */
+/** Optional extra zoom when the user wants 2D pan to every photo corner. */
 export const PHOTO_CORNER_ZOOM = 1.2;
 
 /**
- * Extra zoom for small frames so pan travel stays usable (~≥40 design-px or 18%).
- * Large frames stay at PHOTO_CORNER_ZOOM.
+ * Suggested zoom if the user asks for more pan travel. Floor is 1 (100% fit).
+ * Never applied automatically on upload.
  */
 export function minPhotoAdjustZoom(
   naturalW: number,
@@ -288,8 +294,78 @@ export function minPhotoAdjustZoom(
   const minOffY = Math.max(40, fh * 0.18);
   const zX = (fw + minOffX) / (nw * coverScale);
   const zY = (fh + minOffY) / (nh * coverScale);
-  // Tiny epsilon so float rounding still clears the min-off target.
-  return Math.max(PHOTO_CORNER_ZOOM, zX, zY) * 1.0001;
+  return Math.max(1, zX, zY) * 1.0001;
+}
+
+/** Local cutout PNG (Eiffel, Sagrada, …). JPEG city photos must never use screen-blend. */
+export function isLandmarkPng(src?: string | null): boolean {
+  return !!src && /\/designs\/[^/?#]+\.png(?:$|[?#])/i.test(src);
+}
+
+export function isLandmarkGraphic(el: { type?: string; src?: string; sticker?: boolean }): boolean {
+  if (el.type !== 'image' || !el.src || el.sticker) return false;
+  return isLandmarkPng(el.src);
+}
+
+export function sanitizeImageBlend<T extends { src?: string; mixBlendMode?: string; objectFit?: string }>(el: T): T {
+  if (el.mixBlendMode !== 'screen' || isLandmarkPng(el.src)) return el;
+  const next: T = { ...el, mixBlendMode: undefined };
+  if (next.objectFit === 'contain') next.objectFit = 'cover';
+  return next;
+}
+
+/** Screen-blend only for gold-on-black PNG cutouts — JPEG city photos stay opaque. */
+export function coverImageBlend(el: { src?: string; mixBlendMode?: string }): 'screen' | undefined {
+  return el.mixBlendMode === 'screen' && isLandmarkPng(el.src) ? 'screen' : undefined;
+}
+
+export function coverImageLetterbox(el: { src?: string; objectFit?: string; mixBlendMode?: string }): boolean {
+  return el.objectFit === 'contain' || coverImageBlend(el) === 'screen';
+}
+
+export function restoreLandmarkGraphics<T extends { type?: string; src?: string; objectFit?: string; mixBlendMode?: string }>(
+  saved: T[],
+  builtin: T[],
+): T[] {
+  if (!Array.isArray(saved) || !saved.length) return saved;
+  const bySrc = new Map(
+    builtin.filter((e) => isLandmarkGraphic(e) && e.src).map((e) => [e.src as string, e]),
+  );
+  const withBlend = saved.map((el) => {
+    const b = el.src ? bySrc.get(el.src) : undefined;
+    if (!b) return sanitizeImageBlend(el);
+    return sanitizeImageBlend({
+      ...el,
+      objectFit: el.objectFit || b.objectFit,
+      mixBlendMode: el.mixBlendMode || b.mixBlendMode,
+    });
+  });
+  const srcs = new Set(withBlend.map((e) => e.src).filter(Boolean) as string[]);
+  const extra = builtin.filter((e) => isLandmarkGraphic(e) && e.src && !srcs.has(e.src));
+  if (!extra.length) return withBlend;
+  const bg = withBlend.findIndex((e) => e.type === 'background');
+  const at = bg >= 0 ? bg + 1 : 0;
+  return [...withBlend.slice(0, at), ...extra, ...withBlend.slice(at)];
+}
+
+/** Re-attach city photos / landmarks a Design Studio save dropped, and drop illegal screen-blend. */
+export function restoreCoverGraphics<T extends { type?: string; src?: string; objectFit?: string; mixBlendMode?: string }>(
+  saved: T[],
+  builtin: T[],
+): T[] {
+  const marked = restoreLandmarkGraphics(saved, builtin);
+  let unused = builtin.filter((e) => e.type === 'image' && e.src && !isLandmarkGraphic(e));
+  return marked.map((el) => {
+    if (el.type !== 'image') return el;
+    if (el.src) {
+      unused = unused.filter((b) => b.src !== el.src);
+      return sanitizeImageBlend(el);
+    }
+    const b = unused.shift();
+    return b
+      ? sanitizeImageBlend({ ...el, src: b.src, objectFit: el.objectFit || b.objectFit, mixBlendMode: b.mixBlendMode })
+      : el;
+  });
 }
 
 export function imageFrameCoverFit(
@@ -413,7 +489,7 @@ export interface DesignDef {
 }
 
 /** Shared rev for Travel builtins (Paris/Barcelona + city photo covers). */
-export const TRAVEL_LAYOUT_REV = 10;
+export const TRAVEL_LAYOUT_REV = 11;
 export interface LayoutZone { x:number; y:number; w:number; h:number; type:string; rotation?:number }
 export interface LayoutDef { id:string; category:string; label:{sq:string;en:string}; zones:LayoutZone[] }
 
@@ -850,6 +926,10 @@ export const DESIGNS: DesignDef[] = [
     thumbAccents: [],
     elements: [
       BG('#FEC5D7'),
+      IMG('/designs/eiffel-tower.png', 36, 148, DESIGN_W - 72, 620, {
+        objectFit: 'contain',
+        mixBlendMode: 'screen',
+      }),
       TX('PARIS', 8, 22, DESIGN_W - 16, 78, {
         fontSize: 88, fill: '#FFFFFF', align: 'center',
         fontFamily: "'Londrina Solid', cursive", letterSpacing: 10, lineHeight: 0.9,
@@ -858,7 +938,6 @@ export const DESIGNS: DesignDef[] = [
         fontSize: 26, fill: '#F06BAF', align: 'center',
         fontFamily: "'Londrina Solid', cursive", letterSpacing: 8,
       }),
-      IMG('https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=900&q=84&fit=crop', 24, 152, DESIGN_W - 48, 620),
     ],
   },
   {
@@ -871,6 +950,10 @@ export const DESIGNS: DesignDef[] = [
     thumbAccents: [],
     elements: [
       BG('#A83442'),
+      IMG('/designs/sagrada-familia.png', 36, 148, DESIGN_W - 72, 620, {
+        objectFit: 'contain',
+        mixBlendMode: 'screen',
+      }),
       TX('BARCELONA', 8, 22, DESIGN_W - 16, 78, {
         fontSize: 64, fill: '#FCB426', align: 'center',
         fontFamily: "'Londrina Solid', cursive", letterSpacing: 3, lineHeight: 0.9,
@@ -879,7 +962,6 @@ export const DESIGNS: DesignDef[] = [
         fontSize: 26, fill: '#FCB426', align: 'center',
         fontFamily: "'Londrina Solid', cursive", letterSpacing: 8,
       }),
-      IMG('https://images.unsplash.com/photo-1583422409516-2895a77efded?w=900&q=84&fit=crop', 24, 152, DESIGN_W - 48, 620),
     ],
   },
 
@@ -1325,13 +1407,18 @@ export function applyDesignOverrides(
     // Design Studio is the source of truth. A new deploy must not throw away
     // a shop's saved covers just because built-in layoutRev was bumped.
     // Drop the baked catalog mockup so pickers show the saved layers.
+    const front = frontOk && norm.frontElements?.length
+      ? restoreCoverGraphics(norm.frontElements, d.elements)
+      : d.elements;
+    const builtinBack = d.backElements ?? d.elements;
+    const back = backOk && norm.backElements?.length
+      ? restoreCoverGraphics(norm.backElements, builtinBack)
+      : builtinBack;
     return {
       ...d,
       thumbPhoto: undefined,
-      elements: frontOk && norm.frontElements?.length ? norm.frontElements : d.elements,
-      backElements: backOk && norm.backElements?.length
-        ? norm.backElements
-        : (d.backElements ?? d.elements),
+      elements: front,
+      backElements: back,
     };
   });
 }

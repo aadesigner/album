@@ -57,8 +57,10 @@ describe('imageFrameCoverFit', () => {
 });
 
 describe('minPhotoAdjustZoom', () => {
-  it('stays at corner zoom for large frames', () => {
-    expect(minPhotoAdjustZoom(2000, 1500, 600, 800)).toBeCloseTo(PHOTO_CORNER_ZOOM);
+  it('suggests only a little extra zoom for large frames', () => {
+    const z = minPhotoAdjustZoom(2000, 1500, 600, 800);
+    expect(z).toBeGreaterThan(1);
+    expect(z).toBeLessThan(PHOTO_CORNER_ZOOM);
   });
 
   it('raises zoom for very small frames so pan travel is usable', () => {

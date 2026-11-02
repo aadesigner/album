@@ -29,6 +29,39 @@ function getCanvasHeight(bookWidthCm?: number, bookHeightCm?: number): number {
   return Math.round(DESIGN_W * (bookHeightCm / bookWidthCm));
 }
 
+function isLandmarkPng(src?: string | null): boolean {
+  return !!src && /\/designs\/[^/?#]+\.png(?:$|[?#])/i.test(src);
+}
+
+function coverImageBlend(el: { src?: string; mixBlendMode?: string }): 'screen' | undefined {
+  return el.mixBlendMode === 'screen' && isLandmarkPng(el.src) ? 'screen' : undefined;
+}
+
+function coverImageLetterbox(el: { src?: string; objectFit?: string; mixBlendMode?: string }): boolean {
+  return el.objectFit === 'contain' || coverImageBlend(el) === 'screen';
+}
+
+/** Physical PDF page + raster that shares its aspect (no squash onto the page). */
+export function pdfPageLayout(
+  bookSize?: { widthCm?: number; heightCm?: number },
+  scale = SCALE,
+): {
+  pdfWMm: number;
+  pdfHMm: number;
+  canvasH: number;
+  outW: number;
+  outH: number;
+  orientation: 'portrait' | 'landscape';
+} {
+  const pdfWMm = bookSize?.widthCm ? bookSize.widthCm * 10 : FALLBACK_PDF_W_MM;
+  const pdfHMm = bookSize?.heightCm ? bookSize.heightCm * 10 : FALLBACK_PDF_H_MM;
+  const canvasH = getCanvasHeight(bookSize?.widthCm, bookSize?.heightCm);
+  const outW = DESIGN_W * scale;
+  const outH = Math.max(1, Math.round(outW * (pdfHMm / pdfWMm)));
+  const orientation = pdfHMm >= pdfWMm ? 'portrait' : 'landscape';
+  return { pdfWMm, pdfHMm, canvasH, outW, outH, orientation };
+}
+
 // ── Types (subset of EditorElement) ─────────────────────────────────────────
 export interface PdfElement {
   id: string;
@@ -50,7 +83,8 @@ export interface PdfElement {
   mixBlendMode?: string;
   // text
   text?: string; fontSize?: number; fontFamily?: string; fontStyle?: string;
-  align?: 'left'|'center'|'right'; lineHeight?: number; letterSpacing?: number;
+  align?: 'left'|'center'|'right'; lineHeight?: number;   letterSpacing?: number;
+  verticalAlign?: 'top' | 'middle' | 'bottom';
 }
 
 export interface PdfPage {
@@ -150,12 +184,12 @@ function drawSpacedText(
 }
 
 // ── Render one page to a JPEG data-URL ──────────────────────────────────────
-async function renderPage(elements: PdfElement[], canvasH: number): Promise<string> {
+async function renderPage(elements: PdfElement[], canvasH: number, outW: number, outH: number): Promise<string> {
   const canvas = document.createElement('canvas');
-  canvas.width  = DESIGN_W * SCALE;
-  canvas.height = canvasH * SCALE;
+  canvas.width  = outW;
+  canvas.height = outH;
   const ctx = canvas.getContext('2d')!;
-  ctx.scale(SCALE, SCALE);
+  ctx.scale(outW / DESIGN_W, outH / Math.max(1, canvasH));
 
   // Paper base
   ctx.fillStyle = PAPER_COLOR;
@@ -244,12 +278,13 @@ async function renderPage(elements: PdfElement[], canvasH: number): Promise<stri
     else if (el.type === 'image' && el.src) {
       const img = imgCache.get(imageUrl(el.src));
       if (img) {
-        if (el.mixBlendMode === 'screen') ctx.globalCompositeOperation = 'screen';
+        const blend = coverImageBlend(el);
+        if (blend) ctx.globalCompositeOperation = blend;
         ctx.save();
         ctx.beginPath();
         ctx.rect(el.x, el.y, el.w, el.h);
         ctx.clip();
-        if (el.objectFit === 'contain') {
+        if (coverImageLetterbox(el)) {
           const s = Math.min(el.w / img.naturalWidth, el.h / img.naturalHeight);
           const dw = img.naturalWidth * s;
           const dh = img.naturalHeight * s;
@@ -363,10 +398,7 @@ export async function generatePDF(
   // Physical PDF page size follows the project's real book dimensions
   // (cm → mm) instead of a fixed 3:4 fallback, so square/other-ratio books
   // export at their correct, undistorted size.
-  const pdfWMm = bookSize?.widthCm ? bookSize.widthCm * 10 : FALLBACK_PDF_W_MM;
-  const pdfHMm = bookSize?.heightCm ? bookSize.heightCm * 10 : FALLBACK_PDF_H_MM;
-  const canvasH = getCanvasHeight(bookSize?.widthCm, bookSize?.heightCm);
-  const orientation = pdfHMm >= pdfWMm ? 'portrait' : 'landscape';
+  const { pdfWMm, pdfHMm, canvasH, outW, outH, orientation } = pdfPageLayout(bookSize);
 
   const { default: jsPDF } = await import('jspdf');
   const pdf = new jsPDF({
@@ -378,7 +410,7 @@ export async function generatePDF(
   for (let i = 0; i < toRender.length; i++) {
     onProgress?.(i + 1, toRender.length);
 
-    const dataURL = await renderPage(toRender[i].elements, canvasH);
+    const dataURL = await renderPage(toRender[i].elements, canvasH, outW, outH);
 
     if (i > 0) pdf.addPage([pdfWMm, pdfHMm], orientation);
     pdf.addImage(dataURL, 'JPEG', 0, 0, pdfWMm, pdfHMm);

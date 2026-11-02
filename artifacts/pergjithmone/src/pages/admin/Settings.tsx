@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { AdminLayout, ADMIN } from '@/components/layout/AdminLayout';
 import {
   useGetAdminSettings, useUpdateAdminSettings,
@@ -237,6 +237,17 @@ export default function AdminSettings() {
       setSaveError(err?.data?.error || err?.message || 'Failed to save settings.');
     }
   };
+
+  const watched = form.watch();
+  const skipSettingsAuto = useRef(true);
+  useEffect(() => {
+    if (skipSettingsAuto.current) {
+      skipSettingsAuto.current = false;
+      return;
+    }
+    const t = window.setTimeout(() => { void onSubmit(form.getValues()); }, 1600);
+    return () => window.clearTimeout(t);
+  }, [watched, hiddenIds]);
 
   const designCatalog = useMemo(
     () => buildDesignCatalog(

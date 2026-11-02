@@ -16,7 +16,8 @@ import {
   imageFrameCoverFit,
   fitAddedTextFrame,
   type CustomDesignRecord, type DesignDef, type DesignOverrides, type EditorElement, type DE,
-  PHOTO_CORNER_ZOOM, coverCropRect, imageFrameFocusFromOffset, minPhotoAdjustZoom,
+  coverCropRect, imageFrameFocusFromOffset,
+  coverImageBlend, coverImageLetterbox, restoreCoverGraphics, sanitizeImageBlend,
 } from '@/lib/designs';
 import { applyCoverBackground, coverBgMode, type CoverBgMode } from '@/lib/coverBackground';
 import { uploadErrorMessage, uploadImageToApi } from '@/lib/uploadImage';
@@ -385,7 +386,7 @@ const StudioImage = React.memo(function StudioImage({ el, selected, onSelect, on
   const img = useHtmlImage(el.src);
   const drag = useStudioDrag(el, canvasH, onSelect, onChange, gesture);
   const startRef = useRef({ w: el.w, h: el.h });
-  const isContain = el.objectFit === 'contain' || el.mixBlendMode === 'screen';
+  const isContain = coverImageLetterbox(el);
   const [liveFocus, setLiveFocus] = useState<{ x: number; y: number } | null>(null);
   const focusX = liveFocus?.x ?? el.cropFocusX ?? 0.5;
   const focusY = liveFocus?.y ?? el.cropFocusY ?? 0.5;
@@ -432,15 +433,6 @@ const StudioImage = React.memo(function StudioImage({ el, selected, onSelect, on
     onEnterPhotoAdjust?.();
   };
 
-  useEffect(() => {
-    if (!photoAdjust || !img || isContain) return;
-    const need = minPhotoAdjustZoom(img.width, img.height, el.w, el.h);
-    if ((el.cropZoom ?? 1) + 0.001 < need) {
-      onChange({ cropZoom: need });
-    }
-  // intentionally omit onChange — bump once when entering adjust / frame size changes
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [photoAdjust, img, isContain, el.w, el.h, el.cropZoom]);
 
   return (
     <Group
@@ -558,10 +550,6 @@ const StudioImage = React.memo(function StudioImage({ el, selected, onSelect, on
           onChange({
             cropFocusX: next.cropFocusX,
             cropFocusY: next.cropFocusY,
-            cropZoom: Math.max(
-              cropZoom,
-              img ? minPhotoAdjustZoom(img.width, img.height, el.w, el.h) : PHOTO_CORNER_ZOOM,
-            ),
           });
           setPanning(false);
           gesture.end();
@@ -575,7 +563,7 @@ const StudioImage = React.memo(function StudioImage({ el, selected, onSelect, on
           width={iw} height={ih}
           perfectDrawEnabled={false}
           listening={false}
-          globalCompositeOperation={(el.mixBlendMode as GlobalCompositeOperation) || undefined}
+          globalCompositeOperation={coverImageBlend(el)}
         />
       )}
       {selected && (
@@ -1056,14 +1044,18 @@ function DesignCanvas({
 }
 
 function loadCoverDrafts(design: DesignDef): { front: EditorElement[]; back: EditorElement[] } {
-  const frontSrc = designFrontElements(design);
+  const builtin = DESIGNS.find(d => d.id === design.id);
+  const heal = (saved: EditorElement[], base: EditorElement[]) =>
+    restoreCoverGraphics(saved, base).map(sanitizeImageBlend);
+  const frontSrc = heal(designFrontElements(design), builtin?.elements ?? designFrontElements(design));
   const explicitBack = Array.isArray(design.backElements) && design.backElements.length > 0
     ? design.backElements
     : null;
   const backSrc = explicitBack
     ?? (design.isCustom ? [] : designBackElements(design));
+  const builtinBack = builtin?.backElements ?? builtin?.elements ?? backSrc;
   const front = frontSrc.length ? frontSrc : blankCoverElements('FRONT');
-  const back = backSrc.length ? backSrc : blankCoverElements('BACK');
+  const back = (backSrc.length ? heal(backSrc, builtinBack) : blankCoverElements('BACK'));
   return {
     front: designElementsWithIds(`${design.id}-f`, front),
     back: designElementsWithIds(`${design.id}-b`, back),
@@ -1318,7 +1310,7 @@ export default function AdminDesignStudio() {
       patchSide(side, prev => {
         if (idAtStart && prev.some(e => e.id === idAtStart && e.type === 'image')) {
           return prev.map(e => e.id === idAtStart
-            ? { ...e, src: url, cropFocusX: 0.5, cropFocusY: 0.5, cropZoom: PHOTO_CORNER_ZOOM }
+            ? { ...e, src: url, cropFocusX: 0.5, cropFocusY: 0.5, cropZoom: 1 }
             : e);
         }
         const el: EditorElement = {
@@ -1326,7 +1318,7 @@ export default function AdminDesignStudio() {
           type: 'image',
           src: url,
           x: 80, y: Math.round(canvasHRef.current * 0.2), w: 440, h: Math.round(canvasHRef.current * 0.35), rotation: 0,
-          cropFocusX: 0.5, cropFocusY: 0.5, cropZoom: PHOTO_CORNER_ZOOM,
+          cropFocusX: 0.5, cropFocusY: 0.5, cropZoom: 1,
         };
         queueMicrotask(() => setSelectedId(el.id));
         return [...prev, el];
@@ -1602,6 +1594,12 @@ export default function AdminDesignStudio() {
       setSaving(false);
     }
   };
+
+  useEffect(() => {
+    if (!dirty || saving) return;
+    const t = window.setTimeout(() => { void save(); }, 1400);
+    return () => window.clearTimeout(t);
+  }, [dirty, saving, draftFront, draftBack]);
 
   const resetToDefault = async () => {
     if (!design) return;
@@ -1950,7 +1948,7 @@ export default function AdminDesignStudio() {
             <Loader2 className="animate-spin" size={16} /> Loading designs…
           </div>
         ) : (
-          <div className={`grid grid-cols-1 md:grid-cols-[168px_minmax(0,1fr)_220px] xl:grid-cols-[210px_minmax(0,1fr)_256px] gap-2 ${panelH}`}>
+          <div className={`grid grid-cols-1 md:grid-cols-[160px_minmax(0,1fr)_minmax(240px,280px)] xl:grid-cols-[200px_minmax(0,1fr)_minmax(260px,300px)] gap-2 min-w-0 ${panelH}`}>
             {/* Left: catalog */}
             <div className={`rounded-xl overflow-hidden flex-col order-2 md:order-1 min-h-0 ${paneClass('catalog')}`}
               style={{ background: ADMIN.card, border: `1px solid ${ADMIN.line}` }}>
@@ -2132,10 +2130,6 @@ export default function AdminDesignStudio() {
                         canvasH={canvasH}
                         photoAdjustId={photoAdjustId}
                         onEnterPhotoAdjust={(id) => {
-                          const el = draft.find(e => e.id === id);
-                          if (el && (el.cropZoom ?? 1) < PHOTO_CORNER_ZOOM) {
-                            onChangeEl(id, { cropZoom: PHOTO_CORNER_ZOOM });
-                          }
                           setSelectedId(id);
                           setPhotoAdjustId(id);
                         }}
@@ -2240,7 +2234,7 @@ export default function AdminDesignStudio() {
             </div>
 
             {/* Right: inspector */}
-            <div className={`rounded-xl flex-col order-3 min-h-0 overflow-hidden ${paneClass('props')}`}
+            <div className={`rounded-xl flex-col order-3 min-h-0 min-w-0 overflow-hidden ${paneClass('props')}`}
               style={{ background: ADMIN.card, border: `1px solid ${ADMIN.line}` }}>
               <div className="shrink-0 px-2.5 py-1.5 flex items-center justify-between gap-2"
                 style={{ borderBottom: `1px solid ${ADMIN.line}` }}>
@@ -2252,7 +2246,7 @@ export default function AdminDesignStudio() {
                   {coverSide}
                 </span>
               </div>
-              <div className="flex-1 min-h-0 overflow-y-auto p-2.5 space-y-2.5">
+              <div className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden p-2.5 space-y-2.5">
               {draft.length > 0 && (
                 <div>
                   <p className="text-[10px] uppercase tracking-[0.12em] font-semibold mb-1.5" style={{ color: ADMIN.muted }}>
@@ -2408,8 +2402,8 @@ export default function AdminDesignStudio() {
                     value={selected.fontFamily}
                     onChange={fontFamily => onChangeEl(selected.id, { fontFamily })}
                   />
-                  <div className="flex items-center gap-1.5">
-                    <Input type="number" className="h-8 w-16 text-xs px-2" value={selected.fontSize || 20}
+                  <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                    <Input type="number" className="h-8 w-16 shrink-0 text-xs px-2" value={selected.fontSize || 20}
                       onChange={e => onChangeEl(selected.id, { fontSize: Math.max(8, Number(e.target.value) || 20) })} />
                     {(['regular', 'bold'] as const).map(w => {
                       const on = w === 'bold'
@@ -2419,7 +2413,7 @@ export default function AdminDesignStudio() {
                         <button key={w} type="button"
                           disabled={isEditorSingleCutFont(selected.fontFamily) && w === 'bold'}
                           onClick={() => onChangeEl(selected.id, { fontStyle: patchFontStyle(selected.fontStyle, 'bold', w === 'bold') })}
-                          className="h-8 px-2 rounded-md text-[10px] font-semibold capitalize disabled:opacity-40"
+                          className="h-8 px-2 rounded-md text-[10px] font-semibold capitalize disabled:opacity-40 shrink-0"
                           style={on ? { background: ADMIN.ink, color: '#fff' } : { background: ADMIN.bg, color: ADMIN.muted }}>
                           {w === 'regular' ? 'Reg' : 'Bold'}
                         </button>
@@ -2430,7 +2424,7 @@ export default function AdminDesignStudio() {
                       onClick={() => onChangeEl(selected.id, {
                         fontStyle: patchFontStyle(selected.fontStyle, 'italic', !(selected.fontStyle || '').includes('italic')),
                       })}
-                      className="h-8 w-8 rounded-md text-[12px] italic font-semibold disabled:opacity-40"
+                      className="h-8 w-8 rounded-md text-[12px] italic font-semibold disabled:opacity-40 shrink-0"
                       style={(selected.fontStyle || '').includes('italic')
                         ? { background: ADMIN.blush, color: '#fff' }
                         : { background: ADMIN.bg, color: ADMIN.muted }}>
@@ -2455,21 +2449,21 @@ export default function AdminDesignStudio() {
                       ))}
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-2 min-w-0">
                     <div>
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-[10px] font-medium" style={{ color: ADMIN.muted }}>Line</span>
                         <span className="text-[10px] tabular-nums" style={{ color: ADMIN.ink }}>{(selected.lineHeight ?? 1.2).toFixed(1)}</span>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <button type="button" className="w-7 h-7 rounded-md text-xs"
+                      <div className="flex items-center gap-1 min-w-0">
+                        <button type="button" className="w-7 h-7 shrink-0 rounded-md text-xs"
                           style={{ background: ADMIN.bg, color: ADMIN.ink }}
                           onClick={() => onChangeEl(selected.id, { lineHeight: Math.max(0.8, +(selected.lineHeight ?? 1.2).toFixed(1) - 0.1) })}>−</button>
                         <input type="range" min={80} max={220} step={5} className="flex-1 min-w-0"
                           value={Math.round((selected.lineHeight ?? 1.2) * 100)}
                           onChange={e => onChangeEl(selected.id, { lineHeight: Number(e.target.value) / 100 })}
                           style={{ accentColor: ADMIN.blush }} />
-                        <button type="button" className="w-7 h-7 rounded-md text-xs"
+                        <button type="button" className="w-7 h-7 shrink-0 rounded-md text-xs"
                           style={{ background: ADMIN.bg, color: ADMIN.ink }}
                           onClick={() => onChangeEl(selected.id, { lineHeight: Math.min(2.2, +(selected.lineHeight ?? 1.2).toFixed(1) + 0.1) })}>+</button>
                       </div>
@@ -2479,15 +2473,15 @@ export default function AdminDesignStudio() {
                         <span className="text-[10px] font-medium" style={{ color: ADMIN.muted }}>Tracking</span>
                         <span className="text-[10px] tabular-nums" style={{ color: ADMIN.ink }}>{selected.letterSpacing ?? 0}</span>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <button type="button" className="w-7 h-7 rounded-md text-xs"
+                      <div className="flex items-center gap-1 min-w-0">
+                        <button type="button" className="w-7 h-7 shrink-0 rounded-md text-xs"
                           style={{ background: ADMIN.bg, color: ADMIN.ink }}
                           onClick={() => onChangeEl(selected.id, { letterSpacing: (selected.letterSpacing ?? 0) - 1 })}>−</button>
                         <input type="range" min={-8} max={24} step={1} className="flex-1 min-w-0"
                           value={selected.letterSpacing ?? 0}
                           onChange={e => onChangeEl(selected.id, { letterSpacing: Number(e.target.value) })}
                           style={{ accentColor: ADMIN.blush }} />
-                        <button type="button" className="w-7 h-7 rounded-md text-xs"
+                        <button type="button" className="w-7 h-7 shrink-0 rounded-md text-xs"
                           style={{ background: ADMIN.bg, color: ADMIN.ink }}
                           onClick={() => onChangeEl(selected.id, { letterSpacing: (selected.letterSpacing ?? 0) + 1 })}>+</button>
                       </div>
@@ -2546,7 +2540,7 @@ export default function AdminDesignStudio() {
                     {Math.round(selected.w)}×{Math.round(selected.h)} · ({Math.round(selected.x)}, {Math.round(selected.y)})
                   </p>
                   {(() => {
-                    const adjustDisabled = selected.objectFit === 'contain' || selected.mixBlendMode === 'screen' || !selected.src;
+                    const adjustDisabled = coverImageLetterbox(selected) || !selected.src;
                     const adjusting = photoAdjustId === selected.id;
                     return (
                       <>
@@ -2559,9 +2553,6 @@ export default function AdminDesignStudio() {
                           <button type="button" disabled={adjustDisabled}
                             onClick={() => {
                               if (adjustDisabled) return;
-                              if ((selected.cropZoom ?? 1) < PHOTO_CORNER_ZOOM) {
-                                onChangeEl(selected.id, { cropZoom: PHOTO_CORNER_ZOOM });
-                              }
                               setPhotoAdjustId(selected.id);
                             }}
                             className="flex-1 py-1.5 rounded-md text-[10px] font-semibold disabled:opacity-40"
@@ -2858,11 +2849,7 @@ export default function AdminDesignStudio() {
                                 const z = Math.max(1, Number(e.target.value) / 100);
                                 onChangeEl(selected.id, { cropZoom: z });
                               }}
-                              onPointerDown={() => {
-                                if ((selected.cropZoom ?? 1) < PHOTO_CORNER_ZOOM) {
-                                  onChangeEl(selected.id, { cropZoom: PHOTO_CORNER_ZOOM });
-                                }
-                              }}
+                              onPointerDown={() => { /* keep 100% unless the admin raises zoom */ }}
                               className="w-full" style={{ accentColor: ADMIN.blush }} />
                           </div>
                           <p className="text-[10px] leading-relaxed" style={{ color: ADMIN.muted }}>

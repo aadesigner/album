@@ -654,14 +654,14 @@ function LayoutFormModal({ layout, onClose }: { layout: Layout | null; onClose: 
     }));
   };
 
-  const submit = async () => {
+  const persist = async (closeAfter: boolean) => {
     setError('');
     if (!form.slug.trim() || !form.nameAl.trim() || !form.nameEn.trim()) {
-      setError('Slug and both names are required.');
+      if (closeAfter) setError('Slug and both names are required.');
       return;
     }
     if (cells.length === 0) {
-      setError('Add at least one photo or text zone.');
+      if (closeAfter) setError('Add at least one photo or text zone.');
       return;
     }
     try {
@@ -675,16 +675,33 @@ function LayoutFormModal({ layout, onClose }: { layout: Layout | null; onClose: 
       };
       if (isEdit) {
         await updateLayout.mutateAsync({ layoutId: layout!.id, data });
-      } else {
+      } else if (closeAfter) {
         await createLayout.mutateAsync({ data });
+      } else {
+        return;
       }
       await invalidateLayoutQueries(queryClient);
-      toast({ title: isEdit ? 'Layout updated' : 'Layout created' });
-      onClose();
+      if (closeAfter) {
+        toast({ title: isEdit ? 'Layout updated' : 'Layout created' });
+        onClose();
+      }
     } catch (err: any) {
       setError(err?.data?.error || err?.message || `Failed to ${isEdit ? 'update' : 'create'} layout`);
     }
   };
+
+  const submit = () => { void persist(true); };
+
+  const skipAuto = useRef(true);
+  useEffect(() => {
+    if (!isEdit) return;
+    if (skipAuto.current) {
+      skipAuto.current = false;
+      return;
+    }
+    const t = window.setTimeout(() => { void persist(false); }, 1400);
+    return () => window.clearTimeout(t);
+  }, [form, cells]);
 
   return (
     <AdminModal

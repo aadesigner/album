@@ -248,6 +248,12 @@ function AdminModeChrome({
   }, [editor, saving, slug, lang, queryClient]);
 
   useEffect(() => {
+    if (!enabled || !editor?.dirty || saving) return;
+    const t = window.setTimeout(() => { void save(); }, 1200);
+    return () => window.clearTimeout(t);
+  }, [enabled, editor?.dirty, editor?.content, saving, save]);
+
+  useEffect(() => {
     if (!enabled || !editor) return;
     const onKey = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();

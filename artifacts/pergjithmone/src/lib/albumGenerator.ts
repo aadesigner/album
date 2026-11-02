@@ -10,7 +10,6 @@ import {
   LAYOUTS,
   DESIGNS,
   DESIGN_W,
-  PHOTO_CORNER_ZOOM,
   getCanvasHeight,
   fitDesignToCanvas,
   elementsWithCoverWallpaper,
@@ -386,7 +385,7 @@ function fillPlaceholders(elements: DE[], nextPhoto: () => string | undefined): 
   return elements.map((el) => {
     if (el.type !== 'placeholder') return el;
     const url = nextPhoto();
-    return url ? { ...el, type: 'image' as const, src: url, cropZoom: PHOTO_CORNER_ZOOM } : el;
+    return url ? { ...el, type: 'image' as const, src: url, cropZoom: 1, slotLocked: true } : el;
   });
 }
 
@@ -471,7 +470,7 @@ function prepareCover(
       // City / postcard frames: drop the stock photo, keep the user's.
       source = sideEls.map((el) => (
         el.type === 'image' && el.src && el.objectFit !== 'contain'
-          ? { ...el, src: userPhoto, cropZoom: PHOTO_CORNER_ZOOM }
+          ? { ...el, src: userPhoto, cropZoom: 1 }
           : el
       ));
     } else {
@@ -580,7 +579,7 @@ function buildPhotoCover(
         src: photoUrl,
         x: 40, y: 40, w: DESIGN_W - 80, h: canvasH * 0.68,
         rotation: 0,
-        cropZoom: PHOTO_CORNER_ZOOM,
+        cropZoom: 1,
       });
       els.push({
         type: 'text',
@@ -610,7 +609,7 @@ function buildPhotoCover(
         src: photoUrl,
         x: 0, y: 0, w: DESIGN_W, h: canvasH,
         rotation: 0,
-        cropZoom: PHOTO_CORNER_ZOOM,
+        cropZoom: 1,
       });
       const bandH = categoryKey === 'Travel' || categoryKey === 'Locations' ? canvasH * 0.28 : canvasH * 0.32;
       els.push({
@@ -650,7 +649,7 @@ function buildPhotoCover(
       src: photoUrl,
       x: 40, y: 40, w: DESIGN_W - 80, h: canvasH - 168,
       rotation: 0,
-      cropZoom: PHOTO_CORNER_ZOOM,
+      cropZoom: 1,
     });
     els.push({
       type: 'text',
@@ -707,7 +706,7 @@ function elementsForLayout(
         ...mapped,
         type: 'image',
         src: url,
-        cropZoom: PHOTO_CORNER_ZOOM,
+        cropZoom: 1,
       });
       return;
     }

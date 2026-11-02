@@ -3,7 +3,7 @@ import os from "os";
 import path from "path";
 import fs from "fs";
 import { PDFDocument } from "pdf-lib";
-import { renderProjectPdf, parsePageElements, sortPrintPages, type PdfRenderPage } from "./pdfRenderer";
+import { renderProjectPdf, parsePageElements, sortPrintPages, printRasterSize, getCanvasHeight, type PdfRenderPage } from "./pdfRenderer";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -48,6 +48,29 @@ describe("parsePageElements", () => {
     expect(parsePageElements(JSON.stringify([el]))).toEqual([el]);
     expect(parsePageElements(JSON.stringify({ elements: [el] }))).toEqual([el]);
     expect(parsePageElements(JSON.stringify(JSON.stringify([el])))).toEqual([el]);
+  });
+});
+
+describe("printRasterSize", () => {
+  it("is square pixels for a 21×21 cm book", () => {
+    const r = printRasterSize(21, 21);
+    expect(r.canvasH).toBe(600);
+    expect(r.outW).toBe(r.outH);
+    expect(r.outW).toBe(Math.round(21 / 2.54 * 300));
+  });
+
+  it("keeps 21×28 cm at 3:4 in both the editor canvas and the print raster", () => {
+    const r = printRasterSize(21, 28);
+    expect(r.canvasH).toBe(800);
+    expect(r.outH / r.outW).toBeCloseTo(28 / 21, 3);
+    expect(getCanvasHeight(21, 28) / 600).toBeCloseTo(28 / 21, 5);
+  });
+
+  it("does not squash a landscape 21×14 cm book onto a 3:4 raster", () => {
+    const r = printRasterSize(21, 14);
+    expect(r.canvasH).toBe(400);
+    expect(r.outW).toBeGreaterThan(r.outH);
+    expect(r.outH / r.outW).toBeCloseTo(14 / 21, 3);
   });
 });
 

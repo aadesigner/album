@@ -15,6 +15,8 @@ import {
   buildDesignCatalog,
   parseCustomDesigns,
   applyDesignOverrides,
+  restoreCoverGraphics,
+  sanitizeImageBlend,
   blankCoverElements,
   DESIGNS,
   TRAVEL_LAYOUT_REV,
@@ -277,15 +279,94 @@ describe("designCatalogFace", () => {
       },
     );
     expect(designFrontElements(patched).some((e) => e.text === "BARCELONA")).toBe(true);
-    expect(designFrontElements(patched).some((e) => e.src?.includes("unsplash.com"))).toBe(true);
+    expect(designFrontElements(patched).some((e) => e.src?.includes("sagrada-familia"))).toBe(true);
   });
 
   it("uses live Barcelona layers instead of the baked mockup JPG", () => {
     const d = DESIGNS.find((x) => x.id === "barcelona-red")!;
     expect(d.thumbPhoto).toContain("unsplash.com");
     expect(designCatalogFace(d)).toEqual({ kind: "elements", elements: d.elements });
-    expect(designFrontElements(d).some((e) => e.src?.includes("unsplash.com"))).toBe(true);
+    expect(designFrontElements(d).some((e) => e.src?.includes("sagrada-familia"))).toBe(true);
     expect(designFrontElements(d).some((e) => e.text === "BARCELONA")).toBe(true);
+  });
+
+  it("puts the Eiffel landmark back when a Design Studio save dropped it", () => {
+    const d = DESIGNS.find((x) => x.id === "paris-pink")!;
+    expect(designFrontElements(d).some((e) => e.src?.includes("eiffel-tower"))).toBe(true);
+    const [patched] = applyDesignOverrides(
+      [d],
+      {
+        "paris-pink": {
+          frontElements: [
+            { type: "background", x: 0, y: 0, w: DESIGN_W, h: DESIGN_H, rotation: 0, bgColor: "#FEC5D7" },
+            { type: "text", x: 8, y: 22, w: 100, h: 40, rotation: 0, text: "PARIS" },
+          ],
+        },
+      },
+    );
+    const els = designFrontElements(patched);
+    expect(els.some((e) => e.text === "PARIS")).toBe(true);
+    expect(els.some((e) => e.src?.includes("eiffel-tower") && e.mixBlendMode === "screen")).toBe(true);
+  });
+
+  it("puts the city photo back when a travel save kept type but dropped the picture", () => {
+    const d = DESIGNS.find((x) => x.id === "rome")!;
+    const [patched] = applyDesignOverrides(
+      [d],
+      {
+        rome: {
+          frontElements: [
+            { type: "background", x: 0, y: 0, w: DESIGN_W, h: DESIGN_H, rotation: 0, bgColor: "#F4EFE6" },
+            { type: "text", x: 8, y: 22, w: 200, h: 40, rotation: 0, text: "ROME" },
+            { type: "image", x: 32, y: 168, w: DESIGN_W - 64, h: 520, rotation: 0, src: "" },
+          ],
+        },
+      },
+    );
+    const els = designFrontElements(patched);
+    expect(els.some((e) => e.text === "ROME")).toBe(true);
+    expect(els.some((e) => e.src?.includes("rome-cover-thumb"))).toBe(true);
+  });
+
+  it("strips screen-blend from JPEG city photos so they stay visible", () => {
+    const d = DESIGNS.find((x) => x.id === "london")!;
+    const [patched] = applyDesignOverrides(
+      [d],
+      {
+        london: {
+          frontElements: designFrontElements(d).map((e) =>
+            e.type === "image" ? { ...e, mixBlendMode: "screen", objectFit: "contain" } : e,
+          ),
+        },
+      },
+    );
+    const photo = designFrontElements(patched).find((e) => e.src?.includes("london-cover-thumb"));
+    expect(photo).toBeTruthy();
+    expect(photo?.mixBlendMode).toBeUndefined();
+    expect(photo?.objectFit).toBe("cover");
+  });
+
+  it("keeps screen-blend on the Eiffel PNG", () => {
+    const cleaned = sanitizeImageBlend({
+      src: "/designs/eiffel-tower.png",
+      mixBlendMode: "screen",
+      objectFit: "contain",
+    });
+    expect(cleaned.mixBlendMode).toBe("screen");
+  });
+
+  it("restoreCoverGraphics fills a blank image slot from the builtin cover", () => {
+    const d = DESIGNS.find((x) => x.id === "venice")!;
+    const next = restoreCoverGraphics(
+      [
+        { type: "background", bgColor: "#eee" },
+        { type: "image", src: "" },
+        { type: "text", text: "VENICE" },
+      ],
+      d.elements,
+    );
+    expect(next.some((e) => e.src?.includes("venice-cover-thumb"))).toBe(true);
+    expect(next.some((e) => e.text === "VENICE")).toBe(true);
   });
 
   it("falls back to the mockup only when a design has no layers", () => {

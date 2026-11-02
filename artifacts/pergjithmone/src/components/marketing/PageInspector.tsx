@@ -395,17 +395,16 @@ function BiTextFields({ path }: { path: string }) {
               +
             </button>
           </div>
-          <div className="mt-2 grid grid-cols-3 gap-1">
+          <div className="mt-2 grid grid-cols-3 gap-1 min-w-0">
             {TRACK_STEPS.map((id) => (
               <button
                 key={id}
                 type="button"
                 onClick={() => set({ tracking: id })}
-                className="rounded-lg border py-1.5 text-[10px] font-semibold"
+                className="rounded-lg border py-1.5 px-1 text-[10px] font-semibold truncate min-w-0"
                 style={{
                   borderColor: value.tracking === id ? BLUSH : LINE,
                   background: value.tracking === id ? SOFT : BG,
-                  letterSpacing: TRACK_SAMPLE[id],
                   color: INK,
                 }}
               >
