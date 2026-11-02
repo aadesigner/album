@@ -208,9 +208,14 @@ function bindFrameNode(n: any, id: string, shapeRefs: React.MutableRefObject<Rec
   });
 }
 
+type StudioGestureOpts = {
+  /** Keep Transformer attached (resize/rotate). Detach only for free move/pan. */
+  keepTransformer?: boolean;
+};
+
 type StudioGesture = {
   active: React.MutableRefObject<boolean>;
-  begin: () => void;
+  begin: (opts?: StudioGestureOpts) => void;
   end: () => void;
   /** Mark dirty without a React position patch (avoids full tree re-render mid-drag). */
   markDirty: () => void;
@@ -491,7 +496,7 @@ const StudioImage = React.memo(function StudioImage({ el, selected, onSelect, on
       onTransformStart={() => {
         if (panInside) return;
         startRef.current = { w: el.w, h: el.h };
-        gesture.begin();
+        gesture.begin({ keepTransformer: true });
       }}
       onTransformEnd={(e: any) => {
         if (panInside) return;
@@ -649,7 +654,7 @@ const StudioShape = React.memo(function StudioShape({ el, onSelect, onChange, sh
       onDragEnd={drag.onDragEnd}
       onTransformStart={() => {
         startRef.current = { w: el.w, h: el.h };
-        gesture.begin();
+        gesture.begin({ keepTransformer: true });
       }}
       onTransformEnd={(e: any) => {
         const n = e.target;
@@ -737,7 +742,7 @@ const StudioText = React.memo(function StudioText({ el, onSelect, onChange, shap
       onDragEnd={drag.onDragEnd}
       onTransformStart={() => {
         startRef.current = { w: el.w, h: el.h, fontSize: el.fontSize || 20 };
-        gesture.begin();
+        gesture.begin({ keepTransformer: true });
       }}
       // Text must live-bake so type stays sharp (no bitmap stretch).
       onTransform={(e: any) => {
@@ -861,11 +866,12 @@ function DesignCanvas({
 
   const gesture = useMemo<StudioGesture>(() => ({
     active: gesturingRef,
-    begin: () => {
+    begin: (opts) => {
       gesturingRef.current = true;
       if (busyRef) busyRef.current = true;
-      // Detach handles while moving — Transformer + Stage scale was fighting the drag.
-      if (trRef.current) {
+      // Detach handles while *moving* — Transformer + Stage scale was fighting the drag.
+      // Keep them during resize/rotate or the transform dies on the first frame.
+      if (!opts?.keepTransformer && trRef.current) {
         trRef.current.nodes([]);
         trRef.current.getLayer()?.batchDraw();
       }
@@ -2030,18 +2036,6 @@ export default function AdminDesignStudio() {
             </button>
           ))}
         </div>
-
-        {settings && s?.persistentStorage === false && (
-          <div className="flex items-start gap-2.5 rounded-xl px-3.5 py-2.5 text-sm"
-            style={{ background: '#FFF8EB', border: '1px solid #F0D9A8', color: '#7A5A18' }}>
-            <AlertTriangle size={16} className="shrink-0 mt-0.5" />
-            <p className="min-w-0 text-[13px] leading-snug">
-              No persistent disk volume — uploaded wallpapers, category covers, and Design Studio images
-              will disappear on the next server deploy. Mount a Railway volume at <code>/data</code> (or set <code>DATA_DIR</code>).
-              Cover layouts in the database are already safe.
-            </p>
-          </div>
-        )}
 
         {saveError && (
           <div className="flex items-start gap-2.5 rounded-xl px-3.5 py-2.5 text-sm"
