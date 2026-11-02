@@ -1589,7 +1589,7 @@ function AlbumAIView() {
                   <ArrowRight size={15} />
                 </a>
                 <p className="text-[11px] uppercase tracking-[0.16em] text-neutral-400 mt-5">
-                  {L(lang, 'Nga 3.100 LEK · dërgesë 10–16 ditë', 'From 3,100 LEK · 10–16 day delivery')}
+                  {L(lang, 'Nga 3.000 LEK · dërgesë 10–16 ditë', 'From 3,000 LEK · 10–16 day delivery')}
                 </p>
               </div>
             </section>

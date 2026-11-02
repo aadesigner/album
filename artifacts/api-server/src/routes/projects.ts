@@ -82,7 +82,7 @@ async function getSettings(): Promise<PricingSettings> {
   const map: Record<string, string> = {};
   for (const row of rows) map[row.key] = row.value;
   const data = {
-    basePriceLek: parseInt(map["base_price_lek"] || "3100", 10),
+    basePriceLek: parseInt(map["base_price_lek"] || "3000", 10),
     minPages: parseInt(map["min_pages"] || "30", 10),
     extraSpreadPriceLek: parseInt(map["extra_spread_price_lek"] || "200", 10),
     whatsappNumber: map["whatsapp_number"] || "+355688755833",

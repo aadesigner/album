@@ -1,6 +1,6 @@
 import { isStrokeOnlyShape, shapePathForElement } from './shapes';
 import { resolvePublicImageSrc } from './categoryImages';
-import { loadCachedImage } from './imageCache';
+import { loadCachedImage, bitmapWidth, bitmapHeight, type CachedBitmap } from './imageCache';
 
 /**
  * PDF preview generator — renders each photobook page to an off-screen
@@ -93,13 +93,13 @@ export interface PdfPage {
 }
 
 // ── Image loader (with crossOrigin) ─────────────────────────────────────────
-const imgCache = new Map<string, HTMLImageElement>();
+const imgCache = new Map<string, CachedBitmap>();
 
 function imageUrl(src: string): string {
   return resolvePublicImageSrc(src) || src;
 }
 
-function loadImg(src: string): Promise<HTMLImageElement> {
+function loadImg(src: string): Promise<CachedBitmap> {
   const url = imageUrl(src);
   if (imgCache.has(url)) return Promise.resolve(imgCache.get(url)!);
   return loadCachedImage(url).then((img) => {
@@ -107,6 +107,7 @@ function loadImg(src: string): Promise<HTMLImageElement> {
     return img;
   });
 }
+
 
 // ── Simple word-wrap (letterSpacing-aware — matches Konva Text) ─────────────
 function measureLineWidth(ctx: CanvasRenderingContext2D, text: string, letterSpacing: number): number {
@@ -214,14 +215,16 @@ async function renderPage(elements: PdfElement[], canvasH: number, outW: number,
       if (wallpaper) {
         // object-fit: cover the full page (honours crop focus + zoom)
         const z = Math.max(1, el.cropZoom ?? 1);
+        const iw = bitmapWidth(wallpaper);
+        const ih = bitmapHeight(wallpaper);
         const scale = Math.max(
-          DESIGN_W / Math.max(1, wallpaper.naturalWidth),
-          canvasH / Math.max(1, wallpaper.naturalHeight),
+          DESIGN_W / Math.max(1, iw),
+          canvasH / Math.max(1, ih),
         ) * z;
         const cw = DESIGN_W / scale;
         const ch = canvasH / scale;
-        const maxX = Math.max(0, wallpaper.naturalWidth - cw);
-        const maxY = Math.max(0, wallpaper.naturalHeight - ch);
+        const maxX = Math.max(0, iw - cw);
+        const maxY = Math.max(0, ih - ch);
         const fx = Math.min(1, Math.max(0, el.cropFocusX ?? 0.5));
         const fy = Math.min(1, Math.max(0, el.cropFocusY ?? 0.5));
         const cx = maxX * fx;
@@ -277,22 +280,24 @@ async function renderPage(elements: PdfElement[], canvasH: number, outW: number,
         ctx.beginPath();
         ctx.rect(el.x, el.y, el.w, el.h);
         ctx.clip();
+        const iw = bitmapWidth(img);
+        const ih = bitmapHeight(img);
         if (coverImageLetterbox(el)) {
-          const s = Math.min(el.w / img.naturalWidth, el.h / img.naturalHeight);
-          const dw = img.naturalWidth * s;
-          const dh = img.naturalHeight * s;
-          ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight,
+          const s = Math.min(el.w / iw, el.h / ih);
+          const dw = iw * s;
+          const dh = ih * s;
+          ctx.drawImage(img, 0, 0, iw, ih,
             el.x + (el.w - dw) / 2, el.y + (el.h - dh) / 2, dw, dh);
         } else {
           // object-fit: cover crop (honours saved crop focus + zoom)
           const z = Math.max(1, el.cropZoom ?? 1);
-          const sx = el.w / img.naturalWidth;
-          const sy = el.h / img.naturalHeight;
+          const sx = el.w / iw;
+          const sy = el.h / ih;
           const s  = Math.max(sx, sy) * z;
           const cw = el.w / s;
           const ch = el.h / s;
-          const maxX = Math.max(0, img.naturalWidth - cw);
-          const maxY = Math.max(0, img.naturalHeight - ch);
+          const maxX = Math.max(0, iw - cw);
+          const maxY = Math.max(0, ih - ch);
           const fx = Math.min(1, Math.max(0, el.cropFocusX ?? 0.5));
           const fy = Math.min(1, Math.max(0, el.cropFocusY ?? 0.5));
           const cx = maxX * fx;

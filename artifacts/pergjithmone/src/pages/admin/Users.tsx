@@ -583,7 +583,11 @@ function BanConfirm({
 export default function AdminUsers() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [filter, setFilter] = useState<UserFilter>('all');
+  const [filter, setFilter] = useState<UserFilter>(() => {
+    if (typeof window === 'undefined') return 'all';
+    const raw = new URLSearchParams(window.location.search).get('filter');
+    return USER_FILTERS.some((f) => f.id === raw) ? (raw as UserFilter) : 'all';
+  });
   const [exporting, setExporting] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null);

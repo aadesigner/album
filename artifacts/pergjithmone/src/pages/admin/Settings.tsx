@@ -11,10 +11,11 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormDescription } fr
 import { DESIGN_CATEGORY_LABELS } from '@/lib/designMeta';
 import { parseCustomDesigns, buildDesignCatalog } from '@/lib/designs';
 import { ResponsiveDesignCatalogThumb } from '@/components/PageThumb';
-import { Eye, EyeOff, Check, AlertTriangle, BookX, BookHeart, Settings, Wrench, DollarSign, Palette, ShieldAlert, FileLock2, Megaphone } from 'lucide-react';
+import { Eye, EyeOff, Check, AlertTriangle, BookX, BookHeart, Settings, Wrench, DollarSign, Palette, ShieldAlert, FileLock2, Megaphone, Activity } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { OFFER_BAR_DEFAULTS, parseOfferBar, safeOfferHref, sanitizeHexColor } from '@/lib/offerBar';
 import { OfferBarStrip } from '@/components/layout/OfferBarStrip';
+import { clarityIsConfigured, extractClarityProjectId } from '@/lib/clarity';
 
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -95,7 +96,7 @@ export default function AdminSettings() {
   const form = useForm({
     values: {
       whatsappNumber:       s?.whatsappNumber       || '',
-      basePriceLek:         s?.basePriceLek          || 3100,
+      basePriceLek:         s?.basePriceLek          || 3000,
       minPages:             s?.minPages              || 30,
       extraSpreadPriceLek:  s?.extraSpreadPriceLek   || 200,
       siteName:             s?.siteName              || 'Përgjithmonë',
@@ -140,6 +141,8 @@ export default function AdminSettings() {
       offerBarTextColor:  s?.offerBarTextColor  || OFFER_BAR_DEFAULTS.textColor,
       offerBarButtonBg:   s?.offerBarButtonBg   || OFFER_BAR_DEFAULTS.buttonBg,
       offerBarButtonText: s?.offerBarButtonText || OFFER_BAR_DEFAULTS.buttonText,
+      clarityEnabled:     s?.clarityEnabled     ?? false,
+      clarityProjectId:   s?.clarityProjectId   || '',
     },
   });
 
@@ -228,6 +231,8 @@ export default function AdminSettings() {
         offerBarTextColor:  sanitizeHexColor(values.offerBarTextColor, OFFER_BAR_DEFAULTS.textColor),
         offerBarButtonBg:   sanitizeHexColor(values.offerBarButtonBg, OFFER_BAR_DEFAULTS.buttonBg),
         offerBarButtonText: sanitizeHexColor(values.offerBarButtonText, OFFER_BAR_DEFAULTS.buttonText),
+        clarityEnabled:     Boolean(values.clarityEnabled),
+        clarityProjectId:   extractClarityProjectId(values.clarityProjectId),
       }});
       await invalidateSettings();
       setSaved(true);
@@ -476,6 +481,74 @@ export default function AdminSettings() {
               </div>
 
               <div className={cardClass} style={cardStyle}>
+                <SectionHeader
+                  icon={Activity}
+                  title="Microsoft Clarity"
+                  desc="Session analytics on marketing pages and the album builder only. Never loads in the admin area."
+                />
+                <FormField control={form.control} name="clarityEnabled" render={({ field }) => (
+                  <FormItem>
+                    <div className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-white mb-5" style={{ border: `1px solid ${ADMIN.line}` }}>
+                      <div className="min-w-0">
+                        <FormLabel className="text-base cursor-pointer">Enable Clarity</FormLabel>
+                        <FormDescription>
+                          Runs on home, examples, pricing, FAQ, and other static pages, plus /krijo and the editor. Excluded from /heyadmin.
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Toggle checked={!!field.value} onChange={field.onChange} />
+                      </FormControl>
+                    </div>
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="clarityProjectId" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Project ID or embed code</FormLabel>
+                    <FormControl>
+                      <textarea
+                        {...field}
+                        rows={4}
+                        placeholder={'Paste your Clarity project ID (e.g. abc12xyz) or the full script from clarity.microsoft.com'}
+                        className="w-full rounded-xl border bg-white px-3 py-2 text-sm font-mono resize-y min-h-[96px] focus:outline-none"
+                        style={{ borderColor: ADMIN.line }}
+                        onBlur={(e) => {
+                          const id = extractClarityProjectId(e.target.value);
+                          if (id && id !== e.target.value.trim()) field.onChange(id);
+                        }}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Get this from Microsoft Clarity → Settings → Setup. We extract the project id if you paste the whole snippet.
+                    </FormDescription>
+                  </FormItem>
+                )} />
+                {(() => {
+                  const live = clarityIsConfigured({
+                    clarityEnabled: !!form.watch('clarityEnabled'),
+                    clarityProjectId: extractClarityProjectId(form.watch('clarityProjectId')),
+                  });
+                  const id = extractClarityProjectId(form.watch('clarityProjectId'));
+                  return (
+                    <div
+                      className="mt-5 flex items-start gap-2.5 rounded-xl px-3.5 py-2.5 text-sm"
+                      style={live
+                        ? { background: '#F0F7F2', border: '1px solid #C5E0CC', color: '#1F5C35' }
+                        : { background: ADMIN.bg, border: `1px solid ${ADMIN.line}`, color: ADMIN.muted }}
+                    >
+                      <Check size={15} className="shrink-0 mt-0.5" style={{ opacity: live ? 1 : 0.35 }} />
+                      <p className="text-[13px] leading-snug">
+                        {live
+                          ? `Active — tracking with project “${id}” on public + builder pages.`
+                          : form.watch('clarityEnabled')
+                            ? 'Toggle is on, but add a valid project ID to start tracking.'
+                            : 'Off — no Clarity script is injected.'}
+                      </p>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              <div className={cardClass} style={cardStyle}>
                 <SectionHeader icon={DollarSign} title="Pricing Fallbacks" desc="Used when an album size has no price of its own. Per-size pricing wins when set." />
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-5">
                   <FormField control={form.control} name="basePriceLek" render={({ field }) => (
@@ -504,7 +577,7 @@ export default function AdminSettings() {
                   </p>
                   <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
                     {[20,30,40,50,60,80].map(pages => {
-                      const base  = Number(form.watch('basePriceLek') || 3100);
+                      const base  = Number(form.watch('basePriceLek') || 3000);
                       const minPg = Number(form.watch('minPages') || 24);
                       const extra = Number(form.watch('extraSpreadPriceLek') || 100);
                       const extraSpreads = Math.max(0, Math.ceil((pages - minPg) / 2));

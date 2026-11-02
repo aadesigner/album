@@ -1,10 +1,11 @@
-import { createCanvas, GlobalFonts, loadImage, type Canvas, type Image } from "@napi-rs/canvas";
+import { createCanvas, GlobalFonts, loadImage, Path2D, type Canvas, type Image } from "@napi-rs/canvas";
 import { PDFDocument } from "pdf-lib";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { logger } from "./logger";
-import { uploadFilePathCandidates } from "./dataDir";
+import { designsDir, uploadFilePathCandidates } from "./dataDir";
+import { isStrokeOnlyShape, shapePathForElement } from "./shapes";
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 
@@ -361,6 +362,7 @@ function drawSpacedText(
 
 export function designAssetDirs(): string[] {
   return [
+    designsDir,
     // Copied next to the bundled dist/ by build.mjs
     path.join(MODULE_DIR, "assets", "designs"),
     path.join(process.cwd(), "assets", "designs"),
@@ -541,24 +543,39 @@ async function renderPageToCanvas(
         ctx.fillRect(0, 0, DESIGN_W, canvasH);
       }
     } else if (el.type === "shape") {
-      const cr = el.shapeKind === "circle" ? Math.min(el.w, el.h) / 2 : (el.cornerRadius ?? 0);
-      if (cr > 0) {
-        roundRectPath(ctx, el.x, el.y, el.w, el.h, cr);
-      } else {
-        ctx.beginPath();
-        ctx.rect(el.x, el.y, el.w, el.h);
+      const d = shapePathForElement(el.shapeKind, el.w, el.h, el.cornerRadius);
+      const strokeOnly = isStrokeOnlyShape(el.shapeKind);
+      ctx.save();
+      ctx.translate(el.x, el.y);
+      try {
+        const path = new Path2D(d);
+        if (!strokeOnly && el.fill && el.fill !== "transparent") {
+          ctx.fillStyle = el.fill;
+          ctx.fill(path, "evenodd");
+        }
+        if (el.strokeColor && (el.strokeWidth ?? 0) > 0) {
+          ctx.strokeStyle = el.strokeColor;
+          ctx.lineWidth = el.strokeWidth!;
+          ctx.lineJoin = "round";
+          ctx.lineCap = "round";
+          if (el.strokeDash?.length) ctx.setLineDash(el.strokeDash);
+          ctx.stroke(path);
+          ctx.setLineDash([]);
+        } else if (strokeOnly) {
+          ctx.strokeStyle = el.strokeColor || el.fill || "#1A1A1A";
+          ctx.lineWidth = Math.max(2, el.strokeWidth ?? 3);
+          ctx.lineJoin = "round";
+          ctx.lineCap = "round";
+          ctx.stroke(path);
+        }
+      } catch {
+        // Fallback for odd paths — keep print from dying on a decoration.
+        if (el.fill && el.fill !== "transparent") {
+          ctx.fillStyle = el.fill;
+          ctx.fillRect(0, 0, el.w, el.h);
+        }
       }
-      if (el.fill && el.fill !== "transparent") {
-        ctx.fillStyle = el.fill;
-        ctx.fill();
-      }
-      if (el.strokeColor && (el.strokeWidth ?? 0) > 0) {
-        ctx.strokeStyle = el.strokeColor;
-        ctx.lineWidth = el.strokeWidth!;
-        if (el.strokeDash?.length) ctx.setLineDash(el.strokeDash);
-        ctx.stroke();
-        ctx.setLineDash([]);
-      }
+      ctx.restore();
     } else if (el.type === "image" && el.src) {
       const img = images.get(el.src);
       if (img) {

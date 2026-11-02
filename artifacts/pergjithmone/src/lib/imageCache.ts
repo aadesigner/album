@@ -2,11 +2,22 @@ import { useEffect, useState } from 'react';
 import { resolvePublicImageSrc } from './categoryImages';
 import { isLandmarkPng, knockOutBlackToAlpha } from './designs';
 
-const MAX_ENTRIES = 64;
-const inflight = new Map<string, Promise<HTMLImageElement>>();
-const ready = new Map<string, HTMLImageElement>();
+/** Konva accepts either decoded <img> or a canvas (landmarks stay as canvas). */
+export type CachedBitmap = HTMLImageElement | HTMLCanvasElement;
 
-function touch(src: string, img: HTMLImageElement) {
+export function bitmapWidth(img: CachedBitmap): number {
+  return ('naturalWidth' in img && img.naturalWidth) ? img.naturalWidth : img.width;
+}
+
+export function bitmapHeight(img: CachedBitmap): number {
+  return ('naturalHeight' in img && img.naturalHeight) ? img.naturalHeight : img.height;
+}
+
+const MAX_ENTRIES = 48;
+const inflight = new Map<string, Promise<CachedBitmap>>();
+const ready = new Map<string, CachedBitmap>();
+
+function touch(src: string, img: CachedBitmap) {
   ready.delete(src);
   ready.set(src, img);
   while (ready.size > MAX_ENTRIES) {
@@ -17,7 +28,7 @@ function touch(src: string, img: HTMLImageElement) {
   }
 }
 
-export function peekCachedImage(src: string): HTMLImageElement | undefined {
+export function peekCachedImage(src: string): CachedBitmap | undefined {
   const img = ready.get(src);
   if (!img) return undefined;
   touch(src, img);
@@ -51,7 +62,7 @@ function decodeHtmlImage(url: string, withCors: boolean): Promise<HTMLImageEleme
   });
 }
 
-export function loadCachedImage(src: string): Promise<HTMLImageElement> {
+export function loadCachedImage(src: string): Promise<CachedBitmap> {
   const url = resolvePublicImageSrc(src) || src;
   const hit = peekCachedImage(url);
   if (hit) return Promise.resolve(hit);
@@ -68,19 +79,13 @@ export function loadCachedImage(src: string): Promise<HTMLImageElement> {
       if (!fallback) throw err;
       return decodeHtmlImage(fallback, imageLoadNeedsCors(fallback));
     })
-    .then(async (img) => {
+    .then((img) => {
       inflight.delete(url);
-      let out = img;
+      // Keep the canvas — skip toDataURL (huge CPU/RAM cost on every landmark).
+      let out: CachedBitmap = img;
       if (isLandmarkPng(src) || isLandmarkPng(url)) {
         const cut = knockOutBlackToAlpha(img);
-        if (cut) {
-          out = await new Promise<HTMLImageElement>((resolve) => {
-            const next = new Image();
-            next.onload = () => resolve(next);
-            next.onerror = () => resolve(img);
-            next.src = cut.toDataURL('image/png');
-          });
-        }
+        if (cut) out = cut;
       }
       touch(url, out);
       return out;
@@ -94,9 +99,9 @@ export function loadCachedImage(src: string): Promise<HTMLImageElement> {
 }
 
 /** Shared decoded bitmap for Konva — same photo is not decoded again per slot. */
-export function useCachedImage(src?: string | null): HTMLImageElement | undefined {
+export function useCachedImage(src?: string | null): CachedBitmap | undefined {
   const url = src ? (resolvePublicImageSrc(src) || src) : '';
-  const [img, setImg] = useState<HTMLImageElement | undefined>(() =>
+  const [img, setImg] = useState<CachedBitmap | undefined>(() =>
     url ? peekCachedImage(url) : undefined,
   );
 

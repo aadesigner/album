@@ -38,4 +38,13 @@ describe("newShapeElement", () => {
     expect(isStrokeOnlyShape("rect")).toBe(false);
     expect(newShapeElement("line", 800).fill).toBe("transparent");
   });
+
+  it("includes album decorations with usable presets", () => {
+    for (const kind of ["heart", "arrow", "banner", "flower", "sparkle", "frame"] as const) {
+      const el = newShapeElement(kind, 800);
+      expect(el.w).toBeGreaterThan(40);
+      expect(el.h).toBeGreaterThan(20);
+      expect(shapeSvgPath(kind, el.w, el.h).length).toBeGreaterThan(12);
+    }
+  });
 });

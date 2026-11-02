@@ -3,6 +3,7 @@ import { db } from "@workspace/db-tsconfig";
 import { bookSizesTable, layoutsTable, appSettingsTable } from "@workspace/db-tsconfig";
 import { eq } from "drizzle-orm";
 import { readOfferBarSettings } from "../lib/offerBarSettings";
+import { readClaritySettings } from "../lib/claritySettings";
 import { setPublicCatalogCache, setNoStoreCache } from "../lib/httpCache";
 import { parseJsonArray, parseJsonObject } from "../lib/securitySettingsShared";
 import { parseEditorElements } from "../lib/editorElements";
@@ -50,7 +51,7 @@ router.get("/settings", async (_req, res): Promise<void> => {
 
   res.json({
     whatsappNumber: map["whatsapp_number"] || "+355688755833",
-    basePriceLek: parseInt(map["base_price_lek"] || "3100", 10),
+    basePriceLek: parseInt(map["base_price_lek"] || "3000", 10),
     minPages: parseInt(map["min_pages"] || "30", 10),
     extraSpreadPriceLek: parseInt(map["extra_spread_price_lek"] || "200", 10),
     siteName: map["site_name"] || "Përgjithmonë",
@@ -70,6 +71,7 @@ router.get("/settings", async (_req, res): Promise<void> => {
     pendingBooksLimitEnabled: map["pending_books_limit_enabled"] !== "false",
     pendingBooksLimit: parseInt(map["pending_books_limit"] || "10", 10),
     ...readOfferBarSettings(map),
+    ...readClaritySettings(map),
   });
 });
 

@@ -46,6 +46,14 @@ function preloadDesignAssets(designs: DesignDef[]) {
   }
 }
 
+/** Flex card widths — rows stay centered when they don’t fill the viewport. */
+const WIZARD_CAT_CARD =
+  'w-[calc(50%-0.375rem)] sm:w-[calc(33.333%-0.667rem)] lg:w-[calc(25%-0.75rem)] max-w-[240px]';
+const WIZARD_STYLE_CARD =
+  'w-[calc(50%-0.375rem)] sm:w-[calc(33.333%-0.667rem)] md:w-[calc(25%-0.75rem)] lg:w-[calc(20%-0.8rem)] xl:w-[calc(16.666%-0.875rem)] max-w-[200px]';
+const WIZARD_SIZE_CARD =
+  'w-[calc(50%-0.375rem)] md:w-[260px] max-w-[300px]';
+
 // ── Book size card ───────────────────────────────────────────────────────────
 export function SizeCard({ size, isSelected, onClick, lang, t }: any) {
   const isSquare = size.widthCm === size.heightCm;
@@ -59,7 +67,7 @@ export function SizeCard({ size, isSelected, onClick, lang, t }: any) {
       onClick={onClick}
       whileHover={{ y: -3 }}
       transition={{ duration: 0.2, ease: 'easeOut' }}
-      className={`cursor-pointer rounded-2xl overflow-hidden transition-all duration-200 ${
+      className={`w-full cursor-pointer rounded-2xl overflow-hidden transition-all duration-200 ${
         isSelected
           ? 'ring-2 ring-neutral-900 shadow-xl bg-white'
           : 'ring-1 ring-neutral-200 hover:ring-neutral-400 hover:shadow-md bg-white'
@@ -292,9 +300,8 @@ export default function Wizard() {
     setStep(catId === 'blank' ? 3 : 2);
   };
 
-  const handleDesignSelect = (designId: string | null) => {
+  const handleDesignSelect = (designId: string) => {
     setSelectedDesignId(designId);
-    setStep(3);
   };
 
   useEffect(() => {
@@ -509,22 +516,22 @@ export default function Wizard() {
                   exit={{ opacity: 0, y: -10 }}
                   transition={{ duration: 0.28, ease: 'easeOut' }}
                 >
-                <div className="mb-7 md:mb-10">
+                <div className="mb-7 md:mb-10 text-center mx-auto max-w-2xl">
                   <p className="text-[10px] uppercase tracking-[0.28em] text-neutral-400 mb-2">
                     {String(currentProgressIndex).padStart(2, '0')} / {String(totalProgressSteps).padStart(2, '0')}
                   </p>
                   <h1 className="text-2xl md:text-[38px] font-serif font-medium text-neutral-900 leading-tight mb-2">
                     {t('wizard.s1.title')}
                   </h1>
-                  <p className="text-neutral-500 text-sm max-w-lg leading-relaxed">{t('wizard.s1.subtitle')}</p>
+                  <p className="text-neutral-500 text-sm max-w-lg mx-auto leading-relaxed">{t('wizard.s1.subtitle')}</p>
                 </div>
 
                 {loadingCat ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
+                  <div className="flex flex-wrap justify-center gap-3 md:gap-4">
                     {DEFAULT_CATEGORIES.map((c) => (
                       <div
                         key={c.slug}
-                        className="relative rounded-2xl overflow-hidden"
+                        className={`relative rounded-2xl overflow-hidden ${WIZARD_CAT_CARD}`}
                         style={{ aspectRatio: '3/4', minHeight: 168, WebkitTransform: 'translateZ(0)' }}
                       >
                         <CategoryCoverImg nameAl={c.nameAl} slug={c.slug} alt={c.nameAl} />
@@ -536,13 +543,13 @@ export default function Wizard() {
                     ))}
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
+                  <div className="flex flex-wrap justify-center gap-3 md:gap-4">
                     {categories?.map((cat: any, idx: number) => {
                       return (
                         <motion.div
                           key={cat.id}
                           {...coverPressable(() => handleCategorySelect(cat.id), lang === 'en' ? (cat.nameEn || cat.nameAl) : cat.nameAl)}
-                          className="group relative w-full rounded-2xl overflow-hidden cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900"
+                          className={`group relative rounded-2xl overflow-hidden cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 ${WIZARD_CAT_CARD}`}
                           style={{ aspectRatio: '3/4', minHeight: 168, WebkitTransform: 'translateZ(0)', opacity: 1 }}
                           initial={false}
                           whileHover={{ y: -4, transition: { duration: 0.2 } }}
@@ -582,7 +589,7 @@ export default function Wizard() {
                     {/* Blank canvas */}
                     <motion.button
                       onClick={() => handleCategorySelect('blank')}
-                      className="group relative rounded-2xl overflow-hidden cursor-pointer border-2 border-dashed border-neutral-200 hover:border-neutral-400 bg-white transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                      className={`group relative rounded-2xl overflow-hidden cursor-pointer border-2 border-dashed border-neutral-200 hover:border-neutral-400 bg-white transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-neutral-900 ${WIZARD_CAT_CARD}`}
                       style={{ aspectRatio: '3/4' }}
                       initial={{ opacity: 0, y: 12 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -616,14 +623,14 @@ export default function Wizard() {
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.28, ease: 'easeOut' }}
               >
-                <div className="mb-7 md:mb-10">
+                <div className="mb-7 md:mb-10 text-center mx-auto max-w-2xl">
                   <p className="text-[10px] uppercase tracking-[0.28em] text-neutral-400 mb-2">
                     {String(currentProgressIndex).padStart(2, '0')} / {String(totalProgressSteps).padStart(2, '0')}
                   </p>
                   <h1 className="text-2xl md:text-[38px] font-serif font-medium text-neutral-900 leading-tight mb-2">
                     {lang === 'sq' ? 'Zgjidhni stilin tuaj' : 'Choose your design style'}
                   </h1>
-                  <p className="text-neutral-500 text-sm max-w-lg leading-relaxed">
+                  <p className="text-neutral-500 text-sm max-w-lg mx-auto leading-relaxed">
                     {lang === 'sq'
                       ? `${shownDesigns.length} stilet e gatshme — ${designCategoryLabel}. Ky dizajn do të aplikohet automatikisht në të gjitha faqet.`
                       : `${shownDesigns.length} ready-made styles — ${designCategoryLabel}. This design is applied automatically to every page.`
@@ -631,15 +638,16 @@ export default function Wizard() {
                   </p>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3.5 md:gap-4">
+                <div className="flex flex-wrap justify-center gap-3.5 md:gap-4">
                   {shownDesigns.map((design) => (
-                    <DesignCard
-                      key={design.id}
-                      design={design}
-                      isSelected={selectedDesignId === design.id}
-                      lang={lang as 'sq' | 'en'}
-                      onClick={() => handleDesignSelect(design.id)}
-                    />
+                    <div key={design.id} className={WIZARD_STYLE_CARD}>
+                      <DesignCard
+                        design={design}
+                        isSelected={selectedDesignId === design.id}
+                        lang={lang as 'sq' | 'en'}
+                        onClick={() => handleDesignSelect(design.id)}
+                      />
+                    </div>
                   ))}
                 </div>
                 {shownDesigns.length === 0 && (
@@ -650,19 +658,25 @@ export default function Wizard() {
                   </p>
                 )}
 
-                <div className="mt-8 flex flex-col items-center gap-3">
-                  {selectedDesignId && (
-                    <button
-                      type="button"
-                      onClick={() => setStep(3)}
-                      className="flex items-center gap-2 px-8 py-3 rounded-full bg-neutral-900 text-white text-[12px] font-semibold tracking-wide hover:bg-neutral-700"
-                    >
-                      {lang === 'sq' ? 'Vazhdo me këtë stil' : 'Continue with this style'}
-                      <ChevronRight size={14} className="opacity-70" />
-                    </button>
-                  )}
+                <div className="mt-10 md:mt-12 flex flex-col items-center gap-3">
+                  <motion.button
+                    type="button"
+                    disabled={!selectedDesignId}
+                    onClick={() => setStep(3)}
+                    whileHover={selectedDesignId ? { scale: 1.02 } : {}}
+                    whileTap={selectedDesignId ? { scale: 0.97 } : {}}
+                    transition={{ duration: 0.16 }}
+                    className="flex items-center gap-2.5 px-10 py-3.5 bg-neutral-900 text-white rounded-full text-[12.5px] font-semibold tracking-wide hover:bg-neutral-700 disabled:opacity-35 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {lang === 'sq' ? 'Vazhdo me këtë stil' : 'Continue with this style'}
+                    <ChevronRight size={15} className="opacity-70" />
+                  </motion.button>
                   <button
-                    onClick={() => handleDesignSelect(null)}
+                    type="button"
+                    onClick={() => {
+                      setSelectedDesignId(null);
+                      setStep(3);
+                    }}
                     className="flex items-center gap-2 px-6 py-2.5 rounded-full border border-neutral-200 hover:border-neutral-400 text-[11px] uppercase tracking-[0.12em] text-neutral-400 hover:text-neutral-700 transition-all"
                   >
                     <BookHeart size={13} className="opacity-60" />
@@ -681,14 +695,14 @@ export default function Wizard() {
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.28, ease: 'easeOut' }}
               >
-                <div className="mb-7 md:mb-10">
+                <div className="mb-7 md:mb-10 text-center mx-auto max-w-2xl">
                   <p className="text-[10px] uppercase tracking-[0.28em] text-neutral-400 mb-2">
                     {String(currentProgressIndex).padStart(2, '0')} / {String(totalProgressSteps).padStart(2, '0')}
                   </p>
                   <h1 className="text-2xl md:text-[38px] font-serif font-medium text-neutral-900 leading-tight mb-2">
                     {t('wizard.s3.title')}
                   </h1>
-                  <p className="text-neutral-500 text-sm max-w-lg leading-relaxed">
+                  <p className="text-neutral-500 text-sm max-w-lg mx-auto leading-relaxed">
                     {isBlankPath
                       ? (lang === 'sq'
                         ? 'Faqe të bardha — filloni nga e para. Zgjidhni madhësinë e albumit.'
@@ -698,14 +712,17 @@ export default function Wizard() {
                 </div>
 
                 {loadingSizes ? (
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 max-w-3xl mx-auto">
-                    {[1,2,3].map(i => <div key={i} className="h-64 bg-neutral-200 animate-pulse rounded-2xl" />)}
+                  <div className="flex flex-wrap justify-center gap-3 md:gap-4">
+                    {[1, 2, 3].map(i => (
+                      <div key={i} className={`h-64 bg-neutral-200 animate-pulse rounded-2xl ${WIZARD_SIZE_CARD}`} />
+                    ))}
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 max-w-3xl mx-auto">
+                  <div className="flex flex-wrap justify-center gap-3 md:gap-4">
                     {bookSizes?.map((s: any, idx: number) => (
                       <motion.div
                         key={s.id}
+                        className={WIZARD_SIZE_CARD}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: idx * 0.07, duration: 0.28 }}

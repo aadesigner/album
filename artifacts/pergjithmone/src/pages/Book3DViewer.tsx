@@ -546,9 +546,27 @@ export function Book3DViewer({
         background: vignette,
       }} />
 
-      {/* Header */}
-      <div className="relative z-10 flex items-center justify-between px-5 py-4 flex-shrink-0">
-        <div className="min-w-0">
+      {/* Header — on mobile the top stays clear so the room shows through; the bottom fades. */}
+      <div
+        className="relative z-10 flex items-center justify-between px-5 py-4 flex-shrink-0"
+        style={{
+          paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))',
+        }}
+      >
+        <div
+          aria-hidden
+          className="md:hidden pointer-events-none"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'linear-gradient(180deg, rgba(245,241,234,0) 0%, rgba(245,241,234,0.22) 40%, rgba(245,241,234,0.55) 100%)',
+            WebkitMaskImage: 'linear-gradient(180deg, transparent 0%, #000 70%)',
+            maskImage: 'linear-gradient(180deg, transparent 0%, #000 70%)',
+            backdropFilter: 'blur(14px) saturate(1.1)',
+            WebkitBackdropFilter: 'blur(14px) saturate(1.1)',
+          }}
+        />
+        <div className="min-w-0 relative z-10">
           <p className="font-serif text-sm md:text-base truncate" style={{ color: ink.strong, fontStyle: 'italic' }}>
             {title}
           </p>
@@ -572,7 +590,7 @@ export function Book3DViewer({
           </AnimatePresence>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 relative z-10">
           {/* Reset */}
           {!browseMode && (
             <button

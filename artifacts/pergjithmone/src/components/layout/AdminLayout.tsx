@@ -80,7 +80,8 @@ function useAdminPulse(enabled = true) {
       return r.json() as Promise<AdminPulse>;
     },
     staleTime: 45_000,
-    refetchInterval: 60_000,
+    refetchInterval: 90_000,
+    refetchOnWindowFocus: false,
     refetchOnWindowFocus: false,
     retry: 1,
   });

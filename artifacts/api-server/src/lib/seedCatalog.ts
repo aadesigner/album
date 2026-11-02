@@ -49,7 +49,7 @@ const DEFAULT_BOOK_SIZES = [
     widthCm: "21.00",
     heightCm: "21.00",
     label: "Katror",
-    priceBase: 3100,
+    priceBase: 3000,
     pricePerExtraSpread: 100,
     minPages: 30,
   },
@@ -57,7 +57,7 @@ const DEFAULT_BOOK_SIZES = [
     widthCm: "21.00",
     heightCm: "28.00",
     label: "Portret",
-    priceBase: 3900,
+    priceBase: 3500,
     pricePerExtraSpread: 100,
     minPages: 30,
   },
@@ -65,7 +65,7 @@ const DEFAULT_BOOK_SIZES = [
 
 const DEFAULT_SETTINGS: Array<{ key: string; value: string }> = [
   { key: "whatsapp_number", value: "+355688755833" },
-  { key: "base_price_lek", value: "3100" },
+  { key: "base_price_lek", value: "3000" },
   { key: "book_creation_enabled", value: "true" },
   { key: "offer_bar_enabled", value: "true" },
   { key: "offer_bar_text_al", value: "Çmime më të lira se më parë — oferto speciale për albumin tuaj." },
@@ -77,7 +77,21 @@ const DEFAULT_SETTINGS: Array<{ key: string; value: string }> = [
   { key: "offer_bar_text_color", value: "#FFF8F2" },
   { key: "offer_bar_button_bg", value: "#FFFFFF" },
   { key: "offer_bar_button_text", value: "#8C3A2E" },
+  { key: "clarity_enabled", value: "false" },
+  { key: "clarity_project_id", value: "" },
 ];
+
+/**
+ * Admin-owned JSON. Seed must never insert defaults for these — a redeploy
+ * would otherwise risk wiping Design Studio / stickers / marketing pages.
+ */
+const PROTECTED_SETTING_KEYS = new Set([
+  "design_overrides",
+  "custom_designs",
+  "hidden_design_ids",
+  "editor_elements",
+  "admin_notes",
+]);
 
 export async function seedCatalog(): Promise<void> {
   const existingCategories = await db
@@ -124,8 +138,9 @@ export async function seedCatalog(): Promise<void> {
   }
 
   for (const setting of DEFAULT_SETTINGS) {
-    // Visual-editor JSON lives in page_content_* and must survive deploys.
+    // Visual-editor JSON + Design Studio / stickers must survive deploys.
     if (isPageContentSettingKey(setting.key)) continue;
+    if (PROTECTED_SETTING_KEYS.has(setting.key)) continue;
     const [existing] = await db
       .select({ id: appSettingsTable.id })
       .from(appSettingsTable)
@@ -155,13 +170,49 @@ export async function seedCatalog(): Promise<void> {
       await db.insert(layoutsTable).values(toInsert);
       logger.info({ inserted: toInsert.length }, "Seeded built-in layouts");
     }
-    const retired = await db
-      .update(layoutsTable)
-      .set({ isActive: false })
-      .where(inArray(layoutsTable.slug, [...RETIRED_LAYOUT_SLUGS]))
-      .returning({ slug: layoutsTable.slug });
-    if (retired.length > 0) {
-      logger.info({ hidden: retired.map((r) => r.slug) }, "Hid retired layouts from the client picker");
+    // One-shot hide of retired slugs so an admin who re-enables one later
+    // is not flipped off again on every Railway rebuild.
+    const retireFlagKey = "retired_layouts_seed_v1";
+    const [retireFlag] = await db
+      .select({ id: appSettingsTable.id })
+      .from(appSettingsTable)
+      .where(eq(appSettingsTable.key, retireFlagKey))
+      .limit(1);
+    if (!retireFlag) {
+      const retired = await db
+        .update(layoutsTable)
+        .set({ isActive: false })
+        .where(inArray(layoutsTable.slug, [...RETIRED_LAYOUT_SLUGS]))
+        .returning({ slug: layoutsTable.slug });
+      await db.insert(appSettingsTable).values({
+        key: retireFlagKey,
+        value: JSON.stringify(RETIRED_LAYOUT_SLUGS),
+      });
+      if (retired.length > 0) {
+        logger.info({ hidden: retired.map((r) => r.slug) }, "Hid retired layouts from the client picker");
+      }
+    }
+  }
+
+  // One-time price refresh: only when the row still holds a known old default
+  // so intentional admin price edits are preserved.
+  {
+    const priceBumps: Array<{ from: number; to: number }> = [
+      { from: 3100, to: 3000 },
+      { from: 3900, to: 3500 },
+    ];
+    for (const bump of priceBumps) {
+      const updated = await db
+        .update(bookSizesTable)
+        .set({ priceBase: bump.to })
+        .where(eq(bookSizesTable.priceBase, bump.from))
+        .returning({ id: bookSizesTable.id, label: bookSizesTable.label });
+      if (updated.length > 0) {
+        logger.info(
+          { from: bump.from, to: bump.to, sizes: updated.map((r) => r.label) },
+          "Updated book size base price from legacy default",
+        );
+      }
     }
   }
 
@@ -169,6 +220,7 @@ export async function seedCatalog(): Promise<void> {
   // stored value still equals a known old default so intentional admin tweaks
   // are preserved. Multiple `from` values cover successive prior defaults.
   const limitBumps: Array<{ key: string; from: string[]; to: string }> = [
+    { key: "base_price_lek", from: ["3100"], to: "3000" },
     { key: "rate_limit_general_max", from: ["300", "2000"], to: "8000" },
     { key: "rate_limit_auth_max", from: ["20", "60"], to: "120" },
     { key: "rate_limit_analytics_max", from: ["120"], to: "400" },

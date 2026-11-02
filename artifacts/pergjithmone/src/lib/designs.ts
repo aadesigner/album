@@ -69,6 +69,135 @@ export function clampElementPos(
   return { x: pos.x + dx, y: pos.y + dy };
 }
 
+export type KonvaPoint = { x: number; y: number };
+
+type KonvaAbsTransform = {
+  copy: () => { invert: () => { point: (p: KonvaPoint) => KonvaPoint } };
+  point: (p: KonvaPoint) => KonvaPoint;
+};
+
+type KonvaDragNode = {
+  getParent?: () => { getAbsoluteTransform?: () => KonvaAbsTransform } | null | undefined;
+  getStage?: () => { scaleX?: () => number; scaleY?: () => number } | null | undefined;
+  getLayer?: () => { x?: () => number; y?: () => number } | null | undefined;
+  getAbsolutePosition?: () => KonvaPoint;
+};
+
+function parentAbsTransform(node?: KonvaDragNode | null): KonvaAbsTransform | null {
+  const tr = node?.getParent?.()?.getAbsoluteTransform?.();
+  if (!tr?.copy || !tr.point) return null;
+  return tr;
+}
+
+function finitePoint(p: KonvaPoint | null | undefined): p is KonvaPoint {
+  return !!p && Number.isFinite(p.x) && Number.isFinite(p.y);
+}
+
+/** Konva 10 `dragBoundFunc` positions are stage-absolute, not page-local. */
+export function konvaAbsToLocal(node: KonvaDragNode | null | undefined, absPos: KonvaPoint): KonvaPoint {
+  const stage = node?.getStage?.();
+  const layer = node?.getLayer?.();
+  if (stage?.scaleX && layer?.x) {
+    const sx = stage.scaleX() || 1;
+    const sy = (stage.scaleY?.() || sx) || 1;
+    return {
+      x: absPos.x / sx - (layer.x?.() || 0),
+      y: absPos.y / sy - (layer.y?.() || 0),
+    };
+  }
+  const tr = parentAbsTransform(node);
+  return tr ? tr.copy().invert().point(absPos) : absPos;
+}
+
+export function konvaLocalToAbs(node: KonvaDragNode | null | undefined, local: KonvaPoint): KonvaPoint {
+  const stage = node?.getStage?.();
+  const layer = node?.getLayer?.();
+  if (stage?.scaleX && layer?.x) {
+    const sx = stage.scaleX() || 1;
+    const sy = (stage.scaleY?.() || sx) || 1;
+    return {
+      x: (local.x + (layer.x?.() || 0)) * sx,
+      y: (local.y + (layer.y?.() || 0)) * sy,
+    };
+  }
+  const tr = parentAbsTransform(node);
+  return tr ? tr.point(local) : local;
+}
+
+export function clampKonvaDragAbs(
+  node: KonvaDragNode | null | undefined,
+  absPos: KonvaPoint,
+  w: number,
+  h: number,
+  canvasH: number,
+  rotation = 0,
+): KonvaPoint {
+  if (!finitePoint(absPos)) {
+    const fallback = node?.getAbsolutePosition?.();
+    return finitePoint(fallback) ? fallback : { x: 0, y: 0 };
+  }
+  const local = konvaAbsToLocal(node, absPos);
+  if (!finitePoint(local)) {
+    const fallback = node?.getAbsolutePosition?.();
+    return finitePoint(fallback) ? fallback : absPos;
+  }
+  const clamped = clampElementPos(local, w, h, canvasH, rotation);
+  const abs = konvaLocalToAbs(node, clamped);
+  return finitePoint(abs) ? abs : absPos;
+}
+
+/** Keep saved/editor positions finite and on-page after a gesture. */
+export function sanitizeElementPos(
+  pos: { x: number; y: number },
+  w: number,
+  h: number,
+  canvasH: number,
+  rotation = 0,
+): { x: number; y: number } {
+  const safe = {
+    x: Number.isFinite(pos.x) ? pos.x : 0,
+    y: Number.isFinite(pos.y) ? pos.y : 0,
+  };
+  return clampElementPos(safe, Math.max(1, w || 1), Math.max(1, h || 1), canvasH, rotation);
+}
+
+/** Transformer `boundBoxFunc` boxes are in stage pixels (scale + layer offset). */
+export function pageBoxFromStageBox<T extends { x: number; y: number; width: number; height: number }>(
+  box: T,
+  scaleX: number,
+  layerX: number,
+  layerY: number,
+  scaleY = scaleX,
+): T {
+  const sx = scaleX || 1;
+  const sy = scaleY || 1;
+  return {
+    ...box,
+    x: box.x / sx - layerX,
+    y: box.y / sy - layerY,
+    width: box.width / sx,
+    height: box.height / sy,
+  };
+}
+
+export function stageBoxFromPageBox<T extends { x: number; y: number; width: number; height: number }>(
+  box: T,
+  scaleX: number,
+  layerX: number,
+  layerY: number,
+  scaleY = scaleX,
+): T {
+  const sx = scaleX || 1;
+  const sy = scaleY || 1;
+  return {
+    ...box,
+    x: (box.x + layerX) * sx,
+    y: (box.y + layerY) * sy,
+    width: box.width * sx,
+    height: box.height * sy,
+  };
+}
+
 export type PageBoundBox = {
   x: number; y: number; width: number; height: number; rotation?: number;
 };
@@ -430,19 +559,29 @@ export function applyBlackAsAlpha(data: Uint8ClampedArray | Uint8Array): void {
   }
 }
 
-export function knockOutBlackToAlpha(img: HTMLImageElement): HTMLCanvasElement | null {
+/**
+ * Knock out near-black to alpha for landmark PNGs.
+ * Caps working size so Design Studio does not allocate multi‑MB bitmaps.
+ */
+export function knockOutBlackToAlpha(
+  img: HTMLImageElement,
+  maxEdge = 1280,
+): HTMLCanvasElement | null {
   if (typeof document === 'undefined') return null;
   const w = img.naturalWidth || img.width;
   const h = img.naturalHeight || img.height;
   if (!w || !h) return null;
+  const scale = Math.min(1, maxEdge / Math.max(w, h));
+  const dw = Math.max(1, Math.round(w * scale));
+  const dh = Math.max(1, Math.round(h * scale));
   const c = document.createElement('canvas');
-  c.width = w;
-  c.height = h;
-  const ctx = c.getContext('2d');
+  c.width = dw;
+  c.height = dh;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
   if (!ctx) return null;
   try {
-    ctx.drawImage(img, 0, 0);
-    const id = ctx.getImageData(0, 0, w, h);
+    ctx.drawImage(img, 0, 0, dw, dh);
+    const id = ctx.getImageData(0, 0, dw, dh);
     applyBlackAsAlpha(id.data);
     ctx.putImageData(id, 0, 0);
     return c;
@@ -451,16 +590,31 @@ export function knockOutBlackToAlpha(img: HTMLImageElement): HTMLCanvasElement |
   }
 }
 
+/**
+ * Builtin image srcs (landmarks, city photos, wallpapers) the admin removed.
+ * Persisted so a redeploy cannot put them back.
+ */
+export function omittedLandmarkSrcs(
+  saved: { type?: string; src?: string }[] | undefined,
+  builtin: { type?: string; src?: string }[],
+): string[] {
+  const have = new Set((saved || []).map((e) => e.src).filter(Boolean) as string[]);
+  return builtin
+    .filter((e) => e.type === 'image' && e.src && !have.has(e.src))
+    .map((e) => e.src as string);
+}
+
 export function restoreLandmarkGraphics<T extends { type?: string; src?: string; objectFit?: string; mixBlendMode?: string }>(
   saved: T[],
   builtin: T[],
+  omitted: string[] = [],
 ): T[] {
   if (!Array.isArray(saved) || !saved.length) return saved;
+  const skip = new Set(omitted.filter(Boolean));
   const bySrc = new Map(
     builtin.filter((e) => isLandmarkGraphic(e) && e.src).map((e) => [e.src as string, e]),
   );
-  // Never re-insert a landmark the admin deleted — only tidy blend on ones still present.
-  return saved.map((el) => {
+  const withBlend = saved.map((el) => {
     const b = el.src ? bySrc.get(el.src) : undefined;
     if (!b) return sanitizeImageBlend(el);
     return sanitizeImageBlend({
@@ -468,26 +622,27 @@ export function restoreLandmarkGraphics<T extends { type?: string; src?: string;
       objectFit: el.objectFit || b.objectFit || 'contain',
     });
   });
+  const srcs = new Set(withBlend.map((e) => e.src).filter(Boolean) as string[]);
+  const extra = builtin.filter((e) => (
+    isLandmarkGraphic(e) && e.src && !srcs.has(e.src) && !skip.has(e.src)
+  ));
+  if (!extra.length) return withBlend;
+  const bg = withBlend.findIndex((e) => e.type === 'background');
+  const at = bg >= 0 ? bg + 1 : 0;
+  return [...withBlend.slice(0, at), ...extra, ...withBlend.slice(at)];
 }
 
-/** Fill blank city-photo slots a save dropped. Do not re-insert deleted landmarks. */
+/**
+ * Heal landmark PNGs that old saves dropped after a deploy — unless the admin
+ * explicitly omitted them. Do NOT refill blank city-photo / wallpaper slots:
+ * that undoes Design Studio deletes and custom wallpapers on every build.
+ */
 export function restoreCoverGraphics<T extends { type?: string; src?: string; objectFit?: string; mixBlendMode?: string }>(
   saved: T[],
   builtin: T[],
+  omitted: string[] = [],
 ): T[] {
-  const marked = restoreLandmarkGraphics(saved, builtin);
-  let unused = builtin.filter((e) => e.type === 'image' && e.src && !isLandmarkGraphic(e));
-  return marked.map((el) => {
-    if (el.type !== 'image') return el;
-    if (el.src) {
-      unused = unused.filter((b) => b.src !== el.src);
-      return sanitizeImageBlend(el);
-    }
-    const b = unused.shift();
-    return b
-      ? sanitizeImageBlend({ ...el, src: b.src, objectFit: el.objectFit || b.objectFit, mixBlendMode: b.mixBlendMode })
-      : el;
-  });
+  return restoreLandmarkGraphics(saved, builtin, omitted);
 }
 
 export function imageFrameCoverFit(
@@ -1461,6 +1616,8 @@ export type DesignSideOverride = {
   backElements?: DE[];
   /** Snapshot of the builtin rev at save time (not used to drop overrides). */
   layoutRev?: number;
+  /** Landmark PNGs the admin deleted — do not re-inject on deploy. */
+  omittedLandmarkSrcs?: string[];
 };
 
 export type DesignOverrides = Record<string, DE[] | DesignSideOverride>;
@@ -1494,10 +1651,14 @@ export function normalizeOverride(raw: unknown): DesignSideOverride | null {
       : undefined;
   const back = Array.isArray(o.backElements) ? (o.backElements as DE[]) : undefined;
   if ((!front || !front.length) && (!back || !back.length)) return null;
+  const omitted = Array.isArray(o.omittedLandmarkSrcs)
+    ? (o.omittedLandmarkSrcs as unknown[]).filter((s): s is string => typeof s === 'string' && !!s)
+    : undefined;
   return {
     frontElements: front?.length ? front : back,
     backElements: back?.length ? back : front,
     layoutRev: typeof o.layoutRev === 'number' ? o.layoutRev : undefined,
+    omittedLandmarkSrcs: omitted?.length ? omitted : undefined,
   };
 }
 
@@ -1527,12 +1688,13 @@ export function applyDesignOverrides(
     // Design Studio is the source of truth. A new deploy must not throw away
     // a shop's saved covers just because built-in layoutRev was bumped.
     // Drop the baked catalog mockup so pickers show the saved layers.
+    const omitted = norm.omittedLandmarkSrcs ?? [];
     const front = frontOk && norm.frontElements?.length
-      ? restoreCoverGraphics(norm.frontElements, d.elements)
+      ? restoreCoverGraphics(norm.frontElements, d.elements, omitted)
       : d.elements;
     const builtinBack = d.backElements ?? d.elements;
     const back = backOk && norm.backElements?.length
-      ? restoreCoverGraphics(norm.backElements, builtinBack)
+      ? restoreCoverGraphics(norm.backElements, builtinBack, omitted)
       : builtinBack;
     return {
       ...d,
@@ -1646,4 +1808,28 @@ export function designElementsWithIds(designId: string, elements: DE[]): EditorE
 
 export function designElementsWithoutIds(elements: EditorElement[]): DE[] {
   return elements.map(({ id: _id, ...rest }) => rest);
+}
+
+/**
+ * Photoshop-style layer stack. Array index 0 paints at the back.
+ * `visualFrom` / `visualTo` are 0 = front (top of the layers list).
+ * Background plates stay at the back.
+ */
+export function reorderLayerByVisualIndex<T extends { type?: string }>(
+  els: T[],
+  visualFrom: number,
+  visualTo: number,
+): T[] {
+  if (!Array.isArray(els) || els.length < 2) return els;
+  if (visualFrom === visualTo) return els;
+  const visual = [...els].reverse();
+  if (visualFrom < 0 || visualFrom >= visual.length) return els;
+  if (visual[visualFrom]?.type === 'background') return els;
+  const moved = visual[visualFrom];
+  const without = visual.filter((_, i) => i !== visualFrom);
+  const insertAt = Math.max(0, Math.min(visualTo, without.length));
+  without.splice(insertAt, 0, moved);
+  const bgs = without.filter((e) => e.type === 'background');
+  const rest = without.filter((e) => e.type !== 'background');
+  return [...bgs, ...[...rest].reverse()];
 }

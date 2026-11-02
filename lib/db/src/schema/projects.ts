@@ -45,7 +45,7 @@ export const projectsTable = pgTable("projects", {
   pdfUrl: text("pdf_url"),
   shareToken: text("share_token").unique(),
   pageCount: integer("page_count").notNull().default(32),
-  totalPriceLek: integer("total_price_lek").notNull().default(3100),
+  totalPriceLek: integer("total_price_lek").notNull().default(3000),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

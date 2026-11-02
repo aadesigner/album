@@ -22,7 +22,7 @@ export function OfferBarStrip({
 }) {
   const btn = button ? (
     <span
-      className="inline-flex items-center px-3.5 py-[5px] rounded-full text-[10px] sm:text-[10.5px] font-semibold uppercase tracking-[0.16em] transition-transform hover:-translate-y-px active:translate-y-0"
+      className="inline-flex items-center px-3.5 py-[6px] rounded-full text-[11px] sm:text-[11.5px] font-semibold uppercase tracking-[0.14em] transition-transform hover:-translate-y-px active:translate-y-0"
       style={{
         background: buttonBg,
         color: buttonText,
@@ -50,7 +50,7 @@ export function OfferBarStrip({
         <span aria-hidden className="text-[9px] tracking-[0.28em] opacity-60">
           ✦
         </span>
-        <span className="text-[12px] sm:text-[13px] font-medium tracking-[0.015em] leading-snug">
+        <span className="text-[13px] sm:text-[14px] font-medium tracking-[0.015em] leading-snug">
           {text}
         </span>
         {button && (href ? <Link href={href}>{btn}</Link> : btn)}

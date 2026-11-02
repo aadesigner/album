@@ -153,7 +153,6 @@ export function Navbar() {
           background: 'rgba(255,255,255,0.97)',
           backdropFilter: 'blur(16px)',
           WebkitBackdropFilter: 'blur(16px)',
-          borderBottom: scrolled ? '1px solid rgba(0,0,0,0.09)' : '1px solid rgba(0,0,0,0.06)',
           boxShadow: scrolled ? '0 2px 28px rgba(0,0,0,0.07)' : 'none',
         }}
       >
@@ -177,7 +176,7 @@ export function Navbar() {
               const active = loc === item.href;
               return (
                 <Link key={item.href} href={item.href} className="group relative py-1.5">
-                  <span className={`text-[10px] uppercase tracking-[0.14em] font-medium transition-colors duration-200 ${
+                  <span className={`text-[12px] uppercase tracking-[0.12em] font-medium transition-colors duration-200 ${
                     active ? 'text-neutral-900' : 'text-neutral-400 group-hover:text-neutral-800'
                   }`}>
                     {item.label}
@@ -210,7 +209,7 @@ export function Navbar() {
                   }}
                 >
                   <img src={flag} alt={code} style={{ width: 16, height: 12, objectFit: 'cover', borderRadius: 1, display: 'block' }} />
-                  <span className={`text-[10px] font-semibold tracking-wider transition-colors ${lang === code ? 'text-neutral-800' : 'text-neutral-400'}`}>{label}</span>
+                  <span className={`text-[11.5px] font-semibold tracking-wider transition-colors ${lang === code ? 'text-neutral-800' : 'text-neutral-400'}`}>{label}</span>
                 </button>
               ))}
             </div>
@@ -239,7 +238,7 @@ export function Navbar() {
                   }}
                 >
                   <AccountMonogram initials={initials} size={30} />
-                  <span className="text-[12px] font-medium text-neutral-800 truncate leading-none tracking-[-0.01em]">
+                  <span className="text-[13px] font-medium text-neutral-800 truncate leading-none tracking-[-0.01em]">
                     {name}
                   </span>
                   <ChevronDown
@@ -282,7 +281,7 @@ export function Navbar() {
                             {name}
                           </p>
                           {user?.email && (
-                            <p className="text-[11px] text-neutral-400 truncate mt-1 tracking-wide">
+                            <p className="text-[12px] text-neutral-400 truncate mt-1 tracking-wide">
                               {user.email}
                             </p>
                           )}
@@ -325,7 +324,7 @@ export function Navbar() {
                               <span
                                 className="flex-1"
                                 style={{
-                                  fontSize: 12.5,
+                                  fontSize: 13.5,
                                   fontWeight: active ? 600 : 500,
                                   letterSpacing: '0.01em',
                                 }}
@@ -369,7 +368,7 @@ export function Navbar() {
                         onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
                       >
                         <LogOut size={15} strokeWidth={1.75} style={{ color: '#A87868', flexShrink: 0 }} />
-                        <span style={{ fontSize: 12.5, fontWeight: 500 }}>{t('nav.logout')}</span>
+                        <span style={{ fontSize: 13.5, fontWeight: 500 }}>{t('nav.logout')}</span>
                       </button>
                     </div>
                   </div>
@@ -379,14 +378,14 @@ export function Navbar() {
               <div className="flex items-center gap-4">
                 <Link
                   href="/hyr"
-                  className="text-[10.5px] uppercase tracking-[0.14em] font-medium text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer"
+                  className="text-[12px] uppercase tracking-[0.12em] font-medium text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer"
                 >
                   {t('nav.login')}
                 </Link>
                 <Link href="/krijo">
-                  <button className="flex items-center gap-1.5 px-4 py-2 bg-neutral-900 text-white text-[10.5px] uppercase tracking-[0.16em] font-semibold rounded-full hover:bg-neutral-700 active:scale-95 transition-all duration-150 cursor-pointer">
+                  <button className="flex items-center gap-1.5 px-5 py-2.5 bg-neutral-900 text-white text-[12px] uppercase tracking-[0.14em] font-semibold rounded-full hover:bg-neutral-700 active:scale-95 transition-all duration-150 cursor-pointer">
                     {lang === 'sq' ? 'Krijo Album' : 'Create Book'}
-                    <span className="opacity-60 text-[12px] leading-none">↗</span>
+                    <span className="opacity-60 text-[13px] leading-none">↗</span>
                   </button>
                 </Link>
               </div>
@@ -456,8 +455,8 @@ export function Navbar() {
                           : 'text-neutral-700 hover:bg-neutral-50 active:bg-neutral-100'
                       }`}
                     >
-                      <span className="text-[14px] font-medium">{item.label}</span>
-                      <span className="text-xs opacity-40">↗</span>
+                      <span className="text-[15px] font-medium">{item.label}</span>
+                      <span className="text-sm opacity-40">↗</span>
                     </div>
                   </Link>
                 ))}
@@ -493,7 +492,7 @@ export function Navbar() {
                       <div className={`flex items-center justify-between px-4 py-3 rounded-xl ${
                         loc === '/projektet' ? 'bg-neutral-100 text-neutral-900' : 'text-neutral-700 hover:bg-neutral-50'
                       }`}>
-                        <span className="text-[14px] font-medium">{t('nav.myProjects')}</span>
+                        <span className="text-[15px] font-medium">{t('nav.myProjects')}</span>
                         <span className="text-xs opacity-40">↗</span>
                       </div>
                     </Link>
@@ -501,7 +500,7 @@ export function Navbar() {
                       <div className={`flex items-center justify-between px-4 py-3 rounded-xl ${
                         loc === '/porositë' ? 'bg-neutral-100 text-neutral-900' : 'text-neutral-700 hover:bg-neutral-50'
                       }`}>
-                        <span className="text-[14px] font-medium">{t('nav.myOrders')}</span>
+                        <span className="text-[15px] font-medium">{t('nav.myOrders')}</span>
                         <span className="text-xs opacity-40">↗</span>
                       </div>
                     </Link>
@@ -509,7 +508,7 @@ export function Navbar() {
                       <div className={`flex items-center justify-between px-4 py-3 rounded-xl ${
                         loc === '/profili' ? 'bg-neutral-100 text-neutral-900' : 'text-neutral-700 hover:bg-neutral-50'
                       }`}>
-                        <span className="text-[14px] font-medium">{t('nav.profile')}</span>
+                        <span className="text-[15px] font-medium">{t('nav.profile')}</span>
                         <span className="text-xs opacity-40">↗</span>
                       </div>
                     </Link>
@@ -518,14 +517,14 @@ export function Navbar() {
                         <div className={`flex items-center justify-between px-4 py-3 rounded-xl ${
                           loc.startsWith('/heyadmin') ? 'bg-neutral-100 text-neutral-900' : 'text-neutral-700 hover:bg-neutral-50'
                         }`}>
-                          <span className="text-[14px] font-medium">Admin</span>
+                          <span className="text-[15px] font-medium">Admin</span>
                           <span className="text-xs opacity-40">↗</span>
                         </div>
                       </Link>
                     )}
                     <button
                       onClick={() => { logout(); setIsOpen(false); }}
-                      className="w-full text-left px-4 py-3.5 rounded-xl text-red-500 hover:bg-red-50 active:bg-red-100 text-[14px] font-medium transition-colors mt-1"
+                      className="w-full text-left px-4 py-3.5 rounded-xl text-red-500 hover:bg-red-50 active:bg-red-100 text-[15px] font-medium transition-colors mt-1"
                     >
                       {t('nav.logout')}
                     </button>
@@ -534,12 +533,12 @@ export function Navbar() {
                   <div className="flex gap-2 px-2">
                     <Link href="/hyr" onClick={() => setIsOpen(false)} className="flex-1 min-w-0">
                       <div className="flex items-center justify-center px-3 py-3.5 rounded-xl border border-neutral-200 text-neutral-700 hover:bg-neutral-50 h-full">
-                        <span className="text-[13px] font-medium">{t('nav.login')}</span>
+                        <span className="text-[14px] font-medium">{t('nav.login')}</span>
                       </div>
                     </Link>
                     <Link href="/krijo" onClick={() => setIsOpen(false)} className="flex-1 min-w-0">
                       <div className="flex items-center justify-center gap-1.5 px-3 py-3.5 rounded-xl bg-neutral-900 text-white h-full">
-                        <span className="text-[13px] font-semibold truncate">
+                        <span className="text-[14px] font-semibold truncate">
                           {lang === 'sq' ? 'Krijo Album' : 'Create Album'}
                         </span>
                         <span className="opacity-60 shrink-0">↗</span>
@@ -557,7 +556,7 @@ export function Navbar() {
                   <button
                     key={l.code}
                     onClick={() => setLang(l.code)}
-                    className={`flex-1 py-2.5 text-[12px] font-medium rounded-xl border transition-all flex items-center justify-center gap-2 ${
+                    className={`flex-1 py-2.5 text-[13px] font-medium rounded-xl border transition-all flex items-center justify-center gap-2 ${
                       lang === l.code
                         ? 'bg-neutral-900 text-white border-neutral-900'
                         : 'border-neutral-200 text-neutral-500 hover:border-neutral-400'

@@ -250,7 +250,7 @@ function PendingPrintingWidget() {
   const queryClient = useQueryClient();
   const { data, isLoading, refetch } = useListAdminOrders(
     { page: 1, limit: 12, status: 'pending' },
-    { query: { staleTime: 20_000, refetchOnMount: 'always', refetchInterval: 60_000 } } as any,
+    { query: { staleTime: 45_000, refetchOnMount: 'always', refetchInterval: 90_000 } } as any,
   );
   const updateOrder = useUpdateAdminOrder();
   const [shippingId, setShippingId] = React.useState<number | null>(null);
@@ -284,7 +284,9 @@ function PendingPrintingWidget() {
           </div>
           <div className="min-w-0">
             <h2 className="font-semibold text-[15px]" style={{ color: theme.ink, fontFamily: theme.fontSerif }}>Print queue</h2>
-            <p className="text-[11px] truncate" style={{ color: theme.muted }}>{orders.length} waiting · WhatsApp checkouts</p>
+            <p className="text-[11px] truncate" style={{ color: theme.muted }}>
+              {orders.length ? `${orders.length} pending — mark shipped when done` : 'Nothing pending'}
+            </p>
           </div>
         </div>
         <Link href="/heyadmin/porosi" className="text-xs font-medium whitespace-nowrap" style={{ color: theme.accentDeep }}>All orders →</Link>
@@ -390,8 +392,8 @@ export default function AdminDashboard() {
       if (!res.ok) throw new Error('Failed to load stats');
       return res.json();
     },
-    staleTime: 60_000,
-    refetchInterval: 2 * 60_000,
+    staleTime: 90_000,
+    refetchInterval: 3 * 60_000,
     refetchOnWindowFocus: false,
     placeholderData: (prev) => prev,
   });
@@ -436,12 +438,47 @@ export default function AdminDashboard() {
     void refetch();
   };
 
-  const attention = [
-    pipeline.pending?.count ? `${pipeline.pending.count} to print` : null,
-    pipeline.printing?.count ? `${pipeline.printing.count} printing` : null,
-    pipeline.confirmed?.count ? `${pipeline.confirmed.count} confirmed` : null,
-    s?.draftProjects ? `${s.draftProjects} drafts` : null,
-  ].filter(Boolean) as string[];
+  const actionItems = [
+    Number(pipeline.pending?.count) > 0
+      ? {
+          key: 'pending',
+          label: `${pipeline.pending.count} to print`,
+          href: '/heyadmin/porosi?status=pending',
+          detail: pipeline.pending.revenue ? fmtLek(pipeline.pending.revenue) : null,
+        }
+      : null,
+    Number(pipeline.confirmed?.count) > 0
+      ? {
+          key: 'confirmed',
+          label: `${pipeline.confirmed.count} confirmed`,
+          href: '/heyadmin/porosi?status=confirmed',
+          detail: null,
+        }
+      : null,
+    Number(pipeline.printing?.count) > 0
+      ? {
+          key: 'printing',
+          label: `${pipeline.printing.count} printing`,
+          href: '/heyadmin/porosi?status=printing',
+          detail: null,
+        }
+      : null,
+  ].filter(Boolean) as Array<{ key: string; label: string; href: string; detail: string | null }>;
+
+  const secondaryMetrics = [
+    { label: 'WA clicks', value: s?.wpClicks ?? 0, icon: <MessageCircle size={13} />, tip: 'This period', href: null as string | null },
+    { label: 'Avg order', value: fmtLek(s?.avgOrderValue ?? 0), icon: <Target size={13} />, tip: 'Non-cancelled', href: null },
+    { label: 'Conversion', value: `${s?.conversionRate ?? 0}%`, icon: <Activity size={13} />, tip: 'Orders / visitors', href: null },
+    { label: 'Buyers', value: s?.uniqueBuyers ?? 0, icon: <Users size={13} />, tip: s?.repeatCustomers ? `${s.repeatCustomers} repeat` : 'Unique buyers', href: '/heyadmin/perdorues?filter=ordered' },
+    { label: 'Fulfillment', value: s?.fulfillmentHours ? `${s.fulfillmentHours}h` : '—', icon: <Clock size={13} />, tip: 'Avg to ship', href: '/heyadmin/porosi' },
+    {
+      label: 'Open albums',
+      value: s?.draftProjects ?? 0,
+      icon: <FolderOpen size={13} />,
+      tip: 'Started, not ordered yet',
+      href: '/heyadmin/perdorues?filter=not_ordered',
+    },
+  ];
 
   return (
     <AdminLayout>
@@ -452,7 +489,7 @@ export default function AdminDashboard() {
               Overview
             </p>
             <h1 className="text-[1.75rem] md:text-[2rem] font-semibold leading-tight" style={{ color: theme.ink, fontFamily: theme.fontSerif }}>
-              Studio pulse
+              Dashboard
             </h1>
             <p className="text-sm mt-0.5" style={{ color: theme.muted }}>
               {format(new Date(), 'EEEE, d MMM')} · {s?.rangeLabel || 'This month'}
@@ -504,23 +541,41 @@ export default function AdminDashboard() {
           })}
         </div>
 
-        {attention.length > 0 && (
+        {actionItems.length > 0 && (
           <div
-            className="flex flex-wrap items-center gap-2 px-3.5 py-2.5 mb-4 text-[12px]"
+            className="flex flex-wrap items-center gap-2 px-3.5 py-3 mb-4"
             style={{
               background: theme.accentSoft,
               border: `1px solid ${theme.line}`,
               borderRadius: theme.radius,
-              color: theme.ink,
             }}
           >
-            <span className="font-semibold" style={{ color: theme.accentDeep }}>Needs you</span>
-            <span style={{ color: theme.muted }}>{attention.join(' · ')}</span>
-            {pipeline.pending?.revenue ? (
-              <span className="ml-auto font-semibold" style={{ color: theme.ink }}>{fmtLek(pipeline.pending.revenue)} waiting</span>
-            ) : null}
+            <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: theme.accentDeep }}>
+              Do next
+            </span>
+            {actionItems.map((item) => (
+              <Link
+                key={item.key}
+                href={item.href}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold transition-opacity hover:opacity-85"
+                style={{
+                  background: theme.card,
+                  color: theme.ink,
+                  border: `1px solid ${theme.line}`,
+                  borderRadius: '999px',
+                }}
+              >
+                {item.label}
+                {item.detail ? <span style={{ color: theme.muted }}>· {item.detail}</span> : null}
+                <ArrowUpRight size={11} style={{ color: theme.accentDeep }} />
+              </Link>
+            ))}
           </div>
         )}
+
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] mb-2" style={{ color: theme.muted }}>
+          Period stats
+        </p>
 
         {isLoading && !s ? (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
@@ -568,38 +623,57 @@ export default function AdminDashboard() {
         )}
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 mb-5">
-          {[
-            { label: 'WA clicks', value: s?.wpClicks ?? 0, icon: <MessageCircle size={13} />, tip: 'Period' },
-            { label: 'Avg order', value: fmtLek(s?.avgOrderValue ?? 0), icon: <Target size={13} />, tip: 'Non-cancelled' },
-            { label: 'Conversion', value: `${s?.conversionRate ?? 0}%`, icon: <Activity size={13} />, tip: 'Orders / visitors' },
-            { label: 'Buyers', value: s?.uniqueBuyers ?? 0, icon: <Users size={13} />, tip: s?.repeatCustomers ? `${s.repeatCustomers} repeat` : 'Unique in period' },
-            { label: 'Fulfillment', value: s?.fulfillmentHours ? `${s.fulfillmentHours}h` : '—', icon: <Clock size={13} />, tip: 'Avg to ship' },
-            { label: 'Drafts', value: s?.draftProjects ?? 0, icon: <FolderOpen size={13} />, tip: 'Albums not ordered' },
-          ].map((m) => (
-            <div
-              key={m.label}
-              className="px-3 py-2.5"
-              style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: theme.radius }}
-            >
-              <div className="flex items-center gap-1.5 mb-1" style={{ color: theme.accent }}>
-                {m.icon}
-                <span className="text-[9px] font-semibold uppercase tracking-wider" style={{ color: theme.muted }}>{m.label}</span>
+          {secondaryMetrics.map((m) => {
+            const body = (
+              <>
+                <div className="flex items-center gap-1.5 mb-1" style={{ color: theme.accent }}>
+                  {m.icon}
+                  <span className="text-[9px] font-semibold uppercase tracking-wider" style={{ color: theme.muted }}>{m.label}</span>
+                </div>
+                <p className="text-[16px] font-semibold leading-none" style={{ color: theme.ink, fontFamily: theme.fontSerif }}>{m.value}</p>
+                <p className="text-[10px] mt-1" style={{ color: theme.muted }}>
+                  {m.tip}{m.href ? ' · open →' : ''}
+                </p>
+              </>
+            );
+            return m.href ? (
+              <Link
+                key={m.label}
+                href={m.href}
+                className="block px-3 py-2.5 transition-opacity hover:opacity-90"
+                style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: theme.radius }}
+              >
+                {body}
+              </Link>
+            ) : (
+              <div
+                key={m.label}
+                className="px-3 py-2.5"
+                style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: theme.radius }}
+              >
+                {body}
               </div>
-              <p className="text-[16px] font-semibold leading-none" style={{ color: theme.ink, fontFamily: theme.fontSerif }}>{m.value}</p>
-              <p className="text-[10px] mt-1" style={{ color: theme.muted }}>{m.tip}</p>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] mb-2" style={{ color: theme.muted }}>
+          Order pipeline
+        </p>
         <div
-          className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3.5 mb-5"
+          className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-2 mb-5"
           style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: theme.radius }}
         >
           {PIPELINE_STEPS.map((st) => {
             const count = Number(pipeline[st.key]?.count || 0);
             const revenue = Number(pipeline[st.key]?.revenue || 0);
             return (
-              <div key={st.key}>
+              <Link
+                key={st.key}
+                href={`/heyadmin/porosi?status=${st.key}`}
+                className="block px-2.5 py-2 rounded-lg transition-colors hover:bg-[color:var(--hover)]"
+                style={{ ['--hover' as any]: theme.accentSoft }}
+              >
                 <div className="flex items-center justify-between mb-1.5">
                   <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: theme.muted }}>{st.label}</p>
                   <p className="text-sm font-semibold" style={{ color: theme.ink, fontFamily: theme.fontSerif }}>{count}</p>
@@ -611,7 +685,7 @@ export default function AdminDashboard() {
                   />
                 </div>
                 <p className="text-[10px] mt-1" style={{ color: theme.muted }}>{fmtLek(revenue)}</p>
-              </div>
+              </Link>
             );
           })}
         </div>
@@ -620,6 +694,9 @@ export default function AdminDashboard() {
           <PendingPrintingWidget />
         </div>
 
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] mb-2" style={{ color: theme.muted }}>
+          Charts
+        </p>
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-5">
           <div
             className="xl:col-span-2 p-4"
@@ -703,19 +780,22 @@ export default function AdminDashboard() {
           </div>
         )}
 
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] mb-2" style={{ color: theme.muted }}>
+          All-time totals
+        </p>
         <div
           className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5 p-4"
           style={{
-            background: `linear-gradient(135deg, ${theme.accentSoft} 0%, ${theme.card} 62%)`,
+            background: theme.card,
             border: `1px solid ${theme.line}`,
             borderRadius: theme.radius,
           }}
         >
           {[
-            { label: 'Lifetime pipeline', value: fmtLek(s?.revenue ?? 0) },
-            { label: 'Lifetime earned', value: fmtLek(s?.earned ?? 0) },
-            { label: 'All WA clicks', value: s?.wpClicksTotal ?? 0 },
-            { label: 'All orders', value: s?.totalOrders ?? 0 },
+            { label: 'Pipeline revenue', value: fmtLek(s?.revenue ?? 0) },
+            { label: 'Earned', value: fmtLek(s?.earned ?? 0) },
+            { label: 'WA clicks', value: s?.wpClicksTotal ?? 0 },
+            { label: 'Orders', value: s?.totalOrders ?? 0 },
           ].map((x) => (
             <div key={x.label}>
               <p className="text-[9px] font-semibold uppercase tracking-wider mb-1" style={{ color: theme.muted }}>{x.label}</p>
@@ -724,6 +804,9 @@ export default function AdminDashboard() {
           ))}
         </div>
 
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] mb-2" style={{ color: theme.muted }}>
+          Recent activity
+        </p>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2 overflow-hidden" style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: theme.radius }}>
             <div className="flex items-center justify-between px-4 py-3.5" style={{ borderBottom: `1px solid ${theme.line}` }}>

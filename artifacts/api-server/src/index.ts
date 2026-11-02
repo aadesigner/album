@@ -1,4 +1,5 @@
 import { ensureSchema } from "./lib/ensureSchema";
+import { ensureDataDirs } from "./lib/dataDir";
 import { logger } from "./lib/logger";
 
 // ── Catch unhandled promise rejections so the process doesn't silently crash
@@ -30,6 +31,8 @@ try {
   logger.error({ err }, "Schema push failed — refusing to start with empty/broken DB");
   process.exit(1);
 }
+
+ensureDataDirs();
 
 // Import app AFTER schema push so the first requests never hit missing tables.
 const { default: app } = await import("./app");

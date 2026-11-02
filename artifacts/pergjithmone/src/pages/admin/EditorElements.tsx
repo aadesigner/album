@@ -124,25 +124,25 @@ export default function AdminEditorElements() {
   return (
     <AdminLayout>
       <div
-        className="max-w-5xl"
+        className="p-3 sm:p-4 md:p-5 max-w-5xl mx-auto w-full"
         onDragOver={e => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(false); }}
         onDrop={takeDrop}
       >
-        <div className="mb-6 flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4">
-          <div>
+        <div className="mb-6 flex flex-col items-center text-center gap-4">
+          <div className="w-full max-w-xl">
             <p className="text-[10px] font-semibold tracking-[0.18em] uppercase mb-1.5" style={{ color: ADMIN.blush }}>
               Catalog
             </p>
             <h1 className="text-3xl font-serif font-semibold mb-1" style={{ color: ADMIN.ink }}>
               Text / Elements
             </h1>
-            <p className="text-sm max-w-xl" style={{ color: ADMIN.muted }}>
+            <p className="text-sm mx-auto" style={{ color: ADMIN.muted }}>
               PNG and JPG decorations for the album editor. Transparent PNGs stay see-through
               on the page — hearts, frames, bows, seasonal art.
             </p>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center justify-center gap-2 shrink-0">
             <input
               ref={fileRef}
               type="file"
@@ -167,7 +167,7 @@ export default function AdminEditorElements() {
           </div>
         </div>
 
-        <div className="mb-5 flex flex-col sm:flex-row gap-2.5 sm:items-center">
+        <div className="mb-5 flex flex-col sm:flex-row gap-2.5 sm:items-center sm:justify-center max-w-2xl mx-auto w-full">
           <div className="relative flex-1 min-w-0">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: ADMIN.muted }} />
             <Input

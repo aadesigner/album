@@ -28,10 +28,12 @@ import {
   type SecuritySettings,
 } from "../lib/securitySettings";
 import { OFFER_BAR_KEY_MAP, normalizeOfferBarWrite, readOfferBarSettings } from "../lib/offerBarSettings";
+import { CLARITY_KEY_MAP, normalizeClarityWrite, readClaritySettings } from "../lib/claritySettings";
 import { parseEditorElements, EDITOR_ELEMENTS_MAX } from "../lib/editorElements";
 import { invalidateIpBlocklistCache } from "../lib/ipBlocklist";
 import { queueProjectPdfGeneration, deleteProjectPdfFile } from "../lib/generateProjectPdf";
 import { logger } from "../lib/logger";
+import { hasPersistentStorage, dataRoot } from "../lib/dataDir";
 import {
   ADMIN_STATS_TZ,
   STATS_TTL_MS,
@@ -1370,7 +1372,7 @@ router.get(
 
     res.json({
       whatsappNumber: map["whatsapp_number"] || "+355688755833",
-      basePriceLek: parseInt(map["base_price_lek"] || "3100", 10),
+      basePriceLek: parseInt(map["base_price_lek"] || "3000", 10),
       minPages: parseInt(map["min_pages"] || "30", 10),
       extraSpreadPriceLek: parseInt(map["extra_spread_price_lek"] || "200", 10),
       siteName: map["site_name"] || "Përgjithmonë",
@@ -1390,7 +1392,11 @@ router.get(
       requireLoginForPdf: map["require_login_for_pdf"] === "true",
       pendingBooksLimitEnabled: map["pending_books_limit_enabled"] !== "false",
       pendingBooksLimit: parseInt(map["pending_books_limit"] || "10", 10),
+      // Disk that holds uploads / wallpapers / category covers across deploys.
+      persistentStorage: hasPersistentStorage(),
+      dataRoot,
       ...readOfferBarSettings(map),
+      ...readClaritySettings(map),
       ...readSecuritySettings(map),
     });
   },
@@ -1424,6 +1430,7 @@ router.patch(
       pendingBooksLimitEnabled: "pending_books_limit_enabled",
       pendingBooksLimit: "pending_books_limit",
       ...OFFER_BAR_KEY_MAP,
+      ...CLARITY_KEY_MAP,
       ...SECURITY_SETTINGS_KEY_MAP,
     };
 
@@ -1432,10 +1439,12 @@ router.patch(
       if (req.body[jsKey] !== undefined) {
         const raw = req.body[jsKey];
         const offerValue = normalizeOfferBarWrite(jsKey, raw);
+        const clarityValue = normalizeClarityWrite(jsKey, raw);
         let value: string;
         if (jsKey === "allowedUploadMimeTypes") {
           value = serializeAllowedUploadMimeTypes(raw);
         } else if (offerValue !== null) value = offerValue;
+        else if (clarityValue !== null) value = clarityValue;
         else if (JSON_SETTING_JS_KEYS.has(jsKey)) {
           if (typeof raw === "string") {
             value = raw;
@@ -1557,7 +1566,7 @@ router.patch(
 
     res.json({
       whatsappNumber: map2["whatsapp_number"] || "+355688755833",
-      basePriceLek: parseInt(map2["base_price_lek"] || "3100", 10),
+      basePriceLek: parseInt(map2["base_price_lek"] || "3000", 10),
       minPages: parseInt(map2["min_pages"] || "30", 10),
       extraSpreadPriceLek: parseInt(map2["extra_spread_price_lek"] || "200", 10),
       siteName: map2["site_name"] || "Përgjithmonë",
@@ -1572,12 +1581,15 @@ router.patch(
       hiddenDesignIds: hiddenDesignIds2,
       designOverrides: designOverrides2,
       customDesigns: customDesigns2,
+      persistentStorage: hasPersistentStorage(),
+      dataRoot,
       editorElements: editorElements2,
       adminNotes: adminNotes2,
       requireLoginForPdf: map2["require_login_for_pdf"] === "true",
       pendingBooksLimitEnabled: map2["pending_books_limit_enabled"] !== "false",
       pendingBooksLimit: parseInt(map2["pending_books_limit"] || "10", 10),
       ...readOfferBarSettings(map2),
+      ...readClaritySettings(map2),
       ...readSecuritySettings(map2),
     });
 

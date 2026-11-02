@@ -12,6 +12,7 @@ import { useGetAppSettings } from '@workspace/api-client-react-tsconfig';
 import { useAuth } from '@/contexts/AuthContext';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { MicrosoftClarity } from '@/components/MicrosoftClarity';
 
 /** Retry failed dynamic imports — flaky networks otherwise surface as a full-page error. */
 function lazyRetry<T extends ComponentType<any>>(
@@ -204,6 +205,7 @@ function Router() {
     <>
       <ScrollToTop />
       <AnalyticsTracker />
+      <MicrosoftClarity />
       <Suspense fallback={<PageLoader />}>
         <Switch>
           <Route path="/" component={Home} />

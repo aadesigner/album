@@ -16,13 +16,17 @@ import {
   parseCustomDesigns,
   applyDesignOverrides,
   restoreCoverGraphics,
+  omittedLandmarkSrcs,
   sanitizeImageBlend,
   coverImageBlend,
   applyBlackAsAlpha,
   konvaOpacity,
   clampElementPos,
   boundBoxToPage,
+  clampKonvaDragAbs,
+  sanitizeElementPos,
   blankCoverElements,
+  reorderLayerByVisualIndex,
   DESIGNS,
   TRAVEL_LAYOUT_REV,
   fitAddedTextFrame,
@@ -295,7 +299,7 @@ describe("designCatalogFace", () => {
     expect(designFrontElements(d).some((e) => e.text === "BARCELONA")).toBe(true);
   });
 
-  it("does not put the Eiffel back after Design Studio removed it", () => {
+  it("puts the Eiffel back when an old save dropped it after a deploy", () => {
     const d = DESIGNS.find((x) => x.id === "paris-pink")!;
     expect(designFrontElements(d).some((e) => e.src?.includes("eiffel-tower"))).toBe(true);
     const [patched] = applyDesignOverrides(
@@ -311,10 +315,54 @@ describe("designCatalogFace", () => {
     );
     const els = designFrontElements(patched);
     expect(els.some((e) => e.text === "PARIS")).toBe(true);
+    expect(els.some((e) => e.src?.includes("eiffel-tower"))).toBe(true);
+  });
+
+  it("puts Sagrada back when an old Barcelona save dropped the landmark", () => {
+    const d = DESIGNS.find((x) => x.id === "barcelona-red")!;
+    const [patched] = applyDesignOverrides(
+      [d],
+      {
+        "barcelona-red": {
+          frontElements: [
+            { type: "background", x: 0, y: 0, w: DESIGN_W, h: DESIGN_H, rotation: 0, bgColor: "#A83442" },
+            { type: "text", x: 8, y: 22, w: 200, h: 40, rotation: 0, text: "BARCELONA" },
+          ],
+        },
+      },
+    );
+    const els = designFrontElements(patched);
+    expect(els.some((e) => e.text === "BARCELONA")).toBe(true);
+    expect(els.some((e) => e.src?.includes("sagrada-familia"))).toBe(true);
+  });
+
+  it("records omitted city photos and landmarks when admin removes them", () => {
+    const d = DESIGNS.find((x) => x.id === "rome")!;
+    const kept = designFrontElements(d).filter((e) => e.type !== "image");
+    const omitted = omittedLandmarkSrcs(kept, d.elements);
+    expect(omitted.some((s) => s.includes("rome-cover-thumb"))).toBe(true);
+  });
+
+  it("does not put the Eiffel back after Design Studio recorded it omitted", () => {
+    const d = DESIGNS.find((x) => x.id === "paris-pink")!;
+    const [patched] = applyDesignOverrides(
+      [d],
+      {
+        "paris-pink": {
+          frontElements: [
+            { type: "background", x: 0, y: 0, w: DESIGN_W, h: DESIGN_H, rotation: 0, bgColor: "#FEC5D7" },
+            { type: "text", x: 8, y: 22, w: 100, h: 40, rotation: 0, text: "PARIS" },
+          ],
+          omittedLandmarkSrcs: ["/designs/eiffel-tower.png"],
+        },
+      },
+    );
+    const els = designFrontElements(patched);
+    expect(els.some((e) => e.text === "PARIS")).toBe(true);
     expect(els.some((e) => e.src?.includes("eiffel-tower"))).toBe(false);
   });
 
-  it("puts the city photo back when a travel save kept type but dropped the picture", () => {
+  it("keeps a cleared city-photo slot empty so admin deletes survive deploys", () => {
     const d = DESIGNS.find((x) => x.id === "rome")!;
     const [patched] = applyDesignOverrides(
       [d],
@@ -325,12 +373,13 @@ describe("designCatalogFace", () => {
             { type: "text", x: 8, y: 22, w: 200, h: 40, rotation: 0, text: "ROME" },
             { type: "image", x: 32, y: 168, w: DESIGN_W - 64, h: 520, rotation: 0, src: "" },
           ],
+          omittedLandmarkSrcs: ["/designs/rome-cover-thumb.jpg"],
         },
       },
     );
     const els = designFrontElements(patched);
     expect(els.some((e) => e.text === "ROME")).toBe(true);
-    expect(els.some((e) => e.src?.includes("rome-cover-thumb"))).toBe(true);
+    expect(els.some((e) => e.src?.includes("rome-cover-thumb"))).toBe(false);
   });
 
   it("strips screen-blend from JPEG city photos so they stay visible", () => {
@@ -391,6 +440,26 @@ describe("designCatalogFace", () => {
     expect(clampElementPos({ x: 10, y: 760 }, 100, 80, 800)).toEqual({ x: 10, y: 720 });
   });
 
+  it("clamps Konva drag in page space so scaled previews can still move right", () => {
+    const node = {
+      getStage: () => ({ scaleX: () => 2, scaleY: () => 2 }),
+      getLayer: () => ({ x: () => 50, y: () => 20 }),
+    };
+    // Local (220,80) → abs ((220+50)*2, (80+20)*2)
+    const next = clampKonvaDragAbs(node, { x: (220 + 50) * 2 + 80, y: (80 + 20) * 2 }, 160, 40, 800);
+    expect(next).toEqual({ x: (260 + 50) * 2, y: (80 + 20) * 2 });
+    const pastRight = { x: (520 + 50) * 2, y: (80 + 20) * 2 };
+    expect(clampKonvaDragAbs(node, pastRight, 160, 40, 800)).toEqual({
+      x: (440 + 50) * 2,
+      y: (80 + 20) * 2,
+    });
+  });
+
+  it("sanitizes non-finite drag positions back onto the page", () => {
+    expect(sanitizeElementPos({ x: NaN, y: 40 }, 100, 40, 800)).toEqual({ x: 0, y: 40 });
+    expect(sanitizeElementPos({ x: 900, y: Infinity }, 100, 40, 800)).toEqual({ x: 500, y: 0 });
+  });
+
   it("rejects a resize that would leave the page", () => {
     const oldBox = { x: 500, y: 0, width: 80, height: 80 };
     const next = boundBoxToPage(oldBox, { x: 500, y: 0, width: 200, height: 80 }, 800, 16, 16);
@@ -399,7 +468,7 @@ describe("designCatalogFace", () => {
     expect(next.x + next.width).toBe(DESIGN_W);
   });
 
-  it("restoreCoverGraphics fills a blank image slot from the builtin cover", () => {
+  it("restoreCoverGraphics does not refill blank city-photo slots", () => {
     const d = DESIGNS.find((x) => x.id === "venice")!;
     const next = restoreCoverGraphics(
       [
@@ -409,7 +478,7 @@ describe("designCatalogFace", () => {
       ],
       d.elements,
     );
-    expect(next.some((e) => e.src?.includes("venice-cover-thumb"))).toBe(true);
+    expect(next.some((e) => e.src?.includes("venice-cover-thumb"))).toBe(false);
     expect(next.some((e) => e.text === "VENICE")).toBe(true);
   });
 
@@ -422,6 +491,50 @@ describe("designCatalogFace", () => {
       kind: "photo",
       src: "/designs/vienna-cover-thumb.jpg",
     });
+  });
+});
+
+describe("reorderLayerByVisualIndex", () => {
+  it("moves a front layer behind the next one", () => {
+    const els = [
+      { id: "bg", type: "background" },
+      { id: "photo", type: "image" },
+      { id: "title", type: "text" },
+    ];
+    // Visual list is title, photo, bg. Drop title onto photo → photo in front.
+    const next = reorderLayerByVisualIndex(els, 0, 1);
+    expect(next.map((e) => e.id)).toEqual(["bg", "title", "photo"]);
+  });
+
+  it("brings a back layer to the front", () => {
+    const els = [
+      { id: "bg", type: "background" },
+      { id: "a", type: "image" },
+      { id: "b", type: "shape" },
+      { id: "c", type: "text" },
+    ];
+    // Visual: c, b, a, bg. Drag a (index 2) to the top.
+    const next = reorderLayerByVisualIndex(els, 2, 0);
+    expect(next.map((e) => e.id)).toEqual(["bg", "b", "c", "a"]);
+  });
+
+  it("keeps the background at the back", () => {
+    const els = [
+      { id: "bg", type: "background" },
+      { id: "photo", type: "image" },
+      { id: "title", type: "text" },
+    ];
+    const next = reorderLayerByVisualIndex(els, 0, 2);
+    expect(next[0].id).toBe("bg");
+    expect(next.map((e) => e.id)).toEqual(["bg", "title", "photo"]);
+  });
+
+  it("does not drag the background plate", () => {
+    const els = [
+      { id: "bg", type: "background" },
+      { id: "photo", type: "image" },
+    ];
+    expect(reorderLayerByVisualIndex(els, 1, 0)).toEqual(els);
   });
 });
 

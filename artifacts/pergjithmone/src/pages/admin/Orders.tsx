@@ -185,7 +185,12 @@ function DeleteOrderConfirm({ orderId, customer, album, onConfirm, onCancel, loa
 export default function AdminOrders() {
   const { getToken } = useAuth();
   const { toast } = useToast();
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>(() => {
+    if (typeof window === 'undefined') return 'all';
+    const raw = new URLSearchParams(window.location.search).get('status');
+    const allowed = ['all', 'pending', 'confirmed', 'printing', 'shipped', 'delivered', 'cancelled'];
+    return raw && allowed.includes(raw) ? raw : 'all';
+  });
   const [pdfModal, setPdfModal] = useState<{ url: string; orderId: number } | null>(null);
   const [deletePdf, setDeletePdf] = useState<{ orderId: number } | null>(null);
   const [deletingPdfId, setDeletingPdfId] = useState<number | null>(null);

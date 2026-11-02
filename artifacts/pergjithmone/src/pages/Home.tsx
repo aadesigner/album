@@ -1308,7 +1308,7 @@ function CategoryCard({
                   {lang === 'sq' ? `Krijo Album ${cat.label.sq}` : `Create ${cat.label.en}`}
                 </span>
                 <div className="bg-white/10 backdrop-blur-sm rounded-full px-3 py-1 border border-white/20">
-                  <span className="text-white text-[11px] font-semibold">{lang === 'sq' ? 'nga 3.100 LEK' : 'from 3,100 LEK'}</span>
+                  <span className="text-white text-[11px] font-semibold">{lang === 'sq' ? 'nga 3.000 LEK' : 'from 3,000 LEK'}</span>
                 </div>
               </div>
             </div>

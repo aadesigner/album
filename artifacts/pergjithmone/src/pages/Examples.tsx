@@ -591,60 +591,7 @@ function SpreadBrowserDemo({ lang }: { lang: 'sq' | 'en' }) {
   );
 }
 
-const OCCASION_META = [
-  { slug: 'dasme', spine: '#8B6F47' },
-  { slug: 'udhetime', spine: '#C47A30' },
-  { slug: 'familje', spine: '#5C7A5A' },
-  { slug: 'miqesi', spine: '#5A6B7A' },
-  { slug: 'festash', spine: '#8B5A5A' },
-] as const;
-
 const CRAFT_ICONS = [Layers, BookOpen, Package, Truck];
-
-function OccasionCard({ index }: { index: number }) {
-  const p = usePageFields();
-  const meta = OCCASION_META[index] ?? OCCASION_META[0];
-  const href = `/krijo?category=${encodeURIComponent(meta.slug)}`;
-  return (
-    <Link href={href} className="group block h-full">
-      <motion.article
-        whileHover={{ y: -8, rotateX: 2, rotateY: -3 }}
-        transition={{ type: 'spring', stiffness: 260, damping: 22 }}
-        style={{ transformStyle: 'preserve-3d', perspective: 900 }}
-        className="h-full flex flex-col bg-white overflow-hidden rounded-[1.35rem] border border-neutral-100 shadow-[0_10px_32px_rgba(40,32,24,0.07)]"
-      >
-        <div className="relative aspect-[4/5] overflow-hidden">
-          <Editable path={`occasions.items.${index}.photo`} kind="image" as="div" className="absolute inset-0">
-            <img
-              src={p.img(`occasions.items.${index}.photo`)}
-              alt=""
-              className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.04]"
-            />
-          </Editable>
-          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
-          <div className="absolute top-0 left-0 bottom-0 w-[5px]" style={{ background: meta.spine }} />
-          <p className="absolute top-4 left-6 text-[10px] uppercase tracking-[0.2em] text-white/80">
-            <Editable path={`occasions.items.${index}.category`}>{p.txt(`occasions.items.${index}.category`)}</Editable>
-          </p>
-          <div className="absolute bottom-0 left-0 right-0 p-5">
-            <h3 className="font-serif text-[22px] leading-tight text-white font-medium">
-              <Editable path={`occasions.items.${index}.title`}>{p.txt(`occasions.items.${index}.title`)}</Editable>
-            </h3>
-          </div>
-        </div>
-        <div className="flex flex-1 flex-col p-5 pt-4">
-          <p className="text-[13px] leading-relaxed text-neutral-500 mb-4">
-            <Editable path={`occasions.items.${index}.line`}>{p.txt(`occasions.items.${index}.line`)}</Editable>
-          </p>
-          <span className="mt-auto inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.16em] font-semibold text-neutral-800">
-            <Editable path="occasions.cta">{p.txt('occasions.cta')}</Editable>
-            <ArrowRight size={13} className="transition-transform group-hover:translate-x-0.5" />
-          </span>
-        </div>
-      </motion.article>
-    </Link>
-  );
-}
 
 export default function Examples() {
   return (
@@ -671,7 +618,6 @@ function ExamplesView() {
   const reduced = usePrefersReducedMotion();
   useEffect(() => { void ensureEditorFonts(); }, []);
   const photoKeys = ['cover', 'p2a', 'p2b', 'p2c', 'p3', 'p5a', 'p5b', 'p6', 'p7', 'back'] as const;
-  const occasionCount = Math.max(p.list('occasions.items').length, OCCASION_META.length);
 
   return (
     <DemoPagesContext.Provider value={pages}>
@@ -824,27 +770,6 @@ function ExamplesView() {
               </Link>
             }
           />
-        </EditableSection>
-
-        <EditableSection path="occasions" className="bg-white py-16 md:py-24 border-b border-neutral-100">
-          <div className="max-w-6xl mx-auto px-5">
-            <div className="max-w-xl mb-10 md:mb-14">
-              <p className="text-[11px] uppercase tracking-[0.3em] text-neutral-400 mb-3">
-                <Editable path="occasions.kicker">{p.txt('occasions.kicker')}</Editable>
-              </p>
-              <h2 className="font-serif text-3xl md:text-4xl font-medium text-[#2A2218] leading-tight mb-4">
-                <Editable path="occasions.title">{p.txt('occasions.title')}</Editable>
-              </h2>
-              <p className="text-neutral-500 text-[15px] leading-relaxed">
-                <Editable path="occasions.body">{p.txt('occasions.body')}</Editable>
-              </p>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-6">
-              {Array.from({ length: occasionCount }).map((_, i) => (
-                <OccasionCard key={i} index={i} />
-              ))}
-            </div>
-          </div>
         </EditableSection>
 
         <EditableSection path="craft" className="py-16 md:py-24 border-b border-neutral-200/70">

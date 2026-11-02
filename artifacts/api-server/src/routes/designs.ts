@@ -1,5 +1,8 @@
 import { Router, type IRouter } from "express";
+import { ensureDataDirs } from "../lib/dataDir";
 import { findDesignAssetFile } from "../lib/pdfRenderer";
+
+ensureDataDirs();
 
 const router: IRouter = Router();
 

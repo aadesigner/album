@@ -18,15 +18,17 @@ import {
   type CustomDesignRecord, type DesignDef, type DesignOverrides, type EditorElement, type DE,
   coverCropRect, imageFrameFocusFromOffset,
   coverImageBlend, coverImageLetterbox, konvaOpacity, clampElementPos, boundBoxToPage,
-  restoreCoverGraphics, sanitizeImageBlend,
+  clampKonvaDragAbs, sanitizeElementPos, pageBoxFromStageBox, stageBoxFromPageBox,
+  restoreCoverGraphics, sanitizeImageBlend, omittedLandmarkSrcs, normalizeOverride,
+  reorderLayerByVisualIndex,
 } from '@/lib/designs';
 import { applyCoverBackground, coverBgMode, type CoverBgMode } from '@/lib/coverBackground';
 import { uploadErrorMessage, uploadImageToApi } from '@/lib/uploadImage';
 import { ACCEPT_SAFE_IMAGES } from '@/lib/acceptedImages';
 import { resolvePublicImageSrc } from '@/lib/categoryImages';
-import { useCachedImage } from '@/lib/imageCache';
+import { useCachedImage, bitmapWidth, bitmapHeight } from '@/lib/imageCache';
 import { useAuth } from '@/contexts/AuthContext';
-import { DesignCatalogThumb } from '@/components/PageThumb';
+import { LazyDesignCatalogThumb } from '@/components/PageThumb';
 import {
   SHAPE_KINDS, SHAPE_LABELS, SHAPE_PRESETS, KEEP_RATIO_SHAPES,
   isStrokeOnlyShape, newShapeElement, shapePathForElement,
@@ -35,7 +37,7 @@ import {
 import {
   Check, Loader2, RotateCcw, Save, Eye, EyeOff, AlertTriangle,
   Plus, Trash2, Upload, Image as ImageIcon, Type, Palette, Droplets,
-  Copy, ChevronUp, ChevronDown, Hexagon,
+  Copy, ChevronUp, ChevronDown, Hexagon, GripVertical,
   AlignLeft, AlignCenter, AlignRight, MousePointer2,
 } from 'lucide-react';
 import { useEditorFontsReady, ensureEditorFonts, normalizeEditorFont, isEditorSingleCutFont } from '@/lib/editorFonts';
@@ -118,7 +120,7 @@ function studioDragBound(
   pos: { x: number; y: number },
   w = 0, h = 0, canvasH = DESIGN_H, rotation = 0,
 ) {
-  return clampElementPos(pos, w, h, canvasH, rotation);
+  return sanitizeElementPos(pos, w, h, canvasH, rotation);
 }
 
 type StudioCtxMenu = { x: number; y: number; id: string | null };
@@ -210,12 +212,15 @@ type StudioGesture = {
   active: React.MutableRefObject<boolean>;
   begin: () => void;
   end: () => void;
+  /** Mark dirty without a React position patch (avoids full tree re-render mid-drag). */
+  markDirty: () => void;
 };
 
 /**
  * Smooth builder gestures:
  * - Always draggable (select + drag in one stroke)
  * - Live position kept in a ref so image-load re-renders don't snap Konva back
+ * - Mark dirty at drag start so a settings refetch cannot wipe the cover mid-move
  */
 function useStudioDrag(
   el: EditorElement,
@@ -225,6 +230,8 @@ function useStudioDrag(
   gesture: StudioGesture,
 ) {
   const livePos = useRef({ x: el.x, y: el.y });
+  const sizeRef = useRef({ w: el.w, h: el.h, rotation: el.rotation || 0 });
+  sizeRef.current = { w: el.w, h: el.h, rotation: el.rotation || 0 };
   // Sync from props only when idle — never mid-gesture.
   if (!gesture.active.current) {
     livePos.current = { x: el.x, y: el.y };
@@ -234,16 +241,21 @@ function useStudioDrag(
     x: livePos.current.x,
     y: livePos.current.y,
     draggable: true as const,
-    dragDistance: 2,
+    dragDistance: 3,
     onMouseDown: (e: any) => { e.cancelBubble = true; onSelect(); },
     onTouchStart: (e: any) => { e.cancelBubble = true; onSelect(); },
     onClick: (e: any) => { e.cancelBubble = true; onSelect(); },
     onTap: (e: any) => { e.cancelBubble = true; onSelect(); },
-    dragBoundFunc: (pos: any) => studioDragBound(pos, el.w, el.h, canvasH, el.rotation),
+    dragBoundFunc: function (this: any, pos: { x: number; y: number }) {
+      const { w, h, rotation } = sizeRef.current;
+      return clampKonvaDragAbs(this, pos, w, h, canvasH, rotation);
+    },
     onDragStart: (e: any) => {
       e.cancelBubble = true;
       onSelect();
       gesture.begin();
+      // Dirty without patching x/y — Konva owns position until dragEnd.
+      gesture.markDirty();
       livePos.current = { x: e.target.x(), y: e.target.y() };
     },
     onDragMove: (e: any) => {
@@ -252,7 +264,8 @@ function useStudioDrag(
     },
     onDragEnd: (e: any) => {
       e.cancelBubble = true;
-      const b = studioDragBound({ x: e.target.x(), y: e.target.y() }, el.w, el.h, canvasH, el.rotation);
+      const { w, h, rotation } = sizeRef.current;
+      const b = studioDragBound({ x: e.target.x(), y: e.target.y() }, w, h, canvasH, rotation);
       e.target.position(b);
       livePos.current = b;
       onChange(b);
@@ -291,7 +304,7 @@ function BgFill({ el, onSelect, onChange, canvasH, interactive, gesture }: {
   const focusY = el.cropFocusY ?? 0.5;
   const zoom = Math.max(1, el.cropZoom ?? 1);
   const cover = img
-    ? coverCropRect(img.naturalWidth || img.width, img.naturalHeight || img.height, DESIGN_W, canvasH, focusX, focusY, zoom)
+    ? coverCropRect(bitmapWidth(img), bitmapHeight(img), DESIGN_W, canvasH, focusX, focusY, zoom)
     : null;
   // Pan when selected and the photo overflows the page (or zoom unlocks corners).
   const canPan = !!(interactive && cover && onChange && (cover.maxX > 1 || cover.maxY > 1));
@@ -315,6 +328,7 @@ function BgFill({ el, onSelect, onChange, canvasH, interactive, gesture }: {
           onDragStart={(e: any) => {
             if (!canPan || !cover) return;
             gesture?.begin();
+            gesture?.markDirty();
             const p = e.target.getStage()?.getRelativePointerPosition() ?? e.target.getStage()?.getPointerPosition();
             panStartRef.current = {
               focusX: el.cropFocusX ?? 0.5,
@@ -531,6 +545,7 @@ const StudioImage = React.memo(function StudioImage({ el, selected, onSelect, on
           e.cancelBubble = true;
           setPanning(true);
           gesture.begin();
+          gesture.markDirty();
           const { maxOffX: mx, maxOffY: my } = panMaxRef.current;
           const p = e.target.getStage()?.getRelativePointerPosition();
           panStartRef.current = {
@@ -771,17 +786,21 @@ const StudioText = React.memo(function StudioText({ el, onSelect, onChange, shap
 }, studioNodePropsEqual);
 
 function DesignCanvas({
-  elements, selectedId, onSelect, onChangeEl, canvasH, photoAdjustId, onEnterPhotoAdjust, onExitPhotoAdjust, onContextMenu,
+  elements, selectedId, onSelect, onChangeEl, onMarkDirty, canvasH, photoAdjustId, onEnterPhotoAdjust, onExitPhotoAdjust, onContextMenu, busyRef,
 }: {
   elements: EditorElement[];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   onChangeEl: (id: string, patch: Partial<EditorElement>) => void;
+  /** Flag dirty without rewriting element state (used at drag start). */
+  onMarkDirty?: () => void;
   canvasH: number;
   photoAdjustId?: string | null;
   onEnterPhotoAdjust?: (id: string) => void;
   onExitPhotoAdjust?: () => void;
   onContextMenu?: (info: StudioCtxMenu) => void;
+  /** Parent sets/reads this so cover reloads cannot run mid-drag. */
+  busyRef?: React.MutableRefObject<boolean>;
 }) {
   const trRef = useRef<any>(null);
   const stageRef = useRef<any>(null);
@@ -837,21 +856,32 @@ function DesignCanvas({
     trRef.current.getLayer()?.batchDraw();
   }, [canTransform, selectedId]);
 
+  const markDirtyRef = useRef(onMarkDirty);
+  markDirtyRef.current = onMarkDirty;
+
   const gesture = useMemo<StudioGesture>(() => ({
     active: gesturingRef,
     begin: () => {
       gesturingRef.current = true;
+      if (busyRef) busyRef.current = true;
+      // Detach handles while moving — Transformer + Stage scale was fighting the drag.
+      if (trRef.current) {
+        trRef.current.nodes([]);
+        trRef.current.getLayer()?.batchDraw();
+      }
       const root = wrapRef.current;
       if (root) root.style.touchAction = 'none';
       // Do NOT toggle body.overflow — that resizes the Stage mid-drag.
     },
     end: () => {
       gesturingRef.current = false;
+      if (busyRef) busyRef.current = false;
       const root = wrapRef.current;
       if (root) root.style.touchAction = 'none';
       requestAnimationFrame(() => syncTransformer());
     },
-  }), [syncTransformer]);
+    markDirty: () => { markDirtyRef.current?.(); },
+  }), [syncTransformer, busyRef]);
 
   useEffect(() => {
     syncTransformer();
@@ -937,6 +967,8 @@ function DesignCanvas({
         height={stageH}
         scaleX={scale}
         scaleY={scale}
+        // Cap DPR — retina × full artboard was the main CPU/RAM hog.
+        pixelRatio={typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 1.5) : 1}
         onMouseDown={(e: any) => {
           if (e.target === e.target.getStage()) onSelect(null);
         }}
@@ -947,7 +979,7 @@ function DesignCanvas({
           e.evt?.preventDefault?.();
         }}
       >
-        <Layer x={layerX} y={layerY}>
+        <Layer x={layerX} y={layerY} perfectDrawEnabled={false}>
           <Group clipX={0} clipY={0} clipWidth={DESIGN_W} clipHeight={canvasH}>
           <Rect
             x={0} y={0} width={DESIGN_W} height={canvasH}
@@ -1034,7 +1066,12 @@ function DesignCanvas({
             boundBoxFunc={(oldBox: any, newBox: any) => {
               const minW = selected?.type === 'text' ? 40 : selected?.type === 'shape' ? 4 : 16;
               const minH = selected?.type === 'text' ? 24 : selected?.type === 'shape' ? 4 : 16;
-              return boundBoxToPage(oldBox, newBox, canvasH, minW, minH);
+              const localOld = pageBoxFromStageBox(oldBox, scale, layerX, layerY);
+              const localNew = pageBoxFromStageBox(newBox, scale, layerX, layerY);
+              return stageBoxFromPageBox(
+                boundBoxToPage(localOld, localNew, canvasH, minW, minH),
+                scale, layerX, layerY,
+              );
             }}
             borderStroke="#C97B84"
             borderStrokeWidth={2}
@@ -1066,10 +1103,10 @@ function DesignCanvas({
   );
 }
 
-function loadCoverDrafts(design: DesignDef): { front: EditorElement[]; back: EditorElement[] } {
+function loadCoverDrafts(design: DesignDef, omitted: string[] = []): { front: EditorElement[]; back: EditorElement[] } {
   const builtin = DESIGNS.find(d => d.id === design.id);
   const heal = (saved: EditorElement[], base: EditorElement[]) =>
-    restoreCoverGraphics(saved, base).map(sanitizeImageBlend);
+    restoreCoverGraphics(saved, base, omitted).map(sanitizeImageBlend);
   const frontSrc = heal(designFrontElements(design), builtin?.elements ?? designFrontElements(design));
   const explicitBack = Array.isArray(design.backElements) && design.backElements.length > 0
     ? design.backElements
@@ -1196,6 +1233,14 @@ export default function AdminDesignStudio() {
   const bgFileRef = useRef<HTMLInputElement>(null);
   const coverSideRef = useRef<CoverSide>('front');
   const selectedIdRef = useRef<string | null>(null);
+  const layerListRef = useRef<HTMLDivElement>(null);
+  const layerDragRef = useRef<{
+    id: string;
+    startY: number;
+    dragging: boolean;
+    pointerId: number;
+  } | null>(null);
+  const [layerDragId, setLayerDragId] = useState<string | null>(null);
   const [createForm, setCreateForm] = useState({
     nameEn: '',
     nameSq: '',
@@ -1207,9 +1252,19 @@ export default function AdminDesignStudio() {
 
   const dirty = dirtyFront || dirtyBack;
   const dirtyRef = useRef(false);
+  const canvasBusyRef = useRef(false);
+  const draftFrontRef = useRef(draftFront);
+  const draftBackRef = useRef(draftBack);
   dirtyRef.current = dirty;
+  draftFrontRef.current = draftFront;
+  draftBackRef.current = draftBack;
   coverSideRef.current = coverSide;
   selectedIdRef.current = selectedId;
+
+  const markDirtySide = useCallback(() => {
+    if (coverSideRef.current === 'front') setDirtyFront(true);
+    else setDirtyBack(true);
+  }, []);
 
   const design: DesignDef | undefined = catalog.find(d => d.id === designId);
   const isHidden = !!design && savedHiddenIds.includes(design.id);
@@ -1230,8 +1285,9 @@ export default function AdminDesignStudio() {
 
   useEffect(() => {
     if (!design) return;
-    if (dirtyRef.current) return;
-    const { front, back } = loadCoverDrafts(design);
+    if (dirtyRef.current || canvasBusyRef.current) return;
+    const omitted = normalizeOverride(savedOverrides[design.id])?.omittedLandmarkSrcs ?? [];
+    const { front, back } = loadCoverDrafts(design, omitted);
     const h = canvasH;
     canvasHRef.current = h;
     setDraftFront(pinStudioBackground(fitDesignToCanvas(front, h), h));
@@ -1247,6 +1303,7 @@ export default function AdminDesignStudio() {
     const prev = formatHRef.current;
     formatHRef.current = canvasH;
     if (prev == null || prev === canvasH) return;
+    if (canvasBusyRef.current) return;
     const remap = (els: EditorElement[]) =>
       pinStudioBackground(fitDesignToCanvas(unfitDesignFromCanvas(els, prev), canvasH), canvasH);
     setDraftFront(remap);
@@ -1473,6 +1530,67 @@ export default function AdminDesignStudio() {
     setCtxMenu(null);
   };
 
+  const visualIndexFromPointer = (clientY: number) => {
+    const root = layerListRef.current;
+    if (!root) return 0;
+    const rows = [...root.querySelectorAll<HTMLElement>('[data-layer-id]')];
+    if (!rows.length) return 0;
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i].getBoundingClientRect();
+      if (clientY < r.top + r.height / 2) return i;
+    }
+    return rows.length - 1;
+  };
+
+  const restackLayerFromPointer = (id: string, clientY: number) => {
+    const to = visualIndexFromPointer(clientY);
+    setDraft(prev => {
+      const from = [...prev].reverse().findIndex(e => e.id === id);
+      if (from < 0) return prev;
+      return reorderLayerByVisualIndex(prev, from, to);
+    });
+  };
+
+  const onLayerPointerDown = (e: React.PointerEvent, el: EditorElement) => {
+    if (e.button !== 0) return;
+    layerDragRef.current = {
+      id: el.id,
+      startY: e.clientY,
+      dragging: false,
+      pointerId: e.pointerId,
+    };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const onLayerPointerMove = (e: React.PointerEvent, el: EditorElement) => {
+    const st = layerDragRef.current;
+    if (!st || st.id !== el.id) return;
+    if (!st.dragging && Math.abs(e.clientY - st.startY) < 5) return;
+    if (el.type === 'background') return;
+    if (!st.dragging) {
+      st.dragging = true;
+      setLayerDragId(el.id);
+      setSelectedId(el.id);
+      if (el.type !== 'image') setPhotoAdjustId(null);
+    }
+    e.preventDefault();
+    restackLayerFromPointer(el.id, e.clientY);
+  };
+
+  const onLayerPointerUp = (e: React.PointerEvent, el: EditorElement) => {
+    const st = layerDragRef.current;
+    const wasDrag = !!st?.dragging;
+    if (st && e.currentTarget.hasPointerCapture(st.pointerId)) {
+      e.currentTarget.releasePointerCapture(st.pointerId);
+    }
+    layerDragRef.current = null;
+    setLayerDragId(null);
+    if (!wasDrag) {
+      setSelectedId(el.id);
+      if (el.type !== 'image') setPhotoAdjustId(null);
+    }
+  };
+
   const alignSelected = (how: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom') => {
     if (!selected || selected.type === 'background') return;
     const pageH = canvasHRef.current;
@@ -1571,8 +1689,8 @@ export default function AdminDesignStudio() {
         designElementsWithoutIds(
           unfitDesignFromCanvas(els, canvasHRef.current),
         );
-      const frontElements = toCanonical(draftFront);
-      const backElements = toCanonical(draftBack);
+      const frontElements = toCanonical(draftFrontRef.current);
+      const backElements = toCanonical(draftBackRef.current);
 
       if (design.isCustom) {
         const now = new Date().toISOString();
@@ -1594,23 +1712,39 @@ export default function AdminDesignStudio() {
         await updateSettings.mutateAsync({
           data: { customDesigns: nextCustoms } as any,
         });
+        queryClient.setQueryData(getGetAdminSettingsQueryKey(), (old: any) =>
+          old ? { ...old, customDesigns: nextCustoms } : old,
+        );
       } else {
+        const builtinEls = DESIGNS.find(d => d.id === design.id);
+        const omitted = [...new Set([
+          ...omittedLandmarkSrcs(frontElements, builtinEls?.elements ?? []),
+          ...omittedLandmarkSrcs(backElements, builtinEls?.backElements ?? builtinEls?.elements ?? []),
+        ])];
         const next: DesignOverrides = {
           ...savedOverrides,
           [design.id]: {
             frontElements,
             backElements,
             ...(design.layoutRev != null ? { layoutRev: design.layoutRev } : {}),
+            ...(omitted.length ? { omittedLandmarkSrcs: omitted } : {}),
           },
         };
         await updateSettings.mutateAsync({
           data: { designOverrides: next } as any,
         });
+        queryClient.setQueryData(getGetAdminSettingsQueryKey(), (old: any) =>
+          old ? { ...old, designOverrides: next } : old,
+        );
       }
       dirtyRef.current = false;
       setDirtyFront(false);
       setDirtyBack(false);
-      await invalidate();
+      // Soft-sync public settings in background — avoid full refetch jank in studio.
+      void queryClient.invalidateQueries({
+        queryKey: getGetAppSettingsQueryKey(),
+        refetchType: 'active',
+      });
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 2200);
     } catch (err: any) {
@@ -1620,11 +1754,30 @@ export default function AdminDesignStudio() {
     }
   };
 
+  const saveRef = useRef(save);
+  saveRef.current = save;
+
   useEffect(() => {
     if (!dirty || saving) return;
-    const t = window.setTimeout(() => { void save(); }, 1400);
-    return () => window.clearTimeout(t);
-  }, [dirty, saving, draftFront, draftBack]);
+    let alive = true;
+    let timer = 0;
+    const arm = (ms: number) => {
+      timer = window.setTimeout(() => {
+        if (!alive) return;
+        // Wait out in-progress gestures so we never persist pre-drag coords.
+        if (canvasBusyRef.current) {
+          arm(600);
+          return;
+        }
+        void saveRef.current();
+      }, ms);
+    };
+    arm(2200);
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+    };
+  }, [dirty, saving]);
 
   const resetToDefault = async () => {
     if (!design) return;
@@ -1878,6 +2031,18 @@ export default function AdminDesignStudio() {
           ))}
         </div>
 
+        {settings && s?.persistentStorage === false && (
+          <div className="flex items-start gap-2.5 rounded-xl px-3.5 py-2.5 text-sm"
+            style={{ background: '#FFF8EB', border: '1px solid #F0D9A8', color: '#7A5A18' }}>
+            <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+            <p className="min-w-0 text-[13px] leading-snug">
+              No persistent disk volume — uploaded wallpapers, category covers, and Design Studio images
+              will disappear on the next server deploy. Mount a Railway volume at <code>/data</code> (or set <code>DATA_DIR</code>).
+              Cover layouts in the database are already safe.
+            </p>
+          </div>
+        )}
+
         {saveError && (
           <div className="flex items-start gap-2.5 rounded-xl px-3.5 py-2.5 text-sm"
             style={{ background: '#FDF2F2', border: '1px solid #F0C9C9', color: '#8B3A3A' }}>
@@ -2053,7 +2218,7 @@ export default function AdminDesignStudio() {
                       >
                         <div className="rounded overflow-hidden shrink-0 relative bg-white"
                           style={{ width: CATALOG_THUMB_W, height: CATALOG_THUMB_H, border: `1px solid ${ADMIN.line}` }}>
-                          <DesignCatalogThumb
+                          <LazyDesignCatalogThumb
                             design={d}
                             width={CATALOG_THUMB_W}
                             height={CATALOG_THUMB_H}
@@ -2152,7 +2317,9 @@ export default function AdminDesignStudio() {
                           setPhotoAdjustId(cur => (cur && cur !== id ? null : cur));
                         }}
                         onChangeEl={onChangeEl}
+                        onMarkDirty={markDirtySide}
                         canvasH={canvasH}
+                        busyRef={canvasBusyRef}
                         photoAdjustId={photoAdjustId}
                         onEnterPhotoAdjust={(id) => {
                           setSelectedId(id);
@@ -2196,13 +2363,13 @@ export default function AdminDesignStudio() {
                       </button>
                       {showShapes && (
                         <div
-                          className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-[220px] rounded-xl p-2 shadow-lg z-20"
+                          className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-[300px] max-h-[320px] overflow-y-auto rounded-xl p-2 shadow-lg z-20"
                           style={{ background: ADMIN.card, border: `1px solid ${ADMIN.line}` }}
                         >
                           <p className="text-[9px] uppercase tracking-[0.12em] font-semibold px-1 pb-1.5" style={{ color: ADMIN.muted }}>
-                            Add shape
+                            Album shapes
                           </p>
-                          <div className="grid grid-cols-3 gap-1">
+                          <div className="grid grid-cols-4 gap-1">
                             {SHAPE_KINDS.map(kind => (
                               <button
                                 key={kind}
@@ -2212,7 +2379,7 @@ export default function AdminDesignStudio() {
                                 title={SHAPE_LABELS[kind]}
                               >
                                 <ShapeGlyph kind={kind} />
-                                <span className="text-[9px] font-semibold" style={{ color: ADMIN.ink }}>
+                                <span className="text-[8px] font-semibold text-center leading-tight" style={{ color: ADMIN.ink }}>
                                   {SHAPE_LABELS[kind]}
                                 </span>
                               </button>
@@ -2277,7 +2444,14 @@ export default function AdminDesignStudio() {
                   <p className="text-[10px] uppercase tracking-[0.12em] font-semibold mb-1.5" style={{ color: ADMIN.muted }}>
                     Layers
                   </p>
-                  <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${ADMIN.line}` }}>
+                  <p className="text-[10px] mb-1.5 leading-snug" style={{ color: ADMIN.muted }}>
+                    Drag a row up or down to restack — top of the list is in front.
+                  </p>
+                  <div
+                    ref={layerListRef}
+                    className="rounded-lg overflow-hidden"
+                    style={{ border: `1px solid ${ADMIN.line}` }}
+                  >
                     {[...draft].reverse().map(el => {
                       const label = el.type === 'text'
                         ? (el.text || 'Text').slice(0, 28)
@@ -2290,13 +2464,24 @@ export default function AdminDesignStudio() {
                               : 'Decoration';
                       const Icon = el.type === 'text' ? Type : el.type === 'background' ? Palette : el.type === 'image' ? ImageIcon : Hexagon;
                       const active = selectedId === el.id;
+                      const dragging = layerDragId === el.id;
+                      const locked = el.type === 'background';
                       return (
-                        <button
+                        <div
                           key={el.id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedId(el.id);
-                            if (el.type !== 'image') setPhotoAdjustId(null);
+                          data-layer-id={el.id}
+                          role="button"
+                          tabIndex={0}
+                          onPointerDown={e => onLayerPointerDown(e, el)}
+                          onPointerMove={e => onLayerPointerMove(e, el)}
+                          onPointerUp={e => onLayerPointerUp(e, el)}
+                          onPointerCancel={e => onLayerPointerUp(e, el)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              setSelectedId(el.id);
+                              if (el.type !== 'image') setPhotoAdjustId(null);
+                            }
                           }}
                           onContextMenu={(e) => {
                             e.preventDefault();
@@ -2304,14 +2489,28 @@ export default function AdminDesignStudio() {
                             if (el.type !== 'image') setPhotoAdjustId(null);
                             setCtxMenu({ x: e.clientX, y: e.clientY, id: el.id });
                           }}
-                          className="w-full flex items-center gap-2 px-2 py-1 text-left text-[11px] font-medium"
-                          style={active
-                            ? { background: ADMIN.blushSoft, color: ADMIN.blushDeep }
-                            : { background: ADMIN.card, color: ADMIN.ink, borderTop: `1px solid ${ADMIN.line}` }}
+                          className="w-full flex items-center gap-1.5 px-1.5 py-1 text-left text-[11px] font-medium select-none"
+                          style={{
+                            background: dragging
+                              ? ADMIN.blushSoft
+                              : active
+                                ? ADMIN.blushSoft
+                                : ADMIN.card,
+                            color: active || dragging ? ADMIN.blushDeep : ADMIN.ink,
+                            borderTop: `1px solid ${ADMIN.line}`,
+                            opacity: dragging ? 0.72 : 1,
+                            cursor: locked ? 'default' : (dragging ? 'grabbing' : 'grab'),
+                            touchAction: 'none',
+                          }}
                         >
+                          <GripVertical
+                            size={12}
+                            className="shrink-0"
+                            style={{ opacity: locked ? 0.25 : 0.55 }}
+                          />
                           <Icon size={12} className="shrink-0" />
                           <span className="truncate flex-1">{label}</span>
-                        </button>
+                        </div>
                       );
                     })}
                   </div>
@@ -2640,7 +2839,7 @@ export default function AdminDesignStudio() {
                     {Math.round(selected.w)}×{Math.round(selected.h)} · ({Math.round(selected.x)}, {Math.round(selected.y)})
                   </p>
                   <OpacitySlider value={selected.opacity} onChange={opacity => onChangeEl(selected.id, { opacity })} />
-                  <div className="grid grid-cols-3 gap-1">
+                  <div className="grid grid-cols-4 gap-1 max-h-[220px] overflow-y-auto">
                     {SHAPE_KINDS.map(kind => {
                       const active = (selected.shapeKind || 'rect') === kind;
                       return (
@@ -2660,7 +2859,7 @@ export default function AdminDesignStudio() {
                             : { background: ADMIN.bg, color: ADMIN.ink }}
                           title={SHAPE_LABELS[kind]}>
                           <ShapeGlyph kind={kind} size={22} />
-                          <span className="text-[8px] font-semibold">{SHAPE_LABELS[kind]}</span>
+                          <span className="text-[7px] font-semibold text-center leading-tight">{SHAPE_LABELS[kind]}</span>
                         </button>
                       );
                     })}

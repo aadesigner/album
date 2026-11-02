@@ -86,7 +86,7 @@ export const PAGE_DEFAULTS: Record<PageSlug, Record<string, unknown>> = {
       title: bi('Zgjidhni stilin. Shtoni fotot. I mbani në dorë.', 'Pick a style. Add the photos. Hold it in your hands.'),
       body: bi('E para bëhet kopertina. Të tjerat shkojnë në faqe. Ju i ndryshoni para se t’i printojmë — kudo në Shqipëri.', 'The first becomes the cover. The rest find a page. You change them before we print — anywhere in Albania.'),
       cta: bi('Krijo tani — falas', 'Start now — free'),
-      note: bi('Pa kartë krediti', 'No credit card required'),
+      note: bi('Filloni falas — porositni kur jeni gati', 'Start free — order when you’re ready'),
       steps: [
         {
           title: bi('Zgjidhni stilin', 'Choose a style'),
@@ -114,9 +114,9 @@ export const PAGE_DEFAULTS: Record<PageSlug, Record<string, unknown>> = {
     cta: {
       kicker: bi('— filloni sot', '— start today'),
       title: bi('Fotot meritojnë të jenë kujtim', 'Photos deserve to become a memory'),
-      body: bi('Pa regjistrim. Pa kartë krediti. Filloni falas dhe porositni vetëm kur jeni gati.', "No registration. No credit card. Start free and only order when you're ready."),
+      body: bi('Filloni falas dhe porositni vetëm kur jeni gati.', "Start free and only order when you're ready."),
       button: bi('Krijo albumin tuaj falas →', 'Create your album — free →'),
-      note: bi('Nga 3.100 LEK · Dërgesë falas mbi 5.000 LEK', 'From 3,100 LEK · Free delivery over 5,000 LEK'),
+      note: bi('Nga 3.000 LEK · Dërgesë falas mbi 5.000 LEK', 'From 3,000 LEK · Free delivery over 5,000 LEK'),
     },
   },
 
@@ -154,12 +154,12 @@ export const PAGE_DEFAULTS: Record<PageSlug, Record<string, unknown>> = {
       title: bi('Gati për të filluar?', 'Ready to start?'),
       body: bi('Krijoni albumin tuaj falas. Paguani vetëm kur jeni të kënaqur.', "Create your album for free. Pay only when you're happy with it."),
       button: bi('Krijo albumin tuaj', 'Create your album'),
-      note: bi('Pa regjistrim · Pa kartë krediti', 'No sign-up · No credit card'),
+      note: bi('Nga 3.000 LEK · Dërgesë falas mbi 5.000 LEK', 'From 3,000 LEK · Free delivery over 5,000 LEK'),
     },
   },
 
   pricing: {
-    seo: { title: bi('Çmimet', 'Pricing'), description: bi('Çmime të qarta për albume foto premium — nga 2.900 lekë. Letër mat 200g, hapje e sheshtë, printim galerie. Dërgesa falas mbi 5.000 lekë.', 'Clear pricing for premium photo albums — from 2,900 lek. Matte 200g paper, lay-flat binding, gallery-quality printing. Free delivery over 5,000 lek.') },
+    seo: { title: bi('Çmimet', 'Pricing'), description: bi('Çmime të qarta për albume foto premium — nga 3.000 lekë. Letër mat 200g, hapje e sheshtë, printim galerie. Dërgesa falas mbi 5.000 lekë.', 'Clear pricing for premium photo albums — from 3,000 lek. Matte 200g paper, lay-flat binding, gallery-quality printing. Free delivery over 5,000 lek.') },
     hero: {
       kicker: bi('— çmimet', '— pricing'),
       title: bi('Çmime të qarta, pa surpriza', 'Clear pricing, no surprises'),
@@ -331,7 +331,7 @@ export const PAGE_DEFAULTS: Record<PageSlug, Record<string, unknown>> = {
       title: bi('Albumi juaj, i printuar këtu', 'Your album, printed here'),
       body: bi('Filloni falas. Paguani kur jeni të kënaqur — kartë ose para në dorëzim, kudo në Shqipëri.', 'Start free. Pay when you are happy — card or cash on delivery, anywhere in Albania.'),
       button: bi('Krijo albumin', 'Create your album'),
-      note: bi('Nga 3.100 LEK · dërgesë 10–16 ditë', 'From 3,100 LEK · 10–16 day delivery'),
+      note: bi('Nga 3.000 LEK · dërgesë 10–16 ditë', 'From 3,000 LEK · 10–16 day delivery'),
     },
   },
 

@@ -71,6 +71,7 @@ import {
   coverCropRect, imageFrameCoverFit, imageFrameContainFit, imageFrameFocusFromOffset, fitAddedTextFrame,
   designFrontElements, designBackElements, buildDesignCatalog, parseCustomDesigns,
   coverImageBlend, coverImageLetterbox, konvaOpacity, clampElementPos, boundBoxToPage,
+  konvaAbsToLocal, konvaLocalToAbs, pageBoxFromStageBox, stageBoxFromPageBox,
   type EditorElement, type DE, type DesignDef, type LayoutZone, type LayoutDef, type DesignOverrides,
 } from '@/lib/designs';
 import { parseEditorElements, makeStickerElement, type EditorElementAsset } from '@/lib/editorElements';
@@ -84,7 +85,7 @@ import { ACCEPT_SAFE_IMAGES } from '@/lib/acceptedImages';
 import { applyCoverBackground, coverBgMode, type CoverBgMode } from '@/lib/coverBackground';
 import { useEditorFontsReady, ensureEditorFonts, normalizeEditorFont, isEditorSingleCutFont } from '@/lib/editorFonts';
 import { FontPicker } from '@/components/FontPicker';
-import { useCachedImage } from '@/lib/imageCache';
+import { useCachedImage, bitmapWidth, bitmapHeight } from '@/lib/imageCache';
 
 const PAPER_COLOR = '#FEFDF9';
 const SPINE_W = 1;
@@ -122,6 +123,18 @@ function dragBoundWithGuides(
   }
   const c = clampElementPos({ x, y }, w, h, canvasH, rotation);
   return { x: c.x, y: c.y, guideV, guideH };
+}
+
+function pageDragBound(
+  node: any,
+  absPos: { x: number; y: number },
+  w: number, h: number, canvasH: number, rotation = 0,
+  onGuides?: (g: GuideState) => void,
+) {
+  const local = konvaAbsToLocal(node, absPos);
+  const b = dragBoundWithGuides(local, w, h, canvasH, rotation);
+  onGuides?.({ v: b.guideV, h: b.guideH });
+  return konvaLocalToAbs(node, { x: b.x, y: b.y });
 }
 
 type GuideState = { v: boolean; h: boolean } | null;
@@ -262,7 +275,7 @@ function KBgEl({el,canvasH,interactive,isSelected,onChange,onGestureStart}: {
   const focusY = el.cropFocusY ?? 0.5;
   const cropZoom = Math.max(1, el.cropZoom ?? 1);
   const cover = (el.src && img)
-    ? coverCropRect(img.naturalWidth, img.naturalHeight, DESIGN_W, canvasH, focusX, focusY, cropZoom)
+    ? coverCropRect(bitmapWidth(img), bitmapHeight(img), DESIGN_W, canvasH, focusX, focusY, cropZoom)
     : null;
   // Only listen when already selected (for photo pan). Never steal clicks from
   // text/shapes/images — cover bg is selected via the Background chip only.
@@ -373,10 +386,8 @@ function KShapeEl({el,isSelected,onSelect,onChange,onGestureStart,onDragActive,o
       onTap={(e:any)=>{ if (decorative) return; e.cancelBubble=true; onSelect(); }}
       draggable={isSelected && !decorative}
       dragDistance={4}
-      dragBoundFunc={(pos:any)=>{
-        const b=dragBoundWithGuides(pos,el.w,el.h,canvasH,el.rotation);
-        onGuides?.({v:b.guideV,h:b.guideH});
-        return {x:b.x,y:b.y};
+      dragBoundFunc={function (this: any, pos: any) {
+        return pageDragBound(this, pos, el.w, el.h, canvasH, el.rotation, onGuides);
       }}
       onDragStart={()=>{onGestureStart?.();onDragActive?.(true,{keepTransformer:true});}}
       onDragEnd={(e:any)=>{
@@ -443,8 +454,8 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
   const letterbox = coverImageLetterbox(el);
   const fit = img
     ? (letterbox
-        ? imageFrameContainFit(img.naturalWidth, img.naturalHeight, el.w, el.h)
-        : imageFrameCoverFit(img.naturalWidth, img.naturalHeight, el.w, el.h, focusX, focusY, cropZoom))
+        ? imageFrameContainFit(bitmapWidth(img), bitmapHeight(img), el.w, el.h)
+        : imageFrameCoverFit(bitmapWidth(img), bitmapHeight(img), el.w, el.h, focusX, focusY, cropZoom))
     : null;
   // Cover photos can always enter Adjust (we bump cropZoom to unlock corners).
   const canPan = letterbox ? false : (img ? true : !!fit?.canPan);
@@ -496,9 +507,9 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
     // stays at the old iw/ih until transformEnd and the crop snaps.
     const live = img
       ? (letterbox
-          ? imageFrameContainFit(img.naturalWidth, img.naturalHeight, nw, nh)
+          ? imageFrameContainFit(bitmapWidth(img), bitmapHeight(img), nw, nh)
           : imageFrameCoverFit(
-              img.naturalWidth, img.naturalHeight, nw, nh,
+              bitmapWidth(img), bitmapHeight(img), nw, nh,
               focusX, focusY, cropZoom,
             ))
       : null;
@@ -528,10 +539,8 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
       x={el.x} y={el.y} width={el.w} height={el.h} rotation={el.rotation}
       draggable={isSelected}
       dragDistance={3}
-      dragBoundFunc={(pos: any) => {
-        const b = dragBoundWithGuides(pos, el.w, el.h, canvasH, el.rotation);
-        onGuides?.({ v: b.guideV, h: b.guideH });
-        return { x: b.x, y: b.y };
+      dragBoundFunc={function (this: any, pos: any) {
+        return pageDragBound(this, pos, el.w, el.h, canvasH, el.rotation, onGuides);
       }}
       onMouseDown={(e: any) => { e.cancelBubble = true; onSelect(); }}
       onTouchStart={(e: any) => { e.cancelBubble = true; onSelect(); }}
@@ -587,10 +596,8 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
       onMouseLeave={() => setStageCursor('default')}
       draggable={moveFrame}
       dragDistance={3}
-      dragBoundFunc={(pos: any) => {
-        const b = dragBoundWithGuides(pos, el.w, el.h, canvasH, el.rotation);
-        onGuides?.({ v: b.guideV, h: b.guideH });
-        return { x: b.x, y: b.y };
+      dragBoundFunc={function (this: any, pos: any) {
+        return pageDragBound(this, pos, el.w, el.h, canvasH, el.rotation, onGuides);
       }}
       onDragStart={() => {
         setStageCursor('move');
@@ -772,7 +779,6 @@ function KTxtEl({el,onSelect,onChange,onStartEdit,onGestureStart,onDragActive,on
       width={el.w}
       height={el.h}
       rotation={el.rotation}
-      opacity={konvaOpacity(el.opacity)}
       draggable={isSelected && !isEditing}
       dragDistance={3}
       onMouseDown={(e: any) => { e.cancelBubble = true; if (!isEditing) onSelect(); }}
@@ -781,10 +787,8 @@ function KTxtEl({el,onSelect,onChange,onStartEdit,onGestureStart,onDragActive,on
       onTap={(e: any) => { e.cancelBubble = true; if (!isEditing) onSelect(); }}
       onDblClick={(e: any) => { e.cancelBubble = true; onStartEdit(); }}
       onDblTap={(e: any) => { e.cancelBubble = true; onStartEdit(); }}
-      dragBoundFunc={(pos: any) => {
-        const b = dragBoundWithGuides(pos, el.w, el.h, canvasH, el.rotation);
-        onGuides?.({ v: b.guideV, h: b.guideH });
-        return { x: b.x, y: b.y };
+      dragBoundFunc={function (this: any, pos: any) {
+        return pageDragBound(this, pos, el.w, el.h, canvasH, el.rotation, onGuides);
       }}
       onDragStart={() => { onGestureStart?.(); onDragActive?.(true, { keepTransformer: true }); }}
       onDragEnd={(e: any) => {
@@ -841,7 +845,7 @@ function KTxtEl({el,onSelect,onChange,onStartEdit,onGestureStart,onDragActive,on
         lineHeight={el.lineHeight ?? 1.2}
         letterSpacing={el.letterSpacing ?? 0}
         padding={6}
-        opacity={isEditing ? 0 : 1}
+        opacity={isEditing ? 0 : (el.opacity ?? 1)}
         wrap="word"
         ellipsis={false}
         perfectDrawEnabled={false}
@@ -1244,7 +1248,12 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
               const isText = selectedId && elements.find(e => e.id === selectedId)?.type === 'text';
               const minW = isText ? 40 : 10;
               const minH = isText ? 24 : 10;
-              return boundBoxToPage(old, nw, canvasH, minW, minH);
+              const localOld = pageBoxFromStageBox(old, scX, 0, 0, scY);
+              const localNew = pageBoxFromStageBox(nw, scX, 0, 0, scY);
+              return stageBoxFromPageBox(
+                boundBoxToPage(localOld, localNew, canvasH, minW, minH),
+                scX, 0, 0, scY,
+              );
             }}
             padding={4}
             borderStroke="#2563EB" borderStrokeWidth={2.5} borderDash={undefined}
@@ -1305,6 +1314,7 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
               background:'rgba(255,255,255,0.06)',
               border:'2px solid rgba(59,130,246,0.88)',
               borderRadius:4, padding:Math.round(6*scX),
+              opacity: editEl.opacity ?? 1,
               resize:'none', outline:'none',
               boxSizing:'border-box', overflow:'hidden',
             }}
@@ -1418,10 +1428,13 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
             </div>
 
             <div style={{display:'flex',alignItems:'center',gap:6,minWidth:0}}>
-              <span style={{fontSize:9,color:'#999',whiteSpace:'nowrap',flexShrink:0}}>{Math.round((toolbarEl?.opacity??1)*100)}%</span>
+              <span style={{fontSize:9,color:'#999',whiteSpace:'nowrap',flexShrink:0}}
+                title={chipLang==='sq'?'Tejdukshmëria':'Opacity'}>
+                {chipLang==='sq'?'Tejduk.':'Opacity'} {Math.round((toolbarEl?.opacity??1)*100)}%
+              </span>
               <input type="range" min={0} max={100} step={5}
                 value={Math.round((toolbarEl?.opacity??1)*100)}
-                onChange={e=>onChangeEl(editId,{opacity:parseInt(e.target.value)/100})}
+                onChange={e=>onChangeEl(editId,{opacity:Math.max(0,Math.min(1,parseInt(e.target.value,10)/100))})}
                 onBlur={()=>setTimeout(()=>textareaRef.current?.focus(),15)}
                 style={{flex:1,minWidth:0,accentColor:'#1a1a1a'}}/>
               <button onMouseDown={e=>{e.preventDefault();commitEdit();}}
@@ -1482,7 +1495,7 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
                 }}
                 title={chipLang==='sq'?'Tejdukshmëria':'Opacity'}
               >
-                {opacityPct}%
+                {chipLang==='sq'?'Tejduk.':'Opacity'} {opacityPct}%
                 <input
                   type="range" min={0} max={100} step={5}
                   value={opacityPct}
@@ -3074,7 +3087,7 @@ function OrderModal({project,onClose,lang,flushSave}: {
         </div>
         <div className="bg-neutral-50 rounded-xl p-4 mb-5 space-y-2.5 text-sm">
           {([['Album',project.title||'My Album'],[lang==='sq'?'Faqe':'Pages',`${project.pageCount??30}`],
-             [lang==='sq'?'Çmimi total':'Total price',`${(project.totalPriceLek||3100).toLocaleString()} LEK`],
+             [lang==='sq'?'Çmimi total':'Total price',`${(project.totalPriceLek||3000).toLocaleString()} LEK`],
              [lang==='sq'?'Dërgesa':'Delivery',lang==='sq'?'10–16 ditë pune':'10–16 working days'],
           ] as [string,string][]).map(([k,v])=>(
             <div key={k} className="flex justify-between">
@@ -3556,10 +3569,14 @@ export default function Editor() {
     liveContent.current=next;
     dirtyPages.current.add(pid);
     // Position/size commits after drag: sync update (node already at final place).
-    // Toolbar text tweaks can be deferred.
-    const isGeom='x' in changes||'y' in changes||'w' in changes||'h' in changes||'rotation' in changes
-      ||'cropFocusX' in changes||'cropFocusY' in changes||'cropZoom' in changes;
-    if (isGeom||wasGesture) setPagesContent(next);
+    // Opacity/type sliders must be sync too — startTransition left the canvas
+    // stuck at 100% while the range thumb moved.
+    const isLive='x' in changes||'y' in changes||'w' in changes||'h' in changes||'rotation' in changes
+      ||'cropFocusX' in changes||'cropFocusY' in changes||'cropZoom' in changes
+      ||'opacity' in changes||'fill' in changes||'fontSize' in changes
+      ||'fontFamily' in changes||'fontStyle' in changes||'align' in changes
+      ||'letterSpacing' in changes||'lineHeight' in changes||'text' in changes;
+    if (isLive||wasGesture) setPagesContent(next);
     else startTransition(()=>setPagesContent(next));
     // Sync undo/redo button counts deferred from silent drag-start snapshot.
     if (wasGesture) {
@@ -4112,7 +4129,7 @@ export default function Editor() {
   const saveLabel=saveStatus==='saving'?'⏳ Saving…':saveStatus==='unsaved'?'● Unsaved':'✓ Saved';
 
   return (
-    <div className="flex flex-col" style={{height:'100dvh',overflow:'hidden',background:'#F4F1EC'}}>
+    <div className="flex flex-col relative" style={{height:'100dvh',overflow:'hidden',background:'#F4F1EC'}}>
       {/* Design-applied toast */}
       {designToast && (
         <div style={{
@@ -4147,17 +4164,45 @@ export default function Editor() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      {/* ── Collapsible header wrapper (mobile: 64 px; desktop: 54 px) ── */}
+      {/* ── Collapsible header (mobile overlays the canvas: clear at the top, fade at the bottom) ── */}
       <div
-        className="flex-shrink-0 overflow-hidden"
-        style={{
-          height: isMobile ? (headerCollapsed ? 0 : 64) : 54,
+        className={isMobile ? 'overflow-hidden' : 'flex-shrink-0 overflow-hidden'}
+        style={isMobile ? {
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 40,
+          height: headerCollapsed ? 0 : 'calc(64px + env(safe-area-inset-top, 0px))',
+          transition: 'height 0.22s cubic-bezier(0.4,0,0.2,1)',
+          pointerEvents: headerCollapsed ? 'none' : 'auto',
+        } : {
+          height: 54,
           transition: 'height 0.22s cubic-bezier(0.4,0,0.2,1)',
           background: '#fff',
         }}
       >
-      <div className="flex items-center justify-between px-3 md:px-5 bg-white border-b border-neutral-200"
-        style={{height: isMobile ? 64 : 54}}
+      {isMobile && !headerCollapsed && (
+        <div
+          aria-hidden
+          style={{
+            position: 'absolute',
+            inset: 0,
+            pointerEvents: 'none',
+            background: 'linear-gradient(180deg, rgba(244,241,236,0) 0%, rgba(244,241,236,0.28) 38%, rgba(244,241,236,0.82) 78%, rgba(244,241,236,0.96) 100%)',
+            WebkitMaskImage: 'linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.35) 28%, #000 72%)',
+            maskImage: 'linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.35) 28%, #000 72%)',
+            backdropFilter: 'blur(16px) saturate(1.15)',
+            WebkitBackdropFilter: 'blur(16px) saturate(1.15)',
+          }}
+        />
+      )}
+      <div className={`flex items-center justify-between px-3 md:px-5 ${isMobile ? '' : 'bg-white border-b border-neutral-200'}`}
+        style={{
+          position: 'relative',
+          height: isMobile ? '100%' : 54,
+          paddingTop: isMobile ? 'env(safe-area-inset-top, 0px)' : undefined,
+        }}
         onTouchStart={isMobile ? e=>{headerSwipeRef.current={y:e.touches[0].clientY};} : undefined}
         onTouchEnd={isMobile ? e=>{
           if(!headerSwipeRef.current) return;
@@ -4253,10 +4298,18 @@ export default function Editor() {
       {/* Pull-down handle — slides in when header is hidden on mobile */}
       {isMobile && (
         <div
-          className="flex-shrink-0 flex items-center justify-center bg-white cursor-pointer overflow-hidden"
+          className="flex items-center justify-center cursor-pointer overflow-hidden"
           style={{
-            height: headerCollapsed ? 20 : 0,
-            borderBottom: headerCollapsed ? '1px solid #EEEBE6' : 'none',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 40,
+            height: headerCollapsed ? 'calc(20px + env(safe-area-inset-top, 0px))' : 0,
+            paddingTop: headerCollapsed ? 'env(safe-area-inset-top, 0px)' : 0,
+            background: headerCollapsed
+              ? 'linear-gradient(180deg, rgba(244,241,236,0.2) 0%, rgba(244,241,236,0.78) 100%)'
+              : 'transparent',
             transition: 'height 0.22s cubic-bezier(0.4,0,0.2,1)',
           }}
           onClick={()=>setHeaderCollapsed(false)}
@@ -4280,15 +4333,22 @@ export default function Editor() {
             selectedId={selectedIsBackground ? null : selectedId} onDelete={deleteSelected} lang={lang}
             designs={designsCatalog} layouts={editorLayouts} showDesigns={isCoverPage}/>
         )}
-        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+        <div
+          className="flex-1 flex flex-col overflow-hidden min-w-0"
+          style={isMobile ? {
+            paddingTop: headerCollapsed
+              ? 'env(safe-area-inset-top, 0px)'
+              : 'calc(64px + env(safe-area-inset-top, 0px))',
+          } : undefined}
+        >
 
           {/* Mobile mini spread — open-book preview; tap a side to edit it */}
           {isMobile && currentSpread && !currentSpread.isSolo && (
             <div
-              className="flex-shrink-0 flex items-center justify-center border-b border-neutral-100"
+              className="flex-shrink-0 flex items-center justify-center"
               style={{
                 padding: '6px 12px 8px',
-                background: 'linear-gradient(180deg, #FFFFFF 0%, #F7F4EF 100%)',
+                background: 'linear-gradient(180deg, rgba(244,241,236,0.35) 0%, rgba(247,244,239,0.92) 100%)',
               }}
             >
               {(() => {

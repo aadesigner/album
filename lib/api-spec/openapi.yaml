@@ -2103,6 +2103,18 @@ components:
           type: array
           items:
             type: string
+        clarityEnabled:
+          type: boolean
+          description: When true and a project id is set, Microsoft Clarity loads on static pages and the album builder (never admin).
+        clarityProjectId:
+          type: string
+          description: Microsoft Clarity project id (or paste the full embed snippet — the id is extracted).
+        persistentStorage:
+          type: boolean
+          description: True when uploads/designs live on a volume (DATA_DIR or /data) and survive deploys.
+        dataRoot:
+          type: string
+          description: Absolute path where uploads, designs, and print PDFs are stored.
 
     AppSettingsUpdate:
       type: object
@@ -2161,6 +2173,10 @@ components:
           type: array
           items:
             type: string
+        clarityEnabled:
+          type: boolean
+        clarityProjectId:
+          type: string
 
     # ── Admin ─────────────────────────────────────────────────────────────
 

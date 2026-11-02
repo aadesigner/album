@@ -59,7 +59,7 @@ export function Footer() {
             {siteName}
             <span style={{ fontSize: '0.38em', color: 'rgba(255,255,255,0.32)', marginLeft: '0.08em' }}>.al</span>
           </p>
-          <p className="mt-3 text-[10px] uppercase tracking-[0.30em] text-white/25">
+          <p className="mt-3 text-[11.5px] uppercase tracking-[0.26em] text-white/25">
             {tagline}
           </p>
           <div className="flex items-center justify-center gap-3 mt-6">
@@ -83,7 +83,7 @@ export function Footer() {
         <div className="grid grid-cols-2 md:grid-cols-3 gap-10 mb-12">
 
           <div>
-            <p className="text-[9px] uppercase tracking-[0.24em] mb-5" style={{ color: 'rgba(255,255,255,0.25)' }}>
+            <p className="text-[10.5px] uppercase tracking-[0.22em] mb-5" style={{ color: 'rgba(255,255,255,0.25)' }}>
               {lang === 'sq' ? 'Produkt' : 'Product'}
             </p>
             <ul className="space-y-3.5">
@@ -95,7 +95,7 @@ export function Footer() {
                 <li key={l.href}>
                   <Link
                     href={l.href}
-                    className="text-[13px] transition-colors duration-150"
+                    className="text-[14.5px] transition-colors duration-150"
                     style={{ color: 'rgba(255,255,255,0.40)' }}
                     onMouseEnter={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.88)')}
                     onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.40)')}
@@ -108,7 +108,7 @@ export function Footer() {
           </div>
 
           <div>
-            <p className="text-[9px] uppercase tracking-[0.24em] mb-5" style={{ color: 'rgba(255,255,255,0.25)' }}>
+            <p className="text-[10.5px] uppercase tracking-[0.22em] mb-5" style={{ color: 'rgba(255,255,255,0.25)' }}>
               {lang === 'sq' ? 'Kompania' : 'Company'}
             </p>
             <ul className="space-y-3.5">
@@ -120,7 +120,7 @@ export function Footer() {
                 <li key={l.href}>
                   <Link
                     href={l.href}
-                    className="text-[13px] transition-colors duration-150"
+                    className="text-[14.5px] transition-colors duration-150"
                     style={{ color: 'rgba(255,255,255,0.40)' }}
                     onMouseEnter={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.88)')}
                     onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.40)')}
@@ -133,7 +133,7 @@ export function Footer() {
           </div>
 
           <div>
-            <p className="text-[9px] uppercase tracking-[0.24em] mb-5" style={{ color: 'rgba(255,255,255,0.25)' }}>
+            <p className="text-[10.5px] uppercase tracking-[0.22em] mb-5" style={{ color: 'rgba(255,255,255,0.25)' }}>
               {lang === 'sq' ? 'Ligjore' : 'Legal'}
             </p>
             <ul className="space-y-3.5">
@@ -144,7 +144,7 @@ export function Footer() {
                 <li key={l.href}>
                   <Link
                     href={l.href}
-                    className="text-[13px] transition-colors duration-150"
+                    className="text-[14.5px] transition-colors duration-150"
                     style={{ color: 'rgba(255,255,255,0.40)' }}
                     onMouseEnter={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.88)')}
                     onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.40)')}
@@ -162,11 +162,11 @@ export function Footer() {
           className="flex flex-col md:flex-row items-center justify-between gap-3 pt-6"
           style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}
         >
-          <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.22)' }}>
+          <p style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.22)' }}>
             © {year} {siteName} ·{' '}
             {lang === 'sq' ? 'Të gjitha të drejtat e rezervuara' : 'All rights reserved'}
           </p>
-          <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.22)' }}>
+          <p style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.22)' }}>
             Made with ♥ in Albania
           </p>
         </div>
