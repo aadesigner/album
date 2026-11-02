@@ -24,7 +24,7 @@ import {
 } from '@/lib/designs';
 import { applyCoverBackground, coverBgMode, type CoverBgMode } from '@/lib/coverBackground';
 import { uploadErrorMessage, uploadImageToApi } from '@/lib/uploadImage';
-import { ACCEPT_SAFE_IMAGES } from '@/lib/acceptedImages';
+import { ACCEPT_SAFE_IMAGES, dataTransferHasImageFiles, imageFilesFromDataTransfer } from '@/lib/acceptedImages';
 import { resolvePublicImageSrc } from '@/lib/categoryImages';
 import { useCachedImage, bitmapWidth, bitmapHeight } from '@/lib/imageCache';
 import { useAuth } from '@/contexts/AuthContext';
@@ -186,6 +186,47 @@ const COVER_GRADIENT_PRESETS: { from: string; to: string; dir: 'tb' | 'lr' | 'di
 
 async function uploadStudioImage(file: File, token: string | null): Promise<string> {
   return uploadImageToApi(file, token);
+}
+
+/** Read natural pixel size before upload so graphic frames keep aspect (no cover-crop). */
+async function readImageNaturalSize(file: File): Promise<{ w: number; h: number } | null> {
+  try {
+    if (typeof createImageBitmap === 'function') {
+      const bmp = await createImageBitmap(file);
+      const size = { w: bmp.width, h: bmp.height };
+      bmp.close();
+      if (size.w > 0 && size.h > 0) return size;
+    }
+  } catch { /* fall through */ }
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const w = img.naturalWidth || img.width;
+      const h = img.naturalHeight || img.height;
+      URL.revokeObjectURL(url);
+      resolve(w > 0 && h > 0 ? { w, h } : null);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(null);
+    };
+    img.src = url;
+  });
+}
+
+/** Letterboxed graphic frame — full artwork visible, never cover-cropped. */
+function graphicFrameRect(iw: number, ih: number, canvasH: number) {
+  const maxW = 440;
+  const maxH = Math.max(160, Math.round(canvasH * 0.45));
+  const s = Math.min(maxW / Math.max(1, iw), maxH / Math.max(1, ih));
+  const w = Math.max(48, Math.round(iw * s));
+  const h = Math.max(48, Math.round(ih * s));
+  return {
+    w, h,
+    x: Math.round((DESIGN_W - w) / 2),
+    y: Math.round((canvasH - h) / 2),
+  };
 }
 
 const CATEGORY_ORDER = [
@@ -791,7 +832,7 @@ const StudioText = React.memo(function StudioText({ el, onSelect, onChange, shap
 }, studioNodePropsEqual);
 
 function DesignCanvas({
-  elements, selectedId, onSelect, onChangeEl, onMarkDirty, canvasH, photoAdjustId, onEnterPhotoAdjust, onExitPhotoAdjust, onContextMenu, busyRef,
+  elements, selectedId, onSelect, onChangeEl, onMarkDirty, canvasH, photoAdjustId, onEnterPhotoAdjust, onExitPhotoAdjust, onContextMenu, busyRef, onDropFiles,
 }: {
   elements: EditorElement[];
   selectedId: string | null;
@@ -806,6 +847,8 @@ function DesignCanvas({
   onContextMenu?: (info: StudioCtxMenu) => void;
   /** Parent sets/reads this so cover reloads cannot run mid-drag. */
   busyRef?: React.MutableRefObject<boolean>;
+  /** Desktop drop of image files onto the cover artboard. */
+  onDropFiles?: (files: File[], at: { x: number; y: number }) => void;
 }) {
   const trRef = useRef<any>(null);
   const stageRef = useRef<any>(null);
@@ -937,6 +980,15 @@ function DesignCanvas({
 
   useEffect(() => () => clearLongPress(), [clearLongPress]);
 
+  const clientToDesign = useCallback((clientX: number, clientY: number) => {
+    const rect = wrapRef.current?.getBoundingClientRect();
+    if (!rect) return { x: DESIGN_W / 2, y: canvasH / 2 };
+    return {
+      x: (clientX - rect.left) / scale - layerX,
+      y: (clientY - rect.top) / scale - layerY,
+    };
+  }, [scale, layerX, layerY, canvasH]);
+
   return (
     <div
       ref={wrapRef}
@@ -946,6 +998,20 @@ function DesignCanvas({
         e.preventDefault();
         openCtx(e.clientX, e.clientY, pickAtPointer());
       }}
+      onDragOver={onDropFiles ? (e) => {
+        if (!dataTransferHasImageFiles(e.dataTransfer)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = 'copy';
+      } : undefined}
+      onDrop={onDropFiles ? (e) => {
+        if (!dataTransferHasImageFiles(e.dataTransfer)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const files = imageFilesFromDataTransfer(e.dataTransfer);
+        if (!files.length) return;
+        onDropFiles(files, clientToDesign(e.clientX, e.clientY));
+      } : undefined}
       onTouchStart={(e) => {
         const t = e.touches[0];
         if (!t) return;
@@ -1386,34 +1452,76 @@ export default function AdminDesignStudio() {
     }
   };
 
-  const uploadAndReplaceImage = async (file: File, targetId?: string) => {
+  const uploadAndReplaceImage = async (
+    file: File,
+    targetId?: string,
+    at?: { x: number; y: number },
+    opts?: { select?: boolean; replaceSelected?: boolean },
+  ) => {
     const side = coverSideRef.current;
-    const idAtStart = targetId || selectedIdRef.current;
+    const replaceSelected = opts?.replaceSelected !== false;
+    const idAtStart = replaceSelected ? (targetId || selectedIdRef.current) : undefined;
     setUploading(true);
     setSaveError(null);
     try {
+      const natural = await readImageNaturalSize(file);
       const url = await uploadStudioImage(file, getToken());
+      const canvasH = canvasHRef.current;
+      const frame = natural
+        ? graphicFrameRect(natural.w, natural.h, canvasH)
+        : { x: 80, y: Math.round(canvasH * 0.2), w: 440, h: Math.round(canvasH * 0.35) };
+      if (at) {
+        frame.x = Math.min(Math.max(0, Math.round(at.x - frame.w / 2)), Math.max(0, DESIGN_W - frame.w));
+        frame.y = Math.min(Math.max(0, Math.round(at.y - frame.h / 2)), Math.max(0, canvasH - frame.h));
+      }
       patchSide(side, prev => {
         if (idAtStart && prev.some(e => e.id === idAtStart && e.type === 'image')) {
           return prev.map(e => e.id === idAtStart
-            ? { ...e, src: url, cropFocusX: 0.5, cropFocusY: 0.5, cropZoom: 1 }
+            ? {
+                ...e,
+                src: url,
+                cropFocusX: 0.5,
+                cropFocusY: 0.5,
+                cropZoom: 1,
+                // Graphics / PNG overlays stay letterboxed (like landmarks).
+                objectFit: 'contain' as const,
+              }
             : e);
         }
         const el: EditorElement = {
-          id: `img-${Date.now()}`,
+          id: `img-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
           type: 'image',
           src: url,
-          x: 80, y: Math.round(canvasHRef.current * 0.2), w: 440, h: Math.round(canvasHRef.current * 0.35), rotation: 0,
-          cropFocusX: 0.5, cropFocusY: 0.5, cropZoom: 1,
+          x: frame.x,
+          y: frame.y,
+          w: frame.w,
+          h: frame.h,
+          rotation: 0,
+          cropFocusX: 0.5,
+          cropFocusY: 0.5,
+          cropZoom: 1,
+          objectFit: 'contain',
           opacity: 1,
         };
-        queueMicrotask(() => setSelectedId(el.id));
+        if (opts?.select !== false) queueMicrotask(() => setSelectedId(el.id));
         return [...prev, el];
       });
     } catch (e) {
       handleUploadError(e);
     } finally {
       setUploading(false);
+    }
+  };
+
+  const dropDesktopFilesOntoCover = async (files: File[], at: { x: number; y: number }) => {
+    if (!files.length) return;
+    for (let i = 0; i < files.length; i++) {
+      const pos = { x: at.x + i * 28, y: at.y + i * 28 };
+      // Always add a new graphic on desktop drop — don't overwrite the selection.
+      await uploadAndReplaceImage(files[i], undefined, pos, {
+        replaceSelected: false,
+        select: i === files.length - 1,
+      });
     }
   };
 
@@ -2325,6 +2433,7 @@ export default function AdminDesignStudio() {
                           setPhotoAdjustId(cur => (cur && cur !== info.id ? null : cur));
                           setCtxMenu(info);
                         }}
+                        onDropFiles={dropDesktopFilesOntoCover}
                       />
                     </div>
                   </div>

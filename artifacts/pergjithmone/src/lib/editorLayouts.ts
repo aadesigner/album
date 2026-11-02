@@ -114,8 +114,11 @@ export function isLayoutSlotFrame(el: {
   if (el.type === 'placeholder') return true;
   if (el.type !== 'image') return false;
   const id = el.id || '';
+  // Free-placed photos (`img-…`) are always movable / resizable.
+  if (id.startsWith('img-')) return false;
   // Cover applications: `rome-front-12-4-1730…` — never lock those frames.
   if (/-front-|-back-/.test(id)) return false;
+  // Legacy layout cell ids: `…-<zone>-<timestamp>`
   return /-\d+-\d{10,}$/.test(id);
 }
 

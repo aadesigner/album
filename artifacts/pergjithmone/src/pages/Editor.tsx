@@ -81,7 +81,7 @@ import { isStrokeOnlyShape, shapePathForElement } from '@/lib/shapes';
 import { getEmptyInnerPageNumbers } from '@/lib/pageContent';
 import { PageThumb, DesignCatalogThumb } from '@/components/PageThumb';
 import { uploadErrorMessage, uploadImageToApi } from '@/lib/uploadImage';
-import { ACCEPT_SAFE_IMAGES } from '@/lib/acceptedImages';
+import { ACCEPT_SAFE_IMAGES, dataTransferHasImageFiles, imageFilesFromDataTransfer } from '@/lib/acceptedImages';
 import { applyCoverBackground, coverBgMode, type CoverBgMode } from '@/lib/coverBackground';
 import { useEditorFontsReady, ensureEditorFonts, normalizeEditorFont, isEditorSingleCutFont } from '@/lib/editorFonts';
 import { FontPicker } from '@/components/FontPicker';
@@ -155,10 +155,46 @@ function findPhotoDropTarget(els: EditorElement[], x: number, y: number): Editor
   return null;
 }
 
+/** Default free-photo frame — never full-bleed (that locks drag to 0,0). */
+function freePhotoFrameSize(canvasH: number) {
+  const w = Math.min(500, Math.round(DESIGN_W * 0.72));
+  const h = Math.round(w * (3 / 4));
+  const maxH = Math.max(120, canvasH - 80);
+  if (h <= maxH) return { w, h };
+  return { w: Math.round(maxH * (4 / 3)), h: maxH };
+}
+
+function makeFreePhotoElement(
+  url: string,
+  canvasH: number,
+  at?: { x: number; y: number },
+): EditorElement {
+  const { w, h } = freePhotoFrameSize(canvasH);
+  const x = at
+    ? Math.min(Math.max(0, Math.round(at.x - w / 2)), Math.max(0, DESIGN_W - w))
+    : Math.round((DESIGN_W - w) / 2);
+  const y = at
+    ? Math.min(Math.max(0, Math.round(at.y - h / 2)), Math.max(0, canvasH - h))
+    : Math.round((canvasH - h) / 2);
+  return {
+    id: `img-${Date.now()}`,
+    type: 'image',
+    src: url,
+    x, y, w, h,
+    rotation: 0,
+    cropFocusX: 0.5,
+    cropFocusY: 0.5,
+    cropZoom: 1,
+    opacity: 1,
+    slotLocked: false,
+  };
+}
+
 function dataTransferHasPhoto(dt: DataTransfer | null): boolean {
   if (!dt) return false;
   const types = Array.from(dt.types);
   if (types.includes(ELEMENT_DRAG_MIME)) return false;
+  if (dataTransferHasImageFiles(dt)) return true;
   return types.some(t => t === PHOTO_DRAG_MIME || t === 'text/uri-list');
 }
 
@@ -881,15 +917,17 @@ function KPlaceholderEl({el,isSelected,isDropTarget,onSelect,onOpenPhotos,shapeR
 // Page Canvas
 // ─────────────────────────────────────────────────────────────────────────────
 
-function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos,onDelete,onGestureStart,onElementDragActive,onPageSwipe,editRequestId,onEditRequestHandled,onDropPhoto,onDropSticker,isActive,pageW,pageH,canvasH,shapeRefs,side,isMobile}: {
+function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos,onDelete,onGestureStart,onElementDragActive,onPageSwipe,editRequestId,onEditRequestHandled,onDropPhoto,onDropFiles,onDropSticker,isActive,pageW,pageH,canvasH,shapeRefs,side,isMobile}: {
   page:PageDef; elements:EditorElement[]; selectedId:string|null;
   onSelectId:(id:string|null)=>void; onChangeEl:(id:string,c:Partial<EditorElement>)=>void;
   onOpenPhotos?:()=>void; onDelete?:()=>void; onGestureStart?:()=>void;
   onElementDragActive?:(active:boolean)=>void;
   onPageSwipe?:(dir:1|-1)=>void;
   editRequestId?:string|null; onEditRequestHandled?:()=>void;
-  /** Place a library photo into the layout slot under the drop point. */
-  onDropPhoto?:(url:string, targetId:string)=>void;
+  /** Place a library photo into a slot, or freely on the page when targetId is null. */
+  onDropPhoto?:(url:string, targetId:string|null, at:{x:number;y:number})=>void;
+  /** Desktop / Finder drop — upload then place like onDropPhoto. */
+  onDropFiles?:(files:File[], targetId:string|null, at:{x:number;y:number})=>void;
   onDropSticker?:(url:string, x:number, y:number)=>void;
   isActive:boolean; pageW:number; pageH:number; canvasH:number;
   shapeRefs:React.MutableRefObject<Record<string,any>>; side:'left'|'right'|'solo'; isMobile?:boolean;
@@ -1119,12 +1157,19 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
     <div
       ref={wrapRef}
       style={{position:'relative',width:pageW,height:pageH,flexShrink:0,overflow:'hidden'}}
-      onDragOver={(onDropPhoto || onDropSticker) ? (e) => {
+      onDragOver={(onDropPhoto || onDropFiles || onDropSticker) ? (e) => {
         if (dataTransferHasElement(e.dataTransfer)) {
           if (!onDropSticker) return;
           e.preventDefault();
           e.stopPropagation();
           e.dataTransfer.dropEffect = 'copy';
+          return;
+        }
+        if (onDropFiles && dataTransferHasImageFiles(e.dataTransfer)) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.dataTransfer.dropEffect = 'copy';
+          updateDropHighlight(e.clientX, e.clientY);
           return;
         }
         if (!onDropPhoto || !dataTransferHasPhoto(e.dataTransfer)) return;
@@ -1133,10 +1178,10 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
         e.dataTransfer.dropEffect = 'copy';
         updateDropHighlight(e.clientX, e.clientY);
       } : undefined}
-      onDragLeave={onDropPhoto ? (e) => {
+      onDragLeave={(onDropPhoto || onDropFiles) ? (e) => {
         if (!wrapRef.current?.contains(e.relatedTarget as Node)) setDropTargetId(null);
       } : undefined}
-      onDrop={(onDropPhoto || onDropSticker) ? (e) => {
+      onDrop={(onDropPhoto || onDropFiles || onDropSticker) ? (e) => {
         if (dataTransferHasElement(e.dataTransfer)) {
           e.preventDefault();
           e.stopPropagation();
@@ -1147,6 +1192,17 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
           onDropSticker(url, x, y);
           return;
         }
+        if (onDropFiles && dataTransferHasImageFiles(e.dataTransfer)) {
+          e.preventDefault();
+          e.stopPropagation();
+          const files = imageFilesFromDataTransfer(e.dataTransfer);
+          setDropTargetId(null);
+          if (!files.length) return;
+          const { x, y } = clientToDesign(e.clientX, e.clientY);
+          const hit = findPhotoDropTarget(elements, x, y);
+          onDropFiles(files, hit?.id ?? null, { x, y });
+          return;
+        }
         if (!onDropPhoto || !dataTransferHasPhoto(e.dataTransfer)) return;
         e.preventDefault();
         e.stopPropagation();
@@ -1155,7 +1211,7 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
         if (!url) return;
         const { x, y } = clientToDesign(e.clientX, e.clientY);
         const hit = findPhotoDropTarget(elements, x, y);
-        if (hit) onDropPhoto(url, hit.id);
+        onDropPhoto(url, hit?.id ?? null, { x, y });
       } : undefined}
     >
       <Stage ref={stageRef} width={pageW} height={pageH} scaleX={scX} scaleY={scY}
@@ -1690,7 +1746,7 @@ function LockedPageView({pageW,pageH,role,side}: {pageW:number;pageH:number;role
 // Spread View — realistic book
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SpreadView = React.memo(function SpreadView({spread,spreadContent,selectedId,activeSide,onActiveSide,onSelectId,onChangeEl,onOpenPhotos,onDelete,onGestureStart,onElementDragActive,onPageSwipe,editRequestId,onEditRequestHandled,onDropPhoto,onDropSticker,pageW,pageH,canvasH,shapeRefs,isMobile,readOnly}: {
+const SpreadView = React.memo(function SpreadView({spread,spreadContent,selectedId,activeSide,onActiveSide,onSelectId,onChangeEl,onOpenPhotos,onDelete,onGestureStart,onElementDragActive,onPageSwipe,editRequestId,onEditRequestHandled,onDropPhoto,onDropFiles,onDropSticker,pageW,pageH,canvasH,shapeRefs,isMobile,readOnly}: {
   spread:SpreadDef; spreadContent:Record<number,EditorElement[]>;
   selectedId:string|null; activeSide:'left'|'right'; onActiveSide:(s:'left'|'right')=>void;
   onSelectId:(id:string|null)=>void; onChangeEl:(pid:number,eid:string,c:Partial<EditorElement>)=>void;
@@ -1698,7 +1754,8 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
   onElementDragActive?:(active:boolean)=>void;
   onPageSwipe?:(dir:1|-1)=>void;
   editRequestId?:string|null; onEditRequestHandled?:()=>void;
-  onDropPhoto?:(pageId:number, url:string, targetId:string)=>void;
+  onDropPhoto?:(pageId:number, url:string, targetId:string|null, at:{x:number;y:number})=>void;
+  onDropFiles?:(pageId:number, files:File[], targetId:string|null, at:{x:number;y:number})=>void;
   onDropSticker?:(pageId:number, url:string, x:number, y:number)=>void;
   pageW:number; pageH:number; canvasH:number;
   shapeRefs:React.MutableRefObject<Record<string,any>>; isMobile?:boolean;
@@ -1739,9 +1796,13 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
         onPageSwipe={onPageSwipe}
         editRequestId={readOnly ? null : editRequestId}
         onEditRequestHandled={onEditRequestHandled}
-        onDropPhoto={readOnly || !onDropPhoto ? undefined : (url, targetId) => {
+        onDropPhoto={readOnly || !onDropPhoto ? undefined : (url, targetId, at) => {
           onActiveSide(side);
-          onDropPhoto(page.dbId, url, targetId);
+          onDropPhoto(page.dbId, url, targetId, at);
+        }}
+        onDropFiles={readOnly || !onDropFiles ? undefined : (files, targetId, at) => {
+          onActiveSide(side);
+          onDropFiles(page.dbId, files, targetId, at);
         }}
         onDropSticker={readOnly || !onDropSticker ? undefined : (url, x, y) => {
           onActiveSide(side);
@@ -1774,8 +1835,11 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
               onPageSwipe={onPageSwipe}
               editRequestId={readOnly ? null : editRequestId}
               onEditRequestHandled={onEditRequestHandled}
-              onDropPhoto={readOnly || !onDropPhoto ? undefined : (url, targetId) => {
-                onDropPhoto(soloPage.dbId, url, targetId);
+              onDropPhoto={readOnly || !onDropPhoto ? undefined : (url, targetId, at) => {
+                onDropPhoto(soloPage.dbId, url, targetId, at);
+              }}
+              onDropFiles={readOnly || !onDropFiles ? undefined : (files, targetId, at) => {
+                onDropFiles(soloPage.dbId, files, targetId, at);
               }}
               onDropSticker={readOnly || !onDropSticker ? undefined : (url, x, y) => {
                 onDropSticker(soloPage.dbId, url, x, y);
@@ -1818,9 +1882,13 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
                 onPageSwipe={onPageSwipe}
                 editRequestId={readOnly ? null : editRequestId}
                 onEditRequestHandled={onEditRequestHandled}
-                onDropPhoto={readOnly || !onDropPhoto ? undefined : (url, targetId) => {
+                onDropPhoto={readOnly || !onDropPhoto ? undefined : (url, targetId, at) => {
                   onActiveSide(activeSide);
-                  onDropPhoto(page.dbId, url, targetId);
+                  onDropPhoto(page.dbId, url, targetId, at);
+                }}
+                onDropFiles={readOnly || !onDropFiles ? undefined : (files, targetId, at) => {
+                  onActiveSide(activeSide);
+                  onDropFiles(page.dbId, files, targetId, at);
                 }}
                 onDropSticker={readOnly || !onDropSticker ? undefined : (url, x, y) => {
                   onActiveSide(activeSide);
@@ -2795,13 +2863,23 @@ function Sidebar({tab,onTab,photos,onUpload,uploading,onAddPhoto,onAddText,onAdd
           </div>
         )}
         {tab==='photos' && (
-          <div className="overflow-y-auto flex-1 p-3 space-y-3">
+          <div className="overflow-y-auto flex-1 p-3 space-y-3"
+            onDragOver={e=>{
+              if (!dataTransferHasImageFiles(e.dataTransfer)) return;
+              e.preventDefault();
+              e.dataTransfer.dropEffect='copy';
+            }}
+            onDrop={e=>{
+              if (!dataTransferHasImageFiles(e.dataTransfer)) return;
+              e.preventDefault();
+              imageFilesFromDataTransfer(e.dataTransfer).forEach(f=>onUpload(f));
+            }}>
             <input ref={fileRef} type="file" accept={ACCEPT_SAFE_IMAGES} multiple className="hidden"
               onChange={e=>{Array.from(e.target.files||[]).forEach(f=>onUpload(f));e.target.value='';}}/>
             <button onClick={()=>fileRef.current?.click()} disabled={uploading}
               className="w-full py-2.5 border-2 border-dashed border-neutral-300 rounded-xl text-xs text-neutral-500 hover:border-neutral-600 flex items-center justify-center gap-1.5 transition-colors disabled:opacity-60">
               {uploading?<Loader2 size={13} className="animate-spin"/>:<Plus size={13}/>}
-              {lang==='sq'?'Ngarko foto':'Upload photos'}
+              {lang==='sq'?'Ngarko foto · ose tërhiq këtu':'Upload photos · or drop here'}
             </button>
             {photos.length===0 ? (
               <div className="text-center py-8 text-neutral-300">
@@ -2939,13 +3017,23 @@ function MobileSheet({tab,show,onClose,photos,onUpload,uploading,onAddPhoto,onLa
               </div>
             )}
             {tab==='photos' && (
-              <div className="space-y-3">
+              <div className="space-y-3"
+                onDragOver={e=>{
+                  if (!dataTransferHasImageFiles(e.dataTransfer)) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect='copy';
+                }}
+                onDrop={e=>{
+                  if (!dataTransferHasImageFiles(e.dataTransfer)) return;
+                  e.preventDefault();
+                  imageFilesFromDataTransfer(e.dataTransfer).forEach(f=>onUpload(f));
+                }}>
                 <input ref={fileRef} type="file" accept={ACCEPT_SAFE_IMAGES} multiple className="hidden"
                   onChange={e=>{Array.from(e.target.files||[]).forEach(f=>onUpload(f));e.target.value='';}}/>
                 <button onClick={()=>fileRef.current?.click()} disabled={uploading}
                   className="w-full py-3 border-2 border-dashed border-neutral-300 rounded-xl text-sm flex items-center justify-center gap-2 text-neutral-500 disabled:opacity-60">
                   {uploading?<Loader2 size={15} className="animate-spin"/>:<Plus size={15}/>}
-                  {lang==='sq'?'Ngarko foto':'Upload photos'}
+                  {lang==='sq'?'Ngarko foto · ose tërhiq këtu':'Upload photos · or drop here'}
                 </button>
                 <div className="grid grid-cols-3 gap-2">
                   {photos.map((url,i)=>(
@@ -3622,33 +3710,44 @@ export default function Editor() {
         :e));
       return;
     }
+    // Layout placeholders stay locked to their cell; free photos never go full-bleed.
     const ph=els.find(e=>e.id===selectedId&&e.type==='placeholder')
            ??els.find(e=>e.type==='placeholder');
     if (ph){
       updatePage(activePageId,els.map(e=>e.id===ph.id
-        ?{...e,type:'image' as const,src:url,cropFocusX:0.5,cropFocusY:0.5,cropZoom:1,slotLocked:true}
+        ?{...e,type:'image' as const,src:url,cropFocusX:0.5,cropFocusY:0.5,cropZoom:1,slotLocked:isLayoutSlotFrame(ph)}
         :e));
-      setSelectedId(null);
+      setSelectedId(ph.id);
       return;
     }
-    const hasImages=els.some(e=>e.type==='image');
-    const el:EditorElement=hasImages
-      ?{id:`img-${Date.now()}`,type:'image',src:url,x:50,y:Math.round(60*canvasH/DESIGN_H),w:500,h:Math.round(340*canvasH/DESIGN_H),rotation:0,cropFocusX:0.5,cropFocusY:0.5,cropZoom:1,opacity:1}
-      :{id:`img-${Date.now()}`,type:'image',src:url,x:0,y:0,w:DESIGN_W,h:canvasH,rotation:0,cropFocusX:0.5,cropFocusY:0.5,cropZoom:1,opacity:1};
+    const el = makeFreePhotoElement(url, canvasH);
     updatePage(activePageId,[...els,el]); setSelectedId(el.id);
   },[activePageId,selectedId,updatePage,canvasH,isOrdered]);
 
-  /** Drop a library photo onto a specific placeholder or image frame. */
-  const placePhotoInTarget=useCallback((pageId:number, url:string, targetId:string)=>{
+  /** Drop a library photo onto a layout slot, or freely onto empty page space. */
+  const placePhotoInTarget=useCallback((
+    pageId: number,
+    url: string,
+    targetId: string | null,
+    at: { x: number; y: number },
+  )=>{
     if (isOrdered || !url) return;
     const els=liveContent.current[pageId]??[];
-    const target=els.find(e=>e.id===targetId);
-    if (!target || target.sticker || (target.type!=='placeholder' && target.type!=='image')) return;
-    updatePage(pageId, els.map(e=>e.id===targetId
-      ?{...e, type:'image' as const, src:url, cropFocusX:0.5, cropFocusY:0.5, cropZoom:1, slotLocked: target.type==='placeholder' || !!target.slotLocked}
-      :e));
-    setSelectedId(targetId);
-  },[isOrdered, updatePage]);
+    if (targetId) {
+      const target=els.find(e=>e.id===targetId);
+      if (!target || target.sticker || (target.type!=='placeholder' && target.type!=='image')) return;
+      // Only lock when filling a layout cell — free images stay movable.
+      const lock = isLayoutSlotFrame(target);
+      updatePage(pageId, els.map(e=>e.id===targetId
+        ?{...e, type:'image' as const, src:url, cropFocusX:0.5, cropFocusY:0.5, cropZoom:1, slotLocked: lock}
+        :e));
+      setSelectedId(targetId);
+      return;
+    }
+    const el = makeFreePhotoElement(url, canvasH, at);
+    updatePage(pageId, [...els, el]);
+    setSelectedId(el.id);
+  },[isOrdered, updatePage, canvasH]);
 
   const applyCoverPatch = useCallback((
     patch: Parameters<typeof applyCoverBackground>[2],
@@ -3727,6 +3826,31 @@ export default function Editor() {
       alert(uploadErrorMessage(e, lang==='sq'?'sq':'en'));
     } finally{setUploading(false);}
   },[getToken,addPhoto,lang,isOrdered]);
+
+  /** Desktop drag-and-drop onto a page: upload, add to library, place at drop point. */
+  const dropDesktopFiles=useCallback(async(
+    pageId: number,
+    files: File[],
+    targetId: string | null,
+    at: { x: number; y: number },
+  )=>{
+    if (isOrdered || !files.length) return;
+    setUploading(true);
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const url = await uploadImageToApi(files[i], getToken());
+        setPhotos(prev => [url, ...prev]);
+        const useSlot = i === 0 ? targetId : null;
+        const pos = i === 0 ? at : { x: at.x + i * 28, y: at.y + i * 28 };
+        placePhotoInTarget(pageId, url, useSlot, pos);
+      }
+    } catch (e) {
+      console.error('Desktop drop upload failed', e);
+      alert(uploadErrorMessage(e, lang === 'sq' ? 'sq' : 'en'));
+    } finally {
+      setUploading(false);
+    }
+  }, [getToken, placePhotoInTarget, lang, isOrdered]);
 
   const reorderSpreads=useCallback(async(fromIdx:number,toIdx:number)=>{
     if (isOrdered || fromIdx===toIdx||!project?.pages) return;
@@ -4516,6 +4640,7 @@ export default function Editor() {
                   onPageSwipe={isMobile ? onPageSwipe : undefined}
                   editRequestId={editRequestId} onEditRequestHandled={clearEditRequest}
                   onDropPhoto={isOrdered ? undefined : placePhotoInTarget}
+                  onDropFiles={isOrdered ? undefined : dropDesktopFiles}
                   onDropSticker={isOrdered ? undefined : placeStickerOnPage}
                   pageW={pageW} pageH={pageH} canvasH={canvasH} shapeRefs={shapeRefs} isMobile={isMobile}
                   readOnly={isOrdered}/>

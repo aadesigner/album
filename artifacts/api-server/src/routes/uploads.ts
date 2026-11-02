@@ -126,9 +126,14 @@ async function compressUpload(
     withoutEnlargement: true,
   });
   if (outputExt === ".png") {
-    pipeline = pipeline.png({ quality: PNG_QUALITY, compressionLevel: 9 });
+    // sharp's `quality` switches on palette quantization, which flattens or
+    // corrupts alpha. Keep full RGBA for transparent graphics; palette only
+    // for opaque PNGs (logos without transparency).
+    pipeline = hasAlpha
+      ? pipeline.png({ compressionLevel: 9 })
+      : pipeline.png({ quality: PNG_QUALITY, compressionLevel: 9, palette: true });
   } else if (outputExt === ".webp") {
-    pipeline = pipeline.webp({ quality: JPEG_QUALITY });
+    pipeline = pipeline.webp({ quality: JPEG_QUALITY, alphaQuality: hasAlpha ? 100 : undefined });
   } else {
     pipeline = pipeline.jpeg({ quality: JPEG_QUALITY, mozjpeg: true });
   }
