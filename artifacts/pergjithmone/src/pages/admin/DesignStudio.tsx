@@ -17,7 +17,8 @@ import {
   fitAddedTextFrame,
   type CustomDesignRecord, type DesignDef, type DesignOverrides, type EditorElement, type DE,
   coverCropRect, imageFrameFocusFromOffset,
-  coverImageBlend, coverImageLetterbox, restoreCoverGraphics, sanitizeImageBlend,
+  coverImageBlend, coverImageLetterbox, konvaOpacity, clampElementPos, boundBoxToPage,
+  restoreCoverGraphics, sanitizeImageBlend,
 } from '@/lib/designs';
 import { applyCoverBackground, coverBgMode, type CoverBgMode } from '@/lib/coverBackground';
 import { uploadErrorMessage, uploadImageToApi } from '@/lib/uploadImage';
@@ -113,9 +114,11 @@ function patchFontStyle(current: string | undefined, kind: 'bold' | 'italic', on
   return ['italic', 'bold'].filter(k => parts.has(k)).join(' ') || 'normal';
 }
 
-/** No canvas clamp — text/images may sit partly or fully outside the page. */
-function studioDragBound(pos: { x: number; y: number }, _w?: number, _h?: number, _canvasH?: number) {
-  return { x: pos.x, y: pos.y };
+function studioDragBound(
+  pos: { x: number; y: number },
+  w = 0, h = 0, canvasH = DESIGN_H, rotation = 0,
+) {
+  return clampElementPos(pos, w, h, canvasH, rotation);
 }
 
 type StudioCtxMenu = { x: number; y: number; id: string | null };
@@ -156,7 +159,7 @@ function ShapeGlyph({ kind, size = 28 }: { kind: ShapeKind; size?: number }) {
         stroke={preset.strokeColor || (strokeOnly ? '#1A1A1A' : 'none')}
         strokeWidth={strokeOnly ? 3.5 : 0}
         strokeLinecap="round"
-        opacity={0.9}
+        opacity={1}
       />
     </svg>
   );
@@ -236,7 +239,7 @@ function useStudioDrag(
     onTouchStart: (e: any) => { e.cancelBubble = true; onSelect(); },
     onClick: (e: any) => { e.cancelBubble = true; onSelect(); },
     onTap: (e: any) => { e.cancelBubble = true; onSelect(); },
-    dragBoundFunc: (pos: any) => studioDragBound(pos, el.w, el.h, canvasH),
+    dragBoundFunc: (pos: any) => studioDragBound(pos, el.w, el.h, canvasH, el.rotation),
     onDragStart: (e: any) => {
       e.cancelBubble = true;
       onSelect();
@@ -249,7 +252,7 @@ function useStudioDrag(
     },
     onDragEnd: (e: any) => {
       e.cancelBubble = true;
-      const b = studioDragBound({ x: e.target.x(), y: e.target.y() }, el.w, el.h, canvasH);
+      const b = studioDragBound({ x: e.target.x(), y: e.target.y() }, el.w, el.h, canvasH, el.rotation);
       e.target.position(b);
       livePos.current = b;
       onChange(b);
@@ -456,9 +459,9 @@ const StudioImage = React.memo(function StudioImage({ el, selected, onSelect, on
     <Group
       ref={(n: any) => bindFrameNode(n, el.id, shapeRefs)}
       x={drag.x} y={drag.y} width={el.w} height={el.h} rotation={el.rotation || 0}
-      opacity={el.opacity ?? 1}
       clipX={0} clipY={0} clipWidth={el.w} clipHeight={el.h}
-      globalCompositeOperation={landmarkBlend}
+      opacity={konvaOpacity(el.opacity)}
+      {...(landmarkBlend ? { globalCompositeOperation: landmarkBlend } : {})}
       draggable={moveFrame}
       dragDistance={drag.dragDistance}
       dragBoundFunc={drag.dragBoundFunc}
@@ -485,7 +488,7 @@ const StudioImage = React.memo(function StudioImage({ el, selected, onSelect, on
         n.scaleX(1); n.scaleY(1);
         const nw = Math.max(20, startRef.current.w * s);
         const nh = Math.max(20, startRef.current.h * s);
-        const b = studioDragBound({ x: n.x(), y: n.y() }, nw, nh, canvasH);
+        const b = studioDragBound({ x: n.x(), y: n.y() }, nw, nh, canvasH, n.rotation());
         n.position(b);
         n.width(nw); n.height(nh);
         n.clip({ x: 0, y: 0, width: nw, height: nh });
@@ -618,7 +621,7 @@ const StudioShape = React.memo(function StudioShape({ el, onSelect, onChange, sh
     <Group
       ref={(n: any) => bindFrameNode(n, el.id, shapeRefs)}
       x={drag.x} y={drag.y} width={el.w} height={el.h} rotation={el.rotation || 0}
-      opacity={el.opacity ?? 1}
+      opacity={konvaOpacity(el.opacity)}
       draggable={drag.draggable}
       dragDistance={drag.dragDistance}
       dragBoundFunc={drag.dragBoundFunc}
@@ -640,7 +643,7 @@ const StudioShape = React.memo(function StudioShape({ el, onSelect, onChange, sh
         n.scaleX(1); n.scaleY(1);
         const nw = Math.max(4, startRef.current.w * sx);
         const nh = Math.max(4, startRef.current.h * sy);
-        const b = studioDragBound({ x: n.x(), y: n.y() }, nw, nh, canvasH);
+        const b = studioDragBound({ x: n.x(), y: n.y() }, nw, nh, canvasH, n.rotation());
         n.position(b);
         n.width(nw); n.height(nh);
         const pad = Math.max(0, (24 - Math.min(nw, nh)) / 2);
@@ -705,7 +708,7 @@ const StudioText = React.memo(function StudioText({ el, onSelect, onChange, shap
     <Group
       ref={(n: any) => bindFrameNode(n, el.id, shapeRefs)}
       x={drag.x} y={drag.y} width={el.w} height={el.h} rotation={el.rotation || 0}
-      opacity={el.opacity ?? 1}
+      opacity={konvaOpacity(el.opacity)}
       clipX={0} clipY={0} clipWidth={el.w} clipHeight={el.h}
       draggable={drag.draggable}
       dragDistance={drag.dragDistance}
@@ -740,7 +743,7 @@ const StudioText = React.memo(function StudioText({ el, onSelect, onChange, shap
         });
         finalFs = Math.max(10, Math.round(finalFs));
         n.width(finalW); n.height(finalH);
-        const b = studioDragBound({ x: n.x(), y: n.y() }, finalW, finalH, canvasH);
+        const b = studioDragBound({ x: n.x(), y: n.y() }, finalW, finalH, canvasH, n.rotation());
         n.position(b);
         onChange({ ...b, w: finalW, h: finalH, fontSize: finalFs, rotation: n.rotation() });
         gesture.end();
@@ -945,6 +948,7 @@ function DesignCanvas({
         }}
       >
         <Layer x={layerX} y={layerY}>
+          <Group clipX={0} clipY={0} clipWidth={DESIGN_W} clipHeight={canvasH}>
           <Rect
             x={0} y={0} width={DESIGN_W} height={canvasH}
             fill={PAPER_COLOR} listening={false} perfectDrawEnabled={false}
@@ -1005,6 +1009,7 @@ function DesignCanvas({
             }
             return null;
           })}
+          </Group>
           <Rect x={DESIGN_W / 2} y={0} width={1} height={canvasH}
             fill="rgba(201,123,132,0.18)" listening={false} perfectDrawEnabled={false} />
           <Rect x={0} y={canvasH / 2} width={DESIGN_W} height={1}
@@ -1029,7 +1034,7 @@ function DesignCanvas({
             boundBoxFunc={(oldBox: any, newBox: any) => {
               const minW = selected?.type === 'text' ? 40 : selected?.type === 'shape' ? 4 : 16;
               const minH = selected?.type === 'text' ? 24 : selected?.type === 'shape' ? 4 : 16;
-              return (newBox.width < minW || newBox.height < minH) ? oldBox : newBox;
+              return boundBoxToPage(oldBox, newBox, canvasH, minW, minH);
             }}
             borderStroke="#C97B84"
             borderStrokeWidth={2}
@@ -1337,6 +1342,7 @@ export default function AdminDesignStudio() {
           src: url,
           x: 80, y: Math.round(canvasHRef.current * 0.2), w: 440, h: Math.round(canvasHRef.current * 0.35), rotation: 0,
           cropFocusX: 0.5, cropFocusY: 0.5, cropZoom: 1,
+          opacity: 1,
         };
         queueMicrotask(() => setSelectedId(el.id));
         return [...prev, el];
@@ -1367,6 +1373,7 @@ export default function AdminDesignStudio() {
       fill: '#1A1A1A',
       align: 'center',
       fontFamily,
+      opacity: 1,
     };
     setDraft(prev => [...prev, el]);
     setSelectedId(el.id);

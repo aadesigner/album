@@ -31,10 +31,11 @@ function getCanvasHeight(bookWidthCm?: number, bookHeightCm?: number): number {
 }
 
 function isLandmarkPng(src?: string | null): boolean {
-  return !!src && /\/designs\/[^/?#]+\.png(?:$|[?#])/i.test(src);
+  return !!src && /\/designs\/(?:eiffel-tower|sagrada-familia)\.png(?:$|[?#])/i.test(src);
 }
 
-function coverImageBlend(el: { src?: string; mixBlendMode?: string }): 'screen' | undefined {
+function coverImageBlend(el: { src?: string; mixBlendMode?: string; sticker?: boolean }): 'screen' | undefined {
+  if (el.sticker) return undefined;
   return isLandmarkPng(el.src) ? 'screen' : undefined;
 }
 
@@ -82,6 +83,7 @@ export interface PdfElement {
   cropZoom?: number;
   objectFit?: 'cover' | 'contain';
   mixBlendMode?: string;
+  sticker?: boolean;
   // text
   text?: string; fontSize?: number; fontFamily?: string; fontStyle?: string;
   align?: 'left'|'center'|'right'; lineHeight?: number;   letterSpacing?: number;

@@ -30,6 +30,7 @@ describe("newShapeElement", () => {
     expect(el.shapeKind).toBe("heart");
     expect(el.x + el.w / 2).toBeCloseTo(300);
     expect(el.y + el.h / 2).toBeCloseTo(400);
+    expect(el.opacity).toBe(1);
   });
 
   it("treats line as stroke-only", () => {

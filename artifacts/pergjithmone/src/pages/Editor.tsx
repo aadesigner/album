@@ -70,7 +70,7 @@ import {
   BLANK_STARTER_ID, blankFrontCoverElements, blankBackCoverElements,
   coverCropRect, imageFrameCoverFit, imageFrameContainFit, imageFrameFocusFromOffset, fitAddedTextFrame,
   designFrontElements, designBackElements, buildDesignCatalog, parseCustomDesigns,
-  coverImageBlend, coverImageLetterbox,
+  coverImageBlend, coverImageLetterbox, konvaOpacity, clampElementPos, boundBoxToPage,
   type EditorElement, type DE, type DesignDef, type LayoutZone, type LayoutDef, type DesignOverrides,
 } from '@/lib/designs';
 import { parseEditorElements, makeStickerElement, type EditorElementAsset } from '@/lib/editorElements';
@@ -93,17 +93,19 @@ const PAPER_TEXTURE = `url("data:image/svg+xml,<svg viewBox='0 0 300 300' xmlns=
 /** Survives React Strict Mode remount so wizard design isn't applied twice / lost. */
 const consumedWizardDesignKeys = new Set<string>();
 
-/** No canvas clamp — frames can sit outside the page; guides still snap to midlines. */
-function dragBoundBox(pos: { x: number; y: number }, _w?: number, _h?: number, _canvasH?: number) {
-  return { x: pos.x, y: pos.y };
+function dragBoundBox(
+  pos: { x: number; y: number },
+  w = 0, h = 0, canvasH = DESIGN_H, rotation = 0,
+) {
+  return clampElementPos(pos, w, h, canvasH, rotation);
 }
 
 const GUIDE_SNAP_PX = 5;
 
-/** Snap element center to page midlines (no edge clamp). */
+/** Snap element center to page midlines, then keep the frame on the page. */
 function dragBoundWithGuides(
   pos: { x: number; y: number },
-  w: number, h: number, canvasH: number,
+  w: number, h: number, canvasH: number, rotation = 0,
 ): { x: number; y: number; guideV: boolean; guideH: boolean } {
   let { x, y } = pos;
   const midX = DESIGN_W / 2;
@@ -118,7 +120,8 @@ function dragBoundWithGuides(
     y = midY - h / 2;
     guideH = true;
   }
-  return { x, y, guideV, guideH };
+  const c = clampElementPos({ x, y }, w, h, canvasH, rotation);
+  return { x: c.x, y: c.y, guideV, guideH };
 }
 
 type GuideState = { v: boolean; h: boolean } | null;
@@ -361,7 +364,7 @@ function KShapeEl({el,isSelected,onSelect,onChange,onGestureStart,onDragActive,o
     <Group
       ref={(n:any)=>{if(n && !decorative) shapeRefs.current[el.id]=n;}}
       x={el.x} y={el.y} width={el.w} height={el.h}
-      rotation={el.rotation} opacity={el.opacity??1}
+      rotation={el.rotation} opacity={konvaOpacity(el.opacity)}
       perfectDrawEnabled={false}
       listening={!decorative}
       onMouseDown={(e:any)=>{ if (decorative) return; e.cancelBubble=true; onSelect(); }}
@@ -371,13 +374,13 @@ function KShapeEl({el,isSelected,onSelect,onChange,onGestureStart,onDragActive,o
       draggable={isSelected && !decorative}
       dragDistance={4}
       dragBoundFunc={(pos:any)=>{
-        const b=dragBoundWithGuides(pos,el.w,el.h,canvasH);
+        const b=dragBoundWithGuides(pos,el.w,el.h,canvasH,el.rotation);
         onGuides?.({v:b.guideV,h:b.guideH});
         return {x:b.x,y:b.y};
       }}
       onDragStart={()=>{onGestureStart?.();onDragActive?.(true,{keepTransformer:true});}}
       onDragEnd={(e:any)=>{
-        const b=dragBoundWithGuides({x:e.target.x(),y:e.target.y()},el.w,el.h,canvasH);
+        const b=dragBoundWithGuides({x:e.target.x(),y:e.target.y()},el.w,el.h,canvasH,el.rotation);
         e.target.position({x:b.x,y:b.y}); onChange({x:b.x,y:b.y}); onDragActive?.(false); onGuides?.(null);
       }}
       onTransformStart={()=>{
@@ -391,7 +394,7 @@ function KShapeEl({el,isSelected,onSelect,onChange,onGestureStart,onDragActive,o
         n.scaleX(1); n.scaleY(1);
         const nw=Math.max(10, transformStartRef.current.w * sx);
         const nh=Math.max(10, transformStartRef.current.h * sy);
-        const b=dragBoundBox({x:n.x(),y:n.y()},nw,nh,canvasH);
+        const b=dragBoundBox({x:n.x(),y:n.y()},nw,nh,canvasH,n.rotation());
         n.position(b); n.width(nw); n.height(nh);
         onChange({...b,w:nw,h:nh,rotation:n.rotation()});
         onDragActive?.(false); onGuides?.(null);
@@ -526,7 +529,7 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
       draggable={isSelected}
       dragDistance={3}
       dragBoundFunc={(pos: any) => {
-        const b = dragBoundWithGuides(pos, el.w, el.h, canvasH);
+        const b = dragBoundWithGuides(pos, el.w, el.h, canvasH, el.rotation);
         onGuides?.({ v: b.guideV, h: b.guideH });
         return { x: b.x, y: b.y };
       }}
@@ -536,7 +539,7 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
       onTap={(e: any) => { e.cancelBubble = true; onSelect(); }}
       onDragStart={() => { onGestureStart?.(); onDragActive?.(true, { keepTransformer: true }); }}
       onDragEnd={(e: any) => {
-        const b = dragBoundWithGuides({ x: e.target.x(), y: e.target.y() }, el.w, el.h, canvasH);
+        const b = dragBoundWithGuides({ x: e.target.x(), y: e.target.y() }, el.w, el.h, canvasH, el.rotation);
         e.target.position({ x: b.x, y: b.y });
         onChange({ x: b.x, y: b.y });
         onDragActive?.(false);
@@ -566,8 +569,8 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
       clipY={0}
       clipWidth={el.w}
       clipHeight={el.h}
-      opacity={el.opacity ?? 1}
-      globalCompositeOperation={landmarkBlend}
+      opacity={konvaOpacity(el.opacity)}
+      {...(landmarkBlend ? { globalCompositeOperation: landmarkBlend } : {})}
       onMouseDown={(e: any) => { e.cancelBubble = true; onSelect(); }}
       onTouchStart={(e: any) => { e.cancelBubble = true; onSelect(); }}
       onClick={(e: any) => { e.cancelBubble = true; onSelect(); }}
@@ -585,7 +588,7 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
       draggable={moveFrame}
       dragDistance={3}
       dragBoundFunc={(pos: any) => {
-        const b = dragBoundWithGuides(pos, el.w, el.h, canvasH);
+        const b = dragBoundWithGuides(pos, el.w, el.h, canvasH, el.rotation);
         onGuides?.({ v: b.guideV, h: b.guideH });
         return { x: b.x, y: b.y };
       }}
@@ -595,7 +598,7 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
         onDragActive?.(true, { keepTransformer: true });
       }}
       onDragEnd={(e: any) => {
-        const b = dragBoundWithGuides({ x: e.target.x(), y: e.target.y() }, el.w, el.h, canvasH);
+        const b = dragBoundWithGuides({ x: e.target.x(), y: e.target.y() }, el.w, el.h, canvasH, el.rotation);
         e.target.position({ x: b.x, y: b.y });
         onChange({ x: b.x, y: b.y });
         onDragActive?.(false);
@@ -619,7 +622,7 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
         n.scaleY(1);
         const nw = Math.max(20, n.width() || transformStartRef.current.w);
         const nh = Math.max(20, n.height() || transformStartRef.current.h);
-        const b = dragBoundBox({ x: n.x(), y: n.y() }, nw, nh, canvasH);
+        const b = dragBoundBox({ x: n.x(), y: n.y() }, nw, nh, canvasH, n.rotation());
         n.position(b);
         n.width(nw);
         n.height(nh);
@@ -769,6 +772,7 @@ function KTxtEl({el,onSelect,onChange,onStartEdit,onGestureStart,onDragActive,on
       width={el.w}
       height={el.h}
       rotation={el.rotation}
+      opacity={konvaOpacity(el.opacity)}
       draggable={isSelected && !isEditing}
       dragDistance={3}
       onMouseDown={(e: any) => { e.cancelBubble = true; if (!isEditing) onSelect(); }}
@@ -778,13 +782,13 @@ function KTxtEl({el,onSelect,onChange,onStartEdit,onGestureStart,onDragActive,on
       onDblClick={(e: any) => { e.cancelBubble = true; onStartEdit(); }}
       onDblTap={(e: any) => { e.cancelBubble = true; onStartEdit(); }}
       dragBoundFunc={(pos: any) => {
-        const b = dragBoundWithGuides(pos, el.w, el.h, canvasH);
+        const b = dragBoundWithGuides(pos, el.w, el.h, canvasH, el.rotation);
         onGuides?.({ v: b.guideV, h: b.guideH });
         return { x: b.x, y: b.y };
       }}
       onDragStart={() => { onGestureStart?.(); onDragActive?.(true, { keepTransformer: true }); }}
       onDragEnd={(e: any) => {
-        const b = dragBoundWithGuides({ x: e.target.x(), y: e.target.y() }, el.w, el.h, canvasH);
+        const b = dragBoundWithGuides({ x: e.target.x(), y: e.target.y() }, el.w, el.h, canvasH, el.rotation);
         e.target.position({ x: b.x, y: b.y });
         onChange({ x: b.x, y: b.y });
         onDragActive?.(false);
@@ -813,7 +817,7 @@ function KTxtEl({el,onSelect,onChange,onStartEdit,onGestureStart,onDragActive,on
             c.height(nh);
           }
         });
-        const b = dragBoundBox({ x: n.x(), y: n.y() }, nw, nh, canvasH);
+        const b = dragBoundBox({ x: n.x(), y: n.y() }, nw, nh, canvasH, n.rotation());
         n.position(b);
         onChange({ ...b, w: nw, h: nh, rotation: n.rotation() });
         onDragActive?.(false);
@@ -837,7 +841,7 @@ function KTxtEl({el,onSelect,onChange,onStartEdit,onGestureStart,onDragActive,on
         lineHeight={el.lineHeight ?? 1.2}
         letterSpacing={el.letterSpacing ?? 0}
         padding={6}
-        opacity={isEditing ? 0 : (el.opacity ?? 1)}
+        opacity={isEditing ? 0 : 1}
         wrap="word"
         ellipsis={false}
         perfectDrawEnabled={false}
@@ -1110,7 +1114,7 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
   return (
     <div
       ref={wrapRef}
-      style={{position:'relative',width:pageW,height:pageH,flexShrink:0}}
+      style={{position:'relative',width:pageW,height:pageH,flexShrink:0,overflow:'hidden'}}
       onDragOver={(onDropPhoto || onDropSticker) ? (e) => {
         if (dataTransferHasElement(e.dataTransfer)) {
           if (!onDropSticker) return;
@@ -1240,7 +1244,7 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
               const isText = selectedId && elements.find(e => e.id === selectedId)?.type === 'text';
               const minW = isText ? 40 : 10;
               const minH = isText ? 24 : 10;
-              return (nw.width < minW || nw.height < minH) ? old : nw;
+              return boundBoxToPage(old, nw, canvasH, minW, minH);
             }}
             padding={4}
             borderStroke="#2563EB" borderStrokeWidth={2.5} borderDash={undefined}
@@ -3612,8 +3616,8 @@ export default function Editor() {
     }
     const hasImages=els.some(e=>e.type==='image');
     const el:EditorElement=hasImages
-      ?{id:`img-${Date.now()}`,type:'image',src:url,x:50,y:Math.round(60*canvasH/DESIGN_H),w:500,h:Math.round(340*canvasH/DESIGN_H),rotation:0,cropFocusX:0.5,cropFocusY:0.5,cropZoom:1}
-      :{id:`img-${Date.now()}`,type:'image',src:url,x:0,y:0,w:DESIGN_W,h:canvasH,rotation:0,cropFocusX:0.5,cropFocusY:0.5,cropZoom:1};
+      ?{id:`img-${Date.now()}`,type:'image',src:url,x:50,y:Math.round(60*canvasH/DESIGN_H),w:500,h:Math.round(340*canvasH/DESIGN_H),rotation:0,cropFocusX:0.5,cropFocusY:0.5,cropZoom:1,opacity:1}
+      :{id:`img-${Date.now()}`,type:'image',src:url,x:0,y:0,w:DESIGN_W,h:canvasH,rotation:0,cropFocusX:0.5,cropFocusY:0.5,cropZoom:1,opacity:1};
     updatePage(activePageId,[...els,el]); setSelectedId(el.id);
   },[activePageId,selectedId,updatePage,canvasH,isOrdered]);
 
@@ -3893,7 +3897,7 @@ export default function Editor() {
       text,x:Math.round((DESIGN_W-box.w)/2),y:Math.round(canvasH/2-box.h/2),
       w:box.w,h:box.h,rotation:0,
       fontSize,fontFamily,fill:'#1a1a1a',
-      align:style?.align??'center',fontStyle};
+      align:style?.align??'center',fontStyle,opacity:1};
     const els=liveContent.current[activePageId]??[];
     updatePage(activePageId,[...els,el]);
     setSelectedId(el.id);

@@ -18,6 +18,9 @@ import {
   restoreCoverGraphics,
   sanitizeImageBlend,
   coverImageBlend,
+  konvaOpacity,
+  clampElementPos,
+  boundBoxToPage,
   blankCoverElements,
   DESIGNS,
   TRAVEL_LAYOUT_REV,
@@ -360,6 +363,29 @@ describe("designCatalogFace", () => {
     expect(coverImageBlend({ src: "/designs/eiffel-tower.png" })).toBe("screen");
     expect(coverImageBlend({ src: "/designs/sagrada-familia.png" })).toBe("screen");
     expect(coverImageBlend({ src: "/designs/rome-cover-thumb.jpg", mixBlendMode: "screen" })).toBeUndefined();
+    expect(coverImageBlend({ src: "/designs/baby-ador-graphic.png" })).toBeUndefined();
+    expect(coverImageBlend({ src: "/designs/eiffel-tower.png", sticker: true })).toBeUndefined();
+  });
+
+  it("omits full Konva opacity so clipped groups stay solid", () => {
+    expect(konvaOpacity(undefined)).toBeUndefined();
+    expect(konvaOpacity(1)).toBeUndefined();
+    expect(konvaOpacity(0.9)).toBe(0.9);
+    expect(konvaOpacity(40)).toBe(0.4);
+  });
+
+  it("keeps dragged frames on the album page", () => {
+    expect(clampElementPos({ x: -40, y: -10 }, 100, 80, 800)).toEqual({ x: 0, y: 0 });
+    expect(clampElementPos({ x: 580, y: 10 }, 100, 80, 800)).toEqual({ x: 500, y: 10 });
+    expect(clampElementPos({ x: 10, y: 760 }, 100, 80, 800)).toEqual({ x: 10, y: 720 });
+  });
+
+  it("rejects a resize that would leave the page", () => {
+    const oldBox = { x: 500, y: 0, width: 80, height: 80 };
+    const next = boundBoxToPage(oldBox, { x: 500, y: 0, width: 200, height: 80 }, 800, 16, 16);
+    expect(next.x).toBe(500);
+    expect(next.width).toBe(100);
+    expect(next.x + next.width).toBe(DESIGN_W);
   });
 
   it("restoreCoverGraphics fills a blank image slot from the builtin cover", () => {

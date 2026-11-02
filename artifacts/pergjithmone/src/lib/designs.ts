@@ -19,6 +19,97 @@ export const DESIGN_W = 600;
 export const DESIGN_H = 800;
 export const PAPER_COLOR = '#FEFDF9';
 
+/** Axis-aligned bounds of a rect rotated around its top-left (Konva default). */
+export function rotatedRectAabb(
+  x: number, y: number, w: number, h: number, rotationDeg = 0,
+): { x: number; y: number; w: number; h: number } {
+  const rad = ((rotationDeg || 0) * Math.PI) / 180;
+  if (!rad) return { x, y, w, h };
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const xs = [0, w, w, 0].map((px, i) => x + px * cos - [0, 0, h, h][i] * sin);
+  const ys = [0, w, w, 0].map((px, i) => y + px * sin + [0, 0, h, h][i] * cos);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+}
+
+/** Keep an element's frame on the album page (drag). */
+export function clampElementPos(
+  pos: { x: number; y: number },
+  w: number,
+  h: number,
+  canvasH: number,
+  rotation = 0,
+): { x: number; y: number } {
+  const pageH = canvasH > 0 ? canvasH : DESIGN_H;
+  if (!rotation) {
+    return {
+      x: Math.min(Math.max(pos.x, 0), Math.max(0, DESIGN_W - w)),
+      y: Math.min(Math.max(pos.y, 0), Math.max(0, pageH - h)),
+    };
+  }
+  const aabb = rotatedRectAabb(pos.x, pos.y, w, h, rotation);
+  let dx = 0;
+  let dy = 0;
+  if (aabb.w <= DESIGN_W) {
+    if (aabb.x < 0) dx = -aabb.x;
+    else if (aabb.x + aabb.w > DESIGN_W) dx = DESIGN_W - aabb.x - aabb.w;
+  } else {
+    dx = -aabb.x;
+  }
+  if (aabb.h <= pageH) {
+    if (aabb.y < 0) dy = -aabb.y;
+    else if (aabb.y + aabb.h > pageH) dy = pageH - aabb.y - aabb.h;
+  } else {
+    dy = -aabb.y;
+  }
+  return { x: pos.x + dx, y: pos.y + dy };
+}
+
+export type PageBoundBox = {
+  x: number; y: number; width: number; height: number; rotation?: number;
+};
+
+/** Keep a Konva transformer box on the album page (resize). */
+export function boundBoxToPage(
+  oldBox: PageBoundBox,
+  newBox: PageBoundBox,
+  canvasH: number,
+  minW: number,
+  minH: number,
+): PageBoundBox {
+  if (newBox.width < minW || newBox.height < minH) return oldBox;
+  const pageH = canvasH > 0 ? canvasH : DESIGN_H;
+  const rot = newBox.rotation || 0;
+  if (rot) {
+    const aabb = rotatedRectAabb(newBox.x, newBox.y, newBox.width, newBox.height, rot);
+    const ok = aabb.x >= -0.5 && aabb.y >= -0.5
+      && aabb.x + aabb.w <= DESIGN_W + 0.5
+      && aabb.y + aabb.h <= pageH + 0.5;
+    return ok ? newBox : oldBox;
+  }
+  let x = newBox.x;
+  let y = newBox.y;
+  let width = Math.min(Math.max(newBox.width, minW), DESIGN_W);
+  let height = Math.min(Math.max(newBox.height, minH), pageH);
+  if (x < 0) {
+    width = Math.max(minW, Math.min(width + x, DESIGN_W));
+    x = 0;
+  }
+  if (y < 0) {
+    height = Math.max(minH, Math.min(height + y, pageH));
+    y = 0;
+  }
+  if (x + width > DESIGN_W) width = Math.max(minW, DESIGN_W - x);
+  if (y + height > pageH) height = Math.max(minH, pageH - y);
+  if (x + width > DESIGN_W) x = Math.max(0, DESIGN_W - width);
+  if (y + height > pageH) y = Math.max(0, pageH - height);
+  return { ...newBox, x, y, width, height };
+}
+
 /** Matches KonvaText `padding={6}` in the album / studio editors. */
 const ADDED_TEXT_PAD = 6;
 
@@ -297,14 +388,22 @@ export function minPhotoAdjustZoom(
   return Math.max(1, zX, zY) * 1.0001;
 }
 
-/** Local cutout PNG (Eiffel, Sagrada, …). JPEG city photos must never use screen-blend. */
+/** Gold-on-black landmark cutouts only — other /designs PNGs stay fully opaque. */
 export function isLandmarkPng(src?: string | null): boolean {
-  return !!src && /\/designs\/[^/?#]+\.png(?:$|[?#])/i.test(src);
+  return !!src && /\/designs\/(?:eiffel-tower|sagrada-familia)\.png(?:$|[?#])/i.test(src);
 }
 
 export function isLandmarkGraphic(el: { type?: string; src?: string; sticker?: boolean }): boolean {
   if (el.type !== 'image' || !el.src || el.sticker) return false;
   return isLandmarkPng(el.src);
+}
+
+/** Konva/CSS opacity. Omit 1 so clipped groups don't flatten through a buffer. */
+export function konvaOpacity(opacity?: number): number | undefined {
+  if (opacity == null || Number.isNaN(opacity)) return undefined;
+  const n = opacity > 1 && opacity <= 100 ? opacity / 100 : opacity;
+  if (n >= 0.999) return undefined;
+  return Math.max(0, Math.min(1, n));
 }
 
 export function sanitizeImageBlend<T extends { src?: string; mixBlendMode?: string; objectFit?: string }>(el: T): T {
@@ -314,8 +413,9 @@ export function sanitizeImageBlend<T extends { src?: string; mixBlendMode?: stri
   return next;
 }
 
-/** Gold-on-black /designs PNGs always screen — even if a save dropped mixBlendMode. */
-export function coverImageBlend(el: { src?: string; mixBlendMode?: string }): 'screen' | undefined {
+/** Landmark cutouts screen; stickers and other PNGs draw at full opacity. */
+export function coverImageBlend(el: { src?: string; mixBlendMode?: string; sticker?: boolean }): 'screen' | undefined {
+  if (el.sticker) return undefined;
   return isLandmarkPng(el.src) ? 'screen' : undefined;
 }
 
@@ -597,11 +697,11 @@ export const SH = (k: ShapeKind, x:number, y:number, w:number, h:number, fill:st
   ({ type:'shape', shapeKind:k, x, y, w, h, rotation:0, fill, opacity:0.4, strokeWidth:0, ...o });
 export const PH = (x:number, y:number, w:number, h:number, rotation=0): DE => ({ type:'placeholder', x, y, w, h, rotation });
 export const TX = (text:string, x:number, y:number, w:number, h:number, o:Partial<DE>={}): DE =>
-  ({ type:'text', x, y, w, h, rotation:0, text,
+  ({ type:'text', x, y, w, h, rotation:0, text, opacity: 1,
      fontSize:18, fill:'#333333', align:'center', fontFamily:'Georgia, serif', fontStyle:'normal', ...o });
 /** Movable cover graphic (transparent PNG) — used by landmark travel templates. */
 export const IMG = (src: string, x: number, y: number, w: number, h: number, o: Partial<DE> = {}): DE =>
-  ({ type: 'image', src, x, y, w, h, rotation: 0, ...o });
+  ({ type: 'image', src, x, y, w, h, rotation: 0, opacity: 1, ...o });
 
 
 /** Bump Unsplash (etc.) picker thumbs (w=400) to a size usable on covers/PDF.

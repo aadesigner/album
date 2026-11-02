@@ -135,15 +135,15 @@ export interface ShapePreset {
 }
 
 export const SHAPE_PRESETS: Record<ShapeKind, ShapePreset> = {
-  rect:     { kind: 'rect',     w: 280, h: 160, fill: '#1A1A1A', opacity: 0.9,  strokeWidth: 0, cornerRadius: 0 },
-  circle:   { kind: 'circle',   w: 200, h: 200, fill: '#1A1A1A', opacity: 0.9,  strokeWidth: 0 },
+  rect:     { kind: 'rect',     w: 280, h: 160, fill: '#1A1A1A', opacity: 1, strokeWidth: 0, cornerRadius: 0 },
+  circle:   { kind: 'circle',   w: 200, h: 200, fill: '#1A1A1A', opacity: 1, strokeWidth: 0 },
   line:     { kind: 'line',     w: 360, h: 24,  fill: 'transparent', opacity: 1, strokeColor: '#1A1A1A', strokeWidth: 4 },
-  triangle: { kind: 'triangle', w: 200, h: 180, fill: '#1A1A1A', opacity: 0.9,  strokeWidth: 0 },
-  diamond:  { kind: 'diamond',  w: 180, h: 180, fill: '#1A1A1A', opacity: 0.9,  strokeWidth: 0 },
-  star:     { kind: 'star',     w: 200, h: 200, fill: '#C9A227', opacity: 0.95, strokeWidth: 0 },
-  heart:    { kind: 'heart',    w: 200, h: 180, fill: '#C97B84', opacity: 0.95, strokeWidth: 0 },
-  arch:     { kind: 'arch',     w: 280, h: 160, fill: '#1A1A1A', opacity: 0.88, strokeWidth: 0 },
-  ring:     { kind: 'ring',     w: 200, h: 200, fill: '#1A1A1A', opacity: 0.9,  strokeWidth: 0 },
+  triangle: { kind: 'triangle', w: 200, h: 180, fill: '#1A1A1A', opacity: 1, strokeWidth: 0 },
+  diamond:  { kind: 'diamond',  w: 180, h: 180, fill: '#1A1A1A', opacity: 1, strokeWidth: 0 },
+  star:     { kind: 'star',     w: 200, h: 200, fill: '#C9A227', opacity: 1, strokeWidth: 0 },
+  heart:    { kind: 'heart',    w: 200, h: 180, fill: '#C97B84', opacity: 1, strokeWidth: 0 },
+  arch:     { kind: 'arch',     w: 280, h: 160, fill: '#1A1A1A', opacity: 1, strokeWidth: 0 },
+  ring:     { kind: 'ring',     w: 200, h: 200, fill: '#1A1A1A', opacity: 1, strokeWidth: 0 },
 };
 
 export function newShapeElement(kind: ShapeKind, pageH: number, pageW = 600): {
