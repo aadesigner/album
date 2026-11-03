@@ -87,6 +87,54 @@ function SectionHeader({ icon: Icon, title, desc }: { icon: any; title: string; 
 
 const CATEGORY_ORDER = ['Wedding','Travel','Baby & Family','Friendship','Celebration','Modern','Portrait','Nature'];
 
+/** Normalize form values into the PATCH body — also used as a dirty fingerprint. */
+function buildSettingsPayload(values: any, hiddenIds: Set<string>) {
+  return {
+    ...values,
+    basePriceLek:       Number(values.basePriceLek),
+    minPages:           Number(values.minPages),
+    extraSpreadPriceLek:Number(values.extraSpreadPriceLek),
+    maintenanceMode:    Boolean(values.maintenanceMode),
+    bookCreationEnabled:Boolean(values.bookCreationEnabled),
+    requireLoginForPdf: Boolean(values.requireLoginForPdf),
+    pendingBooksLimitEnabled: Boolean(values.pendingBooksLimitEnabled),
+    pendingBooksLimit:        Number(values.pendingBooksLimit),
+    rateLimitGeneralWindowMs:    Number(values.rateLimitGeneralWindowMs),
+    rateLimitGeneralMax:         Number(values.rateLimitGeneralMax),
+    rateLimitAuthWindowMs:       Number(values.rateLimitAuthWindowMs),
+    rateLimitAuthMax:            Number(values.rateLimitAuthMax),
+    rateLimitAnalyticsWindowMs:  Number(values.rateLimitAnalyticsWindowMs),
+    rateLimitAnalyticsMax:       Number(values.rateLimitAnalyticsMax),
+    rateLimitUploadsWindowMs:    Number(values.rateLimitUploadsWindowMs),
+    rateLimitUploadsMax:         Number(values.rateLimitUploadsMax),
+    loginLockoutThreshold:       Number(values.loginLockoutThreshold),
+    loginLockoutMinutes:         Number(values.loginLockoutMinutes),
+    maxAlbumsPerUser:            Number(values.maxAlbumsPerUser),
+    maxPhotosPerAlbum:           Number(values.maxPhotosPerAlbum),
+    maxOrdersPerDay:             Number(values.maxOrdersPerDay),
+    maxConcurrentPdfGenerations: Number(values.maxConcurrentPdfGenerations),
+    maxUploadFileSizeMb:         Number(values.maxUploadFileSizeMb),
+    allowedUploadMimeTypes: String(values.allowedUploadMimeTypes || ''),
+    hiddenDesignIds: Array.from(hiddenIds).sort(),
+    offerBarEnabled:    Boolean(values.offerBarEnabled),
+    offerBarTextAl:     String(values.offerBarTextAl || ''),
+    offerBarTextEn:     String(values.offerBarTextEn || ''),
+    offerBarButtonAl:   String(values.offerBarButtonAl || ''),
+    offerBarButtonEn:   String(values.offerBarButtonEn || ''),
+    offerBarHref:       safeOfferHref(values.offerBarHref),
+    offerBarBg:         sanitizeHexColor(values.offerBarBg, OFFER_BAR_DEFAULTS.bg),
+    offerBarTextColor:  sanitizeHexColor(values.offerBarTextColor, OFFER_BAR_DEFAULTS.textColor),
+    offerBarButtonBg:   sanitizeHexColor(values.offerBarButtonBg, OFFER_BAR_DEFAULTS.buttonBg),
+    offerBarButtonText: sanitizeHexColor(values.offerBarButtonText, OFFER_BAR_DEFAULTS.buttonText),
+    clarityEnabled:     Boolean(values.clarityEnabled),
+    clarityProjectId:   extractClarityProjectId(values.clarityProjectId),
+  };
+}
+
+function settingsFingerprint(values: any, hiddenIds: Set<string>) {
+  return JSON.stringify(buildSettingsPayload(values, hiddenIds));
+}
+
 export default function AdminSettings() {
   const queryClient = useQueryClient();
   const { data: settings, isLoading } = useGetAdminSettings();
@@ -151,12 +199,45 @@ export default function AdminSettings() {
   const [designsSaved, setDesignsSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  /** Last successfully persisted fingerprint — autosave only when this differs. */
+  const lastSavedFp = useRef<string | null>(null);
+  const settingsHydrated = useRef(false);
+  const saveInFlight = useRef(false);
+  const autoSaveTimer = useRef<number | undefined>(undefined);
+  const hiddenIdsRef = useRef(hiddenIds);
+  hiddenIdsRef.current = hiddenIds;
+
+  const scheduleAutoSave = () => {
+    if (!settingsHydrated.current || saveInFlight.current) return;
+    const fp = settingsFingerprint(form.getValues(), hiddenIdsRef.current);
+    if (fp === lastSavedFp.current) return;
+    if (autoSaveTimer.current) window.clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = window.setTimeout(() => {
+      autoSaveTimer.current = undefined;
+      void onSubmitRef.current(form.getValues());
+    }, 1600);
+  };
+  const onSubmitRef = useRef<(values: any) => Promise<void>>(async () => {});
 
   useEffect(() => {
     if (s?.hiddenDesignIds) {
       setHiddenIds(new Set(s.hiddenDesignIds as string[]));
     }
   }, [s?.hiddenDesignIds]);
+
+  // Baseline once server settings land (and after a successful refetch).
+  useEffect(() => {
+    if (isLoading || !s) return;
+    const ids = new Set<string>(
+      Array.isArray(s.hiddenDesignIds) ? (s.hiddenDesignIds as string[]) : [],
+    );
+    // Wait a tick so react-hook-form `values` have applied.
+    const t = window.setTimeout(() => {
+      lastSavedFp.current = settingsFingerprint(form.getValues(), ids);
+      settingsHydrated.current = true;
+    }, 0);
+    return () => window.clearTimeout(t);
+  }, [isLoading, s, form]);
 
   const toggleDesign = (id: string) => {
     setHiddenIds(prev => {
@@ -181,6 +262,7 @@ export default function AdminSettings() {
       await updateSettings.mutateAsync({
         data: { hiddenDesignIds: Array.from(hiddenIds) } as any,
       });
+      lastSavedFp.current = settingsFingerprint(form.getValues(), hiddenIds);
       await invalidateSettings();
       setDesignsSaved(true);
       setTimeout(() => setDesignsSaved(false), 2500);
@@ -192,67 +274,43 @@ export default function AdminSettings() {
   };
 
   const onSubmit = async (values: any) => {
+    const payload = buildSettingsPayload(values, hiddenIdsRef.current);
+    const fp = JSON.stringify(payload);
+    if (fp === lastSavedFp.current) return;
+    if (saveInFlight.current) return;
+    saveInFlight.current = true;
     setSaveError(null);
     try {
-      await updateSettings.mutateAsync({ data: {
-        ...values,
-        basePriceLek:       Number(values.basePriceLek),
-        minPages:           Number(values.minPages),
-        extraSpreadPriceLek:Number(values.extraSpreadPriceLek),
-        maintenanceMode:    Boolean(values.maintenanceMode),
-        bookCreationEnabled:Boolean(values.bookCreationEnabled),
-        requireLoginForPdf: Boolean(values.requireLoginForPdf),
-        pendingBooksLimitEnabled: Boolean(values.pendingBooksLimitEnabled),
-        pendingBooksLimit:        Number(values.pendingBooksLimit),
-        rateLimitGeneralWindowMs:    Number(values.rateLimitGeneralWindowMs),
-        rateLimitGeneralMax:         Number(values.rateLimitGeneralMax),
-        rateLimitAuthWindowMs:       Number(values.rateLimitAuthWindowMs),
-        rateLimitAuthMax:            Number(values.rateLimitAuthMax),
-        rateLimitAnalyticsWindowMs:  Number(values.rateLimitAnalyticsWindowMs),
-        rateLimitAnalyticsMax:       Number(values.rateLimitAnalyticsMax),
-        rateLimitUploadsWindowMs:    Number(values.rateLimitUploadsWindowMs),
-        rateLimitUploadsMax:         Number(values.rateLimitUploadsMax),
-        loginLockoutThreshold:       Number(values.loginLockoutThreshold),
-        loginLockoutMinutes:         Number(values.loginLockoutMinutes),
-        maxAlbumsPerUser:            Number(values.maxAlbumsPerUser),
-        maxPhotosPerAlbum:           Number(values.maxPhotosPerAlbum),
-        maxOrdersPerDay:             Number(values.maxOrdersPerDay),
-        maxConcurrentPdfGenerations: Number(values.maxConcurrentPdfGenerations),
-        maxUploadFileSizeMb:         Number(values.maxUploadFileSizeMb),
-        allowedUploadMimeTypes: String(values.allowedUploadMimeTypes || ''),
-        hiddenDesignIds: Array.from(hiddenIds),
-        offerBarEnabled:    Boolean(values.offerBarEnabled),
-        offerBarTextAl:     String(values.offerBarTextAl || ''),
-        offerBarTextEn:     String(values.offerBarTextEn || ''),
-        offerBarButtonAl:   String(values.offerBarButtonAl || ''),
-        offerBarButtonEn:   String(values.offerBarButtonEn || ''),
-        offerBarHref:       safeOfferHref(values.offerBarHref),
-        offerBarBg:         sanitizeHexColor(values.offerBarBg, OFFER_BAR_DEFAULTS.bg),
-        offerBarTextColor:  sanitizeHexColor(values.offerBarTextColor, OFFER_BAR_DEFAULTS.textColor),
-        offerBarButtonBg:   sanitizeHexColor(values.offerBarButtonBg, OFFER_BAR_DEFAULTS.buttonBg),
-        offerBarButtonText: sanitizeHexColor(values.offerBarButtonText, OFFER_BAR_DEFAULTS.buttonText),
-        clarityEnabled:     Boolean(values.clarityEnabled),
-        clarityProjectId:   extractClarityProjectId(values.clarityProjectId),
-      }});
+      await updateSettings.mutateAsync({ data: payload as any });
+      lastSavedFp.current = fp;
       await invalidateSettings();
       setSaved(true);
       setDesignsSaved(true);
       setTimeout(() => { setSaved(false); setDesignsSaved(false); }, 2500);
     } catch (err: any) {
       setSaveError(err?.data?.error || err?.message || 'Failed to save settings.');
+    } finally {
+      saveInFlight.current = false;
     }
   };
+  onSubmitRef.current = onSubmit;
 
-  const watched = form.watch();
-  const skipSettingsAuto = useRef(true);
+  // Autosave only on real field edits — dirty fingerprint gate skips no-ops.
   useEffect(() => {
-    if (skipSettingsAuto.current) {
-      skipSettingsAuto.current = false;
-      return;
-    }
-    const t = window.setTimeout(() => { void onSubmit(form.getValues()); }, 1600);
-    return () => window.clearTimeout(t);
-  }, [watched, hiddenIds]);
+    const sub = form.watch((_values, info) => {
+      if (info?.type && info.type !== 'change') return;
+      scheduleAutoSave();
+    });
+    return () => {
+      sub.unsubscribe();
+      if (autoSaveTimer.current) window.clearTimeout(autoSaveTimer.current);
+    };
+  }, [form]);
+
+  // Design visibility toggles live outside the form — debounce those too.
+  useEffect(() => {
+    scheduleAutoSave();
+  }, [hiddenIds]);
 
   const designCatalog = useMemo(
     () => buildDesignCatalog(

@@ -10,13 +10,21 @@ const router: IRouter = Router();
 // POST /analytics/track — lightweight event recorder (no auth required)
 router.post("/analytics/track", async (req, res): Promise<void> => {
   const { event = "page_view", path = "/" } = req.body || {};
+  const cleanPath = String(path).slice(0, 255);
+  const cleanEvent = String(event).slice(0, 64);
+
+  // Admin SPA traffic is noise for marketing analytics — ack without writing.
+  if (cleanPath === "/heyadmin" || cleanPath.startsWith("/heyadmin/")) {
+    res.status(204).end();
+    return;
+  }
 
   const ip = getClientIp(req) || "unknown";
   const country = (req.headers["cf-ipcountry"] as string)?.toUpperCase() || null;
 
   // Fire-and-forget — don't block the response
   db.insert(siteAnalyticsTable)
-    .values({ ip, path: String(path).slice(0, 255), event: String(event).slice(0, 64), country })
+    .values({ ip, path: cleanPath, event: cleanEvent, country })
     .catch(() => {});
 
   res.status(204).end();

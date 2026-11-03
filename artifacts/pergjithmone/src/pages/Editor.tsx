@@ -1979,6 +1979,7 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
     const needsLayout = !readOnly && page.role === 'inner' && !pageHasPhotoLayout(pageEls);
     return <div style={{cursor:'default'}} onClick={()=>{
       onActiveSide(side);
+      // Selecting / clicking a blank inner opens the layout picker.
       if (needsLayout) onRequestLayout?.();
     }}>
       <PageCanvas page={page} elements={pageEls}
@@ -3719,17 +3720,11 @@ export default function Editor() {
     }
   }, [activePageRole]);
 
-  // Inner blank page → force layout picker (desktop dim gate / mobile sheet).
+  // Blank inner pages show a faded “Shto paraqitje” CTA only — open the
+  // layout picker (desktop gate / mobile sheet) after the user clicks the page.
   useEffect(() => {
-    if (isOrdered) { setLayoutGateOpen(false); return; }
-    if (activeNeedsLayout) {
-      setTab('layouts');
-      if (isMobile) setShowSheet(true);
-      else setLayoutGateOpen(true);
-    } else {
-      setLayoutGateOpen(false);
-    }
-  }, [activeNeedsLayout, isMobile, isOrdered]);
+    if (isOrdered || !activeNeedsLayout) setLayoutGateOpen(false);
+  }, [activeNeedsLayout, isOrdered]);
 
   const activeCoverBg = useMemo(() => {
     if (!isCoverPage || !activePageId) return null;

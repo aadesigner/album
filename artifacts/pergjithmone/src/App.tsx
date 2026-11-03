@@ -135,6 +135,9 @@ const queryClient = new QueryClient({
       // back to a page doesn't trigger a waterfall re-fetch.
       staleTime: 5 * 60_000,
       gcTime:   15 * 60_000,
+      // Opt in per-query (e.g. Orders) when live data on focus is required.
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: true,
     },
   },
 });
@@ -147,9 +150,25 @@ function ScrollToTop() {
 
 const BASE_URL = (import.meta as any).env?.BASE_URL?.replace(/\/$/, '') || '';
 
+/** Skip admin SPA noise + de-dupe identical page_views in one tab session. */
+const analyticsSeen = new Map<string, number>();
+const ANALYTICS_DEDUP_MS = 60_000;
+
+function shouldTrackPath(path: string) {
+  if (!path) return false;
+  if (path === '/heyadmin' || path.startsWith('/heyadmin/')) return false;
+  return true;
+}
+
 function AnalyticsTracker() {
   const [loc] = useLocation();
   useEffect(() => {
+    if (!shouldTrackPath(loc)) return;
+    const key = `page_view:${loc}`;
+    const now = Date.now();
+    const prev = analyticsSeen.get(key) || 0;
+    if (now - prev < ANALYTICS_DEDUP_MS) return;
+    analyticsSeen.set(key, now);
     const t = setTimeout(() => {
       fetch(`${BASE_URL}/api/analytics/track`, {
         method: 'POST',

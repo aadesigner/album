@@ -1,4 +1,4 @@
-/** Public site chrome (navbar + footer) — styles & colors admin can switch. */
+/** Public site chrome — distinct menu/footer *layouts* (not just color skins). */
 
 export type NavStyleId = 'classic' | 'solid' | 'editorial' | 'glass' | 'pills';
 export type FooterStyleId = 'classic' | 'light' | 'band' | 'magazine' | 'slim';
@@ -22,49 +22,116 @@ export interface WebThemeConfig {
   footerAccent: string;
 }
 
-export const NAV_STYLE_META: Record<NavStyleId, { name: string; blurb: string }> = {
+export type StyleMeta = {
+  name: string;
+  blurb: string;
+  /** Structural difference vs primary — shown in admin. */
+  layout: string;
+  primary?: boolean;
+};
+
+export const NAV_STYLE_META: Record<NavStyleId, StyleMeta> = {
   classic: {
-    name: 'Classic paper',
-    blurb: 'Light bar, uppercase links, underline active state — the original look.',
+    name: 'Classic',
+    primary: true,
+    blurb: 'The original site menu — keep this as the default.',
+    layout: 'Logo · centered uppercase links · underline active · pill CTA',
   },
   solid: {
-    name: 'Bold solid',
-    blurb: 'Filled color bar, white type, strong CTA pill.',
+    name: 'Command bar',
+    blurb: 'A dense filled strip — brand and links share one row with a hard CTA block.',
+    layout: 'Wordmark + rule + inline links left · square CTA right',
   },
   editorial: {
-    name: 'Editorial',
-    blurb: 'Warm paper, serif wordmark, soft sentence-case links.',
+    name: 'Masthead',
+    blurb: 'Two-row newspaper header — utilities on top, big serif brand below.',
+    layout: 'Top utility row · large serif brand · sentence links · text CTA',
   },
   glass: {
-    name: 'Night glass',
-    blurb: 'Dark frosted glass, airy links, luminous accent.',
+    name: 'Floating island',
+    blurb: 'A centered frosted capsule that floats over the page, not a full-width bar.',
+    layout: 'Inset rounded island · spaced links · soft glow CTA',
   },
   pills: {
     name: 'Chip rail',
-    blurb: 'Floating chip links and a rounded brand capsule.',
+    blurb: 'Brand capsule and chip links sit on a soft rail — playful and compact.',
+    layout: 'Brand pill · chip links · accent chip CTA',
   },
 };
 
-export const FOOTER_STYLE_META: Record<FooterStyleId, { name: string; blurb: string }> = {
+export const FOOTER_STYLE_META: Record<FooterStyleId, StyleMeta> = {
   classic: {
-    name: 'Dark spotlight',
-    blurb: 'Centered brand, ornamental divider, dark canvas.',
+    name: 'Spotlight',
+    primary: true,
+    blurb: 'The original centered dark footer with ornament and columns.',
+    layout: 'Centered brand · diamond divider · 3 link columns',
   },
   light: {
-    name: 'Soft paper',
-    blurb: 'Light columns, ink type, quiet social row.',
+    name: 'Column paper',
+    blurb: 'Light four-column footer — brand + three link groups.',
+    layout: 'Brand column + Product / Company / Legal',
   },
   band: {
-    name: 'Accent band',
-    blurb: 'Gradient strip with compact link row underneath.',
+    name: 'Hero band',
+    blurb: 'Big brand strip on top, then a separate light link rail underneath.',
+    layout: 'Colored hero band · white link rail below',
   },
   magazine: {
-    name: 'Magazine',
-    blurb: 'Huge stacked title, asymmetric columns, cream field.',
+    name: 'Magazine title',
+    blurb: 'Huge stacked title, then link columns — editorial closing page.',
+    layout: 'Oversized title · asymmetric columns · quiet copyright',
   },
   slim: {
-    name: 'Slim line',
-    blurb: 'One tight row — brand, links, social — no fluff.',
+    name: 'Single line',
+    blurb: 'One compact row — brand, a few links, social. No columns.',
+    layout: 'Brand · inline links · social · one row',
+  },
+};
+
+/** Recommended colors when switching to a layout (so the structure reads clearly). */
+export const NAV_STYLE_PRESETS: Record<NavStyleId, Partial<WebThemeConfig>> = {
+  classic: {
+    navBgMode: 'solid', navBg: '#FFFFFF', navBgTo: '#F5F0E8',
+    navText: '#1C1916', navMuted: '#9A9288', navAccent: '#1C1916', navAccentOn: '#FFFFFF',
+  },
+  solid: {
+    navBgMode: 'solid', navBg: '#1C1916', navBgTo: '#2A241E',
+    navText: '#F7F3EE', navMuted: 'rgba(247,243,238,0.55)', navAccent: '#C4A574', navAccentOn: '#1C1916',
+  },
+  editorial: {
+    navBgMode: 'solid', navBg: '#F7F1E6', navBgTo: '#EDE4D4',
+    navText: '#2C241C', navMuted: '#8A7E70', navAccent: '#8B6914', navAccentOn: '#FFF9F0',
+  },
+  glass: {
+    navBgMode: 'gradient', navBg: '#1A1520', navBgTo: '#0E1820',
+    navText: '#F2EEF6', navMuted: 'rgba(242,238,246,0.55)', navAccent: '#E8B4C8', navAccentOn: '#1A1020',
+  },
+  pills: {
+    navBgMode: 'solid', navBg: '#F3EEE6', navBgTo: '#E8E0D4',
+    navText: '#2A241E', navMuted: '#8A8074', navAccent: '#2A241E', navAccentOn: '#F7F3EE',
+  },
+};
+
+export const FOOTER_STYLE_PRESETS: Record<FooterStyleId, Partial<WebThemeConfig>> = {
+  classic: {
+    footerBgMode: 'solid', footerBg: '#0D0D0D', footerBgTo: '#1A1512',
+    footerText: '#FFFFFF', footerMuted: 'rgba(255,255,255,0.40)', footerAccent: '#C4A574',
+  },
+  light: {
+    footerBgMode: 'solid', footerBg: '#FFFEFB', footerBgTo: '#F5F0E8',
+    footerText: '#1C1916', footerMuted: '#8A8074', footerAccent: '#8C3A2E',
+  },
+  band: {
+    footerBgMode: 'gradient', footerBg: '#8C3A2E', footerBgTo: '#5C241C',
+    footerText: '#FFF8F2', footerMuted: 'rgba(255,248,242,0.55)', footerAccent: '#E8B4A0',
+  },
+  magazine: {
+    footerBgMode: 'solid', footerBg: '#F4EFE6', footerBgTo: '#E8DFD0',
+    footerText: '#1C1916', footerMuted: '#7A7064', footerAccent: '#8B6914',
+  },
+  slim: {
+    footerBgMode: 'solid', footerBg: '#1C1916', footerBgTo: '#2A241E',
+    footerText: '#F7F3EE', footerMuted: 'rgba(247,243,238,0.5)', footerAccent: '#C4A574',
   },
 };
 

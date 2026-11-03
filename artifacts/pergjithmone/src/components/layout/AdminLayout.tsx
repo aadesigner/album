@@ -67,14 +67,18 @@ const navGroups = NAV_GROUP_ORDER.map((title) => ({
 
 const SIDEBAR_OPEN_KEY = 'admin-nav-open-groups';
 
+/** Catalog stays expanded so Design Studio / Categories / Layouts stay one click away. */
+const PINNED_OPEN_GROUPS: NavGroupTitle[] = ['Catalog'];
+
 function readOpenGroups(activeGroup: NavGroupTitle): Record<NavGroupTitle, boolean> {
   const base: Record<NavGroupTitle, boolean> = {
     Overview: false,
-    Catalog: false,
+    Catalog: true,
     Website: false,
     System: false,
   };
   base[activeGroup] = true;
+  for (const g of PINNED_OPEN_GROUPS) base[g] = true;
   try {
     const raw = sessionStorage.getItem(SIDEBAR_OPEN_KEY);
     if (!raw) return base;
@@ -83,6 +87,7 @@ function readOpenGroups(activeGroup: NavGroupTitle): Record<NavGroupTitle, boole
       if (typeof parsed[g] === 'boolean') base[g] = parsed[g]!;
     }
     base[activeGroup] = true;
+    for (const g of PINNED_OPEN_GROUPS) base[g] = true;
   } catch { /* ignore */ }
   return base;
 }
@@ -113,8 +118,8 @@ function useAdminPulse(enabled = true) {
       if (!r.ok) throw new Error('Failed to load pulse');
       return r.json() as Promise<AdminPulse>;
     },
-    staleTime: 45_000,
-    refetchInterval: 90_000,
+    staleTime: 60_000,
+    refetchInterval: 120_000,
     refetchOnWindowFocus: false,
     retry: 1,
   });
@@ -352,16 +357,24 @@ function Sidebar({
 
   useEffect(() => {
     setOpenGroups((prev) => {
-      if (prev[activeGroup]) return prev;
-      const next = { ...prev, [activeGroup]: true };
+      let changed = false;
+      const next = { ...prev };
+      if (!next[activeGroup]) { next[activeGroup] = true; changed = true; }
+      for (const g of PINNED_OPEN_GROUPS) {
+        if (!next[g]) { next[g] = true; changed = true; }
+      }
+      if (!changed) return prev;
       try { sessionStorage.setItem(SIDEBAR_OPEN_KEY, JSON.stringify(next)); } catch { /* ignore */ }
       return next;
     });
   }, [activeGroup]);
 
   const toggleGroup = (title: NavGroupTitle) => {
+    // Pinned groups (Catalog) stay open — only collapse other sections.
+    if (PINNED_OPEN_GROUPS.includes(title)) return;
     setOpenGroups((prev) => {
       const next = { ...prev, [title]: !prev[title] };
+      for (const g of PINNED_OPEN_GROUPS) next[g] = true;
       try { sessionStorage.setItem(SIDEBAR_OPEN_KEY, JSON.stringify(next)); } catch { /* ignore */ }
       return next;
     });
@@ -465,7 +478,7 @@ function Sidebar({
                 type="button"
                 onClick={() => toggleGroup(group.title)}
                 aria-expanded={open}
-                className={`w-full flex items-center gap-2 font-semibold tracking-[0.14em] uppercase transition-colors ${
+                className={`w-full flex items-center gap-2 font-semibold tracking-[0.14em] uppercase transition-colors cursor-pointer ${
                   isMobile ? 'px-2.5 py-2.5 text-[10px]' : 'px-2 py-2 text-[9.5px]'
                 }`}
                 style={{
@@ -474,6 +487,7 @@ function Sidebar({
                   background: open ? `${theme.sidebarHover}` : 'transparent',
                   opacity: groupHasActive ? 1 : 0.72,
                   fontFamily: theme.fontSans,
+                  cursor: PINNED_OPEN_GROUPS.includes(group.title) ? 'default' : 'pointer',
                 }}
               >
                 <span className="flex-1 text-left truncate">{group.title}</span>
@@ -509,13 +523,14 @@ function Sidebar({
                           key={href}
                           href={href}
                           onClick={onClose}
-                          className={`flex items-center gap-2 font-medium transition-all duration-200 ${
+                          className={`flex items-center gap-2 font-medium transition-all duration-200 cursor-pointer ${
                             isMobile
                               ? 'px-2.5 py-2 text-[13px]'
                               : 'px-2 py-1.5 text-[12.5px]'
                           }`}
                           style={{
                             borderRadius: theme.radius,
+                            cursor: 'pointer',
                             ...(isActive
                               ? {
                                   background: theme.sidebarActive,

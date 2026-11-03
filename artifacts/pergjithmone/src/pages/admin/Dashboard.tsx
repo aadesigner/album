@@ -250,7 +250,7 @@ function PendingPrintingWidget() {
   const queryClient = useQueryClient();
   const { data, isLoading, refetch } = useListAdminOrders(
     { page: 1, limit: 12, status: 'pending' },
-    { query: { staleTime: 45_000, refetchOnMount: 'always', refetchInterval: 90_000 } } as any,
+    { query: { staleTime: 45_000, refetchOnMount: true, refetchInterval: 120_000 } } as any,
   );
   const updateOrder = useUpdateAdminOrder();
   const [shippingId, setShippingId] = React.useState<number | null>(null);

@@ -5,40 +5,27 @@ import { eq } from "drizzle-orm";
 import { readOfferBarSettings } from "../lib/offerBarSettings";
 import { readClaritySettings } from "../lib/claritySettings";
 import { readWebThemeSettings } from "../lib/webThemeSettings";
-import { setPublicCatalogCache, setNoStoreCache } from "../lib/httpCache";
+import { setPublicCatalogCache } from "../lib/httpCache";
 import { parseJsonArray, parseJsonObject } from "../lib/securitySettingsShared";
 import { parseEditorElements } from "../lib/editorElements";
+import { createTtlMemo } from "../lib/ttlMemo";
 
 const router: IRouter = Router();
 
-// GET /book-sizes
-router.get("/book-sizes", async (_req, res): Promise<void> => {
-  setPublicCatalogCache(res);
-  const sizes = await db
-    .select()
-    .from(bookSizesTable)
-    .where(eq(bookSizesTable.isActive, true));
-  res.json(
-    sizes.map((s) => ({
-      ...s,
-      widthCm: parseFloat(s.widthCm as string),
-      heightCm: parseFloat(s.heightCm as string),
-    })),
-  );
-});
+/** Public settings change rarely — keep one hot copy per process (~45s). */
+const publicSettingsMemo = createTtlMemo<Record<string, unknown>>(45_000);
+/** Active layouts are shared by every editor session — cache briefly. */
+const publicLayoutsMemo = createTtlMemo<unknown[]>(45_000);
 
-// GET /layouts
-router.get("/layouts", async (_req, res): Promise<void> => {
-  setNoStoreCache(res);
-  const layouts = await db
-    .select()
-    .from(layoutsTable)
-    .where(eq(layoutsTable.isActive, true));
-  res.json(layouts);
-});
+export function invalidatePublicSettingsCache(): void {
+  publicSettingsMemo.invalidate();
+}
 
-// GET /settings
-router.get("/settings", async (_req, res): Promise<void> => {
+export function invalidatePublicLayoutsCache(): void {
+  publicLayoutsMemo.invalidate();
+}
+
+async function loadPublicSettings(): Promise<Record<string, unknown>> {
   const rows = await db.select().from(appSettingsTable);
   const map: Record<string, string> = {};
   for (const row of rows) {
@@ -50,7 +37,7 @@ router.get("/settings", async (_req, res): Promise<void> => {
   const customDesigns = parseJsonArray(map["custom_designs"]);
   const editorElements = parseEditorElements(parseJsonArray(map["editor_elements"]));
 
-  res.json({
+  return {
     whatsappNumber: map["whatsapp_number"] || "+355688755833",
     basePriceLek: parseInt(map["base_price_lek"] || "3000", 10),
     minPages: parseInt(map["min_pages"] || "30", 10),
@@ -74,7 +61,44 @@ router.get("/settings", async (_req, res): Promise<void> => {
     ...readOfferBarSettings(map),
     ...readClaritySettings(map),
     ...readWebThemeSettings(map),
+  };
+}
+
+// GET /book-sizes
+router.get("/book-sizes", async (_req, res): Promise<void> => {
+  setPublicCatalogCache(res);
+  const sizes = await db
+    .select()
+    .from(bookSizesTable)
+    .where(eq(bookSizesTable.isActive, true));
+  res.json(
+    sizes.map((s) => ({
+      ...s,
+      widthCm: parseFloat(s.widthCm as string),
+      heightCm: parseFloat(s.heightCm as string),
+    })),
+  );
+});
+
+// GET /layouts
+router.get("/layouts", async (_req, res): Promise<void> => {
+  // Short public cache + in-process memo. Admin mutations invalidate the memo.
+  setPublicCatalogCache(res);
+  const { value } = await publicLayoutsMemo.get(async () => {
+    return db
+      .select()
+      .from(layoutsTable)
+      .where(eq(layoutsTable.isActive, true));
   });
+  res.json(value);
+});
+
+// GET /settings
+router.get("/settings", async (_req, res): Promise<void> => {
+  // SiteGuard hits this on almost every page — memo + short browser cache.
+  setPublicCatalogCache(res);
+  const { value } = await publicSettingsMemo.get(loadPublicSettings);
+  res.json(value);
 });
 
 export default router;

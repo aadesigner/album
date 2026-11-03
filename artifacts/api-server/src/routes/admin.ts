@@ -17,6 +17,10 @@ import { eq, count, sql, desc, ilike, and, or, ne, inArray, gte, lt } from "driz
 import { requireAdmin, invalidateCachedUser, hashPassword } from "../lib/auth";
 import { invalidatePendingBooksLimitCache } from "./projects";
 import {
+  invalidatePublicLayoutsCache,
+  invalidatePublicSettingsCache,
+} from "./settings";
+import {
   SECURITY_SETTINGS_DEFAULTS,
   SECURITY_SETTINGS_KEY_MAP,
   invalidateSecuritySettingsCache,
@@ -1559,6 +1563,7 @@ router.patch(
       }
     }
     invalidateSecuritySettingsCache();
+    invalidatePublicSettingsCache();
 
     const rows2 = await db.select().from(appSettingsTable);
     const map2: Record<string, string> = {};
@@ -1709,6 +1714,7 @@ router.post(
       .insert(layoutsTable)
       .values({ slug, nameAl, nameEn, gridDefinitionJson, previewIcon, isActive: isActive ?? true })
       .returning();
+    invalidatePublicLayoutsCache();
     res.status(201).json(layout);
   },
 );
@@ -1729,6 +1735,7 @@ router.patch(
       .where(eq(layoutsTable.id, id))
       .returning();
     if (!layout) { res.status(404).json({ error: "Not found" }); return; }
+    invalidatePublicLayoutsCache();
     res.json(layout);
   },
 );
@@ -1744,6 +1751,7 @@ router.delete(
     const id = parseInt(raw, 10);
     if (isNaN(id)) { res.status(400).json({ error: "Invalid ID" }); return; }
     await db.delete(layoutsTable).where(eq(layoutsTable.id, id));
+    invalidatePublicLayoutsCache();
     res.json({ success: true });
   },
 );
