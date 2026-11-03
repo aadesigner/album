@@ -1372,6 +1372,7 @@ router.get(
     const hiddenDesignIds = parseJsonArray(map["hidden_design_ids"]).map(String);
     const designOverrides = parseJsonObject(map["design_overrides"]);
     const customDesigns = parseJsonArray(map["custom_designs"]);
+    const designDisplay = parseJsonObject(map["design_display"]);
     const editorElements = parseEditorElements(parseJsonArray(map["editor_elements"]));
     const adminNotes = parseAdminNotes(map["admin_notes"]);
 
@@ -1392,6 +1393,7 @@ router.get(
       hiddenDesignIds,
       designOverrides,
       customDesigns,
+      designDisplay,
       editorElements,
       adminNotes,
       requireLoginForPdf: map["require_login_for_pdf"] === "true",
@@ -1430,6 +1432,7 @@ router.patch(
       hiddenDesignIds: "hidden_design_ids",
       designOverrides: "design_overrides",
       customDesigns: "custom_designs",
+      designDisplay: "design_display",
       editorElements: "editor_elements",
       adminNotes: "admin_notes",
       requireLoginForPdf: "require_login_for_pdf",
@@ -1571,6 +1574,7 @@ router.patch(
     const hiddenDesignIds2 = parseJsonArray(map2["hidden_design_ids"]).map(String);
     const designOverrides2 = parseJsonObject(map2["design_overrides"]);
     const customDesigns2 = parseJsonArray(map2["custom_designs"]);
+    const designDisplay2 = parseJsonObject(map2["design_display"]);
     const editorElements2 = parseEditorElements(parseJsonArray(map2["editor_elements"]));
     const adminNotes2 = parseAdminNotes(map2["admin_notes"]);
 
@@ -1591,6 +1595,7 @@ router.patch(
       hiddenDesignIds: hiddenDesignIds2,
       designOverrides: designOverrides2,
       customDesigns: customDesigns2,
+      designDisplay: designDisplay2,
       persistentStorage: hasPersistentStorage(),
       dataRoot,
       editorElements: editorElements2,

@@ -8,6 +8,64 @@ import { isStrokeOnlyShape, shapePathForElement } from '@/lib/shapes';
 import { useEditorFontsReady, ensureEditorFonts, normalizeEditorFont, isEditorSingleCutFont } from '@/lib/editorFonts';
 import { resolvePublicImageSrc } from '@/lib/categoryImages';
 import { designApiFallback } from '@/lib/imageCache';
+import { isLocalPhotoSrc, resolveDisplayUrl } from '@/lib/localPhotoStore';
+
+/** Resolves `local-photo:` blobs + public URLs for strip / 3D thumbs. */
+function ThumbImg({
+  src, priority = false, style, className,
+}: {
+  src: string;
+  priority?: boolean;
+  style?: React.CSSProperties;
+  className?: string;
+}) {
+  const [display, setDisplay] = useState(() =>
+    isLocalPhotoSrc(src) ? '' : (resolvePublicImageSrc(src) || src),
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    if (isLocalPhotoSrc(src)) {
+      setDisplay('');
+      void resolveDisplayUrl(src).then((url) => {
+        if (!cancelled) setDisplay(url || '');
+      });
+      return () => { cancelled = true; };
+    }
+    setDisplay(resolvePublicImageSrc(src) || src);
+    return () => { cancelled = true; };
+  }, [src]);
+
+  if (!display) {
+    return (
+      <div
+        className={className}
+        style={{
+          ...style,
+          background: 'linear-gradient(135deg,#EDE7DE,#D9D0C4)',
+        }}
+        aria-hidden
+      />
+    );
+  }
+
+  return (
+    <img
+      className={className}
+      src={display}
+      alt=""
+      loading={priority ? 'eager' : 'lazy'}
+      decoding="async"
+      referrerPolicy="no-referrer"
+      onError={(e) => {
+        const node = e.currentTarget;
+        const fb = designApiFallback(node.getAttribute('src') || src);
+        if (fb && !node.src.includes('/api/designs/')) node.src = fb;
+      }}
+      style={style}
+    />
+  );
+}
 
 function thumbFontFamily(ff?: string): string {
   return normalizeEditorFont(ff);
@@ -81,12 +139,19 @@ export const PageThumb = React.memo(function PageThumb({
           const key = (el as EditorElement).id ?? i;
           if (el.type === 'background') {
             if (el.src) {
-              return <img key={key} src={resolvePublicImageSrc(el.src) || el.src} alt="" loading={priority ? 'eager' : 'lazy'} decoding="async" referrerPolicy="no-referrer" style={{
-                position: 'absolute', inset: 0, width: '100%', height: '100%',
-                objectFit: 'cover',
-                objectPosition: `${(el.cropFocusX ?? 0.5) * 100}% ${(el.cropFocusY ?? 0.5) * 100}%`,
-                display: 'block', pointerEvents: 'none',
-              }}/>;
+              return (
+                <ThumbImg
+                  key={key}
+                  src={el.src}
+                  priority={priority}
+                  style={{
+                    position: 'absolute', inset: 0, width: '100%', height: '100%',
+                    objectFit: 'cover',
+                    objectPosition: `${(el.cropFocusX ?? 0.5) * 100}% ${(el.cropFocusY ?? 0.5) * 100}%`,
+                    display: 'block', pointerEvents: 'none',
+                  }}
+                />
+              );
             }
             let bg = el.bgColor || PAPER_COLOR;
             if (el.bgGradientFrom && el.bgGradientTo) {
@@ -112,17 +177,9 @@ export const PageThumb = React.memo(function PageThumb({
                   pointerEvents: 'none',
                 }}
               >
-                <img
-                  src={resolvePublicImageSrc(el.src) || el.src}
-                  alt=""
-                  loading={priority ? 'eager' : 'lazy'}
-                  decoding="async"
-                  referrerPolicy="no-referrer"
-                  onError={(e) => {
-                    const node = e.currentTarget;
-                    const fb = designApiFallback(node.getAttribute('src') || el.src || '');
-                    if (fb && !node.src.includes('/api/designs/')) node.src = fb;
-                  }}
+                <ThumbImg
+                  src={el.src}
+                  priority={priority}
                   style={{
                     width: '100%', height: '100%', display: 'block',
                     objectFit: el.objectFit === 'contain' ? 'contain' : 'cover',

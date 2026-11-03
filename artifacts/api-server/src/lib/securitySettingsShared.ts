@@ -178,6 +178,7 @@ export const JSON_SETTING_JS_KEYS = new Set([
   "hiddenDesignIds",
   "designOverrides",
   "customDesigns",
+  "designDisplay",
   "adminNotes",
   "editorElements",
   "webTheme",

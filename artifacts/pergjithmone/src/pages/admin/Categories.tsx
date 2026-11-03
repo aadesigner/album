@@ -5,15 +5,28 @@ import {
   useListAdminCategories, useCreateAdminCategory, useUpdateAdminCategory, useDeleteAdminCategory,
   useListSubcategories, useCreateAdminSubcategory, useUpdateAdminSubcategory, useDeleteAdminSubcategory,
   getListAdminCategoriesQueryKey, getListCategoriesQueryKey, getListSubcategoriesQueryKey,
+  useGetAdminSettings, useUpdateAdminSettings,
+  getGetAdminSettingsQueryKey, getGetAppSettingsQueryKey,
 } from '@workspace/api-client-react-tsconfig';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ImageUploadInput } from '@/components/admin/ImageUploadInput';
-import { Plus, Edit2, Trash2, ChevronDown, ChevronRight, FolderTree, Search } from 'lucide-react';
+import {
+  Plus, Edit2, Trash2, ChevronDown, ChevronRight, FolderTree, Search,
+  ChevronUp, Star, Loader2, Save,
+} from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { getCategoryImage } from '@/lib/categoryImages';
 import { CategoryCoverImg } from '@/components/CategoryCoverImg';
+import { resolveDesignCategory, DESIGN_CATEGORY_LABELS } from '@/lib/designMeta';
+import {
+  buildDesignCatalog, parseCustomDesigns, parseDesignDisplay,
+  sortDesignsByPriority, withCategoryDesignOrder, withDesignDisplayMeta,
+  type DesignDef,
+} from '@/lib/designs';
+import { LazyDesignCatalogThumb } from '@/components/PageThumb';
+import { Link } from 'wouter';
 
 type Category = {
   id: number; slug: string; nameAl: string; nameEn: string; iconEmoji: string;
@@ -314,6 +327,344 @@ function DeleteConfirm({ title, description, onConfirm, onCancel, loading }: {
   );
 }
 
+// ── Album designs order / rename (within a book category) ───────────────────
+function CategoryDesignsPanel({ category }: { category: Category }) {
+  const { data: settings } = useGetAdminSettings();
+  const updateSettings = useUpdateAdminSettings();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ nameEn: '', nameSq: '', thumbLabel: '' });
+
+  const designKey = resolveDesignCategory(category);
+  const hiddenIds: string[] = Array.isArray(settings?.hiddenDesignIds)
+    ? (settings!.hiddenDesignIds as string[])
+    : [];
+  const designDisplay = useMemo(
+    () => parseDesignDisplay((settings as any)?.designDisplay),
+    [settings],
+  );
+  const catalog = useMemo(
+    () => buildDesignCatalog(
+      (settings as any)?.designOverrides,
+      parseCustomDesigns((settings as any)?.customDesigns),
+      designDisplay,
+    ),
+    [settings, designDisplay],
+  );
+
+  const designs = useMemo(() => {
+    if (!designKey) return [] as DesignDef[];
+    const active = catalog.filter(
+      (d) => d.category === designKey && !hiddenIds.includes(d.id),
+    );
+    return sortDesignsByPriority(active);
+  }, [catalog, designKey, hiddenIds]);
+
+  const persistDisplay = async (nextDisplay: ReturnType<typeof parseDesignDisplay>) => {
+    setSaving(true);
+    try {
+      await updateSettings.mutateAsync({ data: { designDisplay: nextDisplay } as any });
+      queryClient.setQueryData(getGetAdminSettingsQueryKey(), (old: any) =>
+        old ? { ...old, designDisplay: nextDisplay } : old,
+      );
+      void queryClient.invalidateQueries({
+        queryKey: getGetAppSettingsQueryKey(),
+        refetchType: 'active',
+      });
+      toast({ title: 'Design order saved' });
+    } catch (e: any) {
+      toast({
+        title: 'Failed to save design order',
+        description: e?.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const moveDesign = async (id: string, dir: -1 | 1) => {
+    const ids = designs.map((d) => d.id);
+    const idx = ids.indexOf(id);
+    const target = idx + dir;
+    if (idx < 0 || target < 0 || target >= ids.length) return;
+    const next = [...ids];
+    const [item] = next.splice(idx, 1);
+    next.splice(target, 0, item);
+    await persistDisplay(withCategoryDesignOrder(designDisplay, next));
+  };
+
+  const makePrimary = async (id: string) => {
+    const ids = designs.map((d) => d.id);
+    const idx = ids.indexOf(id);
+    if (idx <= 0) return;
+    const next = [...ids];
+    const [item] = next.splice(idx, 1);
+    next.unshift(item);
+    await persistDisplay(withCategoryDesignOrder(designDisplay, next));
+  };
+
+  const startEdit = (d: DesignDef) => {
+    setEditingId(d.id);
+    setEditForm({
+      nameEn: d.name.en || '',
+      nameSq: d.name.sq || '',
+      thumbLabel: d.thumbLabel || '',
+    });
+  };
+
+  const saveRename = async () => {
+    if (!editingId) return;
+    const nameEn = editForm.nameEn.trim();
+    const nameSq = editForm.nameSq.trim() || nameEn;
+    if (!nameEn) {
+      toast({ title: 'English name is required', variant: 'destructive' });
+      return;
+    }
+    setSaving(true);
+    try {
+      const nextDisplay = withDesignDisplayMeta(designDisplay, editingId, {
+        name: { en: nameEn, sq: nameSq },
+        thumbLabel: editForm.thumbLabel,
+      });
+      const customs = parseCustomDesigns((settings as any)?.customDesigns);
+      const isCustom = customs.some((c) => c.id === editingId);
+      const patch: Record<string, unknown> = { designDisplay: nextDisplay };
+      let nextCustoms = customs;
+      if (isCustom) {
+        nextCustoms = customs.map((c) =>
+          c.id === editingId
+            ? {
+                ...c,
+                name: { en: nameEn, sq: nameSq },
+                thumbLabel: editForm.thumbLabel.trim() || nameEn.slice(0, 12).toUpperCase(),
+                updatedAt: new Date().toISOString(),
+              }
+            : c,
+        );
+        patch.customDesigns = nextCustoms;
+      }
+      await updateSettings.mutateAsync({ data: patch as any });
+      queryClient.setQueryData(getGetAdminSettingsQueryKey(), (old: any) =>
+        old
+          ? {
+              ...old,
+              designDisplay: nextDisplay,
+              ...(isCustom ? { customDesigns: nextCustoms } : {}),
+            }
+          : old,
+      );
+      void queryClient.invalidateQueries({
+        queryKey: getGetAppSettingsQueryKey(),
+        refetchType: 'active',
+      });
+      setEditingId(null);
+      toast({ title: 'Design name saved' });
+    } catch (e: any) {
+      toast({
+        title: 'Failed to rename design',
+        description: e?.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!designKey) {
+    return (
+      <div className="px-6 py-3" style={{ borderTop: `1px solid ${ADMIN.line}`, background: '#FAFBFC' }}>
+        <p className="text-xs" style={{ color: ADMIN.muted }}>
+          No album-design group mapped for this category yet — designs stay under Design Studio.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-6 py-4 space-y-3" style={{ borderTop: `1px solid ${ADMIN.line}`, background: '#FAFBFC' }}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: ADMIN.muted }}>
+            Album designs
+          </p>
+          <p className="text-[11px] mt-0.5" style={{ color: ADMIN.muted }}>
+            Active styles for{' '}
+            <span className="font-semibold" style={{ color: ADMIN.ink }}>
+              {DESIGN_CATEGORY_LABELS[designKey]?.en || designKey}
+            </span>
+            . First = primary on Create. Order is saved permanently.
+          </p>
+        </div>
+        <Link
+          href="/heyadmin/dizajne"
+          className="text-[11px] font-semibold underline-offset-2 hover:underline"
+          style={{ color: ADMIN.blush }}
+        >
+          Open Design Studio →
+        </Link>
+      </div>
+
+      {designs.length === 0 ? (
+        <p className="text-xs italic" style={{ color: ADMIN.muted }}>
+          No active designs in this group. Unhide them in Settings → Design visibility, or create in Design Studio.
+        </p>
+      ) : (
+        <div className="space-y-1.5">
+          {designs.map((d, i) => {
+            const isPrimary = i === 0;
+            const isEditing = editingId === d.id;
+            return (
+              <div
+                key={d.id}
+                className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-xl px-2.5 py-2"
+                style={{
+                  background: ADMIN.card,
+                  border: `1px solid ${isPrimary ? ADMIN.blush : ADMIN.line}`,
+                }}
+              >
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <span
+                    className="w-6 h-6 rounded-lg text-[10px] font-bold tabular-nums inline-flex items-center justify-center shrink-0"
+                    style={{ background: ADMIN.bg, color: ADMIN.ink }}
+                  >
+                    {i + 1}
+                  </span>
+                  <div
+                    className="rounded-md overflow-hidden shrink-0 bg-white"
+                    style={{ width: 36, height: 48, border: `1px solid ${ADMIN.line}` }}
+                  >
+                    <LazyDesignCatalogThumb design={d} width={36} height={48} preferMockup={false} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    {isEditing ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+                        <Input
+                          value={editForm.nameEn}
+                          onChange={(e) => setEditForm((f) => ({ ...f, nameEn: e.target.value }))}
+                          placeholder="English name"
+                          className="h-8 text-xs rounded-lg"
+                        />
+                        <Input
+                          value={editForm.nameSq}
+                          onChange={(e) => setEditForm((f) => ({ ...f, nameSq: e.target.value }))}
+                          placeholder="Albanian name"
+                          className="h-8 text-xs rounded-lg"
+                        />
+                        <Input
+                          value={editForm.thumbLabel}
+                          onChange={(e) => setEditForm((f) => ({ ...f, thumbLabel: e.target.value }))}
+                          placeholder="Thumb label"
+                          className="h-8 text-xs rounded-lg"
+                        />
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-sm font-medium truncate" style={{ color: ADMIN.ink }}>
+                          {d.name.en}
+                          {isPrimary && (
+                            <span
+                              className="ml-1.5 inline-flex items-center gap-0.5 text-[9px] font-bold uppercase tracking-wide align-middle"
+                              style={{ color: ADMIN.blush }}
+                            >
+                              <Star size={9} fill="currentColor" /> Primary
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-[11px] truncate" style={{ color: ADMIN.muted }}>
+                          {d.name.sq}
+                          {d.isCustom ? ' · custom' : ''}
+                        </p>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0 self-end sm:self-center">
+                  {isEditing ? (
+                    <>
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={saving}
+                        onClick={() => void saveRename()}
+                        className="h-8 rounded-lg text-white text-[11px] gap-1 hover:opacity-90"
+                        style={{ background: ADMIN.blush }}
+                      >
+                        {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                        Save
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={saving}
+                        onClick={() => setEditingId(null)}
+                        className="h-8 rounded-lg text-[11px]"
+                      >
+                        Cancel
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        disabled={saving || i === 0}
+                        title="Move up"
+                        onClick={() => void moveDesign(d.id, -1)}
+                      >
+                        <ChevronUp size={14} />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        disabled={saving || i === designs.length - 1}
+                        title="Move down"
+                        onClick={() => void moveDesign(d.id, 1)}
+                      >
+                        <ChevronDown size={14} />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        disabled={saving || isPrimary}
+                        title="Set as primary (first)"
+                        onClick={() => void makePrimary(d.id)}
+                        style={{ color: isPrimary ? ADMIN.blush : ADMIN.muted }}
+                      >
+                        <Star size={14} fill={isPrimary ? 'currentColor' : 'none'} />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        disabled={saving}
+                        title="Rename"
+                        onClick={() => startEdit(d)}
+                      >
+                        <Edit2 size={13} />
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Subcategory panel (expanded under a category row) ──────────────────────
 function SubcategoryPanel({ categoryId }: { categoryId: number }) {
   const { data: subcategories, isLoading } = useListSubcategories(categoryId);
@@ -447,7 +798,9 @@ export default function AdminCategories() {
           <div>
             <p className="text-[10px] font-semibold tracking-[0.18em] uppercase mb-1.5" style={{ color: ADMIN.blush }}>Catalog</p>
             <h1 className="text-3xl font-serif font-semibold mb-1" style={{ color: ADMIN.ink }}>Categories</h1>
-            <p className="text-sm" style={{ color: ADMIN.muted }}>Book categories, subcategories, and visibility on Home and Create.</p>
+            <p className="text-sm" style={{ color: ADMIN.muted }}>
+              Book categories, album-design order/priority, subcategories, and visibility on Home and Create.
+            </p>
           </div>
           <Button className="gap-2 rounded-2xl text-white hover:opacity-90 shrink-0" style={{ background: ADMIN.blush }}
             onClick={() => setFormTarget({ open: true, cat: null })}>
@@ -555,6 +908,7 @@ export default function AdminCategories() {
                       {expanded === cat.id && (
                         <tr>
                           <td colSpan={6} className="p-0">
+                            <CategoryDesignsPanel category={cat} />
                             <SubcategoryPanel categoryId={cat.id} />
                           </td>
                         </tr>
@@ -568,7 +922,7 @@ export default function AdminCategories() {
           </div>
         </div>
         <p className="mt-4 text-xs flex items-center gap-1.5" style={{ color: ADMIN.muted }}>
-          <FolderTree size={12} /> Expand a category to manage its subcategories — templates link to a subcategory.
+          <FolderTree size={12} /> Expand a category to order album designs (priority / primary) and manage subcategories.
         </p>
       </div>
     </AdminLayout>

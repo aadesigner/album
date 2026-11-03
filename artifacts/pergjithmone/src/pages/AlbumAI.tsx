@@ -15,13 +15,18 @@ import { useLocation, Link } from 'wouter';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { resolveDesignCategory, resolveDesignCategoryFromQuery } from '@/lib/designMeta';
-import { DESIGNS } from '@/lib/designs';
+import {
+  DESIGNS, buildDesignCatalog, parseCustomDesigns, parseDesignDisplay,
+} from '@/lib/designs';
 import { generateAlbum, suggestInnerPageCount } from '@/lib/albumGenerator';
 import {
   DRAFT_PROJECT_ID,
   reassignLocalPhotos,
   storeBuilderPhoto,
+  isLocalPhotoSrc,
+  resolveDisplayUrl,
 } from '@/lib/localPhotoStore';
+import { LocalPhotoImg } from '@/components/LocalPhotoImg';
 import { ACCEPT_SAFE_IMAGES } from '@/lib/acceptedImages';
 import { pendingBooksLimitMessage } from '@/lib/projectErrors';
 import { SizeCard } from './Wizard';
@@ -37,7 +42,7 @@ import {
 
 // Minimum photos required before generation is allowed. Kept as a single
 // named constant so the UI copy, validation, and progress bar all agree.
-const MIN_PHOTOS = 25;
+const MIN_PHOTOS = 32;
 const MAX_PHOTOS = 40;
 
 // Cap on simultaneous in-flight uploads. Firing all 25-80 photos at once
@@ -610,7 +615,7 @@ function AlbumAIView() {
   // count for the current photo tally — same heuristic used at generation
   // time, but surfaced here so the user can see and override it up front.
   const recommendedSize = React.useMemo(() => {
-    const desiredInner = Math.max(4, Math.round(doneCount / 2));
+    const desiredInner = suggestInnerPageCount(doneCount, 4);
     const sizes = ((bookSizes as any[]) || []).slice().sort((a, b) => a.minPages - b.minPages);
     return sizes.filter(s => s.minPages <= desiredInner).pop() || sizes[0] || null;
   }, [bookSizes, doneCount]);
@@ -724,14 +729,24 @@ function AlbumAIView() {
     setGenerating(true);
     setGenDone(false);
     setGenReveal(false);
-    setRevealPhotos(photoUrls.slice(0, 12));
+    // Prefer blob preview URLs — `local-photo:` cannot paint in a raw <img>.
+    const previewForReveal = photos
+      .filter((p) => p.status === 'done' && (p.previewUrl || p.url))
+      .slice(0, 12)
+      .map((p) => p.previewUrl || p.url!);
+    setRevealPhotos(previewForReveal.length ? previewForReveal : photoUrls.slice(0, 12));
     setGenStageIndex(0);
     setGenError(null);
     try {
       const cat = (categories as any[])?.find((c: any) => c.id === catId);
+      const designCatalog = buildDesignCatalog(
+        siteSettings?.designOverrides,
+        parseCustomDesigns(siteSettings?.customDesigns),
+        parseDesignDisplay(siteSettings?.designDisplay),
+      );
       const designCategoryKey =
         resolveDesignCategory(cat)
-        || resolveDesignCategoryFromQuery(cat?.slug, null, DESIGNS)
+        || resolveDesignCategoryFromQuery(cat?.slug, null, designCatalog.length ? designCatalog : DESIGNS)
         || 'Modern';
 
       if (!photoUrls.length) {
@@ -741,10 +756,9 @@ function AlbumAIView() {
       setGenStageIndex(0); // project
       const chosenSize = ((bookSizes as any[]) || []).find(s => s.id === sizeId);
       if (!chosenSize) throw new Error('No album sizes available');
-      // Opening + closing heroes, then ~1.55 photos/page so spreads stay airy
-      // and each image is used once.
-      const desiredInner = suggestInnerPageCount(photoUrls.length, 4);
-      const finalInner = Math.max(desiredInner, chosenSize.minPages);
+      // Dense enough to fill every page with a layout (meets book minPages).
+      const desiredInner = suggestInnerPageCount(photoUrls.length, chosenSize.minPages || 4);
+      const finalInner = Math.max(desiredInner, chosenSize.minPages || 4);
 
       const project = await createProject.mutateAsync({
         data: { bookSizeId: chosenSize.id, title: lang === 'sq' ? 'Albumi im me AI' : 'My AI Album' },
@@ -775,9 +789,17 @@ function AlbumAIView() {
       // Tiny delay so the "designing" stage is visible even on fast machines,
       // and so rapid retries never collide on the same Math.random stream feel.
       await new Promise(r => setTimeout(r, 280 + Math.floor(Math.random() * 220)));
-      const album = generateAlbum(designCategoryKey, photoUrls, innerPages.length, lang as 'sq' | 'en', {
-        widthCm: Number(chosenSize.widthCm), heightCm: Number(chosenSize.heightCm),
-      });
+      const album = generateAlbum(
+        designCategoryKey,
+        photoUrls,
+        innerPages.length,
+        lang as 'sq' | 'en',
+        {
+          widthCm: Number(chosenSize.widthCm),
+          heightCm: Number(chosenSize.heightCm),
+        },
+        designCatalog,
+      );
 
       const frontCoverPage = (fresh.pages as any[]).find(p => p.pageType === 'front_cover');
       const insideCoverPage = (fresh.pages as any[]).find(
@@ -858,7 +880,7 @@ function AlbumAIView() {
       setGenDone(false);
       setGenReveal(false);
     }
-  }, [categories, bookSizes, createProject, addProjectPage, getToken, lang, setLocation]);
+  }, [categories, bookSizes, createProject, addProjectPage, getToken, lang, setLocation, siteSettings, photos]);
 
   // Step 2 "Continue" → move to the size-confirmation step instead of
   // generating immediately, so the user sees (and can change) the size/price
@@ -904,12 +926,24 @@ function AlbumAIView() {
       const { categoryId: catId, photos: savedPhotos } = JSON.parse(raw);
       if (typeof catId === 'number') setCategoryId(catId);
       if (Array.isArray(savedPhotos) && savedPhotos.length > 0) {
-        setPhotos(savedPhotos.map((p: any) => ({
-          id: p.id,
-          previewUrl: p.url,
-          status: 'done' as UploadStatus,
-          url: p.url,
-        })));
+        void (async () => {
+          const restored: PhotoItem[] = await Promise.all(
+            savedPhotos.map(async (p: any) => {
+              const url = String(p.url || '');
+              let previewUrl = url;
+              if (isLocalPhotoSrc(url)) {
+                previewUrl = (await resolveDisplayUrl(url)) || url;
+              }
+              return {
+                id: String(p.id || url),
+                previewUrl,
+                status: 'done' as UploadStatus,
+                url,
+              };
+            }),
+          );
+          setPhotos(restored);
+        })();
       }
       setStep(3);
     } catch (e) { console.error('Failed to resume album selection', e); }
@@ -1022,7 +1056,12 @@ function AlbumAIView() {
                                   delay: 0.05 + i * 0.06,
                                 }}
                               >
-                                <img src={src} alt="" className="w-full h-full object-cover" draggable={false} />
+                                <LocalPhotoImg
+                                  src={src}
+                                  className="w-full h-full object-cover"
+                                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                  draggable={false}
+                                />
                               </motion.div>
                             );
                           })}
@@ -1089,11 +1128,9 @@ function AlbumAIView() {
                           const a = (i / 6) * Math.PI * 2;
                           const r = 58;
                           return (
-                            <motion.img
+                            <motion.div
                               key={p.id}
-                              src={p.previewUrl}
-                              alt=""
-                              className="absolute w-9 h-9 rounded-md object-cover border-2 border-white shadow-md"
+                              className="absolute w-9 h-9 rounded-md overflow-hidden border-2 border-white shadow-md"
                               style={{ left: '50%', top: '50%', marginLeft: -18, marginTop: -18 }}
                               initial={{ opacity: 0, scale: 0.4 }}
                               animate={{
@@ -1103,8 +1140,14 @@ function AlbumAIView() {
                                 y: Math.sin(a) * r,
                               }}
                               transition={{ delay: i * 0.08, type: 'spring', stiffness: 200, damping: 16 }}
-                              draggable={false}
-                            />
+                            >
+                              <LocalPhotoImg
+                                src={p.previewUrl || p.url!}
+                                className="w-full h-full object-cover"
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                draggable={false}
+                              />
+                            </motion.div>
                           );
                         })}
                       </div>
@@ -1355,7 +1398,12 @@ function AlbumAIView() {
                                   : undefined
                             }
                           >
-                            <img src={p.previewUrl} alt="" className="absolute inset-0 w-full h-full object-cover pointer-events-none" />
+                            <LocalPhotoImg
+                              src={p.previewUrl || p.url || ''}
+                              className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
+                              draggable={false}
+                            />
                             {p.status === 'uploading' && (
                               <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
                                 <Loader2 size={16} className="text-white animate-spin" />

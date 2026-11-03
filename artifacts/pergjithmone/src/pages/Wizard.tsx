@@ -12,7 +12,8 @@ import {
   resolveDesignCategoryFromQuery,
 } from '@/lib/designMeta';
 import {
-  BLANK_STARTER_ID, parseCustomDesigns, buildDesignCatalog,
+  BLANK_STARTER_ID, parseCustomDesigns, buildDesignCatalog, parseDesignDisplay,
+  sortDesignsByPriority,
   designFrontElements, type DesignDef, type DesignOverrides,
 } from '@/lib/designs';
 import { ResponsiveDesignCatalogThumb } from '@/components/PageThumb';
@@ -213,9 +214,18 @@ export default function Wizard() {
     return (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw as DesignOverrides : {};
   }, [siteSettings?.designOverrides]);
 
+  const designDisplay = useMemo(
+    () => parseDesignDisplay(siteSettings?.designDisplay),
+    [siteSettings?.designDisplay],
+  );
+
   const designCatalog = useMemo(
-    () => buildDesignCatalog(designOverrides, parseCustomDesigns(siteSettings?.customDesigns)),
-    [designOverrides, siteSettings?.customDesigns],
+    () => buildDesignCatalog(
+      designOverrides,
+      parseCustomDesigns(siteSettings?.customDesigns),
+      designDisplay,
+    ),
+    [designOverrides, siteSettings?.customDesigns, designDisplay],
   );
 
   useEffect(() => { void ensureEditorFonts(); }, []);
@@ -276,9 +286,10 @@ export default function Wizard() {
     const base = designCategoryKey
       ? designCatalog.filter(d => d.category === designCategoryKey)
       : [];
-    return hiddenDesignIds.length > 0
+    const visible = hiddenDesignIds.length > 0
       ? base.filter(d => !hiddenDesignIds.includes(d.id))
       : base;
+    return sortDesignsByPriority(visible);
   }, [designCategoryKey, hiddenDesignIds, designCatalog]);
   const designCategoryLabel = designCategoryKey
     ? (DESIGN_CATEGORY_LABELS[designCategoryKey]?.[lang] || designCategoryKey)
@@ -288,14 +299,24 @@ export default function Wizard() {
 
   const handleCategorySelect = (catId: number | 'blank') => {
     setSelectedCategory(catId);
-    setSelectedDesignId(null);
-    if (catId !== 'blank') {
-      const cat = (categories as any[])?.find((c: any) => c.id === catId);
-      const key = resolveDesignCategory(cat);
-      if (key) preloadDesignAssets(designCatalog.filter(d => d.category === key));
+    if (catId === 'blank') {
+      setSelectedDesignId(null);
+      setStep(3);
+      return;
     }
-    // Blank canvas skips the style step entirely.
-    setStep(catId === 'blank' ? 3 : 2);
+    const cat = (categories as any[])?.find((c: any) => c.id === catId);
+    const key = resolveDesignCategory(cat);
+    const inCat = key
+      ? sortDesignsByPriority(
+          designCatalog.filter(
+            (d) => d.category === key && !hiddenDesignIds.includes(d.id),
+          ),
+        )
+      : [];
+    // Primary = first in admin priority order.
+    setSelectedDesignId(inCat[0]?.id ?? null);
+    if (key) preloadDesignAssets(inCat);
+    setStep(2);
   };
 
   const handleDesignSelect = (designId: string) => {

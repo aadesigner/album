@@ -14,6 +14,11 @@ import {
   designCatalogFace,
   buildDesignCatalog,
   parseCustomDesigns,
+  parseDesignDisplay,
+  applyDesignDisplay,
+  sortDesignsByPriority,
+  withCategoryDesignOrder,
+  withDesignDisplayMeta,
   applyDesignOverrides,
   restoreCoverGraphics,
   omittedLandmarkSrcs,
@@ -216,6 +221,32 @@ describe("front/back design helpers", () => {
     expect(custom.isCustom).toBe(true);
     expect(designFrontElements(custom)[1].text).toBe("FRONT");
     expect(designBackElements(custom)[1].text).toBe("BACK");
+  });
+
+  it("applies design display rename and priority order", () => {
+    const a = DESIGNS[0];
+    const b = DESIGNS[1];
+    expect(a).toBeTruthy();
+    expect(b).toBeTruthy();
+    const display = withCategoryDesignOrder(
+      withDesignDisplayMeta({}, a.id, {
+        name: { en: "Renamed EN", sq: "Emri AL" },
+        thumbLabel: "NEW",
+      }),
+      [b.id, a.id],
+    );
+    const catalog = buildDesignCatalog({}, null, display);
+    const renamed = catalog.find((d) => d.id === a.id)!;
+    expect(renamed.name.en).toBe("Renamed EN");
+    expect(renamed.name.sq).toBe("Emri AL");
+    expect(renamed.thumbLabel).toBe("NEW");
+    const sameCat = sortDesignsByPriority(
+      catalog.filter((d) => d.category === a.category && (d.id === a.id || d.id === b.id)),
+    );
+    expect(sameCat[0].id).toBe(b.id);
+    expect(sameCat[1].id).toBe(a.id);
+    expect(parseDesignDisplay(display)[a.id]?.name?.en).toBe("Renamed EN");
+    expect(applyDesignDisplay([a], display)[0].sortOrder).toBe(1);
   });
 
   it("applies side overrides onto built-ins", () => {

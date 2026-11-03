@@ -205,25 +205,16 @@ const CATEGORY_TONES: Record<string, { bg: string; fill: string; muted: string; 
   Locations: { bg: '#F7F2EA', fill: '#1A1A1A', muted: '#7A6A5A', accent: '#E0D4C4', paper: '#FFFFFF' },
 };
 
-/** How often to use a catalog cover (vs editorial photo-forward). */
-const CATALOG_COVER_CHANCE: Record<string, number> = {
-  Wedding: 0.68,
-  'Baby & Family': 0.62,
-  Friendship: 0.58,
-  Celebration: 0.5,
-  Portrait: 0.6,
-  Travel: 0.38,
-  Locations: 0.38,
-  Nature: 0.4,
-  Modern: 0.32,
-};
-
-function designsForCategory(categoryKey: string): DesignDef[] {
+function designsForCategory(
+  categoryKey: string,
+  catalog?: DesignDef[] | null,
+): DesignDef[] {
+  const source = catalog?.length ? catalog : DESIGNS;
   const keys = AI_CATEGORY_EXPAND[categoryKey] ?? (categoryKey ? [categoryKey] : ['Travel', 'Wedding']);
-  const filtered = DESIGNS.filter((d) => keys.includes(d.category));
+  const filtered = source.filter((d) => keys.includes(d.category));
   if (filtered.length) return filtered;
-  const travel = DESIGNS.filter((d) => d.category === 'Travel');
-  return travel.length ? travel : DESIGNS;
+  const travel = source.filter((d) => d.category === 'Travel');
+  return travel.length ? travel : source;
 }
 
 /** Prefer typography / photo-frame covers; landmark-only travel is a spice. */
@@ -733,7 +724,11 @@ export interface GeneratedAlbum {
 
 /**
  * Generate a full album from a category and photo URLs.
- * Photos stay in upload order. Each photo is used at most once.
+ * Photos stay in upload order. Prefer unique photos; recycle only if needed
+ * so every inner page still receives a layout + photo.
+ *
+ * Front/back covers always use an admin catalog template (Design Studio),
+ * including custom designs when `catalogDesigns` is provided.
  */
 export function generateAlbum(
   categoryKey: string,
@@ -741,10 +736,11 @@ export function generateAlbum(
   innerPageCount: number,
   lang: 'sq' | 'en',
   bookSize?: { widthCm?: number; heightCm?: number },
+  catalogDesigns?: DesignDef[] | null,
 ): GeneratedAlbum {
   idCounter = 0;
   const cat = categoryKey || 'Modern';
-  const pool = shuffle(designsForCategory(cat));
+  const pool = shuffle(designsForCategory(cat, catalogDesigns));
   const canvasH = getCanvasHeight(bookSize?.widthCm, bookSize?.heightCm);
   const paper = (CATEGORY_TONES[cat] ?? CATEGORY_TONES.Modern).paper;
   const { frontUrl, backUrl, story } = splitPhotoRoles(photoUrls);
@@ -758,35 +754,25 @@ export function generateAlbum(
     };
   };
 
-  const catalogChance = CATALOG_COVER_CHANCE[cat] ?? 0.4;
-  const useCatalogFront = pool.length > 0 && rand() < catalogChance;
-
+  // Always apply admin front + back of the same design template.
   let frontDesignId = 'photo-front';
+  let backDesignId = 'photo-back';
   let frontCover: EditorElement[];
-  if (useCatalogFront) {
-    const frontDesign = pickWeighted(pool, coverDesignWeight);
-    frontDesignId = frontDesign.id;
+  let backCover: EditorElement[];
+  if (pool.length > 0) {
+    const design = pickWeighted(pool, coverDesignWeight);
+    frontDesignId = design.id;
+    backDesignId = design.id;
     frontCover = withIds(
-      prepareCover(frontDesign, canvasH, takeOnce(frontUrl), cat, lang, 'front'),
+      prepareCover(design, canvasH, takeOnce(frontUrl), cat, lang, 'front'),
       'cover-front',
     );
-  } else {
-    frontCover = withIds(buildPhotoCover(canvasH, frontUrl, cat, lang, 'front'), 'cover-front');
-  }
-
-  // Designed front + personal photo back reads like a finished book.
-  const useCatalogBack = !backUrl && pool.length > 1 && rand() < 0.35;
-  let backDesignId = 'photo-back';
-  let backCover: EditorElement[];
-  if (useCatalogBack) {
-    const backPool = pool.filter((d) => d.id !== frontDesignId);
-    const backDesign = pickWeighted(backPool.length ? backPool : pool, coverDesignWeight);
-    backDesignId = backDesign.id;
     backCover = withIds(
-      prepareCover(backDesign, canvasH, takeOnce(backUrl), cat, lang, 'back'),
+      prepareCover(design, canvasH, takeOnce(backUrl), cat, lang, 'back'),
       'cover-back',
     );
   } else {
+    frontCover = withIds(buildPhotoCover(canvasH, frontUrl, cat, lang, 'front'), 'cover-front');
     backCover = withIds(buildPhotoCover(canvasH, backUrl, cat, lang, 'back'), 'cover-back');
   }
 
@@ -800,18 +786,39 @@ export function generateAlbum(
   ], 'inside-cover');
 
   let storyIdx = 0;
+  /** Prefer unused story photos; recycle only to keep every page filled. */
   const nextStoryPhoto = (): string | undefined => {
-    if (storyIdx >= story.length) return undefined;
-    return story[storyIdx++];
+    if (!story.length) return undefined;
+    const url = story[storyIdx % story.length];
+    storyIdx += 1;
+    return url;
   };
 
   const planned = planPageLayouts(story.length, innerPageCount, cat);
+  const fallbackLayout =
+    findAllowedLayout('full')
+    || findAllowedLayout('bordered-single')
+    || LAYOUTS.find((l) => photoSlotCount(l) === 1)
+    || LAYOUTS[0];
+
   const innerPages: EditorElement[][] = [];
   for (let p = 0; p < innerPageCount; p++) {
-    const remaining = story.length - storyIdx;
-    const layout = planned[p];
-    if (!layout || remaining <= 0) {
-      innerPages.push(withIds([paperBg], `inner-${p}`));
+    const layout = planned[p] || fallbackLayout;
+    if (!layout) {
+      // Absolute last resort — still never leave a bare paper sheet.
+      const url = nextStoryPhoto();
+      innerPages.push(withIds(
+        url
+          ? [
+              paperBg,
+              {
+                type: 'image', x: 0, y: 0, w: DESIGN_W, h: canvasH, rotation: 0,
+                src: url, cropZoom: 1,
+              },
+            ]
+          : [paperBg],
+        `inner-${p}`,
+      ));
       continue;
     }
     innerPages.push(withIds(elementsForLayout(layout, canvasH, paper, nextStoryPhoto), `inner-${p}`));
@@ -830,13 +837,18 @@ export function generateAlbum(
   };
 }
 
-/** Suggested inner page count — opening/closing heroes plus airy middle spreads. */
+/**
+ * Suggested inner page count.
+ * Dense enough that a 32-photo album can fill typical minPages (≈30)
+ * without blank sheets — prefer ≤1.25 photos/page when possible.
+ */
 export function suggestInnerPageCount(photoCount: number, minPages = 4): number {
   if (photoCount <= 0) return minPages;
   const coverTake = photoCount >= 3 ? 2 : photoCount >= 1 ? 1 : 0;
   const story = Math.max(0, photoCount - coverTake);
   if (story === 0) return minPages;
-  const body = Math.max(0, story - 2);
-  const middle = Math.ceil(body / 1.55);
-  return Math.max(minPages, 2 + middle);
+  const packed = Math.max(minPages, Math.ceil(story / 1.25));
+  // When we have enough story photos for minPages, don't invent extra blanks.
+  if (story >= minPages) return Math.min(packed, story);
+  return packed;
 }

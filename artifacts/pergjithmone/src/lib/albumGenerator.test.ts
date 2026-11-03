@@ -33,8 +33,8 @@ describe("generateAlbum", () => {
     expect(allImages.length).toBeGreaterThan(0);
   });
 
-  it("never reuses the same photo across the album", () => {
-    const album = generateAlbum("Modern", PHOTOS, 16, "en", { widthCm: 21, heightCm: 28 });
+  it("prefers unique photos when the page budget fits", () => {
+    const album = generateAlbum("Modern", PHOTOS, 12, "en", { widthCm: 21, heightCm: 28 });
     const srcs = [
       ...album.frontCover,
       ...album.backCover,
@@ -43,6 +43,18 @@ describe("generateAlbum", () => {
       .filter((e) => e.type === "image" && e.src)
       .map((e) => e.src as string);
     expect(new Set(srcs).size).toBe(srcs.length);
+  });
+
+  it("fills every inner page with a layout and at least one photo", () => {
+    const album = generateAlbum("Wedding", PHOTOS, 30, "en", { widthCm: 21, heightCm: 28 });
+    expect(album.innerPages).toHaveLength(30);
+    for (const page of album.innerPages) {
+      const imgs = page.filter((e) => e.type === "image" && e.src);
+      expect(imgs.length).toBeGreaterThanOrEqual(1);
+    }
+    // Catalog template ids — not the old photo-forward fallbacks
+    expect(album.meta.frontDesignId).not.toBe("photo-front");
+    expect(album.meta.backDesignId).toBe(album.meta.frontDesignId);
   });
 
   it("never leaves placeholder caption copy on pages", () => {

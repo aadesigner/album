@@ -146,6 +146,7 @@ function useLiveDesign(id: string): DesignDef | undefined {
     const catalog = buildDesignCatalog(
       (settings as any)?.designOverrides,
       parseCustomDesigns((settings as any)?.customDesigns),
+      (settings as any)?.designDisplay,
     );
     return catalog.find(d => d.id === id) ?? DESIGNS.find(d => d.id === id);
   }, [id, settings]);
@@ -890,6 +891,7 @@ function AlbumStarter({ lang }: { lang: 'sq' | 'en' }) {
     const catalog = buildDesignCatalog(
       (settings as any)?.designOverrides,
       parseCustomDesigns((settings as any)?.customDesigns),
+      (settings as any)?.designDisplay,
     );
     const map: Record<string, ReturnType<typeof designFrontElements>> = {};
     for (const s of ALBUM_STYLES) {

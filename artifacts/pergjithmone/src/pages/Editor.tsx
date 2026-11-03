@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo, useDeferredValue, startTransition } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo, startTransition } from 'react';
 import { Stage, Layer, Rect, Text as KonvaText, Image as KonvaImage, Transformer, Line, Group, Path as KonvaPath } from 'react-konva';
 import { useGetProject, useCreateOrder, useListBookSizes, useGetAppSettings, useListLayouts, getGetProjectQueryKey, getListProjectsQueryKey } from '@workspace/api-client-react-tsconfig';
 import { useQueryClient } from '@tanstack/react-query';
@@ -70,6 +70,7 @@ import {
   BLANK_STARTER_ID, blankFrontCoverElements, blankBackCoverElements,
   coverCropRect, imageFrameCoverFit, imageFrameContainFit, imageFrameFocusFromOffset, fitAddedTextFrame,
   designFrontElements, designBackElements, buildDesignCatalog, parseCustomDesigns,
+  parseDesignDisplay, sortDesignsByPriority,
   coverImageBlend, coverImageLetterbox, konvaOpacity, clampElementPos, boundBoxToPage,
   konvaAbsToLocal, konvaLocalToAbs, pageBoxFromStageBox, stageBoxFromPageBox,
   type EditorElement, type DE, type DesignDef, type LayoutZone, type LayoutDef, type DesignOverrides,
@@ -2442,7 +2443,16 @@ const SpreadNav = React.memo(function SpreadNav({spreads,current,onChange,onAddS
             width:w, height:h, flexShrink:0, background:'#FFFFFF',
             backgroundImage:'repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(0,0,0,0.06) 3px,rgba(0,0,0,0.06) 4px)',
           }}/>;
-          return <PageThumb elements={pagesContent[page.dbId]??[]} width={w} height={h} canvasH={canvasH}/>;
+          return (
+            <PageThumb
+              elements={pagesContent[page.dbId]??[]}
+              width={w}
+              height={h}
+              canvasH={canvasH}
+              fit="cover"
+              priority={isCurrent}
+            />
+          );
         };
 
         const ring=insertBefore
@@ -2455,7 +2465,8 @@ const SpreadNav = React.memo(function SpreadNav({spreads,current,onChange,onAddS
 
         const scale=isCurrent?'scale(1.08)':'scale(1)';
 
-        const THUMB_SOLO_W=28, THUMB_PAIR_W=24;
+        // Small but readable — enough to see photos/layouts in the strip.
+        const THUMB_SOLO_W=40, THUMB_PAIR_W=34;
         const thumbH=Math.round((sp.isSolo?THUMB_SOLO_W:THUMB_PAIR_W)*(canvasH/DESIGN_W));
         const thumbContainerW=sp.isSolo?THUMB_SOLO_W:THUMB_SOLO_W+2+THUMB_PAIR_W;
 
@@ -2967,7 +2978,7 @@ function DesignsPanel({onApply, lang, designs}: {
             {(CATEGORY_LABELS[cat]?.[lang]) ?? cat}
           </p>
           <div className="grid grid-cols-3 gap-2">
-            {designs.filter(d => d.category === cat).map(d => (
+            {sortDesignsByPriority(designs.filter(d => d.category === cat)).map(d => (
               <DesignThumb key={d.id} design={d} lang={lang} onApply={() => onApply(d)} />
             ))}
           </div>
@@ -3517,8 +3528,6 @@ export default function Editor() {
   const currentSpread=spreads[spreadIdx];
 
   const [pagesContent,setPagesContent]=useState<Record<number,EditorElement[]>>({});
-  // Filmstrip thumbs can lag a frame behind — keeps drag/edit on the canvas snappy.
-  const deferredPagesContent=useDeferredValue(pagesContent);
   const [selectedId,setSelectedId]=useState<string|null>(null);
   const [activeSide,setActiveSide]=useState<'left'|'right'>('right');
   const [tab,setTab]=useState<SideTab>('designs');
@@ -4317,16 +4326,17 @@ export default function Editor() {
   const {data:appSettings}=useGetAppSettings();
   const designOverrides = ((appSettings as any)?.designOverrides || {}) as DesignOverrides;
   const customDesigns = parseCustomDesigns((appSettings as any)?.customDesigns);
+  const designDisplay = parseDesignDisplay((appSettings as any)?.designDisplay);
   const hiddenDesignIds: string[] = (appSettings as any)?.hiddenDesignIds || [];
   const catalogElements = useMemo(
     () => parseEditorElements((appSettings as any)?.editorElements),
     [appSettings],
   );
   const designsCatalog = useMemo(() => {
-    const all = buildDesignCatalog(designOverrides, customDesigns);
+    const all = buildDesignCatalog(designOverrides, customDesigns, designDisplay);
     if (!hiddenDesignIds.length) return all;
     return all.filter(d => !hiddenDesignIds.includes(d.id));
-  }, [designOverrides, customDesigns, hiddenDesignIds]);
+  }, [designOverrides, customDesigns, designDisplay, hiddenDesignIds]);
   const minInnerPages=Number(bookSize?.minPages)
     || Number((appSettings as any)?.minPages)
     || 30;
@@ -4839,17 +4849,17 @@ export default function Editor() {
           } : undefined}
         >
 
-          {/* Mobile mini spread — open-book preview; tap a side to edit it */}
-          {isMobile && currentSpread && !currentSpread.isSolo && (
+          {/* Mini spread — open-book preview on mobile + desktop; tap a side to edit it */}
+          {currentSpread && !currentSpread.isSolo && (
             <div
               className="flex-shrink-0 flex items-center justify-center"
               style={{
-                padding: '6px 12px 8px',
+                padding: isMobile ? '6px 12px 8px' : '8px 16px 10px',
                 background: 'linear-gradient(180deg, rgba(244,241,236,0.35) 0%, rgba(247,244,239,0.92) 100%)',
               }}
             >
               {(() => {
-                const thumbH = 44;
+                const thumbH = isMobile ? 52 : 64;
                 const thumbW = Math.round(thumbH * (DESIGN_W / canvasH));
                 const sides = (['left', 'right'] as const).map((side) => {
                   const page = side === 'left' ? currentSpread.left : currentSpread.right;
@@ -4940,6 +4950,8 @@ export default function Editor() {
                               width={thumbW}
                               height={thumbH}
                               canvasH={canvasH}
+                              fit="cover"
+                              priority={active}
                             />
                           )}
                         </div>
@@ -5109,7 +5121,7 @@ export default function Editor() {
             onAddSpread={addSpread} addingSpread={addingSpread}
             onReorder={reorderSpreads}
             onDeleteSpread={deleteSpread} deletingSpread={deletingSpread}
-            pagesContent={deferredPagesContent} canvasH={canvasH} lang={lang}
+            pagesContent={pagesContent} canvasH={canvasH} lang={lang}
             readOnly={isOrdered}/>
           {isMobile && !isOrdered && (
             <div className="flex items-center border-t border-neutral-200 bg-white py-1 px-1 flex-shrink-0" style={{gap:2}}>

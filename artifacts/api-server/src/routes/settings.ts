@@ -35,6 +35,7 @@ async function loadPublicSettings(): Promise<Record<string, unknown>> {
   const hiddenDesignIds = parseJsonArray(map["hidden_design_ids"]).map(String);
   const designOverrides = parseJsonObject(map["design_overrides"]);
   const customDesigns = parseJsonArray(map["custom_designs"]);
+  const designDisplay = parseJsonObject(map["design_display"]);
   const editorElements = parseEditorElements(parseJsonArray(map["editor_elements"]));
 
   return {
@@ -54,6 +55,7 @@ async function loadPublicSettings(): Promise<Record<string, unknown>> {
     hiddenDesignIds,
     designOverrides,
     customDesigns,
+    designDisplay,
     editorElements,
     requireLoginForPdf: map["require_login_for_pdf"] === "true",
     pendingBooksLimitEnabled: map["pending_books_limit_enabled"] !== "false",

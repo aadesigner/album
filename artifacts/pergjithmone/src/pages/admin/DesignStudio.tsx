@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   DESIGNS, DESIGN_W, DESIGN_H, PAPER_COLOR, CATEGORY_LABELS,
-  buildDesignCatalog, parseCustomDesigns,
+  buildDesignCatalog, parseCustomDesigns, parseDesignDisplay,
+  withDesignDisplayMeta, sortDesignsByPriority,
   designFrontElements, designBackElements,
   designElementsWithIds, designElementsWithoutIds,
   blankCoverElements, newCustomDesignId,
@@ -1286,11 +1287,15 @@ export default function AdminDesignStudio() {
     () => parseCustomDesigns(s?.customDesigns),
     [s?.customDesigns],
   );
+  const savedDesignDisplay = useMemo(
+    () => parseDesignDisplay(s?.designDisplay),
+    [s?.designDisplay],
+  );
   const savedHiddenIds: string[] = Array.isArray(s?.hiddenDesignIds) ? s.hiddenDesignIds as string[] : [];
 
   const catalog = useMemo(
-    () => buildDesignCatalog(savedOverrides, savedCustomDesigns),
-    [savedOverrides, savedCustomDesigns],
+    () => buildDesignCatalog(savedOverrides, savedCustomDesigns, savedDesignDisplay),
+    [savedOverrides, savedCustomDesigns, savedDesignDisplay],
   );
 
   const categories = useMemo(() => {
@@ -1357,6 +1362,8 @@ export default function AdminDesignStudio() {
     thumbColor: '#2A2A2A',
     thumbLabel: '',
   });
+  const [nameForm, setNameForm] = useState({ nameEn: '', nameSq: '', thumbLabel: '' });
+  const [savingName, setSavingName] = useState(false);
 
   const dirty = dirtyFront || dirtyBack;
   const dirtyRef = useRef(false);
@@ -1391,6 +1398,15 @@ export default function AdminDesignStudio() {
   const customFingerprint = design?.isCustom
     ? JSON.stringify(savedCustomDesigns.find(c => c.id === design.id) ?? null)
     : '';
+
+  useEffect(() => {
+    if (!design) return;
+    setNameForm({
+      nameEn: design.name.en || '',
+      nameSq: design.name.sq || '',
+      thumbLabel: design.thumbLabel || '',
+    });
+  }, [design?.id, design?.name.en, design?.name.sq, design?.thumbLabel]);
 
   useEffect(() => { void ensureEditorFonts(); }, []);
 
@@ -1948,6 +1964,59 @@ export default function AdminDesignStudio() {
     }
   };
 
+  const saveName = async () => {
+    if (!design) return;
+    const nameEn = nameForm.nameEn.trim();
+    const nameSq = nameForm.nameSq.trim() || nameEn;
+    if (!nameEn) {
+      setSaveError('English name is required.');
+      return;
+    }
+    setSavingName(true);
+    setSaveError(null);
+    try {
+      const nextDisplay = withDesignDisplayMeta(savedDesignDisplay, design.id, {
+        name: { en: nameEn, sq: nameSq },
+        thumbLabel: nameForm.thumbLabel,
+      });
+      const patch: Record<string, unknown> = { designDisplay: nextDisplay };
+      let nextCustoms = savedCustomDesigns;
+      if (design.isCustom) {
+        nextCustoms = savedCustomDesigns.map((c) =>
+          c.id === design.id
+            ? {
+                ...c,
+                name: { en: nameEn, sq: nameSq },
+                thumbLabel: nameForm.thumbLabel.trim() || nameEn.slice(0, 12).toUpperCase(),
+                updatedAt: new Date().toISOString(),
+              }
+            : c,
+        );
+        patch.customDesigns = nextCustoms;
+      }
+      await updateSettings.mutateAsync({ data: patch as any });
+      queryClient.setQueryData(getGetAdminSettingsQueryKey(), (old: any) =>
+        old
+          ? {
+              ...old,
+              designDisplay: nextDisplay,
+              ...(design.isCustom ? { customDesigns: nextCustoms } : {}),
+            }
+          : old,
+      );
+      void queryClient.invalidateQueries({
+        queryKey: getGetAppSettingsQueryKey(),
+        refetchType: 'active',
+      });
+      setSavedFlash(true);
+      setTimeout(() => setSavedFlash(false), 1800);
+    } catch (err: any) {
+      setSaveError(err?.data?.error || err?.message || 'Failed to save design name.');
+    } finally {
+      setSavingName(false);
+    }
+  };
+
   const saveRef = useRef(save);
   saveRef.current = save;
 
@@ -2143,13 +2212,14 @@ export default function AdminDesignStudio() {
   };
 
   const catDesigns = useMemo(() => {
-    return catalog.filter(d => {
+    const list = catalog.filter(d => {
       if (d.category !== activeCat) return false;
       const hidden = savedHiddenIds.includes(d.id);
       if (visFilter === 'visible' && hidden) return false;
       if (visFilter === 'hidden' && !hidden) return false;
       return true;
     });
+    return sortDesignsByPriority(list);
   }, [catalog, activeCat, visFilter, savedHiddenIds]);
 
   const categoryOptions = useMemo(() => {
@@ -2450,6 +2520,7 @@ export default function AdminDesignStudio() {
                         {isHidden ? 'Hidden' : 'Live'}
                         {hasOverride ? ' · override' : ''}
                         {dirty ? ` · unsaved${dirtyFront && dirtyBack ? ' (both)' : dirtyFront ? ' (front)' : ' (back)'}` : ''}
+                        {' · rename in Props'}
                       </p>
                     </div>
                     <div className="inline-flex p-0.5 rounded-md" style={{ background: ADMIN.bg }}>
@@ -2628,6 +2699,51 @@ export default function AdminDesignStudio() {
                 </span>
               </div>
               <div className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden p-2.5 space-y-2.5">
+              {design && (
+                <div className="rounded-lg p-2 space-y-2" style={{ border: `1px solid ${ADMIN.line}`, background: ADMIN.bg }}>
+                  <p className="text-[10px] uppercase tracking-[0.12em] font-semibold" style={{ color: ADMIN.muted }}>
+                    Design name (customer-facing)
+                  </p>
+                  <div>
+                    <label className="block text-[10px] font-medium mb-1" style={{ color: ADMIN.muted }}>English *</label>
+                    <Input
+                      value={nameForm.nameEn}
+                      onChange={e => setNameForm(f => ({ ...f, nameEn: e.target.value }))}
+                      className="h-8 text-[12px] rounded-lg"
+                      placeholder="Paris Pink"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-medium mb-1" style={{ color: ADMIN.muted }}>Albanian</label>
+                    <Input
+                      value={nameForm.nameSq}
+                      onChange={e => setNameForm(f => ({ ...f, nameSq: e.target.value }))}
+                      className="h-8 text-[12px] rounded-lg"
+                      placeholder="Paris Rozë"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-medium mb-1" style={{ color: ADMIN.muted }}>Thumb label</label>
+                    <Input
+                      value={nameForm.thumbLabel}
+                      onChange={e => setNameForm(f => ({ ...f, thumbLabel: e.target.value }))}
+                      className="h-8 text-[12px] rounded-lg"
+                      placeholder="PARIS"
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={savingName || !nameForm.nameEn.trim()}
+                    onClick={() => void saveName()}
+                    className="w-full h-8 rounded-lg text-white text-[11px] font-semibold hover:opacity-90"
+                    style={{ background: ADMIN.blush }}
+                  >
+                    {savingName ? <Loader2 size={12} className="mr-1.5 animate-spin" /> : <Save size={12} className="mr-1.5" />}
+                    {savingName ? 'Saving…' : 'Save name'}
+                  </Button>
+                </div>
+              )}
               {draft.length > 0 && (
                 <div>
                   <p className="text-[10px] uppercase tracking-[0.12em] font-semibold mb-1.5" style={{ color: ADMIN.muted }}>

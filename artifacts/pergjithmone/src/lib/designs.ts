@@ -814,6 +814,114 @@ export interface DesignDef {
    * a newer built-in rev must never discard a shop's saved covers.
    */
   layoutRev?: number;
+  /**
+   * Admin priority within its design category (lower = earlier / primary).
+   * Persisted in app_settings.design_display — never wiped by seed/redeploy.
+   */
+  sortOrder?: number;
+}
+
+/** Admin-owned display meta (rename + order). Survives redeploys. */
+export interface DesignDisplayEntry {
+  name?: { sq: string; en: string };
+  thumbLabel?: string;
+  /** Lower = shows earlier in the category picker; 0 = primary. */
+  sortOrder?: number;
+}
+
+export type DesignDisplayMap = Record<string, DesignDisplayEntry>;
+
+export function parseDesignDisplay(raw: unknown): DesignDisplayMap {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const out: DesignDisplayMap = {};
+  for (const [id, entry] of Object.entries(raw as Record<string, unknown>)) {
+    if (!id || !entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+    const e = entry as Record<string, unknown>;
+    const meta: DesignDisplayEntry = {};
+    if (e.name && typeof e.name === 'object' && !Array.isArray(e.name)) {
+      const n = e.name as Record<string, unknown>;
+      const en = String(n.en ?? '').trim();
+      const sq = String(n.sq ?? '').trim();
+      if (en || sq) meta.name = { en: en || sq, sq: sq || en };
+    }
+    if (typeof e.thumbLabel === 'string' && e.thumbLabel.trim()) {
+      meta.thumbLabel = e.thumbLabel.trim();
+    }
+    if (typeof e.sortOrder === 'number' && Number.isFinite(e.sortOrder)) {
+      meta.sortOrder = e.sortOrder;
+    }
+    if (meta.name || meta.thumbLabel != null || meta.sortOrder != null) {
+      out[id] = meta;
+    }
+  }
+  return out;
+}
+
+/** Apply rename / thumb / sortOrder onto catalog entries (does not reorder). */
+export function applyDesignDisplay(
+  designs: DesignDef[],
+  display?: DesignDisplayMap | null,
+): DesignDef[] {
+  if (!display || !Object.keys(display).length) return designs;
+  return designs.map((d) => {
+    const meta = display[d.id];
+    if (!meta) return d;
+    return {
+      ...d,
+      name: meta.name ? { sq: meta.name.sq, en: meta.name.en } : d.name,
+      thumbLabel: meta.thumbLabel != null ? meta.thumbLabel : d.thumbLabel,
+      sortOrder: typeof meta.sortOrder === 'number' ? meta.sortOrder : d.sortOrder,
+    };
+  });
+}
+
+/**
+ * Sort designs for a single category picker.
+ * Explicit sortOrder first (ascending); ties keep stable catalog order.
+ */
+export function sortDesignsByPriority(designs: DesignDef[]): DesignDef[] {
+  return designs
+    .map((d, index) => ({ d, index }))
+    .sort((a, b) => {
+      const ao = typeof a.d.sortOrder === 'number' ? a.d.sortOrder : Number.POSITIVE_INFINITY;
+      const bo = typeof b.d.sortOrder === 'number' ? b.d.sortOrder : Number.POSITIVE_INFINITY;
+      if (ao !== bo) return ao - bo;
+      return a.index - b.index;
+    })
+    .map(({ d }) => d);
+}
+
+/** Rewrite sortOrder 0..n-1 for the given ordered ids (other ids untouched). */
+export function withCategoryDesignOrder(
+  display: DesignDisplayMap,
+  orderedIds: string[],
+): DesignDisplayMap {
+  const next: DesignDisplayMap = { ...display };
+  orderedIds.forEach((id, i) => {
+    next[id] = { ...(next[id] || {}), sortOrder: i };
+  });
+  return next;
+}
+
+/** Patch name / thumbLabel for one design id. */
+export function withDesignDisplayMeta(
+  display: DesignDisplayMap,
+  id: string,
+  patch: Pick<DesignDisplayEntry, 'name' | 'thumbLabel'>,
+): DesignDisplayMap {
+  const prev = display[id] || {};
+  const nextEntry: DesignDisplayEntry = { ...prev };
+  if (patch.name) {
+    const en = String(patch.name.en || '').trim();
+    const sq = String(patch.name.sq || '').trim();
+    if (en || sq) nextEntry.name = { en: en || sq, sq: sq || en };
+  }
+  if (patch.thumbLabel !== undefined) {
+    const t = String(patch.thumbLabel || '').trim();
+    if (t) nextEntry.thumbLabel = t;
+    else delete nextEntry.thumbLabel;
+  }
+  return { ...display, [id]: nextEntry };
 }
 
 /** Shared rev for Travel builtins (Paris/Barcelona + city photo covers). */
@@ -1781,8 +1889,9 @@ export function getDesignWithOverrides(
   id: string,
   overrides?: DesignOverrides | null,
   customDesigns?: CustomDesignRecord[] | null,
+  designDisplay?: DesignDisplayMap | null,
 ): DesignDef | undefined {
-  return buildDesignCatalog(overrides, customDesigns).find((d) => d.id === id);
+  return buildDesignCatalog(overrides, customDesigns, designDisplay).find((d) => d.id === id);
 }
 
 export function customDesignToDef(c: CustomDesignRecord): DesignDef {
@@ -1831,15 +1940,16 @@ export function parseCustomDesigns(raw: unknown): CustomDesignRecord[] {
   return out;
 }
 
-/** Built-ins (with overrides) + admin custom designs. */
+/** Built-ins (with overrides) + admin custom designs + display rename/order. */
 export function buildDesignCatalog(
   overrides?: DesignOverrides | null,
   customDesigns?: CustomDesignRecord[] | null,
+  designDisplay?: DesignDisplayMap | null,
 ): DesignDef[] {
   const builtIn = applyDesignOverrides(DESIGNS, overrides);
   const customs = parseCustomDesigns(customDesigns).map(customDesignToDef);
   const customsApplied = applyDesignOverrides(customs, overrides);
-  return [...builtIn, ...customsApplied];
+  return applyDesignDisplay([...builtIn, ...customsApplied], designDisplay);
 }
 
 /** Starter canvas for a new admin cover. */

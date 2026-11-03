@@ -9,7 +9,9 @@ import { Input } from '@/components/ui/input';
 import { useForm } from 'react-hook-form';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormDescription } from '@/components/ui/form';
 import { DESIGN_CATEGORY_LABELS } from '@/lib/designMeta';
-import { parseCustomDesigns, buildDesignCatalog } from '@/lib/designs';
+import {
+  parseCustomDesigns, buildDesignCatalog, parseDesignDisplay, sortDesignsByPriority,
+} from '@/lib/designs';
 import { ResponsiveDesignCatalogThumb } from '@/components/PageThumb';
 import { Eye, EyeOff, Check, AlertTriangle, BookX, BookHeart, Settings, Wrench, DollarSign, Palette, ShieldAlert, FileLock2, Megaphone, Activity } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -318,8 +320,9 @@ export default function AdminSettings() {
         ? s.designOverrides
         : {},
       parseCustomDesigns(s?.customDesigns),
+      parseDesignDisplay(s?.designDisplay),
     ),
-    [s?.designOverrides, s?.customDesigns],
+    [s?.designOverrides, s?.customDesigns, s?.designDisplay],
   );
 
   const designsByCategory = useMemo(() => {
@@ -331,7 +334,7 @@ export default function AdminSettings() {
     return order.map(cat => ({
       cat,
       label: DESIGN_CATEGORY_LABELS[cat]?.en || cat,
-      designs: designCatalog.filter(d => d.category === cat),
+      designs: sortDesignsByPriority(designCatalog.filter(d => d.category === cat)),
     }));
   }, [designCatalog]);
 

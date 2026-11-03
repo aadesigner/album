@@ -59,6 +59,7 @@ const PageMiniRender = memo(function PageMiniRender({ elements, w, h, paperColor
         canvasH={canvasH}
         fit="width"
         background={paperColor}
+        priority
       />
     </div>
   );

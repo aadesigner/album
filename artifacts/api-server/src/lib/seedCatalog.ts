@@ -89,6 +89,7 @@ const PROTECTED_SETTING_KEYS = new Set([
   "design_overrides",
   "custom_designs",
   "hidden_design_ids",
+  "design_display",
   "editor_elements",
   "admin_notes",
   // Navbar/footer theme JSON — admin-owned; never seed-overwrite on redeploy.
