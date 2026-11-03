@@ -2498,8 +2498,16 @@ export default function AdminDesignStudio() {
                             : { borderColor: 'transparent', background: 'transparent', opacity: hidden ? 0.55 : 1 }
                         }
                       >
-                        <div className="rounded overflow-hidden shrink-0 relative bg-white"
-                          style={{ width: CATALOG_THUMB_W, height: CATALOG_THUMB_H, border: `1px solid ${ADMIN.line}` }}>
+                        <div
+                          className="rounded overflow-hidden shrink-0 relative"
+                          style={{
+                            width: CATALOG_THUMB_W,
+                            height: CATALOG_THUMB_H,
+                            border: `1px solid ${ADMIN.line}`,
+                            background:
+                              'repeating-conic-gradient(#E8E4DC 0% 25%, #FAF7F2 0% 50%) 50% / 10px 10px',
+                          }}
+                        >
                           <LazyDesignCatalogThumb
                             design={d}
                             width={CATALOG_THUMB_W}
@@ -3391,8 +3399,16 @@ export default function AdminDesignStudio() {
                   {bgUiMode === 'photo' && (
                     <div className="space-y-2">
                       {selected.src ? (
-                        <img src={selected.src} alt="" className="w-full h-28 object-cover rounded-lg"
-                          style={{ border: `1px solid ${ADMIN.line}` }} />
+                        <img
+                          src={selected.src}
+                          alt=""
+                          className="w-full h-28 object-contain rounded-lg"
+                          style={{
+                            border: `1px solid ${ADMIN.line}`,
+                            background:
+                              'repeating-conic-gradient(#E8E4DC 0% 25%, #FAF7F2 0% 50%) 50% / 14px 14px',
+                          }}
+                        />
                       ) : (
                         <p className="text-[11px]" style={{ color: ADMIN.muted }}>No photo yet — upload one.</p>
                       )}

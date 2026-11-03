@@ -37,12 +37,14 @@ function ThumbImg({
   }, [src]);
 
   if (!display) {
+    // Transparent placeholder — a grey fill looked like the PNG had a baked background
+    // (and showed as a tiny grey speck in the 3D viewer while thumbs resolved).
     return (
       <div
         className={className}
         style={{
           ...style,
-          background: 'linear-gradient(135deg,#EDE7DE,#D9D0C4)',
+          background: 'transparent',
         }}
         aria-hidden
       />
@@ -378,7 +380,14 @@ export function DesignCatalogThumb({
     return <PageThumb elements={face.elements} width={width} height={height} />;
   }
   return (
-    <div style={{ width, height, background: (design.thumb?.background as string) || '#ECE7E1' }} />
+    <div
+      style={{
+        width,
+        height,
+        background: (design.thumb?.background as string)
+          || 'repeating-conic-gradient(#E8E4DC 0% 25%, #FAF7F2 0% 50%) 50% / 10px 10px',
+      }}
+    />
   );
 }
 
@@ -418,7 +427,8 @@ export function LazyDesignCatalogThumb(
           style={{
             width: props.width,
             height: props.height,
-            background: (props.design.thumb?.background as string) || '#ECE7E1',
+            background: (props.design.thumb?.background as string)
+              || 'repeating-conic-gradient(#E8E4DC 0% 25%, #FAF7F2 0% 50%) 50% / 10px 10px',
           }}
         />
       )}
@@ -456,7 +466,11 @@ export function ResponsiveDesignCatalogThumb({
   return (
     <div
       className={className}
-      style={{ background: (design.thumb?.background as string) || '#ECE7E1', ...style }}
+      style={{
+        background: (design.thumb?.background as string)
+          || 'repeating-conic-gradient(#E8E4DC 0% 25%, #FAF7F2 0% 50%) 50% / 10px 10px',
+        ...style,
+      }}
     />
   );
 }

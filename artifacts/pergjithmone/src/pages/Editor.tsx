@@ -700,7 +700,8 @@ function KImgEl({el,isSelected,isDropTarget,onSelect,onChange,onGestureStart,onD
         endGesture();
       }}
     >
-      <Rect width={liveSize.current.w} height={liveSize.current.h} fill="#D0C8BC" cornerRadius={2} />
+      {/* Transparent while loading — never a solid grey plate (looked like baked PNG bg). */}
+      <Rect width={liveSize.current.w} height={liveSize.current.h} fill="rgba(0,0,0,0.001)" cornerRadius={2} />
       {isSelected && (
         <Rect width={liveSize.current.w} height={liveSize.current.h} stroke="#2563EB" strokeWidth={2.5} listening={false} cornerRadius={2} />
       )}

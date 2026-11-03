@@ -37,8 +37,20 @@ export function peekCachedImage(src: string): CachedBitmap | undefined {
 }
 
 export function imageLoadNeedsCors(url: string): boolean {
-  const absolute = /^https?:\/\//i.test(url);
-  return absolute && typeof window !== 'undefined' && !url.startsWith(window.location.origin);
+  if (!url || typeof window === 'undefined') return false;
+  // Relative / same-origin — Konva must NOT set crossOrigin or some browsers
+  // paint a solid grey plate instead of the PNG alpha.
+  if (url.startsWith('/') || url.startsWith('blob:') || url.startsWith('data:')) return false;
+  if (!/^https?:\/\//i.test(url)) return false;
+  try {
+    const u = new URL(url);
+    if (u.origin === window.location.origin) return false;
+    // Our own upload/design paths on another host still work without CORS for paint.
+    if (/^\/(?:api\/)?(?:uploads\/files|designs)\//i.test(u.pathname)) return false;
+  } catch {
+    return false;
+  }
+  return true;
 }
 
 export function designApiFallback(url: string): string | null {
@@ -77,15 +89,22 @@ export function loadCachedImage(src: string): Promise<CachedBitmap> {
       if (!local) throw new Error('local photo missing on this device');
       url = local;
     }
+    // Prefer no-CORS first for paint reliability (transparent PNGs in Konva).
+    // Only retry with CORS when the plain load fails (rare cross-origin CDNs).
+    const wantsCors = imageLoadNeedsCors(url);
     try {
-      return await decodeHtmlImage(url, imageLoadNeedsCors(url));
+      return await decodeHtmlImage(url, false);
     } catch (err) {
-      if (imageLoadNeedsCors(url)) {
-        try { return await decodeHtmlImage(url, false); } catch { /* fall through */ }
+      if (wantsCors) {
+        try { return await decodeHtmlImage(url, true); } catch { /* fall through */ }
       }
       const fallback = designApiFallback(url);
       if (!fallback) throw err;
-      return decodeHtmlImage(fallback, imageLoadNeedsCors(fallback));
+      try {
+        return await decodeHtmlImage(fallback, false);
+      } catch {
+        return decodeHtmlImage(fallback, imageLoadNeedsCors(fallback));
+      }
     }
   })()
     .then((img) => {
