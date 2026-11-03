@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   DESIGN_W, DESIGN_H, PAPER_COLOR,
   designCatalogFace, isLandmarkPng,
@@ -7,8 +7,19 @@ import {
 import { isStrokeOnlyShape, shapePathForElement } from '@/lib/shapes';
 import { useEditorFontsReady, ensureEditorFonts, normalizeEditorFont, isEditorSingleCutFont } from '@/lib/editorFonts';
 import { resolvePublicImageSrc } from '@/lib/categoryImages';
-import { designApiFallback } from '@/lib/imageCache';
+import {
+  designApiFallback, loadCachedImage, bitmapWidth, bitmapHeight, type CachedBitmap,
+} from '@/lib/imageCache';
 import { isLocalPhotoSrc, resolveDisplayUrl } from '@/lib/localPhotoStore';
+
+/** Avoids CSS baseline gap / GPU fringe that reads as a light border on alpha PNGs. */
+const THUMB_IMG_EDGE: React.CSSProperties = {
+  display: 'block',
+  verticalAlign: 'top',
+  backfaceVisibility: 'hidden',
+  WebkitBackfaceVisibility: 'hidden',
+  transform: 'translateZ(0)',
+};
 
 /** Resolves `local-photo:` blobs + public URLs for strip / 3D thumbs. */
 function ThumbImg({
@@ -19,11 +30,44 @@ function ThumbImg({
   style?: React.CSSProperties;
   className?: string;
 }) {
+  const landmark = isLandmarkPng(src);
   const [display, setDisplay] = useState(() =>
-    isLocalPhotoSrc(src) ? '' : (resolvePublicImageSrc(src) || src),
+    landmark || isLocalPhotoSrc(src) ? '' : (resolvePublicImageSrc(src) || src),
   );
 
+  // Landmarks: same knock-out path as Konva, served as PNG blob so objectFit still works
+  // (and we never need mix-blend screen — that caused the light halo in 3D).
   useEffect(() => {
+    if (!landmark) return;
+    let cancelled = false;
+    let blobUrl: string | null = null;
+    setDisplay('');
+    void loadCachedImage(src).then((bmp: CachedBitmap) => {
+      if (cancelled) return;
+      const w = bitmapWidth(bmp);
+      const h = bitmapHeight(bmp);
+      if (!w || !h) return;
+      const c = document.createElement('canvas');
+      c.width = w;
+      c.height = h;
+      const ctx = c.getContext('2d');
+      if (!ctx) return;
+      ctx.drawImage(bmp, 0, 0);
+      c.toBlob((blob) => {
+        if (!blob || cancelled) return;
+        if (blobUrl) URL.revokeObjectURL(blobUrl);
+        blobUrl = URL.createObjectURL(blob);
+        setDisplay(blobUrl);
+      }, 'image/png');
+    }).catch(() => { /* leave blank */ });
+    return () => {
+      cancelled = true;
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    };
+  }, [src, landmark]);
+
+  useEffect(() => {
+    if (landmark) return;
     let cancelled = false;
     if (isLocalPhotoSrc(src)) {
       setDisplay('');
@@ -34,7 +78,7 @@ function ThumbImg({
     }
     setDisplay(resolvePublicImageSrc(src) || src);
     return () => { cancelled = true; };
-  }, [src]);
+  }, [src, landmark]);
 
   if (!display) {
     // Transparent placeholder — a grey fill looked like the PNG had a baked background
@@ -60,11 +104,12 @@ function ThumbImg({
       decoding="async"
       referrerPolicy="no-referrer"
       onError={(e) => {
+        if (landmark) return;
         const node = e.currentTarget;
         const fb = designApiFallback(node.getAttribute('src') || src);
         if (fb && !node.src.includes('/api/designs/')) node.src = fb;
       }}
-      style={style}
+      style={{ ...THUMB_IMG_EDGE, border: 'none', outline: 'none', ...style }}
     />
   );
 }
@@ -173,7 +218,9 @@ export const PageThumb = React.memo(function PageThumb({
                   position: 'absolute', left: el.x, top: el.y, width: el.w, height: el.h,
                   overflow: 'hidden',
                   opacity: el.opacity ?? 1,
-                  mixBlendMode: isLandmarkPng(el.src) ? 'screen' : undefined,
+                  // Never screen-blend here — it put a light halo around transparent
+                  // vectors in the 3D viewer. Landmarks use knock-out alpha in ThumbImg.
+                  isolation: 'isolate',
                   transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
                   transformOrigin: 'top left',
                   pointerEvents: 'none',
@@ -183,8 +230,8 @@ export const PageThumb = React.memo(function PageThumb({
                   src={el.src}
                   priority={priority}
                   style={{
-                    width: '100%', height: '100%', display: 'block',
-                    objectFit: el.objectFit === 'contain' ? 'contain' : 'cover',
+                    width: '100%', height: '100%',
+                    objectFit: el.objectFit === 'contain' || isLandmarkPng(el.src) ? 'contain' : 'cover',
                     objectPosition: `${fx}% ${fy}%`,
                     transform: zoom > 1 ? `scale(${zoom})` : undefined,
                     transformOrigin: `${fx}% ${fy}%`,

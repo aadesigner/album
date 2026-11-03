@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo, startTransition } from 'react';
+import { flushSync } from 'react-dom';
 import { Stage, Layer, Rect, Text as KonvaText, Image as KonvaImage, Transformer, Line, Group, Path as KonvaPath } from 'react-konva';
 import { useGetProject, useCreateOrder, useListBookSizes, useGetAppSettings, useListLayouts, getGetProjectQueryKey, getListProjectsQueryKey } from '@workspace/api-client-react-tsconfig';
 import { useQueryClient } from '@tanstack/react-query';
@@ -278,6 +279,25 @@ const TEXT_COLORS = [
   '#FFFFFF','#1A1A1A','#555555','#AAAAAA',
   '#D4AF37','#FCB426','#E63946','#F878C3','#457B9D','#2A9D8F','#F4A261',
 ];
+
+/** Quick size chips — common photobook body / title steps. */
+const TEXT_SIZE_PRESETS = [18, 24, 30, 36, 48, 64, 80];
+
+const TEXT_TOOL_BTN: React.CSSProperties = {
+  height: 36,
+  minWidth: 36,
+  padding: '0 10px',
+  borderRadius: 10,
+  border: 'none',
+  cursor: 'pointer',
+  fontSize: 13,
+  fontWeight: 600,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  flexShrink: 0,
+  transition: 'background 0.12s, color 0.12s',
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Build spreads
@@ -896,15 +916,30 @@ function KTxtEl({el,onSelect,onChange,onStartEdit,onGestureStart,onDragActive,on
   const family = normalizeEditorFont(el.fontFamily);
   const style = canvasFontStyle(el.fontFamily, el.fontStyle);
   const minH = Math.max(24, (el.fontSize || 20) * (el.lineHeight ?? 1.2) + 12);
-  // Snapshot size at transform start — Konva scale is always relative to that.
-  const transformStartRef = useRef({ w: el.w, h: el.h });
+  // Snapshot at transform start — never live-bake mid-drag (that fights Transformer on mobile).
+  const transformStartRef = useRef({ w: el.w, h: el.h, fontSize: el.fontSize || 20 });
   const gestureActiveRef = useRef(false);
+  const lastTapRef = useRef(0);
   const livePos = useRef({ x: el.x, y: el.y });
   const liveSize = useRef({ w: el.w, h: el.h, rotation: el.rotation || 0 });
   if (!gestureActiveRef.current) {
     livePos.current = { x: el.x, y: el.y };
     liveSize.current = { w: el.w, h: el.h, rotation: el.rotation || 0 };
   }
+
+  const handleTap = (e: any) => {
+    e.cancelBubble = true;
+    if (isEditing) return;
+    onSelect();
+    // Manual double-tap — Konva dblTap is unreliable on mobile (keyboard never opens).
+    const now = Date.now();
+    if (now - lastTapRef.current < 340) {
+      lastTapRef.current = 0;
+      onStartEdit();
+    } else {
+      lastTapRef.current = now;
+    }
+  };
 
   const endGesture = useCallback(() => {
     requestAnimationFrame(() => {
@@ -914,25 +949,8 @@ function KTxtEl({el,onSelect,onChange,onStartEdit,onGestureStart,onDragActive,on
     });
   }, [onDragActive, onGuides]);
 
-  const bakeTextFrame = (n: any, sx: number, sy: number) => {
-    const nw = Math.max(40, transformStartRef.current.w * sx);
-    const nh = Math.max(minH, transformStartRef.current.h * sy);
-    n.scaleX(1);
-    n.scaleY(1);
-    n.width(nw);
-    n.height(nh);
-    n.getChildren().forEach((c: any) => {
-      if (typeof c.width === 'function') {
-        c.width(nw);
-        c.height(nh);
-      }
-    });
-    liveSize.current = { ...liveSize.current, w: nw, h: nh };
-    return { nw, nh };
-  };
-
   // Group + invisible hit rect: whole box is clickable (not just glyph pixels).
-  // Live-bake width/height during transform so the typeface never scales/jumps.
+  // Scale visually during drag; bake width/height/fontSize only on end (stable on touch).
   return (
     <Group
       ref={(n: any) => { if (n) shapeRefs.current[el.id] = n; }}
@@ -946,7 +964,7 @@ function KTxtEl({el,onSelect,onChange,onStartEdit,onGestureStart,onDragActive,on
       onMouseDown={(e: any) => { e.cancelBubble = true; if (!isEditing) onSelect(); }}
       onTouchStart={(e: any) => { e.cancelBubble = true; if (!isEditing) onSelect(); }}
       onClick={(e: any) => { e.cancelBubble = true; if (!isEditing) onSelect(); }}
-      onTap={(e: any) => { e.cancelBubble = true; if (!isEditing) onSelect(); }}
+      onTap={handleTap}
       onDblClick={(e: any) => { e.cancelBubble = true; onStartEdit(); }}
       onDblTap={(e: any) => { e.cancelBubble = true; onStartEdit(); }}
       dragBoundFunc={function (this: any, pos: any) {
@@ -955,6 +973,7 @@ function KTxtEl({el,onSelect,onChange,onStartEdit,onGestureStart,onDragActive,on
       }}
       onDragStart={() => {
         gestureActiveRef.current = true;
+        lastTapRef.current = 0;
         onGestureStart?.();
         onDragActive?.(true, { keepTransformer: true });
       }}
@@ -971,20 +990,35 @@ function KTxtEl({el,onSelect,onChange,onStartEdit,onGestureStart,onDragActive,on
       }}
       onTransformStart={() => {
         gestureActiveRef.current = true;
-        transformStartRef.current = { w: liveSize.current.w, h: liveSize.current.h };
+        transformStartRef.current = {
+          w: liveSize.current.w,
+          h: liveSize.current.h,
+          fontSize: el.fontSize || 20,
+        };
         onGestureStart?.();
         onDragActive?.(true, { keepTransformer: true });
       }}
-      onTransform={(e: any) => {
-        bakeTextFrame(e.target, e.target.scaleX(), e.target.scaleY());
-      }}
       onTransformEnd={(e: any) => {
         const n = e.target;
-        // Size was already baked in onTransform; don't multiply by scale again.
+        const sx = Math.abs(n.scaleX()) || 1;
+        const sy = Math.abs(n.scaleY()) || 1;
         n.scaleX(1);
         n.scaleY(1);
-        const nw = Math.max(40, n.width() || transformStartRef.current.w);
-        const nh = Math.max(minH, n.height() || transformStartRef.current.h);
+        const start = transformStartRef.current;
+        // Corners ≈ uniform → scale typeface; side handles → reflow box only.
+        const uniform = Math.abs(sx - sy) < 0.14;
+        let nw: number;
+        let nh: number;
+        let fs = start.fontSize;
+        if (uniform) {
+          const s = Math.max(0.2, (sx + sy) / 2);
+          nw = Math.max(40, start.w * s);
+          nh = Math.max(minH, start.h * s);
+          fs = Math.max(6, Math.min(200, Math.round(start.fontSize * s)));
+        } else {
+          nw = Math.max(40, start.w * sx);
+          nh = Math.max(minH, start.h * sy);
+        }
         n.width(nw);
         n.height(nh);
         n.getChildren().forEach((c: any) => {
@@ -992,12 +1026,13 @@ function KTxtEl({el,onSelect,onChange,onStartEdit,onGestureStart,onDragActive,on
             c.width(nw);
             c.height(nh);
           }
+          if (typeof c.fontSize === 'function') c.fontSize(fs);
         });
         const b = dragBoundBox({ x: n.x(), y: n.y() }, nw, nh, canvasH, n.rotation());
         n.position(b);
         livePos.current = { x: b.x, y: b.y };
         liveSize.current = { w: nw, h: nh, rotation: n.rotation() };
-        onChange({ ...b, w: nw, h: nh, rotation: n.rotation() });
+        onChange({ ...b, w: nw, h: nh, rotation: n.rotation(), fontSize: fs });
         endGesture();
       }}
     >
@@ -1054,13 +1089,12 @@ function KPlaceholderEl({el,isSelected,isDropTarget,onSelect,onOpenPhotos,shapeR
 // Page Canvas
 // ─────────────────────────────────────────────────────────────────────────────
 
-function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos,onDelete,onGestureStart,onElementDragActive,onPageSwipe,editRequestId,onEditRequestHandled,onDropPhoto,onDropFiles,onDropSticker,onRequestLayout,needsLayout,isActive,pageW,pageH,canvasH,shapeRefs,side,isMobile}: {
+function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos,onDelete,onGestureStart,onElementDragActive,onPageSwipe,onDropPhoto,onDropFiles,onDropSticker,onRequestLayout,needsLayout,isActive,pageW,pageH,canvasH,shapeRefs,side,isMobile}: {
   page:PageDef; elements:EditorElement[]; selectedId:string|null;
   onSelectId:(id:string|null)=>void; onChangeEl:(id:string,c:Partial<EditorElement>)=>void;
   onOpenPhotos?:()=>void; onDelete?:(id?: string)=>void; onGestureStart?:()=>void;
   onElementDragActive?:(active:boolean)=>void;
   onPageSwipe?:(dir:1|-1)=>void;
-  editRequestId?:string|null; onEditRequestHandled?:()=>void;
   /** Place a library photo into a layout slot only (targetId required for photos). */
   onDropPhoto?:(url:string, targetId:string|null, at:{x:number;y:number})=>void;
   /** Desktop / Finder drop — upload then place into a layout slot. */
@@ -1168,6 +1202,18 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
     onSelectId(el.id);
   },[onSelectId,onChangeEl]);
 
+  /** Mount textarea + focus in the same user gesture so mobile keyboards open. */
+  const beginEdit=useCallback((el:EditorElement)=>{
+    flushSync(() => { startEdit(el); });
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.focus({ preventScroll: true });
+    try {
+      const len = ta.value.length;
+      ta.setSelectionRange(len, len);
+    } catch { /* some mobile WebViews reject selection APIs */ }
+  },[startEdit]);
+
   const commitEdit=useCallback(()=>{
     setEditId(prev=>{
       if(prev) onChangeEl(prev,{text:editText});
@@ -1175,16 +1221,6 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
     });
     textSeedRef.current = false;
   },[editText,onChangeEl]);
-
-  useEffect(()=>{
-    if (!editId) return;
-    const t = window.setTimeout(() => {
-      const ta = textareaRef.current;
-      if (!ta) return;
-      ta.focus({ preventScroll: true });
-    }, 30);
-    return () => window.clearTimeout(t);
-  }, [editId]);
 
   // Leaving an image clears photo-adjust mode.
   useEffect(()=>{
@@ -1203,15 +1239,6 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
     window.addEventListener('keydown', onKey);
     return ()=>window.removeEventListener('keydown', onKey);
   },[photoAdjustId,isActive]);
-
-  // Newly added text opens the editor immediately (desktop + mobile).
-  useEffect(()=>{
-    if(!editRequestId||!isActive) return;
-    const el=elements.find(e=>e.id===editRequestId&&e.type==='text');
-    if(!el) return;
-    startEdit(el);
-    onEditRequestHandled?.();
-  },[editRequestId,elements,isActive,startEdit,onEditRequestHandled]);
 
   // Page swipe on Konva's own container — attaches after the stage paints.
   useEffect(()=>{
@@ -1262,6 +1289,148 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
     };
   },[isMobile,onPageSwipe,editId,photoAdjustId,pageW,pageH]);
 
+  // Two-finger pinch to resize the selected image / sticker / text on mobile.
+  const pinchSelRef = useRef({ selectedId, editId, photoAdjustId, elements, canvasH });
+  pinchSelRef.current = { selectedId, editId, photoAdjustId, elements, canvasH };
+  useEffect(() => {
+    if (!isMobile || !isActive) return;
+    let cancelled = false;
+    let el: HTMLElement | null = null;
+    type PinchState = {
+      id: string;
+      type: string;
+      startDist: number;
+      lastScale: number;
+      w: number; h: number; x: number; y: number;
+      fontSize?: number;
+    };
+    let pinch: PinchState | null = null;
+
+    const touchDist = (a: Touch, b: Touch) => {
+      const dx = a.clientX - b.clientX;
+      const dy = a.clientY - b.clientY;
+      return Math.hypot(dx, dy);
+    };
+
+    const clampScale = (state: PinchState, scale: number) => {
+      const minW = state.type === 'text' ? 40 : 20;
+      const minH = state.type === 'text' ? 24 : 20;
+      const maxEdge = Math.max(DESIGN_W, pinchSelRef.current.canvasH) * 4;
+      const maxByW = maxEdge / Math.max(1, state.w);
+      const maxByH = maxEdge / Math.max(1, state.h);
+      const minByW = minW / Math.max(1, state.w);
+      const minByH = minH / Math.max(1, state.h);
+      return Math.min(maxByW, maxByH, Math.max(minByW, minByH, scale));
+    };
+
+    const paintPinch = (state: PinchState, rawScale: number, commit: boolean) => {
+      const scale = clampScale(state, rawScale);
+      const nw = state.w * scale;
+      const nh = state.h * scale;
+      const nx = state.x + state.w / 2 - nw / 2;
+      const ny = state.y + state.h / 2 - nh / 2;
+      const node = shapeRefs.current[state.id];
+      if (node) {
+        if (!commit) {
+          // Live preview: scale the group (keeps photo/sticker children in sync).
+          node.scaleX(scale);
+          node.scaleY(scale);
+          node.position({ x: nx, y: ny });
+        } else {
+          node.scaleX(1);
+          node.scaleY(1);
+          node.position({ x: nx, y: ny });
+          if (typeof node.width === 'function') node.width(nw);
+          if (typeof node.height === 'function') node.height(nh);
+          if (typeof node.clip === 'function') node.clip({ x: 0, y: 0, width: nw, height: nh });
+          node.getChildren?.().forEach((c: any) => {
+            const name = typeof c.getClassName === 'function' ? c.getClassName() : '';
+            if (name === 'Rect' || name === 'Text') {
+              if (typeof c.width === 'function') c.width(nw);
+              if (typeof c.height === 'function') c.height(nh);
+            }
+          });
+        }
+        node.getLayer()?.batchDraw();
+        trRef.current?.forceUpdate?.();
+        trRef.current?.getLayer()?.batchDraw();
+      }
+      if (commit) {
+        const patch: Partial<EditorElement> = { x: nx, y: ny, w: nw, h: nh };
+        if (state.type === 'text' && state.fontSize) {
+          patch.fontSize = Math.max(6, Math.min(200, Math.round(state.fontSize * scale)));
+        }
+        onChangeEl(state.id, patch);
+      }
+    };
+
+    const onStart = (e: TouchEvent) => {
+      const cur = pinchSelRef.current;
+      if (e.touches.length !== 2 || cur.editId || cur.photoAdjustId || !cur.selectedId) {
+        pinch = null;
+        return;
+      }
+      const sel = cur.elements.find(x => x.id === cur.selectedId);
+      if (!sel || (sel.type !== 'image' && sel.type !== 'text') || isLayoutSlotFrame(sel)) {
+        pinch = null;
+        return;
+      }
+      e.preventDefault();
+      pinch = {
+        id: sel.id,
+        type: sel.type,
+        startDist: Math.max(1, touchDist(e.touches[0], e.touches[1])),
+        lastScale: 1,
+        w: sel.w, h: sel.h, x: sel.x, y: sel.y,
+        fontSize: sel.type === 'text' ? (sel.fontSize || 20) : undefined,
+      };
+      draggingRef.current = true;
+      setDragActive(true, { keepTransformer: true });
+      onGestureStart?.();
+    };
+
+    const onMove = (e: TouchEvent) => {
+      if (!pinch || e.touches.length !== 2) return;
+      e.preventDefault();
+      const scale = touchDist(e.touches[0], e.touches[1]) / pinch.startDist;
+      pinch.lastScale = scale;
+      paintPinch(pinch, scale, false);
+    };
+
+    const endPinch = () => {
+      if (!pinch) return;
+      paintPinch(pinch, pinch.lastScale, true);
+      pinch = null;
+      setDragActive(false);
+    };
+
+    const onEnd = (e: TouchEvent) => {
+      if (!pinch) return;
+      if (e.touches.length >= 2) return;
+      endPinch();
+    };
+
+    const attach = () => {
+      if (cancelled) return;
+      const stage = stageRef.current;
+      el = (stage?.container?.() as HTMLElement | undefined) ?? null;
+      if (!el) { requestAnimationFrame(attach); return; }
+      el.addEventListener('touchstart', onStart, { passive: false });
+      el.addEventListener('touchmove', onMove, { passive: false });
+      el.addEventListener('touchend', onEnd, { passive: true });
+      el.addEventListener('touchcancel', onEnd, { passive: true });
+    };
+    attach();
+    return () => {
+      cancelled = true;
+      if (!el) return;
+      el.removeEventListener('touchstart', onStart);
+      el.removeEventListener('touchmove', onMove);
+      el.removeEventListener('touchend', onEnd);
+      el.removeEventListener('touchcancel', onEnd);
+    };
+  }, [isMobile, isActive, onChangeEl, setDragActive, onGestureStart, shapeRefs, pageW, pageH]);
+
   useEffect(()=>{
     if (!fontsReady || !stageRef.current) return;
     stageRef.current.getLayers?.().forEach((layer: any) => layer.batchDraw?.());
@@ -1292,10 +1461,10 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
   const toolbarStyle=canvasFontStyle(toolbarEl?.fontFamily, toolbarEl?.fontStyle);
   const isBold=toolbarStyle.includes('bold');
   const isItalic=toolbarStyle.includes('italic');
-  // Prefer beside the text (right, then left) so the panel doesn’t cover it.
-  // Never wider than the white page — a fixed 366px strip used to hang off the canvas.
-  const PANEL_W = Math.min(300, Math.max(216, pageW - 8));
-  const PANEL_H = 168;
+  const scriptFont = isEditorSingleCutFont(toolbarEl?.fontFamily);
+  // Mobile: dock full-width under the canvas. Desktop: float beside the text.
+  const PANEL_W = isMobile ? Math.max(0, pageW - 8) : Math.min(320, Math.max(240, pageW - 8));
+  const PANEL_H = isMobile ? 210 : 236;
   const GAP = 8;
   const elLeft=toolbarEl?toolbarEl.x*scX:0;
   const elRight=toolbarEl?(toolbarEl.x+toolbarEl.w)*scX:0;
@@ -1305,17 +1474,24 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
   const roomLeft=toolbarEl?(elLeft-GAP>=PANEL_W):false;
   let panelLeft=4;
   let panelTop=4;
+  let panelWidth = PANEL_W;
   if (toolbarEl) {
-    if (roomRight) panelLeft = elRight + GAP;
-    else if (roomLeft) panelLeft = elLeft - GAP - PANEL_W;
-    else panelLeft = Math.max(4, Math.min(elLeft, pageW - PANEL_W - 4));
-    // Vertically align near the text mid, clamped on-page (not forced above).
-    panelTop = Math.max(4, Math.min(elMidY - PANEL_H / 2, pageH - PANEL_H - 4));
-    // If neither side fits, fall back under/over only as last resort.
-    if (!roomRight && !roomLeft) {
+    if (isMobile) {
+      panelLeft = 4;
+      panelWidth = Math.max(0, pageW - 8);
+      panelTop = Math.max(4, pageH - PANEL_H - 4);
+    } else if (roomRight) {
+      panelLeft = elRight + GAP;
+      panelTop = Math.max(4, Math.min(elMidY - PANEL_H / 2, pageH - PANEL_H - 4));
+    } else if (roomLeft) {
+      panelLeft = elLeft - GAP - PANEL_W;
+      panelTop = Math.max(4, Math.min(elMidY - PANEL_H / 2, pageH - PANEL_H - 4));
+    } else {
+      panelLeft = Math.max(4, Math.min(elLeft, pageW - PANEL_W - 4));
       const elBottom = (toolbarEl.y + toolbarEl.h) * scY;
       if (elBottom + PANEL_H + GAP <= pageH) panelTop = elBottom + GAP;
       else if (elTop - PANEL_H - GAP >= 4) panelTop = elTop - PANEL_H - GAP;
+      else panelTop = Math.max(4, pageH - PANEL_H - 4);
     }
   }
   const coverInteractive = page.role === 'front_cover' || page.role === 'back_cover';
@@ -1479,7 +1655,7 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
                   onSelect={()=>{if(editId&&editId!==el.id)commitEdit();onSelectId(el.id);}}
                   onChange={c=>onChangeEl(el.id,c)} onGestureStart={onGestureStart} onDragActive={setDragActive}
                   onGuides={reportGuides}
-                  onStartEdit={()=>startEdit(el)} shapeRefs={shapeRefs} canvasH={canvasH}
+                  onStartEdit={()=>beginEdit(el)} shapeRefs={shapeRefs} canvasH={canvasH}
                   fontEpoch={fontEpoch}
                 />
               );
@@ -1500,8 +1676,8 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
             keepRatio={selectedIsSticker}
             enabledAnchors={
               selectedType === 'text'
-                // Text: width/height box only — corners scale the typeface and jump the box.
-                ? ['middle-left', 'middle-right', 'top-center', 'bottom-center']
+                // Corners = scale typeface; side handles = reflow box width/height.
+                ? ['top-left', 'top-right', 'bottom-left', 'bottom-right', 'middle-left', 'middle-right']
                 : selectedIsSticker
                   ? ['top-left','top-right','bottom-left','bottom-right']
                 : ['top-left','top-center','top-right','middle-left','middle-right','bottom-left','bottom-center','bottom-right']
@@ -1513,9 +1689,9 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
               const minH = isText ? 24 : 10;
               const localOld = pageBoxFromStageBox(old, scX, PAGE_BLEED, PAGE_BLEED, scY);
               const localNew = pageBoxFromStageBox(nw, scX, PAGE_BLEED, PAGE_BLEED, scY);
-              // Images: only enforce min/max size mid-gesture. Clamping x/y here
-              // while growing past the page made the transformer stutter.
-              if (sel?.type === 'image') {
+              // Images / text: only enforce min/max mid-gesture. Live clamp of x/y
+              // while scaling fought the Transformer (especially on touch).
+              if (sel?.type === 'image' || isText) {
                 const maxEdge = Math.max(DESIGN_W, canvasH) * 4;
                 if (localNew.width < minW || localNew.height < minH) return old;
                 if (localNew.width > maxEdge || localNew.height > maxEdge) return old;
@@ -1526,19 +1702,20 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
                 scX, PAGE_BLEED, PAGE_BLEED, scY,
               );
             }}
-            padding={4}
+            padding={isMobile ? 6 : 4}
             borderStroke="#2563EB" borderStrokeWidth={2.5} borderDash={undefined}
             anchorFill="#FFFFFF" anchorStroke="#2563EB" anchorStrokeWidth={2.5}
-            anchorSize={14} anchorCornerRadius={7}
-            rotateAnchorOffset={28} rotationSnapTolerance={6}
+            anchorSize={isMobile ? 22 : 14} anchorCornerRadius={isMobile ? 11 : 7}
+            rotateAnchorOffset={isMobile ? 36 : 28} rotationSnapTolerance={6}
             ignoreStroke
             anchorStyleFunc={(anchor:any)=>{
               // Soft drop-shadow so handles read clearly on any page background.
               anchor.shadowColor('rgba(15,23,42,0.35)'); anchor.shadowBlur(4);
               anchor.shadowOffsetY(1); anchor.shadowOpacity(1);
               if (anchor.hasName('rotater')) {
+                const s = isMobile ? 24 : 18;
                 anchor.fill('#2563EB'); anchor.stroke('#FFFFFF'); anchor.strokeWidth(2);
-                anchor.width(18); anchor.height(18); anchor.cornerRadius(9); anchor.offsetX(9); anchor.offsetY(9);
+                anchor.width(s); anchor.height(s); anchor.cornerRadius(s / 2); anchor.offsetX(s / 2); anchor.offsetY(s / 2);
               }
             }}/>
         </Layer>
@@ -1593,17 +1770,53 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
             }}
           />
 
-          {/* ── Floating formatting panel ── */}
-          <div style={{
-            position:'absolute', pointerEvents:'all',
-            left:panelLeft, top:panelTop, width:PANEL_W,
-            boxSizing:'border-box', overflow:'hidden',
-            background:'#ffffff',
-            borderRadius:14, border:'1px solid rgba(0,0,0,0.09)',
-            boxShadow:'0 16px 48px rgba(0,0,0,0.16),0 2px 8px rgba(0,0,0,0.07)',
-            padding:'8px 9px', display:'flex', flexDirection:'column', gap:6,
-          }}>
-            <div style={{display:'flex',alignItems:'center',gap:5,minWidth:0}}>
+          {/* ── Text format dock (builder-style) ── */}
+          <div
+            style={{
+              position: 'absolute',
+              pointerEvents: 'all',
+              left: panelLeft,
+              top: panelTop,
+              width: panelWidth,
+              boxSizing: 'border-box',
+              overflow: 'hidden',
+              background: '#ffffff',
+              borderRadius: isMobile ? 16 : 14,
+              border: '1px solid rgba(0,0,0,0.08)',
+              boxShadow: isMobile
+                ? '0 -8px 32px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.06)'
+                : '0 16px 48px rgba(0,0,0,0.16), 0 2px 8px rgba(0,0,0,0.07)',
+              padding: isMobile ? '10px 10px 12px' : '10px 12px 12px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8,
+              zIndex: 30,
+            }}
+            onMouseDown={e => e.stopPropagation()}
+            onPointerDown={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#888' }}>
+                {chipLang === 'sq' ? 'Teksti' : 'Text'}
+              </span>
+              <button
+                type="button"
+                onMouseDown={e => { e.preventDefault(); commitEdit(); }}
+                style={{
+                  ...TEXT_TOOL_BTN,
+                  height: 30,
+                  background: '#1a1a1a',
+                  color: '#fff',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  padding: '0 14px',
+                }}
+              >
+                {chipLang === 'sq' ? 'Gati' : 'Done'}
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
               <FontPicker
                 value={toolbarEl?.fontFamily}
                 onChange={fontFamily => {
@@ -1611,110 +1824,215 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
                   setTimeout(() => textareaRef.current?.focus(), 20);
                 }}
               />
-              <button onMouseDown={e=>{e.preventDefault();
-                const fam=normalizeEditorFont(toolbarEl?.fontFamily);
-                const script=isEditorSingleCutFont(fam);
-                const nextItalic=script?false:isItalic;
-                const fs=[(!isBold?'bold':''),(nextItalic?'italic':'')].filter(Boolean).join(' ')||'normal';
-                onChangeEl(editId,{fontStyle:fs});}}
-                style={{width:28,height:28,borderRadius:7,border:'none',cursor:'pointer',fontWeight:'bold',
-                  fontSize:13,flexShrink:0,transition:'all 0.12s',
-                  background:isBold?'#1a1a1a':'#f0f0f0',color:isBold?'#fff':'#555'}}>B</button>
-              <button onMouseDown={e=>{e.preventDefault();
-                const fam=normalizeEditorFont(toolbarEl?.fontFamily);
-                if(isEditorSingleCutFont(fam)) return;
-                const fs=[(isBold?'bold':''),(!isItalic?'italic':'')].filter(Boolean).join(' ')||'normal';
-                onChangeEl(editId,{fontStyle:fs});}}
-                style={{width:28,height:28,borderRadius:7,border:'none',
-                  cursor:isEditorSingleCutFont(toolbarEl?.fontFamily)?'default':'pointer',
-                  fontStyle:'italic', fontSize:14,flexShrink:0,transition:'all 0.12s',
-                  background:isItalic?'#1a1a1a':'#f0f0f0',color:isItalic?'#fff':'#666',
-                  opacity:isEditorSingleCutFont(toolbarEl?.fontFamily)?0.4:1}}>I</button>
+              <button
+                type="button"
+                onMouseDown={e => {
+                  e.preventDefault();
+                  const nextItalic = scriptFont ? false : isItalic;
+                  const fs = [(!isBold ? 'bold' : ''), (nextItalic ? 'italic' : '')].filter(Boolean).join(' ') || 'normal';
+                  onChangeEl(editId, { fontStyle: fs });
+                }}
+                style={{
+                  ...TEXT_TOOL_BTN,
+                  fontWeight: 800,
+                  background: isBold ? '#1a1a1a' : '#f2f2f2',
+                  color: isBold ? '#fff' : '#444',
+                }}
+              >B</button>
+              <button
+                type="button"
+                disabled={scriptFont}
+                onMouseDown={e => {
+                  e.preventDefault();
+                  if (scriptFont) return;
+                  const fs = [(isBold ? 'bold' : ''), (!isItalic ? 'italic' : '')].filter(Boolean).join(' ') || 'normal';
+                  onChangeEl(editId, { fontStyle: fs });
+                }}
+                style={{
+                  ...TEXT_TOOL_BTN,
+                  fontStyle: 'italic',
+                  fontFamily: 'Georgia, serif',
+                  background: isItalic ? '#1a1a1a' : '#f2f2f2',
+                  color: isItalic ? '#fff' : '#444',
+                  opacity: scriptFont ? 0.35 : 1,
+                  cursor: scriptFont ? 'default' : 'pointer',
+                }}
+              >I</button>
             </div>
 
-            <div style={{display:'flex',alignItems:'center',gap:4,minWidth:0,flexWrap:'wrap'}}>
-              {(['left','center','right'] as const).map(al=>(
-                <button key={al} onMouseDown={e=>{e.preventDefault();onChangeEl(editId,{align:al});}}
-                  title={al} style={{width:28,height:28,borderRadius:7,border:'none',cursor:'pointer',
-                    flexShrink:0,transition:'all 0.12s',display:'flex',alignItems:'center',justifyContent:'center',
-                    background:(toolbarEl?.align||'center')===al?'#1a1a1a':'#f0f0f0',
-                    color:(toolbarEl?.align||'center')===al?'#fff':'#777'}}>
-                  <svg width="13" height="11" viewBox="0 0 13 11" fill="currentColor">
-                    {al==='left'  && <><rect x="0" y="0" width="13" height="2" rx="1"/><rect x="0" y="4.5" width="9" height="2" rx="1"/><rect x="0" y="9" width="11" height="2" rx="1"/></>}
-                    {al==='center'&& <><rect x="0" y="0" width="13" height="2" rx="1"/><rect x="2" y="4.5" width="9" height="2" rx="1"/><rect x="1" y="9" width="11" height="2" rx="1"/></>}
-                    {al==='right' && <><rect x="0" y="0" width="13" height="2" rx="1"/><rect x="4" y="4.5" width="9" height="2" rx="1"/><rect x="2" y="9" width="11" height="2" rx="1"/></>}
-                  </svg>
-                </button>
-              ))}
-              <span style={{width:1,height:18,background:'#e8e8e8',flexShrink:0}}/>
-              <button onMouseDown={e=>{e.preventDefault();onChangeEl(editId,{fontSize:Math.max(6,(toolbarEl?.fontSize||20)-1)});}}
-                style={{width:24,height:24,borderRadius:6,border:'1px solid #e8e8e8',background:'#fafafa',
-                  cursor:'pointer',fontSize:15,color:'#555',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>−</button>
-              <input type="number" min={6} max={200} step={1} value={toolbarEl?.fontSize||20}
-                onChange={e=>{const v=parseInt(e.target.value);if(!isNaN(v)&&v>=6&&v<=200)onChangeEl(editId,{fontSize:v});}}
-                onBlur={()=>setTimeout(()=>textareaRef.current?.focus(),15)}
-                style={{width:40,textAlign:'center',fontSize:11,border:'1px solid #e8e8e8',borderRadius:6,
-                  padding:'3px 0',outline:'none',background:'#fafafa',flexShrink:0}}/>
-              <button onMouseDown={e=>{e.preventDefault();onChangeEl(editId,{fontSize:Math.min(200,(toolbarEl?.fontSize||20)+1)});}}
-                style={{width:24,height:24,borderRadius:6,border:'1px solid #e8e8e8',background:'#fafafa',
-                  cursor:'pointer',fontSize:15,color:'#555',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>+</button>
-            </div>
-
-            <div style={{display:'flex',flexWrap:'wrap',alignItems:'center',gap:5,minWidth:0}}>
-              {TEXT_COLORS.map(c=>(
-                <button key={c} onMouseDown={e=>{e.preventDefault();onChangeEl(editId,{fill:c});}}
-                  title={c} style={{
-                    width:16,height:16,borderRadius:'50%',cursor:'pointer',flexShrink:0,
-                    background:c,boxSizing:'border-box',
-                    border:(toolbarEl?.fill||'#1a1a1a')===c?'2.5px solid #3B82F6':c==='#FFFFFF'?'1.5px solid #ddd':'1.5px solid transparent',
-                  }}/>
-              ))}
-              <div style={{position:'relative',width:16,height:16,flexShrink:0}}>
-                <div style={{position:'absolute',inset:0,borderRadius:'50%',
-                  background:'conic-gradient(red,yellow,lime,cyan,blue,magenta,red)',
-                  border:'1.5px solid #ddd',pointerEvents:'none'}}/>
-                <input type="color" key={`col-${editId}-${toolbarEl?.fill}`}
-                  defaultValue={toolbarEl?.fill||'#1a1a1a'}
-                  onChange={e=>onChangeEl(editId,{fill:e.target.value})}
-                  onBlur={()=>setTimeout(()=>textareaRef.current?.focus(),15)}
-                  style={{opacity:0,position:'absolute',inset:0,width:'100%',height:'100%',cursor:'pointer',padding:0,border:'none'}}/>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+              <button
+                type="button"
+                onMouseDown={e => { e.preventDefault(); onChangeEl(editId, { fontSize: Math.max(6, (toolbarEl?.fontSize || 30) - 2) }); }}
+                style={{ ...TEXT_TOOL_BTN, background: '#f2f2f2', color: '#444', fontSize: 18 }}
+              >−</button>
+              <input
+                type="number"
+                min={6}
+                max={200}
+                step={1}
+                value={toolbarEl?.fontSize || 30}
+                onChange={e => {
+                  const v = parseInt(e.target.value, 10);
+                  if (!isNaN(v) && v >= 6 && v <= 200) onChangeEl(editId, { fontSize: v });
+                }}
+                onBlur={() => setTimeout(() => textareaRef.current?.focus(), 15)}
+                style={{
+                  width: 52,
+                  height: 36,
+                  textAlign: 'center',
+                  fontSize: 14,
+                  fontWeight: 700,
+                  border: '1px solid #e6e6e6',
+                  borderRadius: 10,
+                  outline: 'none',
+                  background: '#fafafa',
+                  flexShrink: 0,
+                }}
+              />
+              <button
+                type="button"
+                onMouseDown={e => { e.preventDefault(); onChangeEl(editId, { fontSize: Math.min(200, (toolbarEl?.fontSize || 30) + 2) }); }}
+                style={{ ...TEXT_TOOL_BTN, background: '#f2f2f2', color: '#444', fontSize: 18 }}
+              >+</button>
+              <div style={{ flex: 1, display: 'flex', gap: 4, overflowX: 'auto', minWidth: 0, paddingBottom: 1 }}>
+                {TEXT_SIZE_PRESETS.map(sz => {
+                  const on = (toolbarEl?.fontSize || 30) === sz;
+                  return (
+                    <button
+                      key={sz}
+                      type="button"
+                      onMouseDown={e => { e.preventDefault(); onChangeEl(editId, { fontSize: sz }); }}
+                      style={{
+                        ...TEXT_TOOL_BTN,
+                        minWidth: 40,
+                        height: 32,
+                        fontSize: 11,
+                        background: on ? '#1a1a1a' : '#f6f6f6',
+                        color: on ? '#fff' : '#555',
+                      }}
+                    >{sz}</button>
+                  );
+                })}
               </div>
             </div>
 
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6,minWidth:0}}>
-              <div style={{display:'flex',alignItems:'center',gap:4,minWidth:0}}>
-                <span style={{fontSize:9,color:'#999',flexShrink:0}}>↕</span>
-                <button onMouseDown={e=>{e.preventDefault();onChangeEl(editId,{lineHeight:Math.max(0.8,parseFloat(((toolbarEl?.lineHeight??1.2)-0.1).toFixed(1)))});}}
-                  style={{width:22,height:22,borderRadius:5,border:'1px solid #e8e8e8',background:'#fafafa',cursor:'pointer',fontSize:12,color:'#555',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>−</button>
-                <span style={{fontSize:10,color:'#444',minWidth:22,textAlign:'center',flex:1}}>{(toolbarEl?.lineHeight??1.2).toFixed(1)}</span>
-                <button onMouseDown={e=>{e.preventDefault();onChangeEl(editId,{lineHeight:Math.min(3.0,parseFloat(((toolbarEl?.lineHeight??1.2)+0.1).toFixed(1)))});}}
-                  style={{width:22,height:22,borderRadius:5,border:'1px solid #e8e8e8',background:'#fafafa',cursor:'pointer',fontSize:12,color:'#555',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>+</button>
-              </div>
-              <div style={{display:'flex',alignItems:'center',gap:4,minWidth:0}}>
-                <span style={{fontSize:9,color:'#999',flexShrink:0,fontFamily:'Georgia,serif'}} title={chipLang==='sq'?'Hapësira e shkronjave':'Letter spacing'}>AV</span>
-                <button onMouseDown={e=>{e.preventDefault();onChangeEl(editId,{letterSpacing:Math.max(-8,(toolbarEl?.letterSpacing??0)-1)});}}
-                  style={{width:22,height:22,borderRadius:5,border:'1px solid #e8e8e8',background:'#fafafa',cursor:'pointer',fontSize:12,color:'#555',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>−</button>
-                <span style={{fontSize:10,color:'#444',minWidth:16,textAlign:'center',flex:1}}>{toolbarEl?.letterSpacing??0}</span>
-                <button onMouseDown={e=>{e.preventDefault();onChangeEl(editId,{letterSpacing:Math.min(24,(toolbarEl?.letterSpacing??0)+1)});}}
-                  style={{width:22,height:22,borderRadius:5,border:'1px solid #e8e8e8',background:'#fafafa',cursor:'pointer',fontSize:12,color:'#555',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>+</button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              {(['left', 'center', 'right'] as const).map(al => {
+                const on = (toolbarEl?.align || 'center') === al;
+                return (
+                  <button
+                    key={al}
+                    type="button"
+                    onMouseDown={e => { e.preventDefault(); onChangeEl(editId, { align: al }); }}
+                    title={al}
+                    style={{
+                      ...TEXT_TOOL_BTN,
+                      background: on ? '#1a1a1a' : '#f2f2f2',
+                      color: on ? '#fff' : '#555',
+                    }}
+                  >
+                    <svg width="14" height="12" viewBox="0 0 13 11" fill="currentColor">
+                      {al === 'left' && <><rect x="0" y="0" width="13" height="2" rx="1"/><rect x="0" y="4.5" width="9" height="2" rx="1"/><rect x="0" y="9" width="11" height="2" rx="1"/></>}
+                      {al === 'center' && <><rect x="0" y="0" width="13" height="2" rx="1"/><rect x="2" y="4.5" width="9" height="2" rx="1"/><rect x="1" y="9" width="11" height="2" rx="1"/></>}
+                      {al === 'right' && <><rect x="0" y="0" width="13" height="2" rx="1"/><rect x="4" y="4.5" width="9" height="2" rx="1"/><rect x="2" y="9" width="11" height="2" rx="1"/></>}
+                    </svg>
+                  </button>
+                );
+              })}
+              <span style={{ width: 1, height: 22, background: '#ececec', flexShrink: 0 }} />
+              {(['top', 'middle', 'bottom'] as const).map(va => {
+                const on = (toolbarEl?.verticalAlign || 'top') === va;
+                const label = va === 'top' ? 'T' : va === 'middle' ? 'M' : 'B';
+                return (
+                  <button
+                    key={va}
+                    type="button"
+                    onMouseDown={e => { e.preventDefault(); onChangeEl(editId, { verticalAlign: va }); }}
+                    title={chipLang === 'sq'
+                      ? (va === 'top' ? 'Sipër' : va === 'middle' ? 'Mes' : 'Poshtë')
+                      : (va === 'top' ? 'Top' : va === 'middle' ? 'Middle' : 'Bottom')}
+                    style={{
+                      ...TEXT_TOOL_BTN,
+                      minWidth: 34,
+                      fontSize: 11,
+                      background: on ? '#1a1a1a' : '#f2f2f2',
+                      color: on ? '#fff' : '#555',
+                    }}
+                  >{label}</button>
+                );
+              })}
+            </div>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 7 }}>
+              {TEXT_COLORS.map(c => {
+                const on = (toolbarEl?.fill || '#1a1a1a').toLowerCase() === c.toLowerCase();
+                return (
+                  <button
+                    key={c}
+                    type="button"
+                    onMouseDown={e => { e.preventDefault(); onChangeEl(editId, { fill: c }); }}
+                    title={c}
+                    style={{
+                      width: isMobile ? 26 : 22,
+                      height: isMobile ? 26 : 22,
+                      borderRadius: '50%',
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                      background: c,
+                      boxSizing: 'border-box',
+                      border: on ? '2.5px solid #2563EB' : c === '#FFFFFF' ? '1.5px solid #ddd' : '1.5px solid transparent',
+                      boxShadow: on ? '0 0 0 1px rgba(37,99,235,0.25)' : undefined,
+                    }}
+                  />
+                );
+              })}
+              <div style={{ position: 'relative', width: isMobile ? 26 : 22, height: isMobile ? 26 : 22, flexShrink: 0 }}>
+                <div style={{
+                  position: 'absolute', inset: 0, borderRadius: '50%',
+                  background: 'conic-gradient(red,yellow,lime,cyan,blue,magenta,red)',
+                  border: '1.5px solid #ddd', pointerEvents: 'none',
+                }} />
+                <input
+                  type="color"
+                  key={`col-${editId}-${toolbarEl?.fill}`}
+                  defaultValue={toolbarEl?.fill || '#1a1a1a'}
+                  onChange={e => onChangeEl(editId, { fill: e.target.value })}
+                  onBlur={() => setTimeout(() => textareaRef.current?.focus(), 15)}
+                  style={{ opacity: 0, position: 'absolute', inset: 0, width: '100%', height: '100%', cursor: 'pointer', padding: 0, border: 'none' }}
+                />
               </div>
             </div>
 
-            <div style={{display:'flex',alignItems:'center',gap:6,minWidth:0}}>
-              <span style={{fontSize:9,color:'#999',whiteSpace:'nowrap',flexShrink:0}}
-                title={chipLang==='sq'?'Tejdukshmëria':'Opacity'}>
-                {chipLang==='sq'?'Tejduk.':'Opacity'} {Math.round((toolbarEl?.opacity??1)*100)}%
-              </span>
-              <input type="range" min={0} max={100} step={5}
-                value={Math.round((toolbarEl?.opacity??1)*100)}
-                onChange={e=>onChangeEl(editId,{opacity:Math.max(0,Math.min(1,parseInt(e.target.value,10)/100))})}
-                onBlur={()=>setTimeout(()=>textareaRef.current?.focus(),15)}
-                style={{flex:1,minWidth:0,accentColor:'#1a1a1a'}}/>
-              <button onMouseDown={e=>{e.preventDefault();commitEdit();}}
-                style={{height:26,padding:'0 10px',borderRadius:8,background:'#1a1a1a',color:'#fff',
-                  border:'none',cursor:'pointer',fontSize:11,fontWeight:700,flexShrink:0}}>
-                Done
-              </button>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.2fr', gap: 8, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 }}>
+                <span style={{ fontSize: 10, color: '#999', flexShrink: 0 }} title={chipLang === 'sq' ? 'Hapësira e rreshtave' : 'Line height'}>↕</span>
+                <button type="button" onMouseDown={e => { e.preventDefault(); onChangeEl(editId, { lineHeight: Math.max(0.8, parseFloat(((toolbarEl?.lineHeight ?? 1.2) - 0.1).toFixed(1))) }); }}
+                  style={{ ...TEXT_TOOL_BTN, height: 30, minWidth: 30, background: '#f6f6f6', color: '#555' }}>−</button>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#444', minWidth: 24, textAlign: 'center' }}>{(toolbarEl?.lineHeight ?? 1.2).toFixed(1)}</span>
+                <button type="button" onMouseDown={e => { e.preventDefault(); onChangeEl(editId, { lineHeight: Math.min(3.0, parseFloat(((toolbarEl?.lineHeight ?? 1.2) + 0.1).toFixed(1))) }); }}
+                  style={{ ...TEXT_TOOL_BTN, height: 30, minWidth: 30, background: '#f6f6f6', color: '#555' }}>+</button>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 }}>
+                <span style={{ fontSize: 10, color: '#999', flexShrink: 0, fontFamily: 'Georgia, serif' }} title={chipLang === 'sq' ? 'Hapësira e shkronjave' : 'Letter spacing'}>AV</span>
+                <button type="button" onMouseDown={e => { e.preventDefault(); onChangeEl(editId, { letterSpacing: Math.max(-8, (toolbarEl?.letterSpacing ?? 0) - 1) }); }}
+                  style={{ ...TEXT_TOOL_BTN, height: 30, minWidth: 30, background: '#f6f6f6', color: '#555' }}>−</button>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#444', minWidth: 18, textAlign: 'center' }}>{toolbarEl?.letterSpacing ?? 0}</span>
+                <button type="button" onMouseDown={e => { e.preventDefault(); onChangeEl(editId, { letterSpacing: Math.min(24, (toolbarEl?.letterSpacing ?? 0) + 1) }); }}
+                  style={{ ...TEXT_TOOL_BTN, height: 30, minWidth: 30, background: '#f6f6f6', color: '#555' }}>+</button>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                <span style={{ fontSize: 10, color: '#999', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                  {Math.round((toolbarEl?.opacity ?? 1) * 100)}%
+                </span>
+                <input
+                  type="range" min={0} max={100} step={5}
+                  value={Math.round((toolbarEl?.opacity ?? 1) * 100)}
+                  onChange={e => onChangeEl(editId, { opacity: Math.max(0, Math.min(1, parseInt(e.target.value, 10) / 100)) })}
+                  onBlur={() => setTimeout(() => textareaRef.current?.focus(), 15)}
+                  style={{ flex: 1, minWidth: 0, accentColor: '#1a1a1a' }}
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -1781,6 +2099,19 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
               onMouseDown={e=>e.stopPropagation()}
               onPointerDown={e=>e.stopPropagation()}
             >
+              {sel.type === 'text' && (
+                <button
+                  type="button"
+                  onClick={() => beginEdit(sel)}
+                  style={{
+                    padding: '6px 12px', borderRadius: 999, border: 'none', cursor: 'pointer',
+                    fontSize: 11, fontWeight: 700, background: '#1a1a1a', color: '#fff',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {chipLang === 'sq' ? 'Ndrysho' : 'Edit'}
+                </button>
+              )}
               <label
                 style={{
                   display:'flex', alignItems:'center', gap:6,
@@ -2051,14 +2382,13 @@ function LockedPageView({pageW,pageH,role,side}: {pageW:number;pageH:number;role
 // Spread View — realistic book
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SpreadView = React.memo(function SpreadView({spread,spreadContent,selectedId,activeSide,onActiveSide,onSelectId,onChangeEl,onOpenPhotos,onDelete,onGestureStart,onElementDragActive,onPageSwipe,editRequestId,onEditRequestHandled,onDropPhoto,onDropFiles,onDropSticker,onRequestLayout,pageW,pageH,canvasH,shapeRefs,isMobile,readOnly}: {
+const SpreadView = React.memo(function SpreadView({spread,spreadContent,selectedId,activeSide,onActiveSide,onSelectId,onChangeEl,onOpenPhotos,onDelete,onGestureStart,onElementDragActive,onPageSwipe,onDropPhoto,onDropFiles,onDropSticker,onRequestLayout,pageW,pageH,canvasH,shapeRefs,isMobile,readOnly}: {
   spread:SpreadDef; spreadContent:Record<number,EditorElement[]>;
   selectedId:string|null; activeSide:'left'|'right'; onActiveSide:(s:'left'|'right')=>void;
   onSelectId:(id:string|null)=>void; onChangeEl:(pid:number,eid:string,c:Partial<EditorElement>)=>void;
   onOpenPhotos?:()=>void; onDelete?:(id?: string)=>void; onGestureStart?:()=>void;
   onElementDragActive?:(active:boolean)=>void;
   onPageSwipe?:(dir:1|-1)=>void;
-  editRequestId?:string|null; onEditRequestHandled?:()=>void;
   onDropPhoto?:(pageId:number, url:string, targetId:string|null, at:{x:number;y:number})=>void;
   onDropFiles?:(pageId:number, files:File[], targetId:string|null, at:{x:number;y:number})=>void;
   onDropSticker?:(pageId:number, url:string, x:number, y:number)=>void;
@@ -2106,8 +2436,6 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
         onGestureStart={readOnly ? undefined : onGestureStart}
         onElementDragActive={readOnly ? undefined : onElementDragActive}
         onPageSwipe={onPageSwipe}
-        editRequestId={readOnly ? null : editRequestId}
-        onEditRequestHandled={onEditRequestHandled}
         onDropPhoto={readOnly || !onDropPhoto ? undefined : (url, targetId, at) => {
           onActiveSide(side);
           onDropPhoto(page.dbId, url, targetId, at);
@@ -2148,8 +2476,6 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
               onGestureStart={readOnly ? undefined : onGestureStart}
               onElementDragActive={readOnly ? undefined : onElementDragActive}
               onPageSwipe={onPageSwipe}
-              editRequestId={readOnly ? null : editRequestId}
-              onEditRequestHandled={onEditRequestHandled}
               onDropPhoto={readOnly || !onDropPhoto ? undefined : (url, targetId, at) => {
                 onDropPhoto(soloPage.dbId, url, targetId, at);
               }}
@@ -2200,8 +2526,6 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
                 onGestureStart={readOnly ? undefined : onGestureStart}
                 onElementDragActive={readOnly ? undefined : onElementDragActive}
                 onPageSwipe={onPageSwipe}
-                editRequestId={readOnly ? null : editRequestId}
-                onEditRequestHandled={onEditRequestHandled}
                 onDropPhoto={readOnly || !onDropPhoto ? undefined : (url, targetId, at) => {
                   onActiveSide(activeSide);
                   onDropPhoto(page.dbId, url, targetId, at);
@@ -4514,13 +4838,10 @@ export default function Editor() {
     }
   },[project,spreads,deletingSpread,minInnerPages,getToken,projectId,lang,refetchProject,isOrdered]);
 
-  const [editRequestId,setEditRequestId]=useState<string|null>(null);
-  const clearEditRequest=useCallback(()=>setEditRequestId(null),[]);
-
   const addText=useCallback((style?:{fontSize?:number;fontStyle?:string;align?:'left'|'center'|'right'})=>{
     if (isOrdered || !activePageId) return;
     const text=lang==='sq'?'Shto tekstin tënd...':'Your text here...';
-    const fontSize=style?.fontSize??22;
+    const fontSize=style?.fontSize??30;
     const fontFamily='Georgia, serif';
     const fontStyle=style?.fontStyle??'normal';
     const box=fitAddedTextFrame({text,fontSize,fontFamily,fontStyle});
@@ -4531,8 +4852,8 @@ export default function Editor() {
       align:style?.align??'center',fontStyle,opacity:1};
     const els=liveContent.current[activePageId]??[];
     updatePage(activePageId,[...els,el]);
+    // Select only — double-tap opens the keyboard / inline editor.
     setSelectedId(el.id);
-    setEditRequestId(el.id);
   },[activePageId,lang,updatePage,canvasH,isOrdered]);
 
   const addSticker=useCallback((url:string, at?: {x:number;y:number})=>{
@@ -5148,7 +5469,6 @@ export default function Editor() {
                   onGestureStart={beginHistoryGesture}
                   onElementDragActive={onElementDragActive}
                   onPageSwipe={isMobile ? onPageSwipe : undefined}
-                  editRequestId={editRequestId} onEditRequestHandled={clearEditRequest}
                   onDropPhoto={isOrdered ? undefined : placePhotoInTarget}
                   onDropFiles={isOrdered ? undefined : dropDesktopFiles}
                   onDropSticker={isOrdered ? undefined : placeStickerOnPage}

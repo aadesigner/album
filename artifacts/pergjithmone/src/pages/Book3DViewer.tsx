@@ -44,7 +44,7 @@ function relLuminance(hex: string): number {
 
 /**
  * 3D face renderer — same paint path as Design Studio thumbs / wizard
- * (objectFit contain, mixBlendMode screen, letterSpacing, etc.).
+ * (objectFit contain, knock-out landmark alpha, letterSpacing, etc.).
  */
 const PageMiniRender = memo(function PageMiniRender({ elements, w, h, paperColor = PAPER_COLOR, canvasH = DESIGN_H }: {
   elements: EditorElement[]; w: number; h: number; paperColor?: string; canvasH?: number;

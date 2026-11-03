@@ -94,7 +94,7 @@ export function FontPicker({
         onClick={toggle}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="w-full h-8 px-2 rounded-lg text-left text-[12px] outline-none truncate"
+        className="w-full h-9 px-2.5 rounded-[10px] text-left text-[13px] outline-none truncate"
         style={{
           border: `1px solid ${line}`,
           background: bg,
