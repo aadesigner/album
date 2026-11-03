@@ -5,6 +5,10 @@ import { uploadErrorMessage, uploadImageToApi } from '@/lib/uploadImage';
 import { resolvePublicImageSrc } from '@/lib/categoryImages';
 import { ACCEPT_SAFE_IMAGES } from '@/lib/acceptedImages';
 
+/** Checker so transparent PNG/WebP icons aren't mistaken for a grey plate. */
+const ALPHA_CHECKER =
+  'repeating-conic-gradient(#E8E4DC 0% 25%, #FAF7F2 0% 50%) 50% / 14px 14px';
+
 /**
  * Cover-image uploader for admin forms.
  * Shows `value` when set; otherwise optional `fallbackPreview` (e.g. site default).
@@ -73,11 +77,14 @@ export function ImageUploadInput({
         }}
       />
       {displaySrc && !broken ? (
-        <div className="relative w-full h-36 rounded-xl overflow-hidden border border-neutral-200 group bg-neutral-100">
+        <div
+          className="relative w-full h-36 rounded-xl overflow-hidden border border-neutral-200 group"
+          style={{ background: ALPHA_CHECKER }}
+        >
           <img
             src={displaySrc}
             alt="Cover preview"
-            className="w-full h-full object-cover"
+            className="w-full h-full object-contain"
             referrerPolicy="no-referrer"
             onError={() => setBroken(true)}
           />

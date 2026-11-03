@@ -202,6 +202,17 @@ function findPhotoDropTarget(els: EditorElement[], x: number, y: number): Editor
   return null;
 }
 
+/** Top-most free element under the pointer (for right-click remove). */
+function findRemovableAt(els: EditorElement[], x: number, y: number): EditorElement | null {
+  for (let i = els.length - 1; i >= 0; i--) {
+    const e = els[i];
+    if (e.type === 'background' || e.type === 'placeholder') continue;
+    if (isLayoutSlotFrame(e)) continue;
+    if (x >= e.x && x <= e.x + e.w && y >= e.y && y <= e.y + e.h) return e;
+  }
+  return null;
+}
+
 /** True when the page already has a photo layout (slots / placeholders). */
 function pageHasPhotoLayout(els: EditorElement[]): boolean {
   return els.some(e =>
@@ -1045,7 +1056,7 @@ function KPlaceholderEl({el,isSelected,isDropTarget,onSelect,onOpenPhotos,shapeR
 function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos,onDelete,onGestureStart,onElementDragActive,onPageSwipe,editRequestId,onEditRequestHandled,onDropPhoto,onDropFiles,onDropSticker,onRequestLayout,needsLayout,isActive,pageW,pageH,canvasH,shapeRefs,side,isMobile}: {
   page:PageDef; elements:EditorElement[]; selectedId:string|null;
   onSelectId:(id:string|null)=>void; onChangeEl:(id:string,c:Partial<EditorElement>)=>void;
-  onOpenPhotos?:()=>void; onDelete?:()=>void; onGestureStart?:()=>void;
+  onOpenPhotos?:()=>void; onDelete?:(id?: string)=>void; onGestureStart?:()=>void;
   onElementDragActive?:(active:boolean)=>void;
   onPageSwipe?:(dir:1|-1)=>void;
   editRequestId?:string|null; onEditRequestHandled?:()=>void;
@@ -1107,6 +1118,20 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
   // The box never shrinks below whatever height it started editing at
   // (the template's design height), but grows to fit longer text.
   const editMinHRef=useRef(0);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; id: string } | null>(null);
+
+  useEffect(() => {
+    if (!ctxMenu) return;
+    const close = () => setCtxMenu(null);
+    window.addEventListener('mousedown', close);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('keydown', close);
+    return () => {
+      window.removeEventListener('mousedown', close);
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('keydown', close);
+    };
+  }, [ctxMenu]);
 
   // Hide delete chip without detaching the Transformer mid-gesture — detaching
   // during drag was aborting transforms and leaving a scratched preview.
@@ -1316,6 +1341,20 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
     <div
       ref={wrapRef}
       style={{position:'relative',width:pageW,height:pageH,flexShrink:0,overflow:'hidden',touchAction:'none',isolation:'isolate'}}
+      onContextMenu={onDelete ? (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const { x, y } = clientToDesign(e.clientX, e.clientY);
+        const hit = findRemovableAt(elements, x, y);
+        if (!hit) {
+          setCtxMenu(null);
+          return;
+        }
+        if (editId) commitEdit();
+        setPhotoAdjustId(null);
+        onSelectId(hit.id);
+        setCtxMenu({ x: e.clientX, y: e.clientY, id: hit.id });
+      } : undefined}
       onDragOver={(onDropPhoto || onDropFiles || onDropSticker) ? (e) => {
         if (dataTransferHasElement(e.dataTransfer)) {
           if (!onDropSticker) return;
@@ -1871,6 +1910,74 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
 
       {isActive && <div style={{position:'absolute',inset:0,pointerEvents:'none',
         outline:'2.5px solid rgba(59,130,246,0.65)',outlineOffset:'-1px'}}/>}
+
+      {ctxMenu && onDelete && (() => {
+        const hit = elements.find((e) => e.id === ctxMenu.id);
+        const label = hit?.type === 'text'
+          ? (chipLang === 'sq' ? 'Tekst' : 'Text')
+          : hit?.type === 'image'
+            ? (chipLang === 'sq' ? 'Foto' : 'Photo')
+            : hit?.type === 'shape'
+              ? (chipLang === 'sq' ? 'Formë' : 'Shape')
+              : (chipLang === 'sq' ? 'Element' : 'Element');
+        return (
+          <div
+            style={{
+              position: 'fixed',
+              left: Math.max(8, Math.min(ctxMenu.x, (typeof window !== 'undefined' ? window.innerWidth : 400) - 168)),
+              top: Math.max(8, Math.min(ctxMenu.y, (typeof window !== 'undefined' ? window.innerHeight : 400) - 96)),
+              zIndex: 80,
+              minWidth: 148,
+              borderRadius: 12,
+              padding: '4px 0',
+              background: '#FFFFFF',
+              border: '1px solid rgba(0,0,0,0.08)',
+              boxShadow: '0 8px 28px rgba(0,0,0,0.16)',
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+            onContextMenu={(e) => e.preventDefault()}
+          >
+            <p style={{
+              margin: 0,
+              padding: '6px 12px 4px',
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: '0.12em',
+              textTransform: 'uppercase',
+              color: '#9A9188',
+            }}>
+              {label}
+            </p>
+            <button
+              type="button"
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                const id = ctxMenu.id;
+                setCtxMenu(null);
+                onDelete(id);
+              }}
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '8px 12px',
+                border: 'none',
+                background: 'transparent',
+                cursor: 'pointer',
+                fontSize: 13,
+                fontWeight: 600,
+                color: '#B91C1C',
+                textAlign: 'left',
+              }}
+            >
+              <Trash2 size={14} />
+              {chipLang === 'sq' ? 'Hiq' : 'Remove'}
+            </button>
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -1947,7 +2054,7 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
   spread:SpreadDef; spreadContent:Record<number,EditorElement[]>;
   selectedId:string|null; activeSide:'left'|'right'; onActiveSide:(s:'left'|'right')=>void;
   onSelectId:(id:string|null)=>void; onChangeEl:(pid:number,eid:string,c:Partial<EditorElement>)=>void;
-  onOpenPhotos?:()=>void; onDelete?:()=>void; onGestureStart?:()=>void;
+  onOpenPhotos?:()=>void; onDelete?:(id?: string)=>void; onGestureStart?:()=>void;
   onElementDragActive?:(active:boolean)=>void;
   onPageSwipe?:(dir:1|-1)=>void;
   editRequestId?:string|null; onEditRequestHandled?:()=>void;
@@ -3043,7 +3150,7 @@ function Sidebar({tab,onTab,photos,onUpload,uploading,onAddPhoto,onAddText,onAdd
   onAddPhoto:(url:string)=>void; onAddText:(s?:{fontSize?:number;fontStyle?:string;align?:'left'|'center'|'right'})=>void;
   onAddSticker:(url:string)=>void; editorElements: EditorElementAsset[];
   onLayout:(id:string)=>void;
-  onApplyDesign:(d:DesignDef)=>void; selectedId:string|null; onDelete:()=>void; lang:'sq'|'en';
+  onApplyDesign:(d:DesignDef)=>void; selectedId:string|null; onDelete:(id?: string)=>void; lang:'sq'|'en';
   designs: DesignDef[];
   layouts: LayoutDef[];
   /** Designs apply to outer covers only — hide on inner pages. */
@@ -4010,16 +4117,18 @@ export default function Editor() {
     triggerSave();
   },[triggerSave,pushHistory,isOrdered]);
 
-  const deleteSelected=useCallback(()=>{
-    if (isOrdered || !selectedId||!activePageId) return;
+  const deleteSelected=useCallback((id?: string)=>{
+    if (isOrdered || !activePageId) return;
+    const targetId = id || selectedId;
+    if (!targetId) return;
     // Read from the live ref so pagesContent is not in the dep array — otherwise
     // this callback would be recreated on every element edit, breaking memo.
     const els = liveContent.current[activePageId]??[];
-    const target = els.find(e => e.id === selectedId);
+    const target = els.find(e => e.id === targetId);
     if (!target || target.type === 'background') return;
     // Layout photo cells stay — clients can't remove one slot from a 2/3-up grid.
     if (isLayoutSlotFrame(target)) return;
-    updatePage(activePageId, els.filter(e=>e.id!==selectedId));
+    updatePage(activePageId, els.filter(e=>e.id!==targetId));
     setSelectedId(null);
   },[selectedId,activePageId,updatePage,isOrdered]);
 

@@ -846,6 +846,8 @@ const StudioText = React.memo(function StudioText({ el, onSelect, onChange, shap
         letterSpacing={el.letterSpacing || 0}
         lineHeight={el.lineHeight ?? 1.2}
         padding={6}
+        wrap="word"
+        ellipsis={false}
         listening={false}
         perfectDrawEnabled={false}
       />
@@ -1486,7 +1488,29 @@ export default function AdminDesignStudio() {
   }, [patchSide]);
 
   const onChangeEl = useCallback((id: string, patch: Partial<EditorElement>) => {
-    setDraft(prev => prev.map(e => e.id === id ? { ...e, ...patch } : e));
+    setDraft(prev => prev.map((e) => {
+      if (e.id !== id) return e;
+      const next = { ...e, ...patch };
+      // Grow text frame when copy/typography would clip a second line.
+      // Only expand height — never shrink a manually resized box here.
+      const typographyTouched =
+        next.type === 'text'
+        && ('text' in patch || 'fontSize' in patch || 'lineHeight' in patch
+          || 'letterSpacing' in patch || 'fontFamily' in patch || 'fontStyle' in patch);
+      if (typographyTouched) {
+        const box = fitAddedTextFrame({
+          text: next.text || ' ',
+          fontSize: next.fontSize || 20,
+          fontFamily: next.fontFamily,
+          fontStyle: next.fontStyle,
+          letterSpacing: next.letterSpacing,
+          lineHeight: next.lineHeight,
+          maxWidth: next.w,
+        });
+        if (box.h > (next.h || 0)) next.h = box.h;
+      }
+      return next;
+    }));
   }, [setDraft]);
 
   const draft = coverSide === 'front' ? draftFront : draftBack;
@@ -3064,8 +3088,16 @@ export default function AdminDesignStudio() {
                   <p className="text-[11px] font-semibold" style={{ color: ADMIN.ink }}>Image</p>
                   <OpacitySlider value={selected.opacity} onChange={opacity => onChangeEl(selected.id, { opacity })} />
                   {selected.src ? (
-                    <img src={selected.src} alt="" className="w-full h-28 object-contain rounded-lg bg-neutral-50"
-                      style={{ border: `1px solid ${ADMIN.line}` }} />
+                    <img
+                      src={selected.src}
+                      alt=""
+                      className="w-full h-28 object-contain rounded-lg"
+                      style={{
+                        border: `1px solid ${ADMIN.line}`,
+                        background:
+                          'repeating-conic-gradient(#E8E4DC 0% 25%, #FAF7F2 0% 50%) 50% / 14px 14px',
+                      }}
+                    />
                   ) : null}
                   <p className="text-[10px] tabular-nums" style={{ color: ADMIN.muted }}>
                     {Math.round(selected.w)}×{Math.round(selected.h)} · ({Math.round(selected.x)}, {Math.round(selected.y)})

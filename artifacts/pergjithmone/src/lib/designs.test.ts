@@ -636,4 +636,18 @@ describe("fitAddedTextFrame", () => {
     expect(large.h).toBeGreaterThan(small.h);
     expect(large.w).toBeLessThanOrEqual(DESIGN_W - 24);
   });
+
+  it("grows height for a second paragraph line inside a fixed width", () => {
+    const one = fitAddedTextFrame({
+      text: "Line one",
+      fontSize: 28,
+      maxWidth: 220,
+    });
+    const two = fitAddedTextFrame({
+      text: "Line one\nLine two",
+      fontSize: 28,
+      maxWidth: 220,
+    });
+    expect(two.h).toBeGreaterThan(one.h);
+  });
 });

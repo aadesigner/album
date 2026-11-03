@@ -86,7 +86,6 @@ const CONVERTIBLE_FORMATS = new Set(Object.keys(SHARP_FORMAT_TO_MIME));
 // re-encoding keeps disk usage (and later, PDF render time) sane.
 const MAX_DIMENSION = 3200; // px, longest edge — enough for 21×28 cm @ 300 DPI
 const JPEG_QUALITY = 85;
-const PNG_QUALITY = 82;
 
 async function compressUpload(
   filePath: string,
@@ -126,12 +125,9 @@ async function compressUpload(
     withoutEnlargement: true,
   });
   if (outputExt === ".png") {
-    // sharp's `quality` switches on palette quantization, which flattens or
-    // corrupts alpha. Keep full RGBA for transparent graphics; palette only
-    // for opaque PNGs (logos without transparency).
-    pipeline = hasAlpha
-      ? pipeline.png({ compressionLevel: 9 })
-      : pipeline.png({ quality: PNG_QUALITY, compressionLevel: 9, palette: true });
+    // Never palette-quantize PNGs. sharp's `quality` / palette path can flatten
+    // or bake alpha into grey — bad for category icons and mini-template art.
+    pipeline = pipeline.png({ compressionLevel: 9 });
   } else if (outputExt === ".webp") {
     pipeline = pipeline.webp({ quality: JPEG_QUALITY, alphaQuality: hasAlpha ? 100 : undefined });
   } else {

@@ -54,6 +54,9 @@ function useGroupedSubcategories() {
   return { groups, isLoading, subNameById };
 }
 
+const ALPHA_CHECKER =
+  'repeating-conic-gradient(#E8E4DC 0% 25%, #FAF7F2 0% 50%) 50% / 14px 14px';
+
 function CoverThumb({ src, label }: { src?: string | null; label: string }) {
   const [broken, setBroken] = useState(false);
   if (!src || broken) {
@@ -65,14 +68,16 @@ function CoverThumb({ src, label }: { src?: string | null; label: string }) {
     );
   }
   return (
-    <img
-      src={src}
-      alt=""
-      className="w-full h-full object-cover"
-      loading="lazy"
-      referrerPolicy="no-referrer"
-      onError={() => setBroken(true)}
-    />
+    <div className="w-full h-full" style={{ background: ALPHA_CHECKER }}>
+      <img
+        src={src}
+        alt=""
+        className="w-full h-full object-contain"
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        onError={() => setBroken(true)}
+      />
+    </div>
   );
 }
 

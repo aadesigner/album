@@ -60,6 +60,11 @@ export function CategoryCoverImg({
     setShowImg(!!preferred);
   }, [preferred]);
 
+  // Custom transparent PNGs (icons / mini templates) must not sit on the grey
+  // spine wash — that reads as a baked-in grey background. Spine stays as the
+  // fallback when no image is available.
+  const underCustom = !!custom && showImg && !!src;
+
   return (
     <div
       className={className}
@@ -70,8 +75,10 @@ export function CategoryCoverImg({
         width: '100%',
         height: '100%',
         overflow: 'hidden',
-        backgroundColor: spine || '#d4cfc8',
-        backgroundImage: `linear-gradient(165deg, ${spine || '#c4b8aa'} 0%, #d4cfc8 100%)`,
+        backgroundColor: underCustom ? '#FFFFFF' : (spine || '#d4cfc8'),
+        backgroundImage: underCustom
+          ? undefined
+          : `linear-gradient(165deg, ${spine || '#c4b8aa'} 0%, #d4cfc8 100%)`,
         WebkitTransform: 'translateZ(0)',
         transform: 'translateZ(0)',
       }}

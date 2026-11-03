@@ -293,9 +293,75 @@ export function boundBoxToPage(
 /** Matches KonvaText `padding={6}` in the album / studio editors. */
 const ADDED_TEXT_PAD = 6;
 
+function measureStyledTextWidth(
+  measure: (s: string) => number,
+  line: string,
+  letterSpacing: number,
+): number {
+  if (!line) return 0;
+  if (!letterSpacing) return measure(line);
+  let w = 0;
+  const chars = [...line];
+  for (let i = 0; i < chars.length; i++) {
+    w += measure(chars[i]);
+    if (i < chars.length - 1) w += letterSpacing;
+  }
+  return w;
+}
+
+/** Soft word-wrap line count — matches KonvaText wrap="word" well enough for frame height. */
+function countWrappedLines(
+  text: string,
+  maxInnerW: number,
+  measure: (s: string) => number,
+  letterSpacing: number,
+  fallbackCharW: number,
+): number {
+  const paras = text.split('\n');
+  let total = 0;
+  for (const para of paras) {
+    if (!para) {
+      total += 1;
+      continue;
+    }
+    const words = para.split(/(\s+)/);
+    let lineW = 0;
+    let lines = 1;
+    for (const word of words) {
+      if (!word) continue;
+      let ww = measureStyledTextWidth(measure, word, letterSpacing);
+      if (!Number.isFinite(ww) || ww <= 0) ww = Math.max(1, [...word].length * fallbackCharW);
+      // Hard-break overlong tokens so height still grows.
+      if (ww > maxInnerW && maxInnerW > 0) {
+        const chars = [...word];
+        for (const ch of chars) {
+          const cw = measureStyledTextWidth(measure, ch, letterSpacing) || fallbackCharW;
+          if (lineW + cw > maxInnerW && lineW > 0) {
+            lines += 1;
+            lineW = cw;
+          } else {
+            lineW += cw;
+          }
+        }
+        continue;
+      }
+      if (lineW + ww > maxInnerW && lineW > 0) {
+        lines += 1;
+        lineW = ww;
+      } else {
+        lineW += ww;
+      }
+    }
+    total += lines;
+  }
+  return Math.max(1, total);
+}
+
 /**
  * Default frame for a newly added text block: hug the glyphs with a small
  * slack so the transformer is usable, instead of a near-full-page rectangle.
+ * When `maxWidth` is set (existing frame), height accounts for word-wrap
+ * so a second line is not clipped inside KonvaText.
  */
 export function fitAddedTextFrame(opts: {
   text: string;
@@ -312,25 +378,18 @@ export function fitAddedTextFrame(opts: {
   const style = opts.fontStyle || 'normal';
   const ls = opts.letterSpacing || 0;
   const text = opts.text || ' ';
-  const lines = text.split('\n');
-  let maxLine = fs * 0.58 * Math.max(...lines.map((l) => [...l].length), 1);
+  const paras = text.split('\n');
+  const fallbackCharW = fs * 0.58;
+  let maxLine = fallbackCharW * Math.max(...paras.map((l) => [...l].length), 1);
+  let measure: ((s: string) => number) | null = null;
   if (typeof document !== 'undefined') {
     try {
       const ctx = document.createElement('canvas').getContext('2d');
       if (ctx) {
         ctx.font = `${style} ${fs}px ${family}`;
+        measure = (s) => ctx.measureText(s).width;
         maxLine = Math.max(
-          ...lines.map((line) => {
-            if (!line) return 0;
-            if (!ls) return ctx.measureText(line).width;
-            let w = 0;
-            const chars = [...line];
-            for (let i = 0; i < chars.length; i++) {
-              w += ctx.measureText(chars[i]).width;
-              if (i < chars.length - 1) w += ls;
-            }
-            return w;
-          }),
+          ...paras.map((line) => measureStyledTextWidth(measure!, line, ls)),
           0,
         );
       }
@@ -340,11 +399,18 @@ export function fitAddedTextFrame(opts: {
   }
   const pad = ADDED_TEXT_PAD * 2;
   const slackX = Math.max(8, Math.round(fs * 0.28));
-  const slackY = Math.max(2, Math.round(fs * 0.12));
+  const slackY = Math.max(4, Math.round(fs * 0.18));
   const maxW = opts.maxWidth ?? DESIGN_W - 24;
+  const measureFn = measure || ((s: string) => [...s].length * fallbackCharW);
+  // When sizing into an existing width, count wrapped lines; otherwise hug content width.
+  const constraining = opts.maxWidth != null && opts.maxWidth > 0;
+  const innerW = Math.max(8, (constraining ? opts.maxWidth! : Math.min(maxW, Math.ceil(maxLine + pad + slackX))) - pad);
+  const lineCount = constraining
+    ? countWrappedLines(text, innerW, measureFn, ls, fallbackCharW)
+    : Math.max(1, paras.length);
   return {
     w: Math.min(maxW, Math.max(40, Math.ceil(maxLine + pad + slackX))),
-    h: Math.max(24, Math.ceil(lines.length * fs * lh + pad + slackY)),
+    h: Math.max(24, Math.ceil(lineCount * fs * lh + pad + slackY)),
   };
 }
 
