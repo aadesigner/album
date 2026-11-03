@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   DESIGN_W, DESIGN_H, PAPER_COLOR,
   designCatalogFace, isLandmarkPng,
