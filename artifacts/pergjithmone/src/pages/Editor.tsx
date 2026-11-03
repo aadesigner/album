@@ -80,7 +80,13 @@ import { mergeEditorLayouts, layoutZoneToElement, isLayoutSlotFrame } from '@/li
 import { isStrokeOnlyShape, shapePathForElement } from '@/lib/shapes';
 import { getEmptyInnerPageNumbers } from '@/lib/pageContent';
 import { PageThumb, DesignCatalogThumb } from '@/components/PageThumb';
-import { uploadErrorMessage, uploadImageToApi } from '@/lib/uploadImage';
+import { uploadErrorMessage } from '@/lib/uploadImage';
+import {
+  listLocalPhotoSrcs,
+  materializeLocalPhotosInPages,
+  storeBuilderPhoto,
+} from '@/lib/localPhotoStore';
+import { LocalPhotoImg } from '@/components/LocalPhotoImg';
 import { ACCEPT_SAFE_IMAGES, dataTransferHasImageFiles, imageFilesFromDataTransfer } from '@/lib/acceptedImages';
 import { applyCoverBackground, coverBgMode, type CoverBgMode } from '@/lib/coverBackground';
 import { useEditorFontsReady, ensureEditorFonts, normalizeEditorFont, isEditorSingleCutFont } from '@/lib/editorFonts';
@@ -2223,7 +2229,7 @@ function InlinePhotoPicker({photos,onSelect,onUploadAndPlace,uploading,onClose,l
                   onMouseEnter={e=>{(e.currentTarget as HTMLButtonElement).style.borderColor='#1a1a1a';(e.currentTarget as HTMLButtonElement).style.transform='scale(1.05)';}}
                   onMouseLeave={e=>{(e.currentTarget as HTMLButtonElement).style.borderColor='transparent';(e.currentTarget as HTMLButtonElement).style.transform='scale(1)';}}
                 >
-                  <img src={url} alt="" style={{width:'100%',height:'100%',objectFit:'cover',display:'block',pointerEvents:'none'}}/>
+                  <LocalPhotoImg src={url} style={{width:'100%',height:'100%',objectFit:'cover',display:'block',pointerEvents:'none'}} draggable={false}/>
                 </button>
               ))}
             </div>
@@ -2806,7 +2812,7 @@ function CoverBackgroundPanel({
                     className={`aspect-square rounded-lg overflow-hidden border transition-all ${
                       active ? 'border-neutral-900 ring-1 ring-neutral-900' : 'border-neutral-200 hover:border-neutral-600'
                     }`}>
-                    <img src={url} alt="" className="w-full h-full object-cover" />
+                    <LocalPhotoImg src={url} className="w-full h-full object-cover" />
                   </button>
                 );
               })}
@@ -3113,7 +3119,7 @@ function Sidebar({tab,onTab,photos,onUpload,uploading,onAddPhoto,onAddText,onAdd
             ) : (
               <div className="grid grid-cols-2 gap-1.5">
                 {photos.map((url,i)=>(
-                  <button key={i} onClick={()=>onAddPhoto(url)}
+                  <button key={url || i} onClick={()=>onAddPhoto(url)}
                     draggable
                     onDragStart={e=>{
                       e.dataTransfer.setData(PHOTO_DRAG_MIME, url);
@@ -3122,10 +3128,17 @@ function Sidebar({tab,onTab,photos,onUpload,uploading,onAddPhoto,onAddText,onAdd
                       e.dataTransfer.effectAllowed = 'copy';
                     }}
                     className="aspect-square rounded-lg overflow-hidden border border-neutral-200 hover:border-neutral-700 hover:scale-105 transition-all cursor-grab active:cursor-grabbing">
-                      <img src={url} alt="" className="w-full h-full object-cover pointer-events-none" draggable={false}/>
+                      <LocalPhotoImg src={url} className="w-full h-full object-cover pointer-events-none" draggable={false}/>
                   </button>
                 ))}
               </div>
+            )}
+            {photos.length > 0 && (
+              <p className="text-[9px] text-neutral-400 leading-snug px-0.5 pt-1">
+                {lang==='sq'
+                  ? 'Fotot rrinë në këtë pajisje derisa të porosisësh.'
+                  : 'Photos stay on this device until you place an order.'}
+              </p>
             )}
           </div>
         )}
@@ -3288,7 +3301,7 @@ function MobileSheet({tab,show,onClose,photos,onUpload,uploading,onAddPhoto,onLa
                         e.dataTransfer.effectAllowed = 'copy';
                       }}
                       className="aspect-square rounded-xl overflow-hidden border border-neutral-200 cursor-grab active:cursor-grabbing">
-                      <img src={url} alt="" className="w-full h-full object-cover pointer-events-none" draggable={false}/>
+                      <LocalPhotoImg src={url} className="w-full h-full object-cover pointer-events-none" draggable={false}/>
                     </button>
                   ))}
                 </div>
@@ -3328,8 +3341,11 @@ function MobileSheet({tab,show,onClose,photos,onUpload,uploading,onAddPhoto,onLa
 // Order Modal
 // ─────────────────────────────────────────────────────────────────────────────
 
-function OrderModal({project,onClose,lang,flushSave}: {
-  project:any; onClose:()=>void; lang:'sq'|'en'; flushSave?:()=>Promise<void>;
+function OrderModal({project,onClose,lang,flushSave,prepareForPrint}: {
+  project:any; onClose:()=>void; lang:'sq'|'en';
+  flushSave?:()=>Promise<void>;
+  /** Upload device-local photos to the server and rewrite page srcs for PDF. */
+  prepareForPrint?:()=>Promise<void>;
 }) {
   const createOrder=useCreateOrder();
   const queryClient=useQueryClient();
@@ -3345,8 +3361,8 @@ function OrderModal({project,onClose,lang,flushSave}: {
     // don't swallow WhatsApp after the async create-order round-trip.
     const waTab=window.open('about:blank','_blank');
     try{
-      // Persist the latest canvas BEFORE the order PDF kicks off — otherwise
-      // the print file can be built from stale/empty contentJson.
+      // Device-local photos → server URLs, then persist, then order/PDF.
+      if (prepareForPrint) await prepareForPrint();
       if (flushSave) await flushSave();
 
       const o=await createOrder.mutateAsync({data:{projectId:project.id}});
@@ -3668,6 +3684,25 @@ export default function Editor() {
     });
   },[project?.pages]);
 
+  // Restore this device's photo library for the open album (IndexedDB).
+  useEffect(() => {
+    let cancelled = false;
+    void listLocalPhotoSrcs(projectId).then((srcs) => {
+      if (!cancelled && srcs.length) setPhotos(srcs);
+    }).catch(() => { /* IndexedDB unavailable — empty library */ });
+    return () => { cancelled = true; };
+  }, [projectId]);
+
+  /** Upload on-device photos used in the album so server PDF/print can read them. */
+  const prepareForPrint = useCallback(async () => {
+    const { pages, replacements } = await materializeLocalPhotosInPages(liveContent.current);
+    if (replacements.size === 0) return;
+    liveContent.current = pages;
+    setPagesContent(pages);
+    setPhotos((prev) => prev.map((s) => replacements.get(s) ?? s));
+    for (const pid of Object.keys(pages)) dirtyPages.current.add(Number(pid));
+  }, []);
+
   useEffect(()=>{
     const h=(e:KeyboardEvent)=>{
       if (e.key==='Escape') setSelectedId(null);
@@ -3983,13 +4018,13 @@ export default function Editor() {
     if (isOrdered) return;
     setUploading(true);
     try {
-      const url=await uploadImageToApi(file, getToken());
+      const url=await storeBuilderPhoto(projectId, file);
       setPhotos(prev=>[url,...prev]);
     } catch(e){
       console.error('Upload failed',e);
       alert(uploadErrorMessage(e, lang==='sq'?'sq':'en'));
     } finally{setUploading(false);}
-  },[getToken,lang,isOrdered]);
+  },[projectId,lang,isOrdered]);
 
   const pageRoleById = useMemo(() => {
     const m = new Map<number, PageRole>();
@@ -4130,7 +4165,7 @@ export default function Editor() {
     if (isOrdered) return;
     setUploading(true);
     try {
-      const url = await uploadImageToApi(file, getToken());
+      const url = await storeBuilderPhoto(projectId, file);
       setPhotos(prev => [url, ...prev]);
       setCoverPhoto(url);
     } catch (e) {
@@ -4139,14 +4174,14 @@ export default function Editor() {
     } finally {
       setUploading(false);
     }
-  }, [getToken, setCoverPhoto, lang, isOrdered]);
+  }, [projectId, setCoverPhoto, lang, isOrdered]);
 
-  // Upload a file and immediately place it on the active page (used by InlinePhotoPicker)
+  // Store on-device and immediately place (used by InlinePhotoPicker)
   const uploadAndPlace=useCallback(async(file:File)=>{
     if (isOrdered) return;
     setUploading(true);
     try {
-      const url=await uploadImageToApi(file, getToken());
+      const url=await storeBuilderPhoto(projectId, file);
       setPhotos(prev=>[url,...prev]);
       addPhoto(url);
       setPickerOpen(false);
@@ -4154,7 +4189,7 @@ export default function Editor() {
       console.error('Upload failed',e);
       alert(uploadErrorMessage(e, lang==='sq'?'sq':'en'));
     } finally{setUploading(false);}
-  },[getToken,addPhoto,lang,isOrdered]);
+  },[projectId,addPhoto,lang,isOrdered]);
 
   /** Desktop drop: free place on covers; layout slots only on inner pages. */
   const dropDesktopFiles=useCallback(async(
@@ -4174,7 +4209,7 @@ export default function Editor() {
     setUploading(true);
     try {
       for (let i = 0; i < files.length; i++) {
-        const url = await uploadImageToApi(files[i], getToken());
+        const url = await storeBuilderPhoto(projectId, files[i]);
         setPhotos(prev => [url, ...prev]);
         const pos = { x: at.x + i * 28, y: at.y + i * 28 };
         placePhotoInTarget(pageId, url, i === 0 ? targetId : null, pos);
@@ -4185,7 +4220,7 @@ export default function Editor() {
     } finally {
       setUploading(false);
     }
-  }, [getToken, placePhotoInTarget, lang, isOrdered, pageRoleById]);
+  }, [projectId, placePhotoInTarget, lang, isOrdered, pageRoleById]);
 
   const reorderSpreads=useCallback(async(fromIdx:number,toIdx:number)=>{
     if (isOrdered || fromIdx===toIdx||!project?.pages) return;
@@ -5136,7 +5171,16 @@ export default function Editor() {
       )}
 
       <AnimatePresence>
-        {showOrder && !isOrdered && <OrderModal key="ord" project={project} onClose={()=>setShowOrder(false)} lang={lang} flushSave={flushSave}/>}
+        {showOrder && !isOrdered && (
+          <OrderModal
+            key="ord"
+            project={project}
+            onClose={()=>setShowOrder(false)}
+            lang={lang}
+            flushSave={flushSave}
+            prepareForPrint={prepareForPrint}
+          />
+        )}
       </AnimatePresence>
 
       {/* Empty pages warning — shown when client taps Porosit with blank inners */}

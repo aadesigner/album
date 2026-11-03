@@ -13,6 +13,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { ResponsivePageThumb } from '@/components/PageThumb';
 import { DESIGN_H, DESIGN_W, type EditorElement } from '@/lib/designs';
+import { deleteLocalPhotosForProject } from '@/lib/localPhotoStore';
 
 const INSTAGRAM_URL = 'https://www.instagram.com/pergjithmone.al/';
 
@@ -100,6 +101,7 @@ export default function Projects() {
     setDeleting(true);
     try {
       await deleteProject.mutateAsync({ projectId: confirmId });
+      try { await deleteLocalPhotosForProject(confirmId); } catch { /* ignore */ }
       await queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
     } finally {
       setDeleting(false);

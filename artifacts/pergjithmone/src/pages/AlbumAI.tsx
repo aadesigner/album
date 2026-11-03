@@ -17,7 +17,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import { resolveDesignCategory, resolveDesignCategoryFromQuery } from '@/lib/designMeta';
 import { DESIGNS } from '@/lib/designs';
 import { generateAlbum, suggestInnerPageCount } from '@/lib/albumGenerator';
-import { uploadImageToApi } from '@/lib/uploadImage';
+import {
+  DRAFT_PROJECT_ID,
+  reassignLocalPhotos,
+  storeBuilderPhoto,
+} from '@/lib/localPhotoStore';
 import { ACCEPT_SAFE_IMAGES } from '@/lib/acceptedImages';
 import { pendingBooksLimitMessage } from '@/lib/projectErrors';
 import { SizeCard } from './Wizard';
@@ -630,13 +634,14 @@ function AlbumAIView() {
     if (!item.file) return;
     setPhotos(prev => prev.map(p => p.id === item.id ? { ...p, status: 'uploading' } : p));
     try {
-      const url = await uploadImageToApi(item.file, getToken());
+      // Keep AI-builder photos on-device until order (same as the editor).
+      const url = await storeBuilderPhoto(DRAFT_PROJECT_ID, item.file);
       setPhotos(prev => prev.map(p => p.id === item.id ? { ...p, status: 'done', url } : p));
     } catch (e) {
       console.error('Photo upload failed', e);
       setPhotos(prev => prev.map(p => p.id === item.id ? { ...p, status: 'error' } : p));
     }
-  }, [getToken]);
+  }, []);
 
   // Pulls queued items until the concurrency cap is hit; each finished slot
   // re-triggers itself so the queue keeps draining without ever exceeding
@@ -744,6 +749,9 @@ function AlbumAIView() {
       const project = await createProject.mutateAsync({
         data: { bookSizeId: chosenSize.id, title: lang === 'sq' ? 'Albumi im me AI' : 'My AI Album' },
       });
+      try {
+        await reassignLocalPhotos(DRAFT_PROJECT_ID, project.id);
+      } catch { /* non-fatal — photos still resolve by id */ }
 
       setGenStageIndex(1); // pages
       let fresh = await getProject(project.id);

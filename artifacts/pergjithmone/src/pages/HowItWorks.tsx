@@ -191,9 +191,6 @@ function HowItWorksView() {
               <ArrowRight size={16}/>
             </button>
           </Link>
-          <p className="text-[12px] text-neutral-400 mt-4">
-            <Editable path="cta.note">{p.txt('cta.note')}</Editable>
-          </p>
         </div>
       </EditableSection>
     </MarketingLayout>

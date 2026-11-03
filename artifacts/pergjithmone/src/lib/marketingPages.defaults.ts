@@ -154,7 +154,6 @@ export const PAGE_DEFAULTS: Record<PageSlug, Record<string, unknown>> = {
       title: bi('Gati për të filluar?', 'Ready to start?'),
       body: bi('Krijoni albumin tuaj falas. Paguani vetëm kur jeni të kënaqur.', "Create your album for free. Pay only when you're happy with it."),
       button: bi('Krijo albumin tuaj', 'Create your album'),
-      note: bi('Nga 3.000 LEK · Dërgesë falas mbi 5.000 LEK', 'From 3,000 LEK · Free delivery over 5,000 LEK'),
     },
   },
 

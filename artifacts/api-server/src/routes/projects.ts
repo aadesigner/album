@@ -11,11 +11,12 @@ import { eq, and, inArray, count } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { v4 as uuidv4 } from "uuid";
 import { logger } from "../lib/logger";
-import { queueProjectPdfGeneration, pdfsDir, isPdfGenerationInFlight, ensureProjectPdfFile } from "../lib/generateProjectPdf";
+import { enqueueProjectPdfGeneration, pdfsDir, isPdfGenerationInFlight, ensureProjectPdfFile, deleteProjectPdfFile } from "../lib/generateProjectPdf";
 import { getSecuritySettings } from "../lib/securitySettings";
 import {
   getProjectEditBlock,
 } from "../lib/projectEditGuard";
+import { deleteUploadFiles, extractUploadFilenamesFromPages } from "../lib/uploadCleanup";
 import path from "path";
 import fs from "fs";
 
@@ -437,9 +438,23 @@ router.delete(
       return;
     }
 
+    // Collect user photo filenames before cascade deletes the pages.
+    const pages = await db
+      .select({ contentJson: projectPagesTable.contentJson })
+      .from(projectPagesTable)
+      .where(eq(projectPagesTable.projectId, projectId));
+    const uploadFiles = extractUploadFilenamesFromPages(pages);
+
     await db
       .delete(projectsTable)
       .where(eq(projectsTable.id, projectId));
+
+    // Drop print PDF + any uploaded photos referenced by this album.
+    deleteProjectPdfFile(projectId);
+    const removed = deleteUploadFiles(uploadFiles);
+    if (removed > 0) {
+      logger.info({ projectId, removed, candidates: uploadFiles.length }, "Deleted project upload files");
+    }
 
     res.json({ success: true });
   },

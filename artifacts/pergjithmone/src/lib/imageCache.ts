@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { resolvePublicImageSrc } from './categoryImages';
 import { isLandmarkPng, knockOutBlackToAlpha } from './designs';
+import { isLocalPhotoSrc, resolveDisplayUrl } from './localPhotoStore';
 
 /** Konva accepts either decoded <img> or a canvas (landmarks stay as canvas). */
 export type CachedBitmap = HTMLImageElement | HTMLCanvasElement;
@@ -63,38 +64,45 @@ function decodeHtmlImage(url: string, withCors: boolean): Promise<HTMLImageEleme
 }
 
 export function loadCachedImage(src: string): Promise<CachedBitmap> {
-  const url = resolvePublicImageSrc(src) || src;
-  const hit = peekCachedImage(url);
+  const cacheKey = src;
+  const hit = peekCachedImage(cacheKey);
   if (hit) return Promise.resolve(hit);
-  const pending = inflight.get(url);
+  const pending = inflight.get(cacheKey);
   if (pending) return pending;
 
-  const next = decodeHtmlImage(url, imageLoadNeedsCors(url))
-    .catch((err) => {
-      if (imageLoadNeedsCors(url)) return decodeHtmlImage(url, false);
-      throw err;
-    })
-    .catch((err) => {
+  const next = (async () => {
+    let url = resolvePublicImageSrc(src) || src;
+    if (isLocalPhotoSrc(src)) {
+      const local = await resolveDisplayUrl(src);
+      if (!local) throw new Error('local photo missing on this device');
+      url = local;
+    }
+    try {
+      return await decodeHtmlImage(url, imageLoadNeedsCors(url));
+    } catch (err) {
+      if (imageLoadNeedsCors(url)) {
+        try { return await decodeHtmlImage(url, false); } catch { /* fall through */ }
+      }
       const fallback = designApiFallback(url);
       if (!fallback) throw err;
       return decodeHtmlImage(fallback, imageLoadNeedsCors(fallback));
-    })
+    }
+  })()
     .then((img) => {
-      inflight.delete(url);
-      // Keep the canvas — skip toDataURL (huge CPU/RAM cost on every landmark).
+      inflight.delete(cacheKey);
       let out: CachedBitmap = img;
-      if (isLandmarkPng(src) || isLandmarkPng(url)) {
+      if (isLandmarkPng(src) || isLandmarkPng(cacheKey)) {
         const cut = knockOutBlackToAlpha(img);
         if (cut) out = cut;
       }
-      touch(url, out);
+      touch(cacheKey, out);
       return out;
     })
     .catch((err) => {
-      inflight.delete(url);
+      inflight.delete(cacheKey);
       throw err;
     });
-  inflight.set(url, next);
+  inflight.set(cacheKey, next);
   return next;
 }
 
