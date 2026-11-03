@@ -1211,17 +1211,19 @@ function DesignCanvas({
 
 function loadCoverDrafts(design: DesignDef, omitted: string[] = []): { front: EditorElement[]; back: EditorElement[] } {
   const builtin = DESIGNS.find(d => d.id === design.id);
-  const heal = (saved: EditorElement[], base: EditorElement[]) =>
+  const heal = (saved: DE[], base: DE[]) =>
     restoreCoverGraphics(saved, base, omitted).map(sanitizeImageBlend);
   const frontSrc = heal(designFrontElements(design), builtin?.elements ?? designFrontElements(design));
-  const explicitBack = Array.isArray(design.backElements) && design.backElements.length > 0
-    ? design.backElements
-    : null;
-  const backSrc = explicitBack
-    ?? (design.isCustom ? [] : designBackElements(design));
+  // Explicit array (including empty / bg-only) must not fall back to the front.
+  const hasExplicitBack = Array.isArray(design.backElements);
+  const backSrc = hasExplicitBack
+    ? design.backElements!
+    : (design.isCustom ? [] : designBackElements(design));
   const builtinBack = builtin?.backElements ?? builtin?.elements ?? backSrc;
   const front = frontSrc.length ? frontSrc : blankCoverElements('FRONT');
-  const back = (backSrc.length ? heal(backSrc, builtinBack) : blankCoverElements('BACK'));
+  const back = backSrc.length
+    ? heal(backSrc, builtinBack)
+    : blankCoverElements('BACK');
   return {
     front: designElementsWithIds(`${design.id}-f`, front),
     back: designElementsWithIds(`${design.id}-b`, back),
@@ -1361,15 +1363,22 @@ export default function AdminDesignStudio() {
   const canvasBusyRef = useRef(false);
   const draftFrontRef = useRef(draftFront);
   const draftBackRef = useRef(draftBack);
+  /** After our own save, ignore the fingerprint bounce so we don't jump to front. */
+  const skipFingerprintHydrateRef = useRef(false);
+  const hydratedDesignIdRef = useRef<string | null>(null);
+  const designIdRef = useRef(designId);
+  const [draftEpoch, setDraftEpoch] = useState(0);
   dirtyRef.current = dirty;
   draftFrontRef.current = draftFront;
   draftBackRef.current = draftBack;
   coverSideRef.current = coverSide;
   selectedIdRef.current = selectedId;
+  designIdRef.current = designId;
 
   const markDirtySide = useCallback(() => {
     if (coverSideRef.current === 'front') setDirtyFront(true);
     else setDirtyBack(true);
+    setDraftEpoch((n) => n + 1);
   }, []);
 
   const design: DesignDef | undefined = catalog.find(d => d.id === designId);
@@ -1392,6 +1401,15 @@ export default function AdminDesignStudio() {
   useEffect(() => {
     if (!design) return;
     if (dirtyRef.current || canvasBusyRef.current) return;
+
+    const designChanged = hydratedDesignIdRef.current !== design.id;
+    // Own save updates the settings cache fingerprint — keep the back cover
+    // the admin is editing instead of wiping selection and jumping to front.
+    if (!designChanged && skipFingerprintHydrateRef.current) {
+      skipFingerprintHydrateRef.current = false;
+      return;
+    }
+
     const omitted = normalizeOverride(savedOverrides[design.id])?.omittedLandmarkSrcs ?? [];
     const { front, back } = loadCoverDrafts(design, omitted);
     const h = canvasH;
@@ -1401,7 +1419,11 @@ export default function AdminDesignStudio() {
     setSelectedId(null);
     setDirtyFront(false);
     setDirtyBack(false);
-    setCoverSide('front');
+    if (designChanged) {
+      setCoverSide('front');
+      hydratedDesignIdRef.current = design.id;
+    }
+  // Do NOT depend on canvasH here — the format-remap effect below owns that.
   }, [design?.id, overrideFingerprint, customFingerprint]);
 
   const formatHRef = useRef<number | null>(null);
@@ -1427,14 +1449,20 @@ export default function AdminDesignStudio() {
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, []);
 
+  const frontRevRef = useRef(0);
+  const backRevRef = useRef(0);
+
   const patchSide = useCallback((side: CoverSide, updater: (prev: EditorElement[]) => EditorElement[]) => {
     if (side === 'front') {
+      frontRevRef.current += 1;
       setDraftFront(updater);
       setDirtyFront(true);
     } else {
+      backRevRef.current += 1;
       setDraftBack(updater);
       setDirtyBack(true);
     }
+    setDraftEpoch((n) => n + 1);
   }, []);
 
   const setDraft = useCallback((updater: (prev: EditorElement[]) => EditorElement[]) => {
@@ -1468,10 +1496,12 @@ export default function AdminDesignStudio() {
 
   const uploadAndSetBgPhoto = async (file: File) => {
     const side = coverSideRef.current;
+    const designIdAtStart = designIdRef.current;
     setUploading(true);
     setSaveError(null);
     try {
       const url = await uploadStudioImage(file, getToken());
+      if (designIdRef.current !== designIdAtStart) return; // switched design mid-upload
       setBgUiMode('photo');
       patchSide(side, prev => {
         const next = applyCoverBackground(prev, canvasHRef.current, { mode: 'photo', src: url });
@@ -1493,6 +1523,7 @@ export default function AdminDesignStudio() {
     opts?: { select?: boolean; replaceSelected?: boolean },
   ) => {
     const side = coverSideRef.current;
+    const designIdAtStart = designIdRef.current;
     const replaceSelected = opts?.replaceSelected !== false;
     const idAtStart = replaceSelected ? (targetId || selectedIdRef.current) : undefined;
     setUploading(true);
@@ -1500,6 +1531,7 @@ export default function AdminDesignStudio() {
     try {
       const natural = await readImageNaturalSize(file);
       const url = await uploadStudioImage(file, getToken());
+      if (designIdRef.current !== designIdAtStart) return;
       const canvasH = canvasHRef.current;
       const frame = natural
         ? graphicFrameRect(natural.w, natural.h, canvasH)
@@ -1510,6 +1542,7 @@ export default function AdminDesignStudio() {
       }
       patchSide(side, prev => {
         if (idAtStart && prev.some(e => e.id === idAtStart && e.type === 'image')) {
+          const prevEl = prev.find(e => e.id === idAtStart)!;
           return prev.map(e => e.id === idAtStart
             ? {
                 ...e,
@@ -1517,8 +1550,8 @@ export default function AdminDesignStudio() {
                 cropFocusX: 0.5,
                 cropFocusY: 0.5,
                 cropZoom: 1,
-                // Graphics / PNG overlays stay letterboxed (like landmarks).
-                objectFit: 'contain' as const,
+                // Keep prior fit mode (cover photos stay cover; graphics stay contain).
+                objectFit: prevEl.objectFit === 'cover' ? 'cover' as const : 'contain' as const,
               }
             : e);
         }
@@ -1829,6 +1862,9 @@ export default function AdminDesignStudio() {
 
   const save = async () => {
     if (!design) return;
+    const designIdAtStart = design.id;
+    const frontRevAtStart = frontRevRef.current;
+    const backRevAtStart = backRevRef.current;
     setSaving(true);
     setSaveError(null);
     try {
@@ -1843,7 +1879,7 @@ export default function AdminDesignStudio() {
       if (design.isCustom) {
         const now = new Date().toISOString();
         const nextCustoms = savedCustomDesigns.map((c): CustomDesignRecord =>
-          c.id === design.id
+          c.id === designIdAtStart
             ? {
                 ...c,
                 name: design.name,
@@ -1857,6 +1893,7 @@ export default function AdminDesignStudio() {
               }
             : c,
         );
+        skipFingerprintHydrateRef.current = true;
         await updateSettings.mutateAsync({
           data: { customDesigns: nextCustoms } as any,
         });
@@ -1864,20 +1901,21 @@ export default function AdminDesignStudio() {
           old ? { ...old, customDesigns: nextCustoms } : old,
         );
       } else {
-        const builtinEls = DESIGNS.find(d => d.id === design.id);
+        const builtinEls = DESIGNS.find(d => d.id === designIdAtStart);
         const omitted = [...new Set([
           ...omittedLandmarkSrcs(frontElements, builtinEls?.elements ?? []),
           ...omittedLandmarkSrcs(backElements, builtinEls?.backElements ?? builtinEls?.elements ?? []),
         ])];
         const next: DesignOverrides = {
           ...savedOverrides,
-          [design.id]: {
+          [designIdAtStart]: {
             frontElements,
             backElements,
             ...(design.layoutRev != null ? { layoutRev: design.layoutRev } : {}),
             ...(omitted.length ? { omittedLandmarkSrcs: omitted } : {}),
           },
         };
+        skipFingerprintHydrateRef.current = true;
         await updateSettings.mutateAsync({
           data: { designOverrides: next } as any,
         });
@@ -1885,9 +1923,16 @@ export default function AdminDesignStudio() {
           old ? { ...old, designOverrides: next } : old,
         );
       }
-      dirtyRef.current = false;
-      setDirtyFront(false);
-      setDirtyBack(false);
+
+      // If the admin kept editing during the request, keep those sides dirty
+      // so the next autosave persists the newer draft (don't mark stale as saved).
+      const frontClean = frontRevRef.current === frontRevAtStart;
+      const backClean = backRevRef.current === backRevAtStart;
+      setDirtyFront(!frontClean);
+      setDirtyBack(!backClean);
+      dirtyRef.current = !frontClean || !backClean;
+      if (dirtyRef.current) setDraftEpoch((n) => n + 1);
+
       // Soft-sync public settings in background — avoid full refetch jank in studio.
       void queryClient.invalidateQueries({
         queryKey: getGetAppSettingsQueryKey(),
@@ -1896,6 +1941,7 @@ export default function AdminDesignStudio() {
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 2200);
     } catch (err: any) {
+      skipFingerprintHydrateRef.current = false;
       setSaveError(err?.data?.error || err?.message || 'Failed to save layout.');
     } finally {
       setSaving(false);
@@ -1905,6 +1951,8 @@ export default function AdminDesignStudio() {
   const saveRef = useRef(save);
   saveRef.current = save;
 
+  // Debounce from the *latest* edit (draftEpoch), not the first dirty flip —
+  // otherwise autosave can fire mid-delete and rehydrate to the front cover.
   useEffect(() => {
     if (!dirty || saving) return;
     let alive = true;
@@ -1912,7 +1960,6 @@ export default function AdminDesignStudio() {
     const arm = (ms: number) => {
       timer = window.setTimeout(() => {
         if (!alive) return;
-        // Wait out in-progress gestures so we never persist pre-drag coords.
         if (canvasBusyRef.current) {
           arm(600);
           return;
@@ -1925,7 +1972,7 @@ export default function AdminDesignStudio() {
       alive = false;
       window.clearTimeout(timer);
     };
-  }, [dirty, saving]);
+  }, [dirty, saving, draftEpoch]);
 
   const resetToDefault = async () => {
     if (!design) return;
@@ -1995,6 +2042,10 @@ export default function AdminDesignStudio() {
     if (!window.confirm(`Permanently delete custom design "${design.name.en}"?`)) return;
     setDeleting(true);
     setSaveError(null);
+    // Drop pending autosave so it can't race and revive this record.
+    dirtyRef.current = false;
+    setDirtyFront(false);
+    setDirtyBack(false);
     try {
       const nextCustoms = savedCustomDesigns.filter(c => c.id !== design.id);
       const nextHidden = savedHiddenIds.filter(id => id !== design.id);
@@ -2002,9 +2053,6 @@ export default function AdminDesignStudio() {
         data: { customDesigns: nextCustoms, hiddenDesignIds: nextHidden } as any,
       });
       await invalidate();
-      dirtyRef.current = false;
-      setDirtyFront(false);
-      setDirtyBack(false);
       const fallback = catalog.find(d => d.id !== design.id && d.category === activeCat)
         || catalog.find(d => d.id !== design.id)
         || DESIGNS[0];
@@ -2027,6 +2075,10 @@ export default function AdminDesignStudio() {
       return;
     }
     if (!confirmDiscardIfDirty()) return;
+    // Prevent a pending autosave from overwriting the new customs array.
+    dirtyRef.current = false;
+    setDirtyFront(false);
+    setDirtyBack(false);
     setCreating(true);
     setSaveError(null);
     try {

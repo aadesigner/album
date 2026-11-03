@@ -1655,9 +1655,14 @@ export function designCatalogFace(d: Pick<DesignDef, 'thumbPhoto' | 'elements'>)
   return { kind: 'elements', elements: [] };
 }
 
-/** Back cover elements — falls back to front when unset/empty. */
+/**
+ * Back cover elements.
+ * - Missing `backElements` → fall back to front (legacy designs).
+ * - Explicit array (even empty / background-only) → trust it; Design Studio
+ *   may intentionally clear the back without copying the front.
+ */
 export function designBackElements(d: DesignDef): DE[] {
-  if (Array.isArray(d.backElements) && d.backElements.length) return d.backElements;
+  if (Array.isArray(d.backElements)) return d.backElements;
   return designFrontElements(d);
 }
 
@@ -1695,19 +1700,22 @@ export function normalizeOverride(raw: unknown): DesignSideOverride | null {
   }
   if (typeof raw !== 'object') return null;
   const o = raw as Record<string, unknown>;
+  const hasFrontKey = Array.isArray(o.frontElements) || Array.isArray(o.elements);
+  const hasBackKey = Array.isArray(o.backElements);
   const front = Array.isArray(o.frontElements)
     ? (o.frontElements as DE[])
     : Array.isArray(o.elements)
       ? (o.elements as DE[])
       : undefined;
   const back = Array.isArray(o.backElements) ? (o.backElements as DE[]) : undefined;
-  if ((!front || !front.length) && (!back || !back.length)) return null;
+  if (!hasFrontKey && !hasBackKey) return null;
   const omitted = Array.isArray(o.omittedLandmarkSrcs)
     ? (o.omittedLandmarkSrcs as unknown[]).filter((s): s is string => typeof s === 'string' && !!s)
     : undefined;
   return {
-    frontElements: front?.length ? front : back,
-    backElements: back?.length ? back : front,
+    // Only fill sides that were actually saved — never mirror front↔back.
+    frontElements: hasFrontKey ? (front ?? []) : undefined,
+    backElements: hasBackKey ? (back ?? []) : undefined,
     layoutRev: typeof o.layoutRev === 'number' ? o.layoutRev : undefined,
     omittedLandmarkSrcs: omitted?.length ? omitted : undefined,
   };
@@ -1730,11 +1738,18 @@ export function applyDesignOverrides(
     const norm = normalizeOverride(raw);
     if (!norm) return d;
 
+    const rawObj = raw && typeof raw === 'object' && !Array.isArray(raw)
+      ? (raw as Record<string, unknown>)
+      : null;
+    const explicitBack = Array.isArray(rawObj?.backElements);
+    const explicitFront = Array.isArray(rawObj?.frontElements) || Array.isArray(rawObj?.elements);
+    // Studio always writes both sides together — trust minimal (bg-only) saves.
+    // A partial front-only bg plate is treated as accidental and ignored.
+    const bothSidesSaved = explicitFront && explicitBack;
+
     const frontOk = coverHasContent(norm.frontElements);
     const backOk = coverHasContent(norm.backElements);
-    // A Design Studio save that only kept the background (fonts/images
-    // hadn't painted) used to wipe Barcelona down to a red plate.
-    if (!frontOk && !backOk) return d;
+    if (!frontOk && !backOk && !bothSidesSaved && !explicitBack) return d;
 
     // Design Studio is the source of truth. A new deploy must not throw away
     // a shop's saved covers just because built-in layoutRev was bumped.
@@ -1742,11 +1757,17 @@ export function applyDesignOverrides(
     const omitted = norm.omittedLandmarkSrcs ?? [];
     const front = frontOk && norm.frontElements?.length
       ? restoreCoverGraphics(norm.frontElements, d.elements, omitted)
-      : d.elements;
+      : (bothSidesSaved && Array.isArray(norm.frontElements)
+        ? norm.frontElements
+        : d.elements);
     const builtinBack = d.backElements ?? d.elements;
-    const back = backOk && norm.backElements?.length
-      ? restoreCoverGraphics(norm.backElements, builtinBack, omitted)
-      : builtinBack;
+    const back = explicitBack
+      ? (backOk && norm.backElements?.length
+        ? restoreCoverGraphics(norm.backElements, builtinBack, omitted)
+        : (norm.backElements ?? []))
+      : (backOk && norm.backElements?.length
+        ? restoreCoverGraphics(norm.backElements, builtinBack, omitted)
+        : builtinBack);
     return {
       ...d,
       thumbPhoto: undefined,

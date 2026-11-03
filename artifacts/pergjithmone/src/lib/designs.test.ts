@@ -275,7 +275,7 @@ describe("designCatalogFace", () => {
     expect(face.kind === "elements" && face.elements.some((e) => e.text === "VIENNA")).toBe(true);
   });
 
-  it("ignores a background-only Design Studio save so Barcelona keeps its layers", () => {
+  it("ignores a partial background-only front save so Barcelona keeps its layers", () => {
     const d = DESIGNS.find((x) => x.id === "barcelona-red")!;
     const [patched] = applyDesignOverrides(
       [d],
@@ -289,6 +289,33 @@ describe("designCatalogFace", () => {
     );
     expect(designFrontElements(patched).some((e) => e.text === "BARCELONA")).toBe(true);
     expect(designFrontElements(patched).some((e) => e.src?.includes("sagrada-familia"))).toBe(true);
+  });
+
+  it("preserves an explicitly cleared / background-only back cover from Design Studio", () => {
+    const d = DESIGNS.find((x) => x.id === "barcelona-red")!;
+    const bgOnly = [
+      { type: "background" as const, x: 0, y: 0, w: DESIGN_W, h: DESIGN_H, rotation: 0, bgColor: "#A83442" },
+    ];
+    const [patched] = applyDesignOverrides(
+      [d],
+      {
+        "barcelona-red": {
+          frontElements: d.elements,
+          backElements: bgOnly,
+        },
+      },
+    );
+    expect(designFrontElements(patched).some((e) => e.text === "BARCELONA")).toBe(true);
+    expect(designBackElements(patched)).toEqual(bgOnly);
+    expect(designBackElements(patched).some((e) => e.text === "BARCELONA")).toBe(false);
+  });
+
+  it("treats an explicit empty backElements array as empty (not front)", () => {
+    const d = {
+      ...DESIGNS[0],
+      backElements: [] as typeof DESIGNS[0]["elements"],
+    };
+    expect(designBackElements(d)).toEqual([]);
   });
 
   it("uses live Barcelona layers instead of the baked mockup JPG", () => {
