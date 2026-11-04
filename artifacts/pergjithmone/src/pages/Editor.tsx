@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo, startTransition } from 'react';
-import { flushSync } from 'react-dom';
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo, startTransition } from 'react';
+import { createPortal, flushSync } from 'react-dom';
 import { Stage, Layer, Rect, Text as KonvaText, Image as KonvaImage, Transformer, Line, Group, Path as KonvaPath } from 'react-konva';
 import { useGetProject, useCreateOrder, useListBookSizes, useGetAppSettings, useListLayouts, getGetProjectQueryKey, getListProjectsQueryKey } from '@workspace/api-client-react-tsconfig';
 import { useQueryClient } from '@tanstack/react-query';
@@ -1462,38 +1462,74 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
   const isBold=toolbarStyle.includes('bold');
   const isItalic=toolbarStyle.includes('italic');
   const scriptFont = isEditorSingleCutFont(toolbarEl?.fontFamily);
-  // Mobile: dock full-width under the canvas. Desktop: float beside the text.
-  const PANEL_W = isMobile ? Math.max(0, pageW - 8) : Math.min(320, Math.max(240, pageW - 8));
-  const PANEL_H = isMobile ? 210 : 236;
-  const GAP = 8;
-  const elLeft=toolbarEl?toolbarEl.x*scX:0;
-  const elRight=toolbarEl?(toolbarEl.x+toolbarEl.w)*scX:0;
-  const elTop=toolbarEl?toolbarEl.y*scY:0;
-  const elMidY=toolbarEl?(toolbarEl.y+toolbarEl.h/2)*scY:0;
-  const roomRight=toolbarEl?(pageW-elRight-GAP>=PANEL_W):false;
-  const roomLeft=toolbarEl?(elLeft-GAP>=PANEL_W):false;
-  let panelLeft=4;
-  let panelTop=4;
-  let panelWidth = PANEL_W;
-  if (toolbarEl) {
-    if (isMobile) {
-      panelLeft = 4;
-      panelWidth = Math.max(0, pageW - 8);
-      panelTop = Math.max(4, pageH - PANEL_H - 4);
-    } else if (roomRight) {
-      panelLeft = elRight + GAP;
-      panelTop = Math.max(4, Math.min(elMidY - PANEL_H / 2, pageH - PANEL_H - 4));
-    } else if (roomLeft) {
-      panelLeft = elLeft - GAP - PANEL_W;
-      panelTop = Math.max(4, Math.min(elMidY - PANEL_H / 2, pageH - PANEL_H - 4));
-    } else {
-      panelLeft = Math.max(4, Math.min(elLeft, pageW - PANEL_W - 4));
-      const elBottom = (toolbarEl.y + toolbarEl.h) * scY;
-      if (elBottom + PANEL_H + GAP <= pageH) panelTop = elBottom + GAP;
-      else if (elTop - PANEL_H - GAP >= 4) panelTop = elTop - PANEL_H - GAP;
-      else panelTop = Math.max(4, pageH - PANEL_H - 4);
-    }
-  }
+  // Fixed portal dock — never painted on top of the textarea inside the page.
+  const TEXT_DOCK_H = isMobile ? 188 : 200;
+  const [textDock, setTextDock] = useState({ left: 8, top: 8, width: 320 });
+  useLayoutEffect(() => {
+    if (!editId || !editEl) return;
+    const place = () => {
+      const ta = textareaRef.current;
+      const vv = window.visualViewport;
+      const viewTop = vv?.offsetTop ?? 0;
+      const viewLeft = vv?.offsetLeft ?? 0;
+      const viewW = vv?.width ?? window.innerWidth;
+      const viewH = vv?.height ?? window.innerHeight;
+      const viewBottom = viewTop + viewH;
+      const GAP = 10;
+      // Mobile: pin above the soft keyboard (visualViewport bottom). Desktop: beside/below text.
+      if (isMobile) {
+        setTextDock({
+          left: viewLeft + 8,
+          top: Math.max(viewTop + 8, viewBottom - TEXT_DOCK_H - 8),
+          width: Math.max(240, viewW - 16),
+        });
+        return;
+      }
+      const width = Math.min(340, Math.max(280, viewW - 24));
+      if (!ta) {
+        setTextDock({
+          left: viewLeft + 8,
+          top: Math.max(viewTop + 8, viewBottom - TEXT_DOCK_H - 8),
+          width,
+        });
+        return;
+      }
+      const r = ta.getBoundingClientRect();
+      // Prefer right of text, then left, then below, then above — never overlap glyphs.
+      let left = r.right + GAP;
+      let top = r.top;
+      if (left + width <= viewLeft + viewW - 8) {
+        top = Math.max(viewTop + 8, Math.min(r.top, viewBottom - TEXT_DOCK_H - 8));
+      } else if (r.left - GAP - width >= viewLeft + 8) {
+        left = r.left - GAP - width;
+        top = Math.max(viewTop + 8, Math.min(r.top, viewBottom - TEXT_DOCK_H - 8));
+      } else {
+        left = Math.max(viewLeft + 8, Math.min(r.left, viewLeft + viewW - width - 8));
+        const below = r.bottom + GAP;
+        const above = r.top - GAP - TEXT_DOCK_H;
+        if (below + TEXT_DOCK_H <= viewBottom - 8) top = below;
+        else if (above >= viewTop + 8) top = above;
+        else top = Math.max(viewTop + 8, viewBottom - TEXT_DOCK_H - 8);
+      }
+      setTextDock({ left, top, width });
+    };
+    place();
+    const ro = typeof ResizeObserver !== 'undefined' && textareaRef.current
+      ? new ResizeObserver(place)
+      : null;
+    if (textareaRef.current && ro) ro.observe(textareaRef.current);
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    window.visualViewport?.addEventListener('resize', place);
+    window.visualViewport?.addEventListener('scroll', place);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+      window.visualViewport?.removeEventListener('resize', place);
+      window.visualViewport?.removeEventListener('scroll', place);
+    };
+  }, [editId, editEl, editText, isMobile, TEXT_DOCK_H, pageW, pageH, scX, scY]);
   const coverInteractive = page.role === 'front_cover' || page.role === 'back_cover';
 
   const clientToDesign = useCallback((clientX: number, clientY: number) => {
@@ -1721,14 +1757,11 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
         </Layer>
       </Stage>
 
-      {/* ── Inline text editor ── */}
+      {/* ── Inline text editor (textarea on page; format dock is portaled) ── */}
       {editEl && editId && (
-        /* Composite container — onBlur only fires when focus truly leaves */
         <div
-          onBlur={e=>{if(!e.currentTarget.contains(e.relatedTarget as Node))setTimeout(commitEdit,10);}}
           style={{position:'absolute',inset:0,zIndex:28,pointerEvents:'none'}}
         >
-          {/* Nearly-transparent textarea — design shows through */}
           <textarea ref={textareaRef} value={editText}
             placeholder={chipLang==='sq'?'Shto tekstin tënd...':'Your text here...'}
             onChange={e=>{
@@ -1742,6 +1775,17 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
             onKeyDown={e=>{
               if(e.key==='Escape'){e.preventDefault();setEditId(null);textSeedRef.current=false;}
               if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){e.preventDefault();commitEdit();}
+            }}
+            onBlur={e=>{
+              // Commit only when focus leaves both the field and the portaled dock.
+              const next = e.relatedTarget as Node | null;
+              const dock = document.getElementById('editor-text-dock');
+              if (dock && next && dock.contains(next)) return;
+              setTimeout(() => {
+                const active = document.activeElement;
+                if (active && (active === textareaRef.current || dock?.contains(active))) return;
+                commitEdit();
+              }, 10);
             }}
             enterKeyHint="done"
             autoCapitalize="sentences"
@@ -1769,30 +1813,37 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
               caretColor: editEl.fill || '#1a1a1a',
             }}
           />
+        </div>
+      )}
 
-          {/* ── Text format dock (builder-style) ── */}
+      {editEl && editId && createPortal(
           <div
+            id="editor-text-dock"
             style={{
-              position: 'absolute',
-              pointerEvents: 'all',
-              left: panelLeft,
-              top: panelTop,
-              width: panelWidth,
+              position: 'fixed',
+              left: textDock.left,
+              top: textDock.top,
+              width: textDock.width,
+              maxHeight: 'min(240px, 46dvh)',
+              overflowY: 'auto',
               boxSizing: 'border-box',
-              overflow: 'hidden',
               background: '#ffffff',
-              borderRadius: isMobile ? 16 : 14,
+              borderRadius: 14,
               border: '1px solid rgba(0,0,0,0.08)',
-              boxShadow: isMobile
-                ? '0 -8px 32px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.06)'
-                : '0 16px 48px rgba(0,0,0,0.16), 0 2px 8px rgba(0,0,0,0.07)',
-              padding: isMobile ? '10px 10px 12px' : '10px 12px 12px',
+              boxShadow: '0 16px 48px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.08)',
+              padding: '8px 10px 10px',
               display: 'flex',
               flexDirection: 'column',
-              gap: 8,
-              zIndex: 30,
+              gap: 7,
+              zIndex: 80,
+              pointerEvents: 'all',
             }}
-            onMouseDown={e => e.stopPropagation()}
+            onMouseDown={e => {
+              const t = e.target as HTMLElement;
+              if (t.closest('input, textarea, select, [contenteditable="true"]')) return;
+              // Keep the page textarea focused when tapping style chips.
+              e.preventDefault();
+            }}
             onPointerDown={e => e.stopPropagation()}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
@@ -2034,8 +2085,8 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
                 />
               </div>
             </div>
-          </div>
-        </div>
+          </div>,
+          document.body,
       )}
 
       {/* Blank inner page — ask for a layout before photos */}
