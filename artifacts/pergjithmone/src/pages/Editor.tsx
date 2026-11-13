@@ -321,6 +321,18 @@ const TEXT_TOOL_BTN: React.CSSProperties = {
   transition: 'background 0.12s, color 0.12s',
 };
 
+/** Mobile text dock — keep controls usable without eating half the screen. */
+const TEXT_TOOL_BTN_SM: React.CSSProperties = {
+  ...TEXT_TOOL_BTN,
+  height: 28,
+  minWidth: 28,
+  padding: '0 7px',
+  borderRadius: 8,
+  fontSize: 12,
+};
+
+const TEXT_SIZE_PRESETS_MOBILE = [18, 24, 30, 36, 48, 64];
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Build spreads
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1489,8 +1501,9 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
   const isBold=toolbarStyle.includes('bold');
   const isItalic=toolbarStyle.includes('italic');
   const scriptFont = isEditorSingleCutFont(toolbarEl?.fontFamily);
-  // Fixed portal dock — never painted on top of the textarea inside the page.
-  const TEXT_DOCK_H = isMobile ? 188 : 200;
+  // Fixed portal dock — compact on mobile so it stays above the keyboard, not on the glyphs.
+  const TEXT_DOCK_H = isMobile ? 132 : 200;
+  const textDockRef = useRef<HTMLDivElement>(null);
   const [textDock, setTextDock] = useState({ left: 8, top: 8, width: 320 });
   useLayoutEffect(() => {
     if (!editId || !editEl) return;
@@ -1503,20 +1516,20 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
       const viewH = vv?.height ?? window.innerHeight;
       const viewBottom = viewTop + viewH;
       const GAP = 10;
-      // Mobile: pin above the soft keyboard (visualViewport bottom). Desktop: beside/below text.
+      const measured = textDockRef.current?.getBoundingClientRect().height;
+      const dockH = Math.max(isMobile ? 110 : 160, Math.min(measured || TEXT_DOCK_H, TEXT_DOCK_H + 24));
+      // Mobile: pin just above the soft keyboard; keep it short so it doesn't cover the field.
       if (isMobile) {
-        setTextDock({
-          left: viewLeft + 8,
-          top: Math.max(viewTop + 8, viewBottom - TEXT_DOCK_H - 8),
-          width: Math.max(240, viewW - 16),
-        });
+        const width = Math.max(240, viewW - 12);
+        const top = Math.max(viewTop + 6, viewBottom - dockH - 6);
+        setTextDock({ left: viewLeft + 6, top, width });
         return;
       }
       const width = Math.min(340, Math.max(280, viewW - 24));
       if (!ta) {
         setTextDock({
           left: viewLeft + 8,
-          top: Math.max(viewTop + 8, viewBottom - TEXT_DOCK_H - 8),
+          top: Math.max(viewTop + 8, viewBottom - dockH - 8),
           width,
         });
         return;
@@ -1526,17 +1539,17 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
       let left = r.right + GAP;
       let top = r.top;
       if (left + width <= viewLeft + viewW - 8) {
-        top = Math.max(viewTop + 8, Math.min(r.top, viewBottom - TEXT_DOCK_H - 8));
+        top = Math.max(viewTop + 8, Math.min(r.top, viewBottom - dockH - 8));
       } else if (r.left - GAP - width >= viewLeft + 8) {
         left = r.left - GAP - width;
-        top = Math.max(viewTop + 8, Math.min(r.top, viewBottom - TEXT_DOCK_H - 8));
+        top = Math.max(viewTop + 8, Math.min(r.top, viewBottom - dockH - 8));
       } else {
         left = Math.max(viewLeft + 8, Math.min(r.left, viewLeft + viewW - width - 8));
         const below = r.bottom + GAP;
-        const above = r.top - GAP - TEXT_DOCK_H;
-        if (below + TEXT_DOCK_H <= viewBottom - 8) top = below;
+        const above = r.top - GAP - dockH;
+        if (below + dockH <= viewBottom - 8) top = below;
         else if (above >= viewTop + 8) top = above;
-        else top = Math.max(viewTop + 8, viewBottom - TEXT_DOCK_H - 8);
+        else top = Math.max(viewTop + 8, viewBottom - dockH - 8);
       }
       setTextDock({ left, top, width });
     };
@@ -1545,12 +1558,17 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
       ? new ResizeObserver(place)
       : null;
     if (textareaRef.current && ro) ro.observe(textareaRef.current);
+    const dockRo = typeof ResizeObserver !== 'undefined' && textDockRef.current
+      ? new ResizeObserver(place)
+      : null;
+    if (textDockRef.current && dockRo) dockRo.observe(textDockRef.current);
     window.addEventListener('resize', place);
     window.addEventListener('scroll', place, true);
     window.visualViewport?.addEventListener('resize', place);
     window.visualViewport?.addEventListener('scroll', place);
     return () => {
       ro?.disconnect();
+      dockRo?.disconnect();
       window.removeEventListener('resize', place);
       window.removeEventListener('scroll', place, true);
       window.visualViewport?.removeEventListener('resize', place);
@@ -1851,23 +1869,29 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
 
       {editEl && editId && createPortal(
           <div
+            ref={textDockRef}
             id="editor-text-dock"
             style={{
               position: 'fixed',
               left: textDock.left,
               top: textDock.top,
               width: textDock.width,
-              maxHeight: 'min(240px, 46dvh)',
+              maxHeight: isMobile ? 'min(138px, 30dvh)' : 'min(240px, 46dvh)',
               overflowY: 'auto',
+              WebkitOverflowScrolling: 'touch',
               boxSizing: 'border-box',
               background: '#ffffff',
-              borderRadius: 14,
+              borderRadius: isMobile ? 12 : 14,
               border: '1px solid rgba(0,0,0,0.08)',
-              boxShadow: '0 16px 48px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.08)',
-              padding: '8px 10px 10px',
+              boxShadow: isMobile
+                ? '0 8px 28px rgba(0,0,0,0.16)'
+                : '0 16px 48px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.08)',
+              padding: isMobile
+                ? '5px 8px calc(6px + env(safe-area-inset-bottom, 0px))'
+                : '8px 10px 10px',
               display: 'flex',
               flexDirection: 'column',
-              gap: 7,
+              gap: isMobile ? 4 : 7,
               zIndex: 80,
               pointerEvents: 'all',
             }}
@@ -1879,29 +1903,42 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
             }}
             onPointerDown={e => e.stopPropagation()}
           >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#888' }}>
+            {(() => {
+              const btn = isMobile ? TEXT_TOOL_BTN_SM : TEXT_TOOL_BTN;
+              const sizePresets = isMobile ? TEXT_SIZE_PRESETS_MOBILE : TEXT_SIZE_PRESETS;
+              const swatch = isMobile ? 18 : 22;
+              return (
+                <>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+              <span style={{
+                fontSize: isMobile ? 10 : 11,
+                fontWeight: 700,
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase',
+                color: '#888',
+              }}>
                 {chipLang === 'sq' ? 'Teksti' : 'Text'}
               </span>
               <button
                 type="button"
                 onMouseDown={e => { e.preventDefault(); commitEdit(); }}
                 style={{
-                  ...TEXT_TOOL_BTN,
-                  height: 30,
+                  ...btn,
+                  height: isMobile ? 26 : 30,
                   background: '#1a1a1a',
                   color: '#fff',
-                  fontSize: 12,
+                  fontSize: isMobile ? 11 : 12,
                   fontWeight: 700,
-                  padding: '0 14px',
+                  padding: isMobile ? '0 10px' : '0 14px',
                 }}
               >
                 {chipLang === 'sq' ? 'Gati' : 'Done'}
               </button>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 4 : 6, minWidth: 0 }}>
               <FontPicker
+                compact={!!isMobile}
                 value={toolbarEl?.fontFamily}
                 onChange={fontFamily => {
                   onChangeEl(editId, { fontFamily });
@@ -1917,7 +1954,7 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
                   onChangeEl(editId, { fontStyle: fs });
                 }}
                 style={{
-                  ...TEXT_TOOL_BTN,
+                  ...btn,
                   fontWeight: 800,
                   background: isBold ? '#1a1a1a' : '#f2f2f2',
                   color: isBold ? '#fff' : '#444',
@@ -1933,7 +1970,7 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
                   onChangeEl(editId, { fontStyle: fs });
                 }}
                 style={{
-                  ...TEXT_TOOL_BTN,
+                  ...btn,
                   fontStyle: 'italic',
                   fontFamily: 'Georgia, serif',
                   background: isItalic ? '#1a1a1a' : '#f2f2f2',
@@ -1944,11 +1981,11 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
               >I</button>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 4 : 6, minWidth: 0 }}>
               <button
                 type="button"
                 onMouseDown={e => { e.preventDefault(); onChangeEl(editId, { fontSize: Math.max(6, (toolbarEl?.fontSize || 30) - 2) }); }}
-                style={{ ...TEXT_TOOL_BTN, background: '#f2f2f2', color: '#444', fontSize: 18 }}
+                style={{ ...btn, background: '#f2f2f2', color: '#444', fontSize: isMobile ? 15 : 18 }}
               >−</button>
               <input
                 type="number"
@@ -1962,13 +1999,13 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
                 }}
                 onBlur={() => setTimeout(() => textareaRef.current?.focus(), 15)}
                 style={{
-                  width: 52,
-                  height: 36,
+                  width: isMobile ? 40 : 52,
+                  height: isMobile ? 28 : 36,
                   textAlign: 'center',
-                  fontSize: 14,
+                  fontSize: isMobile ? 12 : 14,
                   fontWeight: 700,
                   border: '1px solid #e6e6e6',
-                  borderRadius: 10,
+                  borderRadius: isMobile ? 8 : 10,
                   outline: 'none',
                   background: '#fafafa',
                   flexShrink: 0,
@@ -1977,10 +2014,10 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
               <button
                 type="button"
                 onMouseDown={e => { e.preventDefault(); onChangeEl(editId, { fontSize: Math.min(200, (toolbarEl?.fontSize || 30) + 2) }); }}
-                style={{ ...TEXT_TOOL_BTN, background: '#f2f2f2', color: '#444', fontSize: 18 }}
+                style={{ ...btn, background: '#f2f2f2', color: '#444', fontSize: isMobile ? 15 : 18 }}
               >+</button>
-              <div style={{ flex: 1, display: 'flex', gap: 4, overflowX: 'auto', minWidth: 0, paddingBottom: 1 }}>
-                {TEXT_SIZE_PRESETS.map(sz => {
+              <div style={{ flex: 1, display: 'flex', gap: 3, overflowX: 'auto', minWidth: 0, paddingBottom: 1 }}>
+                {sizePresets.map(sz => {
                   const on = (toolbarEl?.fontSize || 30) === sz;
                   return (
                     <button
@@ -1988,10 +2025,10 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
                       type="button"
                       onMouseDown={e => { e.preventDefault(); onChangeEl(editId, { fontSize: sz }); }}
                       style={{
-                        ...TEXT_TOOL_BTN,
-                        minWidth: 40,
-                        height: 32,
-                        fontSize: 11,
+                        ...btn,
+                        minWidth: isMobile ? 30 : 40,
+                        height: isMobile ? 26 : 32,
+                        fontSize: isMobile ? 10 : 11,
                         background: on ? '#1a1a1a' : '#f6f6f6',
                         color: on ? '#fff' : '#555',
                       }}
@@ -2001,7 +2038,7 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
               </div>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 4 : 6, minWidth: 0 }}>
               {(['left', 'center', 'right'] as const).map(al => {
                 const on = (toolbarEl?.align || 'center') === al;
                 return (
@@ -2011,12 +2048,12 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
                     onMouseDown={e => { e.preventDefault(); onChangeEl(editId, { align: al }); }}
                     title={al}
                     style={{
-                      ...TEXT_TOOL_BTN,
+                      ...btn,
                       background: on ? '#1a1a1a' : '#f2f2f2',
                       color: on ? '#fff' : '#555',
                     }}
                   >
-                    <svg width="14" height="12" viewBox="0 0 13 11" fill="currentColor">
+                    <svg width={isMobile ? 12 : 14} height={isMobile ? 10 : 12} viewBox="0 0 13 11" fill="currentColor">
                       {al === 'left' && <><rect x="0" y="0" width="13" height="2" rx="1"/><rect x="0" y="4.5" width="9" height="2" rx="1"/><rect x="0" y="9" width="11" height="2" rx="1"/></>}
                       {al === 'center' && <><rect x="0" y="0" width="13" height="2" rx="1"/><rect x="2" y="4.5" width="9" height="2" rx="1"/><rect x="1" y="9" width="11" height="2" rx="1"/></>}
                       {al === 'right' && <><rect x="0" y="0" width="13" height="2" rx="1"/><rect x="4" y="4.5" width="9" height="2" rx="1"/><rect x="2" y="9" width="11" height="2" rx="1"/></>}
@@ -2024,7 +2061,7 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
                   </button>
                 );
               })}
-              <span style={{ width: 1, height: 22, background: '#ececec', flexShrink: 0 }} />
+              <span style={{ width: 1, height: isMobile ? 18 : 22, background: '#ececec', flexShrink: 0 }} />
               {(['top', 'middle', 'bottom'] as const).map(va => {
                 const on = (toolbarEl?.verticalAlign || 'top') === va;
                 const label = va === 'top' ? 'T' : va === 'middle' ? 'M' : 'B';
@@ -2037,57 +2074,65 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
                       ? (va === 'top' ? 'Sipër' : va === 'middle' ? 'Mes' : 'Poshtë')
                       : (va === 'top' ? 'Top' : va === 'middle' ? 'Middle' : 'Bottom')}
                     style={{
-                      ...TEXT_TOOL_BTN,
-                      minWidth: 34,
-                      fontSize: 11,
+                      ...btn,
+                      minWidth: isMobile ? 26 : 34,
+                      fontSize: isMobile ? 10 : 11,
                       background: on ? '#1a1a1a' : '#f2f2f2',
                       color: on ? '#fff' : '#555',
                     }}
                   >{label}</button>
                 );
               })}
-            </div>
-
-            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 7 }}>
-              {TEXT_COLORS.map(c => {
-                const on = (toolbarEl?.fill || '#1a1a1a').toLowerCase() === c.toLowerCase();
-                return (
-                  <button
-                    key={c}
-                    type="button"
-                    onMouseDown={e => { e.preventDefault(); onChangeEl(editId, { fill: c }); }}
-                    title={c}
-                    style={{
-                      width: isMobile ? 26 : 22,
-                      height: isMobile ? 26 : 22,
-                      borderRadius: '50%',
-                      cursor: 'pointer',
-                      flexShrink: 0,
-                      background: c,
-                      boxSizing: 'border-box',
-                      border: on ? '2.5px solid #2563EB' : c === '#FFFFFF' ? '1.5px solid #ddd' : '1.5px solid transparent',
-                      boxShadow: on ? '0 0 0 1px rgba(37,99,235,0.25)' : undefined,
-                    }}
+              <div style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                gap: isMobile ? 5 : 7,
+                overflowX: 'auto',
+                minWidth: 0,
+                paddingLeft: 2,
+              }}>
+                {TEXT_COLORS.map(c => {
+                  const on = (toolbarEl?.fill || '#1a1a1a').toLowerCase() === c.toLowerCase();
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      onMouseDown={e => { e.preventDefault(); onChangeEl(editId, { fill: c }); }}
+                      title={c}
+                      style={{
+                        width: swatch,
+                        height: swatch,
+                        borderRadius: '50%',
+                        cursor: 'pointer',
+                        flexShrink: 0,
+                        background: c,
+                        boxSizing: 'border-box',
+                        border: on ? '2px solid #2563EB' : c === '#FFFFFF' ? '1.5px solid #ddd' : '1.5px solid transparent',
+                        boxShadow: on ? '0 0 0 1px rgba(37,99,235,0.25)' : undefined,
+                      }}
+                    />
+                  );
+                })}
+                <div style={{ position: 'relative', width: swatch, height: swatch, flexShrink: 0 }}>
+                  <div style={{
+                    position: 'absolute', inset: 0, borderRadius: '50%',
+                    background: 'conic-gradient(red,yellow,lime,cyan,blue,magenta,red)',
+                    border: '1.5px solid #ddd', pointerEvents: 'none',
+                  }} />
+                  <input
+                    type="color"
+                    key={`col-${editId}-${toolbarEl?.fill}`}
+                    defaultValue={toolbarEl?.fill || '#1a1a1a'}
+                    onChange={e => onChangeEl(editId, { fill: e.target.value })}
+                    onBlur={() => setTimeout(() => textareaRef.current?.focus(), 15)}
+                    style={{ opacity: 0, position: 'absolute', inset: 0, width: '100%', height: '100%', cursor: 'pointer', padding: 0, border: 'none' }}
                   />
-                );
-              })}
-              <div style={{ position: 'relative', width: isMobile ? 26 : 22, height: isMobile ? 26 : 22, flexShrink: 0 }}>
-                <div style={{
-                  position: 'absolute', inset: 0, borderRadius: '50%',
-                  background: 'conic-gradient(red,yellow,lime,cyan,blue,magenta,red)',
-                  border: '1.5px solid #ddd', pointerEvents: 'none',
-                }} />
-                <input
-                  type="color"
-                  key={`col-${editId}-${toolbarEl?.fill}`}
-                  defaultValue={toolbarEl?.fill || '#1a1a1a'}
-                  onChange={e => onChangeEl(editId, { fill: e.target.value })}
-                  onBlur={() => setTimeout(() => textareaRef.current?.focus(), 15)}
-                  style={{ opacity: 0, position: 'absolute', inset: 0, width: '100%', height: '100%', cursor: 'pointer', padding: 0, border: 'none' }}
-                />
+                </div>
               </div>
             </div>
 
+            {!isMobile && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.2fr', gap: 8, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 }}>
                 <span style={{ fontSize: 10, color: '#999', flexShrink: 0 }} title={chipLang === 'sq' ? 'Hapësira e rreshtave' : 'Line height'}>↕</span>
@@ -2118,6 +2163,10 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
                 />
               </div>
             </div>
+            )}
+                </>
+              );
+            })()}
           </div>,
           document.body,
       )}

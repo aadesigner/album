@@ -17,10 +17,13 @@ export function FontPicker({
   value,
   onChange,
   tone = 'light',
+  compact = false,
 }: {
   value?: string | null;
   onChange: (fontFamily: string) => void;
   tone?: 'light' | 'admin';
+  /** Tighter trigger for the mobile text dock. */
+  compact?: boolean;
 }) {
   const { lang } = useLanguage();
   const current = normalizeEditorFont(value);
@@ -94,7 +97,9 @@ export function FontPicker({
         onClick={toggle}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="w-full h-9 px-2.5 rounded-[10px] text-left text-[13px] outline-none truncate"
+        className={`w-full text-left outline-none truncate ${
+          compact ? 'h-7 px-2 rounded-lg text-[12px]' : 'h-9 px-2.5 rounded-[10px] text-[13px]'
+        }`}
         style={{
           border: `1px solid ${line}`,
           background: bg,
