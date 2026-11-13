@@ -11,7 +11,14 @@ import { eq, and, inArray, count } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { v4 as uuidv4 } from "uuid";
 import { logger } from "../lib/logger";
-import { queueProjectPdfGeneration, pdfsDir, isPdfGenerationInFlight, ensureProjectPdfFile } from "../lib/generateProjectPdf";
+import {
+  queueProjectPdfGeneration,
+  pdfsDir,
+  isPdfGenerationInFlight,
+  ensureProjectPdfFile,
+  getLastPdfError,
+  projectPdfExists,
+} from "../lib/generateProjectPdf";
 import { getSecuritySettings } from "../lib/securitySettings";
 import {
   getProjectEditBlock,
@@ -988,11 +995,15 @@ router.get(
     // PDF readiness is orthogonal to checkout. Ordered projects keep
     // status="ordered" while a render runs; report generating via the
     // in-flight set instead of overwriting status.
+    const lastError = getLastPdfError(projectId);
+    const fileReady = projectPdfExists(projectId);
     let pollStatus: string;
     if (isPdfGenerationInFlight(projectId) || project.status === "pdf_generating") {
       pollStatus = "generating";
-    } else if (project.pdfUrl || project.status === "pdf_ready") {
+    } else if (fileReady || project.pdfUrl || project.status === "pdf_ready") {
       pollStatus = "ready";
+    } else if (lastError) {
+      pollStatus = "failed";
     } else {
       // draft, or ordered with a missing/failed PDF
       pollStatus = "pending";
@@ -1000,9 +1011,11 @@ router.get(
 
     res.json({
       status: pollStatus,
-      pdfUrl: project.pdfUrl,
+      pdfUrl: (fileReady || project.pdfUrl)
+        ? (project.pdfUrl || `/api/projects/${projectId}/pdf-download`)
+        : null,
       shareToken: project.shareToken,
-      error: null,
+      error: pollStatus === "failed" ? lastError : null,
     });
   },
 );

@@ -37,7 +37,7 @@ import { CLARITY_KEY_MAP, normalizeClarityWrite, readClaritySettings } from "../
 import { readWebThemeSettings, normalizeWebThemeWrite } from "../lib/webThemeSettings";
 import { parseEditorElements, EDITOR_ELEMENTS_MAX } from "../lib/editorElements";
 import { invalidateIpBlocklistCache } from "../lib/ipBlocklist";
-import { queueProjectPdfGeneration, deleteProjectPdfFile } from "../lib/generateProjectPdf";
+import { queueAndWaitProjectPdfGeneration, deleteProjectPdfFile } from "../lib/generateProjectPdf";
 import { logger } from "../lib/logger";
 import { hasPersistentStorage, resolveDataRoot } from "../lib/dataDir";
 import {
@@ -1368,12 +1368,31 @@ router.post(
       .where(eq(projectsTable.id, order.projectId));
 
     try {
-      await queueProjectPdfGeneration(order.projectId);
+      // Wait up to ~55s so the admin click gets ready/failed — not a silent
+      // background job that looks stuck forever in the UI.
+      // allowMissingUploads: recover stuck orders (local-photo / missing files
+      // print as blank slots; photos still on the volume are included).
+      const result = await queueAndWaitProjectPdfGeneration(order.projectId, 90_000, {
+        allowMissingUploads: true,
+      });
+      if (result.status === "failed") {
+        res.status(400).json({
+          error: result.error || "PDF generation failed",
+          status: "failed",
+        });
+        return;
+      }
+      res.json({
+        success: true,
+        status: result.status,
+        pdfUrl: result.pdfUrl,
+        error: null,
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
       const isCap = msg.startsWith("TOO_MANY_CONCURRENT_PDFS");
       const isMissing = msg.startsWith("MISSING_UPLOADS");
-      const isLocal = msg.startsWith("UNRESOLVED_DEVICE_PHOTOS");
+      const isLocal = msg.startsWith("UNRESOLVED_DEVICE_PHOTOS") || /device-local|local-photo/i.test(msg);
       if (!isCap && !isMissing && !isLocal) {
         logger.error({ err, orderId, projectId: order.projectId }, "Admin PDF regenerate failed");
       }
@@ -1382,11 +1401,11 @@ router.post(
           ? "Too many PDFs generating right now. Try again in a moment."
           : isMissing || isLocal
             ? msg
-            : "Unable to queue PDF generation",
+            : (msg || "Unable to generate PDF"),
+        status: "failed",
       });
       return;
     }
-    res.json({ success: true, status: "generating" });
   },
 );
 

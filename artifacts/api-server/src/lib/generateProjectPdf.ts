@@ -58,11 +58,31 @@ const generatingProjectIds = new Set<number>();
 /** Coalesce concurrent ensure/queue work for the same project. */
 const inFlightRenders = new Map<number, Promise<string>>();
 
+/** Last render failure per project — pdf-status / admin UI can surface it. */
+const lastPdfErrors = new Map<number, string>();
+
 export function isPdfGenerationInFlight(projectId: number): boolean {
   return generatingProjectIds.has(projectId) || inFlightRenders.has(projectId);
 }
 
+export function getLastPdfError(projectId: number): string | null {
+  return lastPdfErrors.get(projectId) ?? null;
+}
+
+export function clearLastPdfError(projectId: number): void {
+  lastPdfErrors.delete(projectId);
+}
+
+function rememberPdfError(projectId: number, err: unknown): void {
+  const msg = err instanceof Error ? err.message : String(err || "PDF generation failed");
+  lastPdfErrors.set(projectId, msg.slice(0, 500));
+}
+
 const PDF_URL = (projectId: number) => `/api/projects/${projectId}/pdf-download`;
+
+export function projectPdfPublicUrl(projectId: number): string {
+  return PDF_URL(projectId);
+}
 
 /**
  * Refuse to bake a print PDF when album pages reference uploads that are not
@@ -92,7 +112,19 @@ export function assertAlbumUploadsOnDisk(
   );
 }
 
-async function loadRenderInput(projectId: number): Promise<{
+export type PdfGenOptions = {
+  /**
+   * Studio / admin recovery: render even if some photos are still `local-photo:`
+   * or missing on disk. Missing slots print blank; available photos still bake in.
+   * Client checkout stays strict so we don't silently ship empty albums.
+   */
+  allowMissingUploads?: boolean;
+};
+
+async function loadRenderInput(
+  projectId: number,
+  opts: PdfGenOptions = {},
+): Promise<{
   bookWidthCm: number;
   bookHeightCm: number;
   pages: PdfRenderPage[];
@@ -119,6 +151,13 @@ async function loadRenderInput(projectId: number): Promise<{
     .where(eq(projectPagesTable.projectId, projectId));
 
   const renderPages: PdfRenderPage[] = pages.map((p) => {
+    const elements = parsePageElements(p.contentJson).map((el) => {
+      // Device-only refs are never fetchable on the server — drop so layout/text still print.
+      if (el.src && (/^local-photo:/i.test(el.src) || /^blob:/i.test(el.src))) {
+        return { ...el, src: undefined };
+      }
+      return el;
+    });
     return {
       pageNumber: p.pageNumber,
       role:
@@ -127,21 +166,32 @@ async function loadRenderInput(projectId: number): Promise<{
           : p.pageType === "inside_back_cover"
             ? "locked_right"
             : p.pageType,
-      elements: parsePageElements(p.contentJson),
+      elements,
     };
   });
 
-  const unresolved = pages.filter((p) => pageHasUnresolvedDevicePhotos(p.contentJson));
-  if (unresolved.length > 0) {
-    throw new Error(
-      `Project ${projectId} still has device-local photos on page(s) `
-      + unresolved.map((p) => p.pageNumber).join(", ")
-      + ". Re-open the album on the original device and place the order again so photos upload before print.",
-    );
-  }
-
   const contentJsons = pages.map((p) => p.contentJson);
-  assertAlbumUploadsOnDisk(contentJsons, projectId);
+  if (!opts.allowMissingUploads) {
+    const unresolved = pages.filter((p) => pageHasUnresolvedDevicePhotos(p.contentJson));
+    if (unresolved.length > 0) {
+      throw new Error(
+        `UNRESOLVED_DEVICE_PHOTOS: project ${projectId} still has device-local photos on page(s) `
+        + unresolved.map((p) => p.pageNumber).join(", ")
+        + ". Client must re-order from the device where the album was built so photos upload before print.",
+      );
+    }
+    assertAlbumUploadsOnDisk(contentJsons, projectId);
+  } else {
+    const unresolved = pages.filter((p) => pageHasUnresolvedDevicePhotos(p.contentJson)).length;
+    const names = collectUploadFilenamesFromPages(contentJsons);
+    const found = resolveAlbumUploadFiles(names, getUploadsDir()).length;
+    if (unresolved > 0 || found < names.length) {
+      logger.warn(
+        { projectId, unresolved, found, totalUploads: names.length },
+        "Admin PDF render allowing missing/local photos — blank slots where files are gone",
+      );
+    }
+  }
 
   return {
     bookWidthCm: Number(bookSize.widthCm),
@@ -209,18 +259,29 @@ async function markPdfFailed(projectId: number, hadExistingFile: boolean): Promi
  * Writes to a temp file first, then replaces the previous PDF atomically so a
  * failed / blank render cannot destroy a good ordered album PDF.
  */
-async function renderProjectPdfToDisk(projectId: number): Promise<string> {
+async function renderProjectPdfToDisk(
+  projectId: number,
+  opts: PdfGenOptions = {},
+): Promise<string> {
   const existing = inFlightRenders.get(projectId);
-  if (existing) return existing;
+  if (existing) {
+    try {
+      return await existing;
+    } catch (err) {
+      // A prior strict job may have failed on missing photos — admin recovery retries softly.
+      if (!opts.allowMissingUploads) throw err;
+    }
+  }
 
   const job = (async () => {
     generatingProjectIds.add(projectId);
     activeGenerations++;
+    clearLastPdfError(projectId);
     const outputPath = projectPdfPath(projectId);
     const hadExistingFile = projectPdfExists(projectId);
     const tempPath = `${outputPath}.tmp-${process.pid}-${Date.now()}`;
     try {
-      const input = await loadRenderInput(projectId);
+      const input = await loadRenderInput(projectId, opts);
       ensureDataDirs();
       fs.mkdirSync(path.dirname(outputPath), { recursive: true });
       await renderProjectPdf({
@@ -236,6 +297,7 @@ async function renderProjectPdfToDisk(projectId: number): Promise<string> {
       }
 
       fs.renameSync(tempPath, outputPath);
+      clearLastPdfError(projectId);
       await markPdfReady(projectId);
       return outputPath;
     } catch (err) {
@@ -244,6 +306,7 @@ async function renderProjectPdfToDisk(projectId: number): Promise<string> {
       } catch {
         // ignore
       }
+      rememberPdfError(projectId, err);
       logger.error({ err, projectId }, "PDF generation failed");
       try {
         await markPdfFailed(projectId, hadExistingFile);
@@ -263,15 +326,20 @@ async function renderProjectPdfToDisk(projectId: number): Promise<string> {
 }
 
 /**
- * Ensure the PDF file exists on disk. Regenerates if missing — but refuses to
- * invent a blank PDF when album photos are gone from disk.
+ * Ensure the PDF file exists on disk. Regenerates if missing.
+ * Admin downloads use allowMissingUploads so a stuck ordered album can still
+ * produce a printable file from whatever photos remain on the server.
  */
-export async function ensureProjectPdfFile(projectId: number): Promise<string> {
+export async function ensureProjectPdfFile(
+  projectId: number,
+  opts: PdfGenOptions = { allowMissingUploads: true },
+): Promise<string> {
   if (projectPdfExists(projectId)) {
     return projectPdfPath(projectId);
   }
-  logger.warn({ projectId, pdfsDir: getPdfsDir() }, "PDF missing on disk — regenerating");
-  return renderProjectPdfToDisk(projectId);
+  logger.warn({ projectId, pdfsDir: getPdfsDir(), opts }, "PDF missing on disk — regenerating");
+  await preparePdfGeneration(projectId, opts);
+  return renderProjectPdfToDisk(projectId, opts);
 }
 
 /**
@@ -289,7 +357,10 @@ export async function ensureProjectPdfFile(projectId: number): Promise<string> {
  * concurrency cap is already reached — callers should surface that as a 429.
  * Also throws MISSING_UPLOADS when photos are not on disk.
  */
-export async function queueProjectPdfGeneration(projectId: number): Promise<void> {
+async function preparePdfGeneration(
+  projectId: number,
+  opts: PdfGenOptions = {},
+): Promise<{ preserveOrdered: boolean }> {
   const settings = await getSecuritySettings();
   if (activeGenerations >= settings.maxConcurrentPdfGenerations && !inFlightRenders.has(projectId)) {
     throw new Error("TOO_MANY_CONCURRENT_PDFS: PDF generation concurrency cap reached");
@@ -306,8 +377,10 @@ export async function queueProjectPdfGeneration(projectId: number): Promise<void
     .select({ contentJson: projectPagesTable.contentJson })
     .from(projectPagesTable)
     .where(eq(projectPagesTable.projectId, projectId));
-  // Fail before clearing anything — protects ordered albums from blank PDFs.
-  assertAlbumUploadsOnDisk(pages.map((p) => p.contentJson), projectId);
+  // Strict for client checkout; admin recovery may skip this.
+  if (!opts.allowMissingUploads) {
+    assertAlbumUploadsOnDisk(pages.map((p) => p.contentJson), projectId);
+  }
 
   const preserveOrdered = project.status === "ordered";
 
@@ -321,7 +394,65 @@ export async function queueProjectPdfGeneration(projectId: number): Promise<void
       .where(eq(projectsTable.id, projectId));
   }
 
-  void renderProjectPdfToDisk(projectId).catch(() => {
-    // Errors already logged + status reset inside renderProjectPdfToDisk.
+  clearLastPdfError(projectId);
+  return { preserveOrdered };
+}
+
+export async function queueProjectPdfGeneration(projectId: number): Promise<void> {
+  // Client checkout: keep strict so we don't bake empty photo slots unnoticed.
+  await preparePdfGeneration(projectId, { allowMissingUploads: false });
+  void renderProjectPdfToDisk(projectId, { allowMissingUploads: false }).catch(() => {
+    // Errors already logged + remembered inside renderProjectPdfToDisk.
   });
+}
+
+/**
+ * Start (or join) a PDF render and wait until it finishes or `waitMs` elapses.
+ * Used by admin "Generate PDF" so the click gets a real ready/failed answer
+ * instead of a silent background job the UI never sees fail.
+ *
+ * Defaults to allowMissingUploads so studio can recover stuck ordered albums
+ * (photos still on volume print; missing/local-photo slots stay blank).
+ */
+export async function queueAndWaitProjectPdfGeneration(
+  projectId: number,
+  waitMs = 55_000,
+  opts: PdfGenOptions = { allowMissingUploads: true },
+): Promise<{ status: "ready" | "generating" | "failed"; pdfUrl: string | null; error: string | null }> {
+  await preparePdfGeneration(projectId, opts);
+  const job = renderProjectPdfToDisk(projectId, opts);
+
+  let settled = false;
+  void job.then(
+    () => { settled = true; },
+    () => { settled = true; },
+  );
+
+  const deadline = Date.now() + Math.max(3_000, waitMs);
+  while (Date.now() < deadline && !settled) {
+    await new Promise((r) => setTimeout(r, 400));
+  }
+
+  if (projectPdfExists(projectId) && !isPdfGenerationInFlight(projectId)) {
+    clearLastPdfError(projectId);
+    // Ensure DB pdfUrl is set even if markPdfReady raced.
+    try {
+      await markPdfReady(projectId);
+    } catch {
+      // ignore
+    }
+    return { status: "ready", pdfUrl: PDF_URL(projectId), error: null };
+  }
+
+  const err = getLastPdfError(projectId);
+  if (err && !isPdfGenerationInFlight(projectId)) {
+    return { status: "failed", pdfUrl: null, error: err };
+  }
+
+  // Still rendering — client should keep polling pdf-status.
+  return {
+    status: "generating",
+    pdfUrl: projectPdfExists(projectId) ? PDF_URL(projectId) : null,
+    error: null,
+  };
 }

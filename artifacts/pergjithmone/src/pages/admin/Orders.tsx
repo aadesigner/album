@@ -44,9 +44,10 @@ function PdfViewerModal({ url, orderId, onClose }: { url: string; orderId: numbe
           </a>
           <a
             href={url.includes('download=') ? url : `${url}${url.includes('?') ? '&' : '?'}download=1`}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-neutral-100 text-neutral-600 hover:bg-neutral-200 text-xs font-medium transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-white transition-opacity hover:opacity-90"
+            style={{ background: ADMIN.blushDeep }}
           >
-            <Download size={12} />
+            <Download size={12} /> Download
           </a>
           <button onClick={onClose} className="p-1.5 rounded-xl transition-colors" style={{ color: ADMIN.muted }}>
             <X size={16} />
@@ -301,10 +302,26 @@ export default function AdminOrders() {
     }
   };
 
-  /** Poll until print PDF is ready, then open the viewer. */
+  const pdfFailToast = (msg: string) => {
+    toast({
+      title: /MISSING_UPLOADS|missing on disk/i.test(msg)
+        ? 'Photos missing on server'
+        : /UNRESOLVED_DEVICE_PHOTOS|device-local|local-photo/i.test(msg)
+          ? 'Photos never reached the server'
+          : 'PDF generation failed',
+      description: /MISSING_UPLOADS|missing on disk/i.test(msg)
+        ? 'Album photo files are not on the /data volume. Mount/restore uploads before regenerating.'
+        : /UNRESOLVED_DEVICE_PHOTOS|device-local|local-photo/i.test(msg)
+          ? 'Client must re-order from the phone/PC where they built the album so photos upload first.'
+          : (msg || 'Try again shortly'),
+      variant: 'destructive',
+    });
+  };
+
+  /** Poll until print PDF is ready/failed, then open the viewer. */
   const waitForPdfAndOpen = async (orderId: number, projectId: number) => {
     const token = getToken();
-    for (let i = 0; i < 90; i++) {
+    for (let i = 0; i < 120; i++) {
       await new Promise((r) => setTimeout(r, 1000));
       try {
         const stRes = await fetch(`${BASE}/api/projects/${projectId}/pdf-status`, {
@@ -312,20 +329,29 @@ export default function AdminOrders() {
           credentials: 'include',
         });
         if (!stRes.ok) continue;
-        const body = await stRes.json() as { status?: string; pdfUrl?: string | null };
+        const body = await stRes.json() as {
+          status?: string;
+          pdfUrl?: string | null;
+          error?: string | null;
+        };
         if (body.status === 'ready' && body.pdfUrl) {
           setPdfModal({
             url: withCacheBust(authedPdfUrl(body.pdfUrl, token)),
             orderId,
           });
           refetch();
-          return true;
+          return 'ready' as const;
+        }
+        if (body.status === 'failed') {
+          pdfFailToast(String(body.error || 'PDF generation failed'));
+          refetch();
+          return 'failed' as const;
         }
       } catch {
         // keep polling
       }
     }
-    return false;
+    return 'timeout' as const;
   };
 
   /** Open the existing print PDF — never regenerates (regen wiped photos when uploads were missing). */
@@ -341,35 +367,41 @@ export default function AdminOrders() {
     setRegenId(orderId);
     try {
       const token = getToken();
+      toast({ title: 'Rendering print PDF…', description: 'Large albums can take 1–2 minutes.' });
       const res = await fetch(`${BASE}/api/admin/orders/${orderId}/regenerate-pdf`, {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         credentials: 'include',
       });
+      const body = await res.json().catch(() => ({})) as {
+        error?: string;
+        status?: string;
+        pdfUrl?: string | null;
+      };
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        const msg = String((body as any)?.error || '');
+        pdfFailToast(String(body.error || ''));
+        return;
+      }
+      if (body.status === 'ready' && body.pdfUrl) {
+        const url = withCacheBust(authedPdfUrl(body.pdfUrl, token));
+        setPdfModal({ url, orderId });
         toast({
-          title: /MISSING_UPLOADS|missing on disk/i.test(msg)
-            ? 'Photos missing on server'
-            : /UNRESOLVED_DEVICE_PHOTOS|local-photo/i.test(msg)
-              ? 'Photos never reached the server'
-              : 'Failed to queue PDF',
-          description: /MISSING_UPLOADS|missing on disk/i.test(msg)
-            ? 'Album photo files are not on the /data volume. The existing PDF was left untouched.'
-            : /UNRESOLVED_DEVICE_PHOTOS|local-photo/i.test(msg)
-              ? 'Client must re-order from the phone/PC where they built the album so photos upload first.'
-              : (msg || 'Try again shortly'),
-          variant: 'destructive',
+          title: 'PDF ready',
+          description: 'Use Download in the viewer or the Download button on the order row.',
         });
+        refetch();
         return;
       }
       if (projectId) {
-        toast({ title: 'Rendering print PDF…' });
-        const ok = await waitForPdfAndOpen(orderId, projectId);
-        if (!ok) {
-          toast({ title: 'Still generating', description: 'Check back in a moment.' });
+        const result = await waitForPdfAndOpen(orderId, projectId);
+        if (result === 'timeout') {
+          toast({
+            title: 'Still generating',
+            description: 'Large albums take longer — refresh Orders in a moment.',
+          });
           refetch();
+        } else if (result === 'ready') {
+          toast({ title: 'PDF ready' });
         }
       } else {
         setTimeout(() => refetch(), 2500);
@@ -500,16 +532,23 @@ export default function AdminOrders() {
                                 onClick={() => handleViewPdf(o)}
                                 className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[10px] font-semibold transition-opacity hover:opacity-80"
                                 style={{ background: ADMIN.blushSoft, color: ADMIN.blushDeep }}
-                                title="Open the saved print PDF (does not re-render)"
+                                title="Open the saved print PDF"
                               >
                                 <Eye size={10} /> View
                               </button>
+                              <a
+                                href={authedPdfUrl(o.pdfUrl, getToken(), { download: true })}
+                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[10px] font-semibold bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
+                                title="Download the print PDF"
+                              >
+                                <Download size={10} /> Download
+                              </a>
                               <button
                                 type="button"
                                 onClick={() => handleRegenPdf(o.id, o.projectId)}
                                 disabled={regenId === o.id}
                                 className="p-1.5 rounded-lg text-neutral-300 hover:bg-amber-50 hover:text-amber-700 transition-colors disabled:opacity-50"
-                                title="Re-render PDF from album (refuses if photos missing on disk)"
+                                title="Re-render PDF from album (uses photos on server; blank if missing)"
                               >
                                 <RefreshCw size={12} className={regenId === o.id ? 'animate-spin' : ''} />
                               </button>
@@ -528,7 +567,7 @@ export default function AdminOrders() {
                               onClick={() => handleRegenPdf(o.id, o.projectId)}
                               disabled={regenId === o.id}
                               className="px-2.5 py-1.5 rounded-lg text-[10px] font-semibold bg-amber-50 text-amber-700 hover:bg-amber-100 disabled:opacity-50"
-                              title="Queue print PDF generation"
+                              title="Generate print PDF for this order"
                             >
                               {regenId === o.id ? 'Rendering…' : 'Generate PDF'}
                             </button>

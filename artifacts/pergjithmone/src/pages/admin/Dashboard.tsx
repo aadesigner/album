@@ -269,23 +269,28 @@ function PendingPrintingWidget() {
     } finally { setShippingId(null); }
   };
 
-  /** Queue print PDF when order landed without one (failed / unfinished generation). */
+  /** Generate print PDF when order landed without one (failed / unfinished generation). */
   const handleGeneratePdf = async (orderId: number, projectId?: number) => {
     setRegenId(orderId);
     try {
       const token = getToken();
+      toast({ title: 'Rendering print PDF…', description: 'This can take up to a minute.' });
       const res = await fetch(`${BASE}/api/admin/orders/${orderId}/regenerate-pdf`, {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         credentials: 'include',
       });
+      const body = await res.json().catch(() => ({})) as {
+        error?: string;
+        status?: string;
+        pdfUrl?: string | null;
+      };
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        const msg = String((body as any)?.error || '');
+        const msg = String(body.error || '');
         toast({
           title: /MISSING_UPLOADS|missing on disk/i.test(msg)
             ? 'Photos missing on server'
-            : /UNRESOLVED_DEVICE_PHOTOS|local-photo/i.test(msg)
+            : /UNRESOLVED_DEVICE_PHOTOS|device-local|local-photo/i.test(msg)
               ? 'Photos never reached the server'
               : 'PDF generation failed',
           description: msg || 'Try again from Orders',
@@ -293,9 +298,13 @@ function PendingPrintingWidget() {
         });
         return;
       }
-      toast({ title: 'Rendering print PDF…' });
+      if (body.status === 'ready' && body.pdfUrl) {
+        toast({ title: 'PDF ready' });
+        refetch();
+        return;
+      }
       if (projectId) {
-        for (let i = 0; i < 60; i++) {
+        for (let i = 0; i < 120; i++) {
           await new Promise((r) => setTimeout(r, 1000));
           try {
             const stRes = await fetch(`${BASE}/api/projects/${projectId}/pdf-status`, {
@@ -303,9 +312,27 @@ function PendingPrintingWidget() {
               credentials: 'include',
             });
             if (!stRes.ok) continue;
-            const body = await stRes.json() as { status?: string; pdfUrl?: string | null };
-            if (body.status === 'ready' && body.pdfUrl) {
+            const st = await stRes.json() as {
+              status?: string;
+              pdfUrl?: string | null;
+              error?: string | null;
+            };
+            if (st.status === 'ready' && st.pdfUrl) {
               toast({ title: 'PDF ready' });
+              refetch();
+              return;
+            }
+            if (st.status === 'failed') {
+              const msg = String(st.error || 'PDF generation failed');
+              toast({
+                title: /MISSING_UPLOADS|missing on disk/i.test(msg)
+                  ? 'Photos missing on server'
+                  : /UNRESOLVED_DEVICE_PHOTOS|device-local|local-photo/i.test(msg)
+                    ? 'Photos never reached the server'
+                    : 'PDF generation failed',
+                description: msg,
+                variant: 'destructive',
+              });
               refetch();
               return;
             }
