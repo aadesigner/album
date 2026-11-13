@@ -1,16 +1,42 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useListOrders } from '@workspace/api-client-react-tsconfig';
 import { Link } from 'wouter';
 import { format } from 'date-fns';
 import { sq as sqLocale } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
-import { Package, ExternalLink } from 'lucide-react';
+import { Package, ExternalLink, Loader2 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 export default function Orders() {
   const { lang } = useLanguage();
   const { data: orders, isLoading } = useListOrders();
+  const [waBusyId, setWaBusyId] = useState<number | null>(null);
+
+  const openWhatsApp = async (orderId: number) => {
+    if (waBusyId != null) return;
+    setWaBusyId(orderId);
+    try {
+      const r = await fetch(`/api/orders/${orderId}/whatsapp?lang=${lang}`, {
+        credentials: 'include',
+      });
+      if (!r.ok) throw new Error('WhatsApp link failed');
+      const body = await r.json() as { url?: string };
+      if (!body.url) throw new Error('Missing WhatsApp URL');
+      window.open(body.url, '_blank', 'noopener,noreferrer');
+      void fetch('/api/analytics/track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event: 'wp_click', path: `/orders/${orderId}` }),
+      }).catch(() => {});
+    } catch {
+      alert(lang === 'sq'
+        ? 'Nuk u hap WhatsApp. Provo përsëri.'
+        : 'Could not open WhatsApp. Please try again.');
+    } finally {
+      setWaBusyId(null);
+    }
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -94,7 +120,22 @@ export default function Orders() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3 md:border-l md:border-border md:pl-6">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 md:border-l md:border-border md:pl-6">
+                  {(order.status === 'pending' || order.status === 'confirmed') && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="w-full md:w-auto text-white"
+                      style={{ background: '#25D366' }}
+                      disabled={waBusyId === order.id}
+                      onClick={() => void openWhatsApp(order.id)}
+                    >
+                      {waBusyId === order.id
+                        ? <Loader2 size={14} className="animate-spin mr-2" />
+                        : <span className="mr-1.5">📱</span>}
+                      {lang === 'sq' ? 'Dërgo në WhatsApp' : 'Send on WhatsApp'}
+                    </Button>
+                  )}
                   <Link href={`/editor/${order.projectId}`}>
                     <Button variant="outline" size="sm" className="w-full md:w-auto">
                       {lang === 'sq' ? 'Shiko Projektin' : 'View Project'}

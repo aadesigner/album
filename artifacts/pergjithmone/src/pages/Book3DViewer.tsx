@@ -192,8 +192,6 @@ function SpreadBrowser({
   const renderSpread = (spread: SpreadDef) => {
     const leftEls = spread.left ? (pagesContent[spread.left.dbId] ?? []) : [];
     const rightEls = spread.right ? (pagesContent[spread.right.dbId] ?? []) : [];
-    const isInsideCover = spread.left?.role === 'locked_left';
-    const isInsideBackCover = spread.right?.role === 'locked_right';
     return (
       <div style={{
         display: 'flex', alignItems: 'stretch',
@@ -207,22 +205,7 @@ function SpreadBrowser({
           transformOrigin: 'right center',
         }}>
           {spread.left ? (
-            isInsideCover ? (
-              <div style={{
-                position: 'absolute', inset: 0, background: '#FFFFFF',
-                backgroundImage: 'repeating-linear-gradient(45deg,transparent,transparent 6px,rgba(0,0,0,0.05) 6px,rgba(0,0,0,0.05) 7px)',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
-              }}>
-                <span style={{ color: 'rgba(0,0,0,0.28)', fontSize: 10, fontFamily: 'Georgia, serif', fontStyle: 'italic' }}>
-                  {lang === 'sq' ? 'brendia e kopertinës' : 'inside cover'}
-                </span>
-                <span style={{ color: 'rgba(0,0,0,0.18)', fontSize: 8, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-                  {lang === 'sq' ? 'e bllokuar' : 'not editable'}
-                </span>
-              </div>
-            ) : (
-              <PageMiniRender elements={leftEls} w={pgW} h={pgH} canvasH={canvasH} />
-            )
+            <PageMiniRender elements={leftEls} w={pgW} h={pgH} canvasH={canvasH} />
           ) : (
             <div style={{ position: 'absolute', inset: 0, background: '#F2EDE5' }} />
           )}
@@ -235,22 +218,7 @@ function SpreadBrowser({
           transformOrigin: 'left center',
         }}>
           {spread.right ? (
-            isInsideBackCover ? (
-              <div style={{
-                position: 'absolute', inset: 0, background: '#FFFFFF',
-                backgroundImage: 'repeating-linear-gradient(45deg,transparent,transparent 6px,rgba(0,0,0,0.05) 6px,rgba(0,0,0,0.05) 7px)',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
-              }}>
-                <span style={{ color: 'rgba(0,0,0,0.28)', fontSize: 10, fontFamily: 'Georgia, serif', fontStyle: 'italic' }}>
-                  {lang === 'sq' ? 'brendia e kopertinës së pasme' : 'inside back cover'}
-                </span>
-                <span style={{ color: 'rgba(0,0,0,0.18)', fontSize: 8, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-                  {lang === 'sq' ? 'e bllokuar' : 'not editable'}
-                </span>
-              </div>
-            ) : (
-              <PageMiniRender elements={rightEls} w={pgW} h={pgH} canvasH={canvasH} />
-            )
+            <PageMiniRender elements={rightEls} w={pgW} h={pgH} canvasH={canvasH} />
           ) : (
             <div style={{ position: 'absolute', inset: 0, background: '#F2EDE5' }} />
           )}

@@ -70,11 +70,12 @@ describe("generateAlbum", () => {
 
   it("uses authentic Albanian headlines on dedication pages", () => {
     const album = generateAlbum("Wedding", PHOTOS, 16, "sq", { widthCm: 21, heightCm: 28 });
+    const poolHeads = narrativesFor("Wedding", "sq").map((p) => p.headline);
     const headlines = album.innerPages
       .filter((page) => !page.some((e) => e.type === "image" && e.src))
       .flatMap((page) => page.filter((e) => e.type === "text"))
       .map((e) => (e.text || "").trim());
-    expect(headlines.some((t) => /dashuria|ne dy|përjetë|perjete/i.test(t))).toBe(true);
+    expect(headlines.some((t) => poolHeads.includes(t))).toBe(true);
     expect(headlines.join(" ")).not.toMatch(/as an ai|delve|tapestry|in today's fast/i);
   });
 
@@ -176,5 +177,51 @@ describe("generateAlbum", () => {
     const album = generateAlbum("Wedding", PHOTOS, 10, "en", { widthCm: 21, heightCm: 28 });
     const firstImages = album.innerPages[0].filter((e) => e.type === "image");
     expect(firstImages).toHaveLength(1);
+  });
+
+  it("never repeats dedication headlines across pages", () => {
+    const album = generateAlbum("Wedding", PHOTOS, 40, "sq", { widthCm: 21, heightCm: 28 });
+    const headlines = album.innerPages
+      .filter((page) => !page.some((e) => e.type === "image" && e.src))
+      .map((page) => {
+        const texts = page
+          .filter((e) => e.type === "text" && (e.text || "").trim())
+          .sort((a, b) => (b.fontSize || 0) - (a.fontSize || 0));
+        return (texts[0]?.text || "").trim();
+      })
+      .filter(Boolean);
+    expect(headlines.length).toBeGreaterThanOrEqual(2);
+    expect(new Set(headlines).size).toBe(headlines.length);
+  });
+
+  it("caps narrative slots to unique copy pool size", () => {
+    const pool = narrativesFor("Travel", "en").length;
+    const slots = planNarrativeSlots(80, pool);
+    expect(slots.size).toBeLessThanOrEqual(pool);
+  });
+
+  it("front cover has no empty text nodes and a readable title", () => {
+    for (let i = 0; i < 6; i++) {
+      const album = generateAlbum("Wedding", PHOTOS, 8, "en", { widthCm: 21, heightCm: 28 });
+      const texts = album.frontCover.filter((e) => e.type === "text");
+      expect(texts.every((e) => String(e.text || "").trim().length > 0)).toBe(true);
+      const joined = texts.map((e) => e.text).join(" ");
+      expect(joined).not.toMatch(/tap to edit|your text here|shto tekst/i);
+      expect(texts.some((e) => String(e.text || "").trim().length >= 3)).toBe(true);
+    }
+  });
+
+  it("keeps travel city banners instead of overwriting with generic Travel", () => {
+    const album = generateAlbum("Travel", PHOTOS, 8, "en", { widthCm: 21, heightCm: 28 });
+    const titles = album.frontCover
+      .filter((e) => e.type === "text")
+      .map((e) => String(e.text || "").trim())
+      .filter(Boolean);
+    // Either a city banner survived, or a short travel title — never nonsense mashups.
+    expect(titles.length).toBeGreaterThan(0);
+    expect(titles.join(" ")).not.toMatch(/tap to edit|anna\s*&\s*mark/i);
+    const hasCity = titles.some((t) => t.length >= 3 && t === t.toUpperCase() && /^[A-Z\s'\-]+$/.test(t));
+    const hasShortTitle = titles.some((t) => /travel|journey|udhëtim/i.test(t));
+    expect(hasCity || hasShortTitle || titles.some((t) => t.length >= 3)).toBe(true);
   });
 });

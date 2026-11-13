@@ -247,6 +247,10 @@ export const PageThumb = React.memo(function PageThumb({
             }}/>;
           }
           if (el.type === 'text') {
+            const raw = String(el.text || '').trim();
+            // Skip empty demo lines — they still took space and looked like
+            // overlapping “ghost” text in the 3D viewer.
+            if (!raw) return null;
             const face = thumbFontStyle(el.fontFamily, el.fontStyle);
             const vAlign = el.verticalAlign || 'top';
             return (
@@ -256,7 +260,9 @@ export const PageThumb = React.memo(function PageThumb({
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: vAlign === 'middle' ? 'center' : vAlign === 'bottom' ? 'flex-end' : 'flex-start',
-                overflow: 'visible',
+                // Clip to the design box so large AI titles cannot spill over
+                // neighbouring layers (Konva clips; HTML thumbs used to overflow).
+                overflow: 'hidden',
                 fontSize: el.fontSize || 18,
                 fontFamily: thumbFontFamily(el.fontFamily),
                 fontStyle: face.fontStyle,

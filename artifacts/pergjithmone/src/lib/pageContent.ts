@@ -14,7 +14,7 @@ export function isPageContentBlank(els: EditorElement[] | undefined | null): boo
   });
 }
 
-/** Empty editable inner page numbers. Skips covers and non-modifiable linings. */
+/** Empty editable inner page numbers. Skips outer covers and inside linings. */
 export function getEmptyInnerPageNumbers(
   pages: Array<{ id: number; pageType?: string; pageNumber?: number }> | undefined | null,
   pagesContent: Record<number, EditorElement[]>,

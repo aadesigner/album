@@ -223,15 +223,23 @@ function designsForCategory(
   return travel.length ? travel : source;
 }
 
-/** Prefer typography / photo-frame covers; landmark-only travel is a spice. */
+/** Prefer clean typography / framed photo covers; city-name banners are riskier for AI. */
 function coverDesignWeight(design: DesignDef): number {
   const els = design.elements || [];
   const hasLandmark = els.some((e) => e.type === 'image' && e.objectFit === 'contain');
   const hasFramedPhoto = els.some((e) => e.type === 'image' && e.src && e.objectFit !== 'contain');
-  const textCount = els.filter((e) => e.type === 'text').length;
+  const texts = els.filter((e) => e.type === 'text' && String(e.text || '').trim());
+  const textCount = texts.length;
+  // ALL-CAPS city labels (LONDON, PARIS…) fight category personalization.
+  const cityBanner = texts.some((e) => {
+    const t = String(e.text || '').trim();
+    return t.length >= 4 && t === t.toUpperCase() && /^[A-ZÀ-Ÿ\s]+$/.test(t);
+  });
+  if (cityBanner) return 0.35;
   if (hasLandmark) return 0.55;
-  if (hasFramedPhoto) return 1.35;
-  if (textCount >= 2) return 1.25;
+  if (hasFramedPhoto) return 1.45;
+  if (textCount >= 2 && textCount <= 4) return 1.3;
+  if (textCount > 6) return 0.5;
   return 1;
 }
 
@@ -386,66 +394,130 @@ function fillPlaceholders(elements: DE[], nextPhoto: () => string | undefined): 
   });
 }
 
-/** Replace demo cover copy (names, cities, years) with category-generic labels. */
+/** Short cover titles that fit template boxes (avoid long phrases that spill in 3D). */
+function coverPrimaryTitle(categoryKey: string, lang: 'sq' | 'en'): string {
+  if (lang === 'sq') {
+    if (categoryKey === 'Wedding') return 'Dasma jonë';
+    if (categoryKey === 'Travel' || categoryKey === 'Locations') return 'Udhëtimi';
+    if (categoryKey === 'Baby & Family') return 'Familja';
+    if (categoryKey === 'Celebration') return 'Festë';
+    if (categoryKey === 'Friendship') return 'Miqësia';
+    if (categoryKey === 'Portrait') return 'Portrete';
+    if (categoryKey === 'Nature') return 'Natyra';
+    return 'Albumi ynë';
+  }
+  if (categoryKey === 'Wedding') return 'Our Wedding';
+  if (categoryKey === 'Travel' || categoryKey === 'Locations') return 'Travel';
+  if (categoryKey === 'Baby & Family') return 'Family';
+  if (categoryKey === 'Celebration') return 'Celebrate';
+  if (categoryKey === 'Friendship') return 'Friends';
+  if (categoryKey === 'Portrait') return 'Portraits';
+  if (categoryKey === 'Nature') return 'Nature';
+  return 'Our Album';
+}
+
+function looksLikeYear(text: string): boolean {
+  return /^\d{4}$/.test(text.trim());
+}
+
+/** City / place banners (LONDON, PARIS…) — keep on Travel, don't mash into "Travel". */
+function looksLikePlaceBanner(text: string): boolean {
+  const t = text.trim();
+  if (t.length < 3 || t.length > 18) return false;
+  if (t !== t.toUpperCase()) return false;
+  return /^[A-ZÀ-Ÿ][A-ZÀ-Ÿ\s'\-]*$/.test(t);
+}
+
+function isPlaceholderCoverText(text: string): boolean {
+  const t = text.trim();
+  if (!t) return true;
+  if (/^tap to edit|^shto tekst|^your (name|text)|^click to|^edit me/i.test(t)) return true;
+  if (/^names?$|^title$|^subtitle$|^date$/i.test(t)) return true;
+  return false;
+}
+
+/** Sample couple / person lines the catalog uses as demos. */
+function looksLikeDemoPersonLine(text: string): boolean {
+  const t = text.trim();
+  if (/^[A-ZÀ-Ÿ][a-zà-ÿ]+\s*&\s*[A-ZÀ-Ÿ][a-zà-ÿ]+$/.test(t)) return true;
+  if (/^(anna|lena|mira|elsa|sara|mark|leon|toni|alex)\b/i.test(t)) return true;
+  if (/wedding of|our story|the johnson|smith &/i.test(t)) return true;
+  return false;
+}
+
+/**
+ * Make catalog covers album-ready without destroying intentional design copy.
+ * Travel city banners stay; demo names / placeholders become a short category
+ * title + year. Empty leftover text nodes are removed so 3D thumbs don't paint
+ * overlapping ghost lines.
+ */
 function personalizeCoverText(elements: DE[], categoryKey: string, lang: 'sq' | 'en'): DE[] {
   const year = String(new Date().getFullYear());
-  const copy: Record<string, { primary: string; secondary: string }> = {
-    Wedding: {
-      primary: lang === 'sq' ? 'Dasma jonë' : 'Our Wedding',
-      secondary: year,
-    },
-    Travel: {
-      primary: lang === 'sq' ? 'Udhëtimi ynë' : 'Our Journey',
-      secondary: lang === 'sq' ? 'Kujtime' : 'Memories',
-    },
-    'Baby & Family': {
-      primary: lang === 'sq' ? 'Familja jonë' : 'Our Family',
-      secondary: year,
-    },
-    Celebration: {
-      primary: lang === 'sq' ? 'Festë' : 'Celebrate',
-      secondary: year,
-    },
-    Friendship: {
-      primary: lang === 'sq' ? 'Miqësia jonë' : 'Our Friendship',
-      secondary: year,
-    },
-    Modern: {
-      primary: lang === 'sq' ? 'Albumi ynë' : 'Our Album',
-      secondary: year,
-    },
-    Portrait: {
-      primary: lang === 'sq' ? 'Portrete' : 'Portraits',
-      secondary: year,
-    },
-    Nature: {
-      primary: lang === 'sq' ? 'Natyra' : 'In Nature',
-      secondary: year,
-    },
-    Locations: {
-      primary: lang === 'sq' ? 'Vendet tona' : 'Places We Love',
-      secondary: year,
-    },
-  };
-  const labels = copy[categoryKey] ?? copy.Modern;
+  const primary = coverPrimaryTitle(categoryKey, lang);
+  const isTravelish = categoryKey === 'Travel' || categoryKey === 'Locations';
+
   const texts = elements.filter((e) => {
     if (e.type !== 'text') return false;
     const raw = String(e.text || '').trim();
-    // Skip ornaments ('&') and empty lines so title lands on real copy.
-    return raw.length > 2;
+    return raw.length > 0 && raw !== '&';
   });
-  if (!texts.length) return elements;
+  if (!texts.length) {
+    return elements.filter((e) => e.type !== 'text' || String(e.text || '').trim().length > 0);
+  }
 
   const ranked = [...texts].sort((a, b) => (b.fontSize || 0) - (a.fontSize || 0));
-  const titleId = ranked[0];
-  const subId = ranked[1];
+  const titleEl = ranked[0];
+  const titleRaw = String(titleEl.text || '').trim();
+  const keepPlaceName = isTravelish && looksLikePlaceBanner(titleRaw);
 
-  return elements.map((el) => {
-    if (el.type !== 'text') return el;
-    if (el === titleId) return { ...el, text: labels.primary };
-    if (el === subId) return { ...el, text: labels.secondary };
-    return { ...el, text: '' };
-  });
+  const yearEl = ranked.find((e) => e !== titleEl && looksLikeYear(String(e.text || '')))
+    || ranked.find((e) => {
+      if (e === titleEl) return false;
+      const t = String(e.text || '').trim();
+      if (looksLikePlaceBanner(t)) return false;
+      return (e.fontSize || 0) <= (titleEl.fontSize || 40) * 0.55;
+    })
+    || null;
+
+  return elements
+    .map((el) => {
+      if (el.type !== 'text') return el;
+      const raw = String(el.text || '').trim();
+      if (!raw || raw === '&') {
+        // Keep a lone "&" ornament between names only when we keep the title line.
+        if (raw === '&' && keepPlaceName) return el;
+        return { ...el, text: '' };
+      }
+      if (isPlaceholderCoverText(raw)) return { ...el, text: '' };
+
+      if (el === titleEl) {
+        if (keepPlaceName) return el; // BARCELONA / PARIS stays
+        if (!looksLikeDemoPersonLine(raw) && !looksLikePlaceBanner(raw) && raw.length <= 22
+          && !isPlaceholderCoverText(raw) && !looksLikeYear(raw)) {
+          // Short intentional titles (e.g. "YAY", "DAY ONE") — leave alone.
+          if (raw === raw.toUpperCase() && raw.length <= 10) return el;
+        }
+        let fontSize = titleEl.fontSize || 36;
+        if (raw.length > 0 && primary.length > raw.length + 2) {
+          fontSize = Math.max(22, Math.round(fontSize * (raw.length / primary.length) * 1.15));
+        }
+        return { ...el, text: primary, fontSize };
+      }
+
+      if (yearEl && el === yearEl) {
+        return { ...el, text: year };
+      }
+
+      // Drop demo person lines and extra filler; keep small ornaments on travel.
+      if (looksLikeDemoPersonLine(raw) || isPlaceholderCoverText(raw)) {
+        return { ...el, text: '' };
+      }
+      if (looksLikeYear(raw)) return { ...el, text: year };
+      // Extra body lines under a city banner clutter 3D — clear them.
+      if (keepPlaceName) return { ...el, text: '' };
+      return { ...el, text: '' };
+    })
+    .filter((e) => e.type !== 'text' || String(e.text || '').trim().length > 0);
 }
 
 function prepareCover(
@@ -680,12 +752,15 @@ function buildPhotoCover(
   return els;
 }
 
-/** Indices of dedication / text-only pages — skip opener + closer. */
-export function planNarrativeSlots(pageCount: number): Set<number> {
+/**
+ * Indices of dedication / text-only pages — skip opener + closer.
+ * `maxUnique` caps slots so we never need to recycle the same copy.
+ */
+export function planNarrativeSlots(pageCount: number, maxUnique = Infinity): Set<number> {
   const slots = new Set<number>();
-  if (pageCount < 5) return slots;
+  if (pageCount < 5 || maxUnique <= 0) return slots;
   let i = 3 + Math.floor(rand() * 2); // page 4 or 5 (1-based)
-  while (i < pageCount - 1) {
+  while (i < pageCount - 1 && slots.size < maxUnique) {
     slots.add(i);
     i += 3 + Math.floor(rand() * 2); // every 3–4 pages
   }
@@ -890,8 +965,10 @@ function elementsForLayout(
       });
       return;
     }
-    // Fill text zones with a short authentic caption when available.
-    const caption = nextCaption?.() || '';
+    // Fill text zones with a short authentic caption — skip empty so we don't
+    // leave invisible text boxes that still stack in 3D thumbs.
+    const caption = nextCaption?.();
+    if (!caption) return;
     zoneEls.push({ ...mapped, text: caption });
   });
 
@@ -996,9 +1073,14 @@ export function generateAlbum(
     return url;
   };
 
-  const narrativeSlots = planNarrativeSlots(innerPageCount);
-  const photoPageCount = Math.max(1, innerPageCount - narrativeSlots.size);
-  const plannedPhoto = planPageLayouts(story.length, photoPageCount, cat);
+  const safePageCount = Math.max(0, Math.floor(innerPageCount) || 0);
+  // Never schedule more dedication pages than unique copy pieces.
+  const narrativePool = shuffle(narrativesFor(cat, lang));
+  const narrativeSlots = planNarrativeSlots(safePageCount, narrativePool.length);
+  const photoPageCount = Math.max(0, safePageCount - narrativeSlots.size);
+  const plannedPhoto = photoPageCount > 0
+    ? planPageLayouts(story.length, photoPageCount, cat)
+    : [];
   const fallbackLayout =
     findAllowedLayout('full')
     || findAllowedLayout('bordered-single')
@@ -1006,33 +1088,54 @@ export function generateAlbum(
     || LAYOUTS[0];
 
   // Map photo layouts onto non-narrative indices only.
-  const planned: (LayoutDef | null)[] = Array.from({ length: innerPageCount }, () => null);
+  const planned: (LayoutDef | null)[] = Array.from({ length: safePageCount }, () => null);
   let photoPlanIdx = 0;
-  for (let p = 0; p < innerPageCount; p++) {
+  for (let p = 0; p < safePageCount; p++) {
     if (narrativeSlots.has(p)) continue;
     planned[p] = plannedPhoto[photoPlanIdx] || null;
     photoPlanIdx += 1;
   }
 
-  const narrativePool = shuffle(narrativesFor(cat, lang));
   let narrativeIdx = 0;
   const captionPool = shuffle(captionsFor(cat, lang));
   let captionIdx = 0;
   const nextCaption = (): string | undefined => {
-    if (!captionPool.length) return undefined;
-    // Use each caption once before recycling — keeps pages distinct.
-    const line = captionPool[captionIdx % captionPool.length];
+    // One-shot captions only — blank rather than repeat the same line.
+    if (captionIdx >= captionPool.length) return undefined;
+    const line = captionPool[captionIdx];
     captionIdx += 1;
     return line;
   };
 
   const whitePaper = '#FFFFFF';
+  const usedHeadlines = new Set<string>();
   const innerPages: EditorElement[][] = [];
-  for (let p = 0; p < innerPageCount; p++) {
+  for (let p = 0; p < safePageCount; p++) {
     if (narrativeSlots.has(p)) {
-      const piece = narrativePool[narrativeIdx % narrativePool.length];
-      narrativeIdx += 1;
-      const style = (narrativeIdx % 3) as 0 | 1 | 2;
+      // Walk pool once; skip any accidental duplicate headlines.
+      let piece = narrativePool[narrativeIdx++];
+      while (piece && usedHeadlines.has(piece.headline) && narrativeIdx < narrativePool.length) {
+        piece = narrativePool[narrativeIdx++];
+      }
+      if (!piece || usedHeadlines.has(piece.headline)) {
+        // No unique copy left — fall through to a photo page instead of repeating.
+        const url = nextStoryPhoto();
+        innerPages.push(withIds(
+          url
+            ? [
+                paperBg,
+                {
+                  type: 'image', x: 0, y: 0, w: DESIGN_W, h: canvasH, rotation: 0,
+                  src: url, cropZoom: 1,
+                },
+              ]
+            : [{ ...paperBg, bgColor: whitePaper }],
+          `inner-${p}`,
+        ));
+        continue;
+      }
+      usedHeadlines.add(piece.headline);
+      const style = (usedHeadlines.size % 3) as 0 | 1 | 2;
       innerPages.push(withIds(
         buildNarrativePage(piece, canvasH, whitePaper, cat, style),
         `inner-story-${p}`,

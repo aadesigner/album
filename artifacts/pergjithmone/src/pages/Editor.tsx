@@ -98,7 +98,6 @@ import { useCachedImage, bitmapWidth, bitmapHeight } from '@/lib/imageCache';
 
 const PAPER_COLOR = '#FEFDF9';
 const SPINE_W = 1;
-const PAPER_TEXTURE = `url("data:image/svg+xml,<svg viewBox='0 0 300 300' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/></filter><rect width='300' height='300' filter='url(%23n)'/></svg>")`;
 
 /** Survives React Strict Mode remount so wizard design isn't applied twice / lost. */
 const consumedWizardDesignKeys = new Set<string>();
@@ -265,7 +264,18 @@ function readElementDragUrl(dt: DataTransfer): string {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type PageRole = 'front_cover' | 'back_cover' | 'locked_left' | 'inner' | 'locked_right';
-// 'locked_left' = inside-front-cover lining, 'locked_right' = inside-back-cover lining.
+// locked_left / locked_right = inside front/back cover (editable paper; same
+// tools as inners — role names kept for spread pairing / PDF order).
+
+function isInsideLiningRole(role: PageRole | string | null | undefined): boolean {
+  return role === 'locked_left' || role === 'locked_right';
+}
+
+/** Inner pages + inside covers — photos need a layout; text/stickers are free. */
+function isEditablePaperRole(role: PageRole | string | null | undefined): boolean {
+  return role === 'inner' || isInsideLiningRole(role);
+}
+
 export interface PageDef { dbId: number; role: PageRole; pageNumber?: number; contentJson?: string | null }
 interface SpreadDef { id: string; navLabel: string; left: PageDef | null; right: PageDef | null; isSolo: boolean }
 type SideTab = 'designs' | 'layouts' | 'photos' | 'text';
@@ -338,11 +348,10 @@ function buildSpreads(pages: any[], lang: 'sq'|'en' = 'sq'): SpreadDef[] {
       right: R?{dbId:R.id,role:'inner',pageNumber:i+2,contentJson:R.contentJson}:null});
   }
 
-  // Inside back cover: a locked lining page, distinct from the outer back
-  // cover, mirroring how the inside front cover pairs with the first inner
-  // page. With an even inner-page count it naturally lands in the trailing
-  // empty right slot left over from the pairing loop above; otherwise it
-  // gets its own trailing spread as a fallback.
+  // Inside back cover: editable paper page (same tools as inners), distinct
+  // from the outer back cover. Mirrors how the inside front pairs with the
+  // first inner. With an even inner-page count it fills the trailing empty
+  // right slot; otherwise it gets its own trailing spread.
   if (insideBack) {
     const insideBackPage = {dbId:insideBack.id,role:'locked_right' as PageRole,contentJson:insideBack.contentJson};
     const lastSpread = spreads[spreads.length-1];
@@ -2452,70 +2461,6 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Locked page
-// ─────────────────────────────────────────────────────────────────────────────
-
-function LockedPageView({pageW,pageH,role,side}: {pageW:number;pageH:number;role:string;side:'left'|'right'}) {
-  const label = role==='locked_left' ? 'Inside Cover'
-    : role==='locked_right' ? 'Inside Back Cover'
-    : role==='back_cover' ? 'Outside Cover' : 'Back Cover';
-  // Unique pattern id so left+right locked pages on the same spread don't collide.
-  const patternId = `locked-hatch-${side}-${role}`;
-  return (
-    <div style={{
-      position:'relative', width:pageW, height:pageH, flexShrink:0,
-      background:'#FFFFFF', overflow:'hidden',
-    }}>
-      {/* Soft paper grain */}
-      <div style={{
-        position:'absolute', inset:0, pointerEvents:'none',
-        backgroundImage:PAPER_TEXTURE, backgroundSize:'256px 256px',
-        opacity:0.04, mixBlendMode:'multiply' as any,
-      }}/>
-      {/* Full-area uneditable hatch */}
-      <svg style={{position:'absolute', inset:0, width:'100%', height:'100%', pointerEvents:'none'}} aria-hidden>
-        <defs>
-          <pattern id={patternId} width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-            <line x1="0" y1="0" x2="0" y2="14" stroke="rgba(120,120,120,0.14)" strokeWidth="1"/>
-          </pattern>
-        </defs>
-        <rect width="100%" height="100%" fill={`url(#${patternId})`}/>
-      </svg>
-      {/* Soft veil so the hatch reads as "locked", not dirty paper */}
-      <div style={{
-        position:'absolute', inset:0, pointerEvents:'none',
-        background:'linear-gradient(180deg, rgba(255,255,255,0.35) 0%, rgba(248,248,248,0.15) 50%, rgba(255,255,255,0.40) 100%)',
-      }}/>
-      <div style={{
-        position:'absolute', inset:0, display:'flex', flexDirection:'column',
-        alignItems:'center', justifyContent:'center', gap:10, pointerEvents:'none',
-      }}>
-        <div style={{
-          width:44, height:44, borderRadius:'50%',
-          background:'rgba(255,255,255,0.92)',
-          border:'1px solid rgba(0,0,0,0.08)',
-          boxShadow:'0 4px 14px rgba(0,0,0,0.06)',
-          display:'flex', alignItems:'center', justifyContent:'center',
-        }}>
-          <Lock size={16} color="#9A9A9A"/>
-        </div>
-        <p style={{
-          fontSize:10, color:'#8A8A8A', textTransform:'uppercase',
-          letterSpacing:'0.16em', fontWeight:500, margin:0,
-        }}>
-          {label}
-        </p>
-        <p style={{
-          fontSize:9, color:'#B0B0B0', letterSpacing:'0.04em', margin:0,
-        }}>
-          Not editable
-        </p>
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Spread View — realistic book
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -2558,10 +2503,8 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
 
   const renderSide=(page:PageDef|null,side:'left'|'right')=>{
     if (!page) return <div style={{width:pageW,height:pageH,flexShrink:0,background:'#EAE5DC'}}/>;
-    const locked=page.role==='locked_left'||page.role==='locked_right';
-    if (locked) return <LockedPageView pageW={pageW} pageH={pageH} role={page.role} side={side}/>;
     const pageEls = spreadContent[page.dbId]??[];
-    const needsLayout = !readOnly && page.role === 'inner' && !pageHasPhotoLayout(pageEls);
+    const needsLayout = !readOnly && isEditablePaperRole(page.role) && !pageHasPhotoLayout(pageEls);
     return <div style={{cursor:'default'}} onClick={()=>{
       onActiveSide(side);
       // Do not force the layout modal on blank click — text/icons are free;
@@ -2645,49 +2588,42 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
           onTouchStart={onDomSwipeStart} onTouchEnd={onDomSwipeEnd}/>
       );
     }
-    const locked = page.role === 'locked_left' || page.role === 'locked_right';
     const pageEls = spreadContent[page.dbId]??[];
-    const needsLayout = !readOnly && page.role === 'inner' && !pageHasPhotoLayout(pageEls);
+    const needsLayout = !readOnly && isEditablePaperRole(page.role) && !pageHasPhotoLayout(pageEls);
     return (
-      <div className="flex items-center justify-center"
-        {...(locked
-          ? {onTouchStart:onDomSwipeStart,onTouchEnd:onDomSwipeEnd,style:{touchAction:'pan-y' as const, overflow:'hidden'}}
-          : {style:{ overflow:'hidden', touchAction:'none' }})}>
+      <div className="flex items-center justify-center" style={{ overflow:'hidden', touchAction:'none' }}>
         <div style={{
           boxShadow: '0 12px 40px rgba(40,32,20,0.12), 0 2px 8px rgba(40,32,20,0.06)',
           outline: '1px solid rgba(0,0,0,0.08)',
           outlineOffset: 0,
           overflow: 'hidden',
         }}>
-          {locked
-            ? <LockedPageView pageW={pageW} pageH={pageH} role={page.role} side={activeSide}/>
-            : <PageCanvas page={page} elements={pageEls}
-                selectedId={readOnly ? null : selectedId}
-                onSelectId={readOnly ? ()=>{} : id=>{ onActiveSide(activeSide); onSelectId(id); }}
-                onChangeEl={readOnly ? ()=>{} : (eid,c)=>onChangeEl(page.dbId,eid,c)}
-                onOpenPhotos={readOnly ? undefined : onOpenPhotos}
-                onDelete={readOnly ? undefined : onDelete}
-                onClearLayout={readOnly || !onClearLayout ? undefined : () => onClearLayout(page.dbId)}
-                onClearSlotPhoto={readOnly || !onClearSlotPhoto ? undefined : (id) => onClearSlotPhoto(page.dbId, id)}
-                onGestureStart={readOnly ? undefined : onGestureStart}
-                onElementDragActive={readOnly ? undefined : onElementDragActive}
-                onPageSwipe={onPageSwipe}
-                onDropPhoto={readOnly || !onDropPhoto ? undefined : (url, targetId, at) => {
-                  onActiveSide(activeSide);
-                  onDropPhoto(page.dbId, url, targetId, at);
-                }}
-                onDropFiles={readOnly || !onDropFiles ? undefined : (files, targetId, at) => {
-                  onActiveSide(activeSide);
-                  onDropFiles(page.dbId, files, targetId, at);
-                }}
-                onDropSticker={readOnly || !onDropSticker ? undefined : (url, x, y) => {
-                  onActiveSide(activeSide);
-                  onDropSticker(page.dbId, url, x, y);
-                }}
-                onRequestLayout={readOnly ? undefined : onRequestLayout}
-                needsLayout={needsLayout}
-                isActive={true} pageW={pageW} pageH={pageH} canvasH={canvasH} shapeRefs={shapeRefs} side="solo" isMobile={true}/>
-          }
+          <PageCanvas page={page} elements={pageEls}
+            selectedId={readOnly ? null : selectedId}
+            onSelectId={readOnly ? ()=>{} : id=>{ onActiveSide(activeSide); onSelectId(id); }}
+            onChangeEl={readOnly ? ()=>{} : (eid,c)=>onChangeEl(page.dbId,eid,c)}
+            onOpenPhotos={readOnly ? undefined : onOpenPhotos}
+            onDelete={readOnly ? undefined : onDelete}
+            onClearLayout={readOnly || !onClearLayout ? undefined : () => onClearLayout(page.dbId)}
+            onClearSlotPhoto={readOnly || !onClearSlotPhoto ? undefined : (id) => onClearSlotPhoto(page.dbId, id)}
+            onGestureStart={readOnly ? undefined : onGestureStart}
+            onElementDragActive={readOnly ? undefined : onElementDragActive}
+            onPageSwipe={onPageSwipe}
+            onDropPhoto={readOnly || !onDropPhoto ? undefined : (url, targetId, at) => {
+              onActiveSide(activeSide);
+              onDropPhoto(page.dbId, url, targetId, at);
+            }}
+            onDropFiles={readOnly || !onDropFiles ? undefined : (files, targetId, at) => {
+              onActiveSide(activeSide);
+              onDropFiles(page.dbId, files, targetId, at);
+            }}
+            onDropSticker={readOnly || !onDropSticker ? undefined : (url, x, y) => {
+              onActiveSide(activeSide);
+              onDropSticker(page.dbId, url, x, y);
+            }}
+            onRequestLayout={readOnly ? undefined : onRequestLayout}
+            needsLayout={needsLayout}
+            isActive={true} pageW={pageW} pageH={pageH} canvasH={canvasH} shapeRefs={shapeRefs} side="solo" isMobile={true}/>
         </div>
       </div>
     );
@@ -3016,11 +2952,6 @@ const SpreadNav = React.memo(function SpreadNav({spreads,current,onChange,onAddS
 
         const renderPageThumb=(page:PageDef|null,w:number,h:number)=>{
           if(!page) return <div style={{width:w,height:h,background:'#EAE5DC',flexShrink:0}}/>;
-          const locked=page.role==='locked_left'||page.role==='locked_right';
-          if(locked) return <div style={{
-            width:w, height:h, flexShrink:0, background:'#FFFFFF',
-            backgroundImage:'repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(0,0,0,0.06) 3px,rgba(0,0,0,0.06) 4px)',
-          }}/>;
           return (
             <PageThumb
               elements={pagesContent[page.dbId]??[]}
@@ -3944,8 +3875,10 @@ function OrderModal({project,onClose,lang,flushSave,prepareForPrint}: {
   const [st,setSt]=useState<'idle'|'loading'|'done'|'error'>('idle');
   const [errMsg,setErrMsg]=useState<string>('');
   const [uploadProgress,setUploadProgress]=useState<{done:number;total:number}|null>(null);
-  /** Always keep a tappable WhatsApp URL — popup blockers fail after long uploads. */
+  /** Tappable WhatsApp URL — browsers often block auto-open after long uploads. */
   const [waUrl,setWaUrl]=useState<string|null>(null);
+  const [waOpened,setWaOpened]=useState(false);
+  const [orderId,setOrderId]=useState<number|null>(null);
   const busy = st === 'loading';
 
   // Stay on this page while photos upload — no blank tab, no dismiss, warn on leave.
@@ -3969,15 +3902,29 @@ function OrderModal({project,onClose,lang,flushSave,prepareForPrint}: {
     };
   }, [busy]);
 
+  // Try auto-open once the real WhatsApp URL is ready. After long uploads most
+  // browsers block this — the green “Send on WhatsApp” button is the fallback.
+  useEffect(() => {
+    if (st !== 'done' || !waUrl || waOpened) return;
+    try {
+      const win = window.open(waUrl, '_blank', 'noopener,noreferrer');
+      if (win) setWaOpened(true);
+    } catch {
+      /* user must tap the button */
+    }
+  }, [st, waUrl, waOpened]);
+
   const go=async()=>{
     if (st==='loading') return;
     setSt('loading');
     setErrMsg('');
     setWaUrl(null);
+    setWaOpened(false);
+    setOrderId(null);
     setUploadProgress(null);
     try{
       // Stay in this modal — never open a blank WhatsApp tab first. After a long
-      // upload the browser blocks popups; the green button below is the reliable path.
+      // upload the browser blocks popups; we open the real link only once ready.
       if (flushSave) await flushSave();
       if (prepareForPrint) {
         await prepareForPrint((done, total) => setUploadProgress({ done, total }));
@@ -4003,16 +3950,12 @@ function OrderModal({project,onClose,lang,flushSave,prepareForPrint}: {
       const {url}=await waRes.json() as {url:string};
       if (!url) throw new Error(lang==='sq'?'Lidhja e WhatsApp mungon.':'WhatsApp link missing.');
       setWaUrl(url);
+      setOrderId(id);
 
       // Keep project lists / album status in sync for this client immediately.
       void queryClient.invalidateQueries({queryKey:getGetProjectQueryKey(project.id)});
       void queryClient.invalidateQueries({queryKey:getListProjectsQueryKey()});
       void queryClient.invalidateQueries({queryKey:['/api/orders']});
-      void fetch('/api/analytics/track',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({event:'wp_click',path:`/orders/${id}`}),
-      }).catch(()=>{});
 
       setSt('done');
     }catch(e:any){
@@ -4077,25 +4020,49 @@ function OrderModal({project,onClose,lang,flushSave,prepareForPrint}: {
         {st==='done'?(
           <div className="text-center py-3 space-y-3">
             <div className="w-11 h-11 rounded-full bg-green-100 flex items-center justify-center mx-auto"><Check size={22} className="text-green-600"/></div>
-            <p className="font-medium text-green-700 text-sm">{lang==='sq'?'Porosia u regjistrua!':'Order registered!'}</p>
-            <p className="text-xs text-neutral-400">
-              {lang==='sq'
-                ? 'Prek butonin për të dërguar porosinë në WhatsApp.'
-                : 'Tap the button to send your order on WhatsApp.'}
+            <p className="font-medium text-green-700 text-sm">
+              {lang==='sq'?'Porosia u ruajt — dërgoje në WhatsApp':'Order saved — send it on WhatsApp'}
+            </p>
+            <p className="text-xs text-neutral-500 leading-relaxed px-1">
+              {waOpened
+                ? (lang==='sq'
+                    ? 'Nëse WhatsApp nuk u hap, prek butonin e gjelbër më poshtë.'
+                    : 'If WhatsApp did not open, tap the green button below.')
+                : (lang==='sq'
+                    ? 'Hapi i fundit: prek butonin e gjelbër për të dërguar mesazhin e porosisë në WhatsApp. Pa këtë hap studioja nuk e sheh porosinë tënde.'
+                    : 'Last step: tap the green button to send your order message on WhatsApp. Without this, the studio won’t see your request.')}
             </p>
             {waUrl && (
               <a
                 href={waUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full py-3.5 rounded-xl font-medium text-sm flex items-center justify-center gap-2 text-white"
+                onClick={() => {
+                  setWaOpened(true);
+                  if (orderId != null) {
+                    void fetch('/api/analytics/track',{
+                      method:'POST',
+                      headers:{'Content-Type':'application/json'},
+                      body:JSON.stringify({event:'wp_click',path:`/orders/${orderId}`}),
+                    }).catch(()=>{});
+                  }
+                }}
+                className="w-full py-3.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 text-white shadow-md"
                 style={{background:'#25D366'}}
               >
                 <span>📱</span>
-                <span>{lang==='sq'?'Hap WhatsApp':'Open WhatsApp'}</span>
+                <span>{lang==='sq'?'Dërgo në WhatsApp':'Send on WhatsApp'}</span>
               </a>
             )}
-            <button type="button" onClick={onClose} className="mt-1 px-6 py-2 bg-neutral-900 text-white rounded-full text-sm">{lang==='sq'?'Mbyll':'Close'}</button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="mt-1 px-6 py-2 text-neutral-400 hover:text-neutral-600 text-xs underline underline-offset-2"
+            >
+              {waOpened
+                ? (lang==='sq'?'Mbyll':'Close')
+                : (lang==='sq'?'Mbyll pa dërguar':'Close without sending')}
+            </button>
           </div>
         ):st==='error'?(
           <div className="text-center py-2 space-y-3">
@@ -4404,30 +4371,20 @@ export default function Editor() {
     if (!currentSpread) return null;
     if (currentSpread.isSolo) return (currentSpread.right??currentSpread.left)?.dbId??null;
     const p=activeSide==='left'?currentSpread.left:currentSpread.right;
-    if (!p||p.role==='locked_left'||p.role==='locked_right') {
-      const other=activeSide==='left'?currentSpread.right:currentSpread.left;
-      if (other&&other.role!=='locked_left'&&other.role!=='locked_right') return other.dbId;
-      return null;
-    }
-    return p.dbId;
+    return p?.dbId ?? null;
   },[currentSpread,activeSide]);
 
   const activePageRole=useMemo((): PageRole | null => {
     if (!currentSpread) return null;
     if (currentSpread.isSolo) return (currentSpread.right??currentSpread.left)?.role??null;
     const p=activeSide==='left'?currentSpread.left:currentSpread.right;
-    if (!p||p.role==='locked_left'||p.role==='locked_right') {
-      const other=activeSide==='left'?currentSpread.right:currentSpread.left;
-      if (other&&other.role!=='locked_left'&&other.role!=='locked_right') return other.role;
-      return null;
-    }
-    return p.role;
+    return p?.role ?? null;
   },[currentSpread,activeSide]);
 
   const isCoverPage = activePageRole === 'front_cover' || activePageRole === 'back_cover';
 
   const activeNeedsLayout = useMemo(() => {
-    if (isOrdered || !activePageId || activePageRole !== 'inner') return false;
+    if (isOrdered || !activePageId || !isEditablePaperRole(activePageRole)) return false;
     return !pageHasPhotoLayout(pagesContent[activePageId] ?? []);
   }, [isOrdered, activePageId, activePageRole, pagesContent]);
 
@@ -5232,11 +5189,8 @@ export default function Editor() {
           ...el,
           id: `${design.id}-back-${page.dbId}-${i}-${ts}`,
         }));
-      } else if (page.role === "locked_left" || page.role === "locked_right") {
-        updates[page.dbId] = [
-          { ...whiteBg, id: `${design.id}-${page.dbId}-bg-${ts}` },
-        ];
       } else {
+        // Inners + inside covers: keep user content, force white paper under it.
         const current = liveContent.current[page.dbId] ?? [];
         const withoutBg = current.filter((e) => e.type !== "background");
         updates[page.dbId] = [
@@ -5602,14 +5556,13 @@ export default function Editor() {
                 const thumbW = Math.round(thumbH * (DESIGN_W / canvasH));
                 const sides = (['left', 'right'] as const).map((side) => {
                   const page = side === 'left' ? currentSpread.left : currentSpread.right;
-                  const locked = page?.role === 'locked_left' || page?.role === 'locked_right';
                   // Numbers only under the art — no "Left/Right" overlay on the thumb
-                  const label = locked
-                    ? ''
-                    : page?.pageNumber != null
-                      ? String(page.pageNumber)
+                  const label = page?.pageNumber != null
+                    ? String(page.pageNumber)
+                    : isInsideLiningRole(page?.role)
+                      ? (page?.role === 'locked_left' ? (lang === 'sq' ? 'Brenda' : 'In') : (lang === 'sq' ? 'Pas' : 'IB'))
                       : '·';
-                  return { side, page, locked, label, active: activeSide === side };
+                  return { side, page, label, active: activeSide === side };
                 });
                 return (
                   <div
@@ -5624,7 +5577,7 @@ export default function Editor() {
                       padding: 3,
                     }}
                   >
-                    {sides.map(({ side, page, locked, label, active }, i) => (
+                    {sides.map(({ side, page, label, active }, i) => (
                       <button
                         key={side}
                         type="button"
@@ -5632,8 +5585,8 @@ export default function Editor() {
                         disabled={!page}
                         aria-selected={active}
                         aria-label={
-                          locked
-                            ? (side === 'left'
+                          isInsideLiningRole(page?.role)
+                            ? (page?.role === 'locked_left'
                               ? (lang === 'sq' ? 'Kopertina e brendshme' : 'Inside cover')
                               : (lang === 'sq' ? 'Pas e brendshme' : 'Inside back'))
                             : page?.pageNumber != null
@@ -5674,16 +5627,7 @@ export default function Editor() {
                             background: '#F3EEE6',
                           }}
                         >
-                          {!page ? null : locked ? (
-                            <div style={{
-                              width: '100%', height: '100%',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              background: '#FAFAF8',
-                              backgroundImage: 'repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(0,0,0,0.05) 3px,rgba(0,0,0,0.05) 4px)',
-                            }}>
-                              <Lock size={11} strokeWidth={1.75} color="#A89F92" />
-                            </div>
-                          ) : (
+                          {!page ? null : (
                             <PageThumb
                               elements={spreadContent[page.dbId] ?? []}
                               width={thumbW}
@@ -5972,8 +5916,8 @@ export default function Editor() {
               </div>
               <p className="text-sm text-neutral-600 mb-5 leading-relaxed">
                 {lang==='sq'
-                  ? 'Para se të porosisësh, plotëso çdo faqe të brendshme me foto ose tekst. Kopertinat dhe faqet e mbyllura nuk llogariten.'
-                  : 'Before you order, fill every inner page with a photo or text. Covers and locked pages don\'t count.'}
+                  ? 'Para se të porosisësh, plotëso çdo faqe të brendshme me foto ose tekst. Kopertinat e jashtme nuk llogariten.'
+                  : 'Before you order, fill every inner page with a photo or text. Outer covers don\'t count.'}
               </p>
               <button onClick={()=>setEmptyPagesWarn([])}
                 className="w-full py-2.5 rounded-xl bg-neutral-900 text-white text-sm font-medium active:bg-neutral-700 transition-colors">

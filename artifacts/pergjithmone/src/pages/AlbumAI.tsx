@@ -596,6 +596,8 @@ function AlbumAIView() {
   const [genError, setGenError] = useState<string | null>(null);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const resumedRef = useRef(false);
+  /** Sync lock — React state alone can miss a double-tap before re-render. */
+  const genLockRef = useRef(false);
 
   const { data: categories, isLoading: loadingCat } = useListCategories();
   const { data: bookSizes } = useListBookSizes();
@@ -727,6 +729,8 @@ function AlbumAIView() {
 
   // ── Generation ───────────────────────────────────────────────────────────
   const runGeneration = useCallback(async (catId: number, photoUrls: string[], sizeId: number) => {
+    if (genLockRef.current) return;
+    genLockRef.current = true;
     setGenerating(true);
     setGenDone(false);
     setGenReveal(false);
@@ -774,12 +778,21 @@ function AlbumAIView() {
       let maxPageNumber = Math.max(0, ...(fresh.pages as any[]).map(p => p.pageNumber ?? 0));
       const missing = finalInner - innerPages.length;
       if (missing > 0) {
-        for (let i = 0; i < missing; i++) {
-          maxPageNumber += 1;
-          await addProjectPage.mutateAsync({
-            projectId: project.id,
-            data: { pageNumber: maxPageNumber, pageType: 'inner' },
-          });
+        // Small concurrent batches — sequential adds were slow; unbounded
+        // parallel adds hammered the API on large albums.
+        const ADD_BATCH = 4;
+        for (let i = 0; i < missing; ) {
+          const chunk = Math.min(ADD_BATCH, missing - i);
+          const ops = [];
+          for (let j = 0; j < chunk; j++) {
+            maxPageNumber += 1;
+            ops.push(addProjectPage.mutateAsync({
+              projectId: project.id,
+              data: { pageNumber: maxPageNumber, pageType: 'inner' },
+            }));
+          }
+          await Promise.all(ops);
+          i += chunk;
         }
         fresh = await getProject(project.id);
         innerPages = (fresh.pages as any[]).filter(p => p.pageType === 'inner');
@@ -838,19 +851,21 @@ function AlbumAIView() {
         throw lastErr ?? new Error('Failed to save a page');
       };
 
-      const patches: Promise<void>[] = [];
-      if (frontCoverPage) patches.push(patchPage(frontCoverPage.id, album.frontCover));
-      if (insideCoverPage) patches.push(patchPage(insideCoverPage.id, album.insideCover));
-      if (insideBackPage) patches.push(patchPage(insideBackPage.id, album.insideCover));
-      if (backCoverPage) patches.push(patchPage(backCoverPage.id, album.backCover));
+      // Build job list first — do NOT start fetch until the batch loop.
+      // Starting every PATCH immediately was flooding the network/CPU/RAM.
+      const saveJobs: { pageId: number; elements: any[] }[] = [];
+      if (frontCoverPage) saveJobs.push({ pageId: frontCoverPage.id, elements: album.frontCover });
+      if (insideCoverPage) saveJobs.push({ pageId: insideCoverPage.id, elements: album.insideCover });
+      if (insideBackPage) saveJobs.push({ pageId: insideBackPage.id, elements: album.insideCover });
+      if (backCoverPage) saveJobs.push({ pageId: backCoverPage.id, elements: album.backCover });
       innerPages.forEach((page, i) => {
-        if (album.innerPages[i]) patches.push(patchPage(page.id, album.innerPages[i]));
+        if (album.innerPages[i]) saveJobs.push({ pageId: page.id, elements: album.innerPages[i] });
       });
 
-      // Save in small batches so a single slow page doesn't time everything out.
-      const BATCH = 6;
-      for (let i = 0; i < patches.length; i += BATCH) {
-        await Promise.all(patches.slice(i, i + BATCH));
+      const BATCH = 4;
+      for (let i = 0; i < saveJobs.length; i += BATCH) {
+        const chunk = saveJobs.slice(i, i + BATCH);
+        await Promise.all(chunk.map((job) => patchPage(job.pageId, job.elements)));
       }
 
       sessionStorage.removeItem(SS_KEY);
@@ -880,6 +895,8 @@ function AlbumAIView() {
       setGenerating(false);
       setGenDone(false);
       setGenReveal(false);
+    } finally {
+      genLockRef.current = false;
     }
   }, [categories, bookSizes, createProject, addProjectPage, getToken, lang, setLocation, siteSettings, photos]);
 
