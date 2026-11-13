@@ -198,7 +198,12 @@ async function renderPage(elements: PdfElement[], canvasH: number, outW: number,
       .map(e => loadImg(e.src!))
   );
 
-  for (const el of elements) {
+  const paintOrder = [...elements].sort((a, b) => {
+    const rank = (t?: string) => (t === 'background' ? 0 : t === 'placeholder' ? 1 : 2);
+    return rank(a.type) - rank(b.type);
+  });
+
+  for (const el of paintOrder) {
     ctx.save();
     ctx.globalAlpha = el.opacity ?? 1;
 
@@ -338,17 +343,21 @@ async function renderPage(elements: PdfElement[], canvasH: number, outW: number,
       const lines = wrapLines(ctx, el.text, maxW, letterSpacing);
       const lineH = fontSize * lh;
       const textH = lines.length * lineH;
-
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(el.x - 1, el.y - 1, el.w + 2, el.h + 2);
-      ctx.clip();
+      const bleedX = Math.max(4, Math.ceil(fontSize * 0.2));
+      const bleedY = Math.max(4, Math.ceil(fontSize * 0.4));
+      const neededH = Math.max(el.h, Math.ceil(textH + pad * 2 + bleedY));
 
       let startY = el.y + pad;
       if (vAlign === 'middle') startY = el.y + pad + Math.max(0, (innerH - textH) / 2);
       if (vAlign === 'bottom') startY = el.y + el.h - pad - textH;
+      if (textH > innerH && vAlign !== 'top') startY = el.y + pad;
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(el.x - bleedX, Math.min(el.y, startY) - 2, el.w + bleedX * 2, neededH + bleedY + 4);
+      ctx.clip();
+
       for (const line of lines) {
-        if (startY >= el.y + el.h) break;
         const lineW = measureLineWidth(ctx, line, letterSpacing);
         let x = el.x + pad;
         if (alignment === 'center') x = el.x + (el.w - lineW) / 2;

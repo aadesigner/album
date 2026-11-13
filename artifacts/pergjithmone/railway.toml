@@ -13,3 +13,4 @@ healthcheckPath = "/healthz"
 healthcheckTimeout = 60
 restartPolicyType = "ON_FAILURE"
 numReplicas = 1
+# Cost: static web needs little RAM — set a low Memory limit in Railway (~256 MB).

@@ -80,9 +80,30 @@ function resolveFontFamily(family?: string): string {
   if (f.includes("cormorant")) return "Cormorant Garamond";
   if (f.includes("raleway")) return "Raleway";
   if (f.includes("montserrat")) return "Montserrat";
-  if (f.includes("georgia") || f.includes("times")) return "Georgia";
-  if (f.includes("arial") || f.includes("helvetica")) return "Arial";
-  if (f.includes("serif") || f.includes("script") || f.includes("vibes")) return "DejaVu Serif";
+  if (f.includes("georgia") || f.includes("times") || f.includes("palatino")) return "Georgia";
+  if (f.includes("arial") || f.includes("helvetica") || f.includes("verdana") || f.includes("trebuchet")) return "Arial";
+  // Unregistered editor faces → closest metric bucket (avoids random system fallback).
+  if (
+    f.includes("garamond") || f.includes("baskerville") || f.includes("lora")
+    || f.includes("spectral") || f.includes("fraunces") || f.includes("instrument")
+    || f.includes("libre") || f.includes("crimson") || f.includes("cardo")
+    || f.includes("newsreader") || f.includes("bodoni") || f.includes("cinzel")
+    || f.includes("alegreya") || f.includes("noto serif") || f.includes("dm serif")
+    || f.includes("source serif") || f.includes("eb garamond") || f.includes("caslon")
+  ) {
+    return "DejaVu Serif";
+  }
+  if (
+    f.includes("script") || f.includes("vibes") || f.includes("allura")
+    || f.includes("sacramento") || f.includes("satisfy") || f.includes("parisienne")
+    || f.includes("italianno") || f.includes("yellowtail") || f.includes("cookie")
+    || f.includes("caveat") || f.includes("tangerine") || f.includes("pinyon")
+    || f.includes("alex brush") || f.includes("homemade") || f.includes("shadows")
+    || f.includes("petit") || f.includes("qwigley")
+  ) {
+    return "Great Vibes";
+  }
+  if (f.includes("serif")) return "DejaVu Serif";
   return "DejaVu Sans";
 }
 
@@ -92,8 +113,8 @@ const DESIGN_H = 800;
 const PAPER_COLOR = "#FEFDF9";
 const PRINT_DPI = 300;
 const CM_TO_INCH = 1 / 2.54;
-/** High JPEG quality for print (balance size vs sharpness). */
-const PRINT_JPEG_QUALITY = 94;
+/** Print JPEG quality — 90 is visually fine at 300 DPI and cheaper on CPU/RAM/disk than 94+. */
+const PRINT_JPEG_QUALITY = 90;
 
 /** Mirrors designs.ts getCanvasHeight() — keep formula identical. */
 export function getCanvasHeight(bookWidthCm: number, bookHeightCm: number): number {
@@ -403,11 +424,27 @@ function resolveUploadFile(filename: string, uploadsDir: string): string | null 
   return null;
 }
 
+function publicApiOrigin(): string | null {
+  const raw = (
+    process.env.PUBLIC_API_URL
+    || process.env.API_PUBLIC_URL
+    || process.env.APP_URL
+    || process.env.VITE_API_URL
+    || ""
+  ).trim().replace(/\/$/, "");
+  return raw || null;
+}
+
 function resolveImageSource(
   src: string,
   uploadsDir: string,
 ): { kind: "file"; path: string } | { kind: "url"; url: string } | null {
   if (!src) return null;
+  // Device-only refs must be uploaded before print — never fetchable on the server.
+  if (/^local-photo:/i.test(src) || /^blob:/i.test(src)) {
+    logger.warn({ src: src.slice(0, 48) }, "PDF render: unresolved device-local photo src");
+    return null;
+  }
   if (src.startsWith("data:")) return { kind: "url", url: src };
 
   let pathname = src;
@@ -419,6 +456,8 @@ function resolveImageSource(
       if (uploadInUrl) {
         const filePath = resolveUploadFile(decodeURIComponent(uploadInUrl[1]), uploadsDir);
         if (filePath) return { kind: "file", path: filePath };
+        // Disk miss (volume move / ephemeral) — try the public URL as a last resort.
+        return { kind: "url", url: src };
       }
       const designInUrl = pathname.match(/\/designs\/([^/?#]+)/i);
       if (designInUrl) {
@@ -435,10 +474,17 @@ function resolveImageSource(
   pathname = pathname.split("?")[0].split("#")[0];
 
   const uploadMatch = pathname.match(/\/api\/uploads\/files\/([^/]+)$/i)
-    || pathname.match(/^\/?uploads\/files\/([^/]+)$/i);
+    || pathname.match(/^\/?uploads\/files\/([^/]+)$/i)
+    || pathname.match(/(?:^|\/)api\/uploads\/files\/([^/]+)$/i);
   if (uploadMatch) {
-    const filePath = resolveUploadFile(decodeURIComponent(uploadMatch[1]), uploadsDir);
+    const filename = decodeURIComponent(uploadMatch[1]);
+    const filePath = resolveUploadFile(filename, uploadsDir);
     if (filePath) return { kind: "file", path: filePath };
+    const origin = publicApiOrigin();
+    if (origin) {
+      logger.warn({ src, filename }, "PDF render: upload missing on disk — trying public URL");
+      return { kind: "url", url: `${origin}/api/uploads/files/${encodeURIComponent(filename)}` };
+    }
     logger.warn({ src }, "PDF render: upload file missing on disk");
     return null;
   }
@@ -503,7 +549,13 @@ async function renderPageToCanvas(
 
   const images = await loadPageImages(page.elements, uploadsDir);
 
-  for (const el of page.elements) {
+  // Backgrounds first so a misplaced full-page fill never covers photos/text.
+  const paintOrder = [...page.elements].sort((a, b) => {
+    const rank = (t?: string) => (t === "background" ? 0 : t === "placeholder" ? 1 : 2);
+    return rank(a.type) - rank(b.type);
+  });
+
+  for (const el of paintOrder) {
     ctx.save();
     ctx.globalAlpha = el.opacity ?? 1;
 
@@ -636,26 +688,32 @@ async function renderPageToCanvas(
       ctx.fillStyle = color;
       ctx.textBaseline = "top";
 
+      // Slightly tighter max width than the editor can produce more wraps when
+      // the print face is a fallback (DejaVu vs Google). Prefer showing every
+      // line over chopping the last ones.
       const maxW = Math.max(1, el.w - pad * 2);
       const innerH = Math.max(0, el.h - pad * 2);
       const lines = wrapLines(ctx, el.text, maxW, letterSpacing);
       const lineH = fontSize * lh;
       const textH = lines.length * lineH;
-
-      ctx.save();
-      // Clip to the text box like Konva — but leave a tiny bleed so antialiased
-      // edges / italic overhang aren't shaved off.
-      ctx.beginPath();
-      ctx.rect(el.x - 1, el.y - 1, el.w + 2, el.h + 2);
-      ctx.clip();
+      // Descenders / italic overhang / metric mismatch vs Konva.
+      const bleedX = Math.max(4, Math.ceil(fontSize * 0.2));
+      const bleedY = Math.max(4, Math.ceil(fontSize * 0.4));
+      const neededH = Math.max(el.h, Math.ceil(textH + pad * 2 + bleedY));
 
       let startY = el.y + pad;
       if (vAlign === "middle") startY = el.y + pad + Math.max(0, (innerH - textH) / 2);
       if (vAlign === "bottom") startY = el.y + el.h - pad - textH;
-      for (const line of lines) {
-        // Draw any line that still intersects the box (Konva shows partial last lines).
-        if (startY >= el.y + el.h) break;
+      // When wrapped text is taller than the saved box, keep top alignment so
+      // the start of the copy isn't pushed above the clip.
+      if (textH > innerH && vAlign !== "top") startY = el.y + pad;
 
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(el.x - bleedX, Math.min(el.y, startY) - 2, el.w + bleedX * 2, neededH + bleedY + 4);
+      ctx.clip();
+
+      for (const line of lines) {
         const lineW = measureLineWidth(ctx, line, letterSpacing);
         let x = el.x + pad;
         if (alignment === "center") x = el.x + (el.w - lineW) / 2;
@@ -725,8 +783,12 @@ export async function renderProjectPdf(params: {
   const pageHeightPt = bookHeightCm * pointsPerCm;
 
   for (const page of toRender) {
-    const canvas = await renderPageToCanvas(page, outW, outH, canvasH, uploadsDir);
+    // One page at a time: a 21×28 cm @ 300 DPI RGBA canvas is ~33 MB native
+    // memory (outside V8 heap / NODE_OPTIONS). Drop refs ASAP so GC can reclaim
+    // before the next page — concurrent albums are capped separately.
+    let canvas: Canvas | null = await renderPageToCanvas(page, outW, outH, canvasH, uploadsDir);
     const jpegBuffer = canvas.toBuffer("image/jpeg", { quality: PRINT_JPEG_QUALITY });
+    canvas = null;
     const jpegImage = await pdf.embedJpg(jpegBuffer);
     const pdfPage = pdf.addPage([pageWidthPt, pageHeightPt]);
     pdfPage.drawImage(jpegImage, { x: 0, y: 0, width: pageWidthPt, height: pageHeightPt });

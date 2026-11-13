@@ -3855,7 +3855,10 @@ function OrderModal({project,onClose,lang,flushSave,prepareForPrint}: {
     // don't swallow WhatsApp after the async create-order round-trip.
     const waTab=window.open('about:blank','_blank');
     try{
-      // Device-local photos → server URLs, then persist, then order/PDF.
+      // Flush any in-flight autosave first, then upload device photos and
+      // persist the rewritten URLs — otherwise a racing autosave can write
+      // stale `local-photo:` srcs back and the print PDF comes out blank.
+      if (flushSave) await flushSave();
       if (prepareForPrint) await prepareForPrint();
       if (flushSave) await flushSave();
 
@@ -4360,34 +4363,50 @@ export default function Editor() {
   // flushSave (used to force-persist pending edits — e.g. a just-applied
   // design — before anything reads contentJson from the DB, like placing
   // an order that triggers server-side PDF generation).
+  // Serialize saves so an in-flight autosave cannot overwrite newer content
+  // (e.g. prepareForPrint rewrote local-photo → /api/uploads, then stale
+  // autosave put the device refs back and print PDF pages went blank).
+  const saveChainRef = useRef(Promise.resolve());
   const performSave=useCallback(async()=>{
     if (isOrdered) { dirtyPages.current.clear(); setSaveStatus('saved'); return; }
-    setSaveStatus('saving');
-    const token=getToken();
-    const toSave=Array.from(dirtyPages.current); dirtyPages.current.clear();
-    if (!toSave.length) { setSaveStatus('saved'); return; }
-    const cur=liveContent.current;
-    const pagesPayload=toSave.map(pid=>({id:pid,contentJson:JSON.stringify(cur[pid]||[])}));
-    try {
-      const r=await fetch(`/api/projects/${projectId}/auto-save`,{
-        method:'POST',
-        headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},
-        body:JSON.stringify({pagesJson:JSON.stringify(pagesPayload)}),
-        keepalive:true,
-      });
-      if (!r.ok) {
-        const body=await r.json().catch(()=>({}));
-        throw new Error((body as any)?.error || `Save failed (${r.status})`);
+    const run = async () => {
+      const toSave = Array.from(dirtyPages.current);
+      if (!toSave.length) { setSaveStatus('saved'); return; }
+      setSaveStatus('saving');
+      const token = getToken();
+      // Read live content at send time — not a stale snapshot from queue time.
+      const cur = liveContent.current;
+      const pagesPayload = toSave.map(pid => ({ id: pid, contentJson: JSON.stringify(cur[pid] || []) }));
+      try {
+        const r = await fetch(`/api/projects/${projectId}/auto-save`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+          body: JSON.stringify({ pagesJson: JSON.stringify(pagesPayload) }),
+          keepalive: true,
+        });
+        if (!r.ok) {
+          const body = await r.json().catch(() => ({}));
+          throw new Error((body as any)?.error || `Save failed (${r.status})`);
+        }
+        // Only clear pages that are still identical to what we just saved —
+        // edits during the request stay dirty for the next save.
+        for (const pid of toSave) {
+          const sent = pagesPayload.find(p => p.id === pid)?.contentJson;
+          if (sent && JSON.stringify(liveContent.current[pid] || []) === sent) {
+            dirtyPages.current.delete(pid);
+          }
+        }
+        setSaveStatus(dirtyPages.current.size ? 'unsaved' : 'saved');
+      } catch (e) {
+        console.error('auto-save failed', e);
+        toSave.forEach(pid => dirtyPages.current.add(pid));
+        setSaveStatus('unsaved');
+        throw e;
       }
-      setSaveStatus('saved');
-    } catch(e){
-      console.error('auto-save failed',e);
-      // Put the pages back so the next save attempt (debounced or flushed)
-      // retries them instead of silently dropping the edit.
-      toSave.forEach(pid=>dirtyPages.current.add(pid));
-      setSaveStatus('unsaved');
-      throw e;
-    }
+    };
+    const queued = saveChainRef.current.then(run, run);
+    saveChainRef.current = queued.catch(() => {});
+    return queued;
   },[projectId,getToken,isOrdered]);
 
   const triggerSave=useCallback(()=>{
@@ -4403,6 +4422,9 @@ export default function Editor() {
   // server-side PDF rendering straight from the database.
   const flushSave=useCallback(async()=>{
     if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current=undefined; }
+    // Always await the save chain so in-flight work finishes before callers
+    // (prepareForPrint / order) continue — even when dirty is currently empty.
+    await saveChainRef.current.catch(() => {});
     if (!dirtyPages.current.size) return;
     await performSave();
   },[performSave]);

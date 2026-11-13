@@ -7,6 +7,7 @@ import { logger } from "./logger";
 import { ensureDataDirs, pdfsDir, uploadsDir } from "./dataDir";
 import { renderProjectPdf, parsePageElements, type PdfRenderPage } from "./pdfRenderer";
 import { getSecuritySettings } from "./securitySettings";
+import { pageHasUnresolvedDevicePhotos } from "./pageContentBlank";
 
 ensureDataDirs();
 export { pdfsDir };
@@ -88,6 +89,15 @@ async function loadRenderInput(projectId: number): Promise<{
       elements: parsePageElements(p.contentJson),
     };
   });
+
+  const unresolved = pages.filter((p) => pageHasUnresolvedDevicePhotos(p.contentJson));
+  if (unresolved.length > 0) {
+    throw new Error(
+      `Project ${projectId} still has device-local photos on page(s) `
+      + unresolved.map((p) => p.pageNumber).join(", ")
+      + ". Re-open the album on the original device and place the order again so photos upload before print.",
+    );
+  }
 
   return {
     bookWidthCm: Number(bookSize.widthCm),

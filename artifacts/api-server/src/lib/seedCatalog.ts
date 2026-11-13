@@ -233,7 +233,8 @@ export async function seedCatalog(): Promise<void> {
     { key: "max_albums_per_user", from: ["20"], to: "50" },
     { key: "max_photos_per_album", from: ["300"], to: "500" },
     { key: "max_orders_per_day", from: ["5"], to: "15" },
-    { key: "max_concurrent_pdf_generations", from: ["3"], to: "6" },
+    // Cost: 6 parallel 300 DPI albums blew Railway CPU/RAM. Cap at 2; admin can raise.
+    { key: "max_concurrent_pdf_generations", from: ["3", "6"], to: "2" },
     { key: "max_upload_file_size_mb", from: ["20"], to: "25" },
     { key: "pending_books_limit", from: ["3"], to: "10" },
   ];

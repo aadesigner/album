@@ -31,7 +31,8 @@ export const SECURITY_SETTINGS_DEFAULTS: SecuritySettings = {
   maxAlbumsPerUser: 50,
   maxPhotosPerAlbum: 500,
   maxOrdersPerDay: 15,
-  maxConcurrentPdfGenerations: 6,
+  // 1–2 keeps print quality; 6 concurrent 300 DPI canvases spikes Railway RAM/CPU hard.
+  maxConcurrentPdfGenerations: 2,
   maxUploadFileSizeMb: 25,
   allowedUploadMimeTypes: [
     "image/jpeg",

@@ -24,4 +24,9 @@ describe("isPageContentBlank", () => {
     expect(isPageContentBlank([{ type: "shape" }])).toBe(false);
     expect(isPageContentBlank([{ type: "text", text: "   " }])).toBe(true);
   });
+
+  it("treats device-local photo refs as blank (not printable)", () => {
+    expect(isPageContentBlank([{ type: "image", src: "local-photo:abc" }])).toBe(true);
+    expect(isPageContentBlank([{ type: "image", src: "blob:http://localhost/x" }])).toBe(true);
+  });
 });

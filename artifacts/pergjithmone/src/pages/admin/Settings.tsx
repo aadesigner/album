@@ -174,7 +174,7 @@ export default function AdminSettings() {
       maxAlbumsPerUser:            s?.maxAlbumsPerUser            || 50,
       maxPhotosPerAlbum:           s?.maxPhotosPerAlbum           || 500,
       maxOrdersPerDay:             s?.maxOrdersPerDay             || 15,
-      maxConcurrentPdfGenerations: s?.maxConcurrentPdfGenerations || 6,
+      maxConcurrentPdfGenerations: s?.maxConcurrentPdfGenerations || 2,
       maxUploadFileSizeMb:         s?.maxUploadFileSizeMb         || 25,
       allowedUploadMimeTypes: Array.isArray(s?.allowedUploadMimeTypes)
         ? s.allowedUploadMimeTypes.join(', ')

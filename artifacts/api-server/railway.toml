@@ -16,3 +16,5 @@ dockerfilePath = "Dockerfile"
 startCommand = "/app/boot-api.sh"
 restartPolicyType = "ON_FAILURE"
 numReplicas = 1
+# Cost: keep 1 replica. In Railway dashboard set a Memory limit (~512–768 MB)
+# so idle billing stays bounded; PDF peaks are capped in-app (max concurrent = 2).
