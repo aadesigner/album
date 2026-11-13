@@ -920,8 +920,24 @@ router.get(
       return;
     }
 
-    const filename = `${(project.title || "album").replace(/[^a-z0-9_\-]/gi, "_")}.pdf`;
-    res.download(filePath, filename);
+    const filename = `${(project.title || "album").replace(/[^a-z0-9_\-]+/gi, "_")}.pdf`;
+    // Default inline so admin iframe / "View" works. Attachment only when
+    // ?download=1 — otherwise browsers force a download and blank/break the modal.
+    const wantDownload =
+      req.query.download === "1"
+      || req.query.download === "true"
+      || String(req.query.disposition || "").toLowerCase() === "attachment";
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Cache-Control", "private, no-store");
+    if (wantDownload) {
+      res.download(filePath, filename);
+      return;
+    }
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="${filename.replace(/"/g, "")}"`,
+    );
+    res.sendFile(path.resolve(filePath));
   },
 );
 

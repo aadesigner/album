@@ -370,6 +370,23 @@ export default function AdminSettings() {
           </p>
         </div>
 
+        {s && (s as any).persistentStorage === false && (
+          <div
+            className="mb-5 flex items-start gap-2.5 rounded-2xl px-4 py-3 text-sm"
+            style={{ background: '#FFFBEB', border: '1px solid #F5D78E', color: '#7A4E00' }}
+          >
+            <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="font-medium">Photo storage is not persistent</p>
+              <p className="text-xs mt-1 opacity-90">
+                Design Studio uploads, category covers, and album photos will be deleted on every Railway build.
+                On the <strong>api-server</strong> service, add a Volume mounted at <code className="text-[11px]">/data</code>
+                {(s as any).dataRoot ? <> (currently writing to <code className="text-[11px]">{String((s as any).dataRoot)}</code>)</> : null}, then redeploy.
+              </p>
+            </div>
+          </div>
+        )}
+
         {saveError && (
           <div
             className="mb-5 flex items-start gap-2.5 rounded-2xl px-4 py-3 text-sm"

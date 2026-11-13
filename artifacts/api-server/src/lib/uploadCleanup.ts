@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { uploadsDir, uploadFilePathCandidates } from "./dataDir";
+import { getUploadsDir, uploadFilePathCandidates } from "./dataDir";
 import { logger } from "./logger";
 
 const UPLOAD_FILE_RE = /\/(?:api\/)?uploads\/files\/([\w.\-]+)/gi;
@@ -53,10 +53,11 @@ export function deleteUploadFiles(filenames: string[]): number {
 export function clearAllUploadFiles(): number {
   let removed = 0;
   try {
-    if (!fs.existsSync(uploadsDir)) return 0;
-    for (const name of fs.readdirSync(uploadsDir)) {
+    const dir = getUploadsDir();
+    if (!fs.existsSync(dir)) return 0;
+    for (const name of fs.readdirSync(dir)) {
       if (name.startsWith(".")) continue;
-      const full = path.join(uploadsDir, name);
+      const full = path.join(dir, name);
       try {
         if (fs.statSync(full).isFile()) {
           fs.unlinkSync(full);

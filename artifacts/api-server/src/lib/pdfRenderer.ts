@@ -4,7 +4,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { logger } from "./logger";
-import { designsDir, uploadFilePathCandidates } from "./dataDir";
+import { getDesignsDir, uploadFilePathCandidates } from "./dataDir";
 import { isStrokeOnlyShape, shapePathForElement } from "./shapes";
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -383,7 +383,7 @@ function drawSpacedText(
 
 export function designAssetDirs(): string[] {
   return [
-    designsDir,
+    getDesignsDir(),
     // Copied next to the bundled dist/ by build.mjs
     path.join(MODULE_DIR, "assets", "designs"),
     path.join(process.cwd(), "assets", "designs"),

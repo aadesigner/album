@@ -32,7 +32,13 @@ app.use(helmet({
 }));
 
 // ── Response compression ───────────────────────────────────────────────────
-app.use(compression());
+app.use(compression({
+  filter: (req, res) => {
+    if (req.headers["x-no-compression"]) return false;
+    // Default compressible() check (skip zip/jpeg/png/etc.).
+    return compression.filter(req, res);
+  },
+}));
 
 // ── Logging ────────────────────────────────────────────────────────────────
 app.use(

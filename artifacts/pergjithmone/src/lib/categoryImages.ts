@@ -1,6 +1,8 @@
 /** Same-origin photos so admin + phones never depend on Unsplash hotlinking. */
 export const CAT_IMG_BY_SLUG: Record<string, string> = {
   dasme: '/designs/wedding-spin-cover.jpg',
+  love: '/designs/wedding-spin-cover.jpg',
+  dashuri: '/designs/wedding-spin-cover.jpg',
   udhetime: '/designs/paris-cover-thumb.jpg',
   familje: '/designs/baby-ador-cover.jpg',
   ditelindje: '/designs/baby-ador-thumb.jpg',
@@ -25,6 +27,8 @@ export const CAT_IMG: Record<string, string> = {
   Natyrë: '/designs/amalfi-cover-thumb.jpg',
   Çifte: CAT_IMG_BY_SLUG.dasme,
   Dashurinë: CAT_IMG_BY_SLUG.dasme,
+  Dashuri: CAT_IMG_BY_SLUG.dasme,
+  Love: CAT_IMG_BY_SLUG.dasme,
   Festë: CAT_IMG_BY_SLUG.festash,
   Festim: CAT_IMG_BY_SLUG.festash,
   'Kafshë shtëpie': '/designs/baby-ador-thumb.jpg',

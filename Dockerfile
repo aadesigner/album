@@ -70,7 +70,14 @@ RUN cp /app/artifacts/pergjithmone/server.mjs /app/server.mjs \
  && printf '%s\n' \
 '#!/bin/sh' \
 'set -eu' \
-'if [ -z "${DATA_DIR:-}" ] && [ -d /data ]; then export DATA_DIR=/data; fi' \
+'# Always prefer the Railway volume. An env DATA_DIR under /app used to win' \
+'# and Design Studio uploads were wiped on every redeploy.' \
+'if [ -d /data ]; then' \
+'  case "${DATA_DIR:-}" in' \
+'    ""|/app|/app/*|/tmp|/tmp/*) export DATA_DIR=/data ;;' \
+'  esac' \
+'  if [ -z "${DATA_DIR:-}" ]; then export DATA_DIR=/data; fi' \
+'fi' \
 'echo "[api] starting node /app/artifacts/api-server/dist/index.mjs DATA_DIR=${DATA_DIR:-unset}"' \
 'exec node /app/artifacts/api-server/dist/index.mjs' \
 > /app/boot-api.sh \

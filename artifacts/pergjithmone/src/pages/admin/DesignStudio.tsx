@@ -2261,9 +2261,19 @@ export default function AdminDesignStudio() {
   const ctxCanEdit = !!(ctxEl && ctxEl.type !== 'background');
   const paperThumbH = Math.max(16, Math.round(20 * (canvasH / DESIGN_W)));
 
+  const storageOk = s?.persistentStorage !== false;
+
   return (
     <AdminLayout>
       <div className="p-2 sm:p-3 w-full max-w-none flex flex-col gap-2">
+        {s && s.persistentStorage === false && (
+          <div className="rounded-xl px-3 py-2.5 text-[12px] leading-snug border border-amber-300 bg-amber-50 text-amber-950">
+            <strong className="font-semibold">Photos will vanish on the next deploy.</strong>
+            {' '}Railway api-server has no volume at <code className="text-[11px]">/data</code>
+            {s.dataRoot ? <> (writing to <code className="text-[11px]">{String(s.dataRoot)}</code>)</> : null}.
+            Attach a volume on the <em>API</em> service mounted at <code className="text-[11px]">/data</code>, redeploy, then re-upload Design Studio images.
+          </div>
+        )}
         {/* Compact top bar */}
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="min-w-0">
@@ -2272,6 +2282,7 @@ export default function AdminDesignStudio() {
             </h1>
             <p className="text-[11px] mt-0.5 truncate" style={{ color: ADMIN.muted }}>
               Front &amp; back covers · live after Save
+              {storageOk ? '' : ' · storage not mounted'}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-1">

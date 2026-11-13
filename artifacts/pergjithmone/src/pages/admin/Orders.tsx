@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { AdminLayout, ADMIN } from '@/components/layout/AdminLayout';
 import { useListAdminOrders, useUpdateAdminOrder, getListAdminOrdersQueryKey, getGetAdminStatsQueryKey } from '@workspace/api-client-react-tsconfig';
 import { format } from 'date-fns';
-import { RefreshCw, Eye, FileX, ExternalLink, X, Download, StickyNote, Trash2 } from 'lucide-react';
+import { RefreshCw, Eye, FileX, ExternalLink, X, Download, StickyNote, Trash2, FolderArchive } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
@@ -42,8 +42,10 @@ function PdfViewerModal({ url, orderId, onClose }: { url: string; orderId: numbe
             style={{ background: ADMIN.blushSoft, color: ADMIN.blushDeep }}>
             <ExternalLink size={12} /> Open
           </a>
-          <a href={url} download
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-neutral-100 text-neutral-600 hover:bg-neutral-200 text-xs font-medium transition-colors">
+          <a
+            href={url.includes('download=') ? url : `${url}${url.includes('?') ? '&' : '?'}download=1`}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-neutral-100 text-neutral-600 hover:bg-neutral-200 text-xs font-medium transition-colors"
+          >
             <Download size={12} />
           </a>
           <button onClick={onClose} className="p-1.5 rounded-xl transition-colors" style={{ color: ADMIN.muted }}>
@@ -58,18 +60,32 @@ function PdfViewerModal({ url, orderId, onClose }: { url: string; orderId: numbe
   );
 }
 
-/** pdfUrl is an auth-gated API path — append access token so iframe/<a> work. */
-function authedPdfUrl(pdfUrl: string, token: string | null): string {
+/** pdfUrl is auth-gated — append access token so iframe/<a> work. */
+function authedPdfUrl(
+  pdfUrl: string,
+  token: string | null,
+  opts?: { download?: boolean },
+): string {
   if (!pdfUrl) return pdfUrl;
   const withBase = pdfUrl.startsWith('http') ? pdfUrl : `${BASE}${pdfUrl.startsWith('/') ? '' : '/'}${pdfUrl}`;
-  if (!token) return withBase;
-  const join = withBase.includes('?') ? '&' : '?';
-  return `${withBase}${join}token=${encodeURIComponent(token)}`;
+  const params = new URLSearchParams();
+  if (token) params.set('token', token);
+  if (opts?.download) params.set('download', '1');
+  const qs = params.toString();
+  if (!qs) return withBase;
+  return `${withBase}${withBase.includes('?') ? '&' : '?'}${qs}`;
 }
 
 function withCacheBust(url: string): string {
   const join = url.includes('?') ? '&' : '?';
   return `${url}${join}t=${Date.now()}`;
+}
+
+/** On-demand zip of unique client-uploaded photos used in the ordered album. */
+function authedOrderImagesZipUrl(orderId: number, token: string | null): string {
+  const path = `${BASE}/api/admin/orders/${orderId}/images-zip`;
+  if (!token) return path;
+  return `${path}?token=${encodeURIComponent(token)}`;
 }
 
 // ── Admin note modal ──────────────────────────────────────────────────────────
@@ -446,7 +462,7 @@ export default function AdminOrders() {
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ borderBottom: `1px solid ${ADMIN.line}` }}>
-                  {['#', 'Customer', 'Album', 'Pages', 'Amount', 'Date', 'PDF', 'Status', 'Note', 'Admin Note', ''].map(h => (
+                  {['#', 'Customer', 'Album', 'Pages', 'Amount', 'Date', 'Files', 'Status', 'Note', 'Admin Note', ''].map(h => (
                     <th key={h || 'actions'} className="px-3 sm:px-4 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider whitespace-nowrap" style={{ color: ADMIN.muted }}>{h}</th>
                   ))}
                 </tr>
@@ -493,37 +509,47 @@ export default function AdminOrders() {
                         <p className="text-[9px] text-neutral-300">{format(new Date(o.createdAt), 'HH:mm')}</p>
                       </td>
 
-                      {/* PDF */}
+                      {/* PDF + photos zip */}
                       <td className="px-4 py-3.5">
-                        {o.pdfUrl ? (
-                          <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5">
+                          {o.pdfUrl ? (
+                            <>
+                              <button
+                                onClick={() => handleViewFreshPdf(o)}
+                                disabled={viewPrepId === o.id || regenId === o.id}
+                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[10px] font-semibold transition-opacity hover:opacity-80 disabled:opacity-50"
+                                style={{ background: ADMIN.blushSoft, color: ADMIN.blushDeep }}
+                                title="Re-render at print size from the current album, then view"
+                              >
+                                <Eye size={10} /> {viewPrepId === o.id ? 'Rendering…' : 'View'}
+                              </button>
+                              <button
+                                onClick={() => setDeletePdf({ orderId: o.id })}
+                                className="p-1.5 rounded-lg text-neutral-300 hover:bg-red-50 hover:text-red-400 transition-colors"
+                                title="Delete PDF"
+                              >
+                                <FileX size={12} />
+                              </button>
+                            </>
+                          ) : (
                             <button
-                              onClick={() => handleViewFreshPdf(o)}
-                              disabled={viewPrepId === o.id || regenId === o.id}
-                              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[10px] font-semibold transition-opacity hover:opacity-80 disabled:opacity-50"
-                              style={{ background: ADMIN.blushSoft, color: ADMIN.blushDeep }}
-                              title="Re-render at print size from the current album, then view"
+                              onClick={() => handleRegenPdf(o.id, o.projectId)}
+                              disabled={regenId === o.id || viewPrepId === o.id}
+                              className="px-2.5 py-1.5 rounded-lg text-[10px] font-semibold bg-amber-50 text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+                              title="Queue print PDF generation"
                             >
-                              <Eye size={10} /> {viewPrepId === o.id ? 'Rendering…' : 'View'}
+                              {regenId === o.id ? 'Rendering…' : 'Generate PDF'}
                             </button>
-                            <button
-                              onClick={() => setDeletePdf({ orderId: o.id })}
-                              className="p-1.5 rounded-lg text-neutral-300 hover:bg-red-50 hover:text-red-400 transition-colors"
-                              title="Delete PDF"
-                            >
-                              <FileX size={12} />
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => handleRegenPdf(o.id, o.projectId)}
-                            disabled={regenId === o.id || viewPrepId === o.id}
-                            className="px-2.5 py-1.5 rounded-lg text-[10px] font-semibold bg-amber-50 text-amber-700 hover:bg-amber-100 disabled:opacity-50"
-                            title="Queue print PDF generation"
+                          )}
+                          <a
+                            href={authedOrderImagesZipUrl(o.id, getToken())}
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[10px] font-semibold transition-opacity hover:opacity-80"
+                            style={{ background: '#F0F7F4', color: '#2F6B56' }}
+                            title="Download zip of client photos used in this album"
                           >
-                            {regenId === o.id ? 'Rendering…' : 'Generate PDF'}
-                          </button>
-                        )}
+                            <FolderArchive size={10} /> Photos
+                          </a>
+                        </div>
                       </td>
 
                       {/* Status */}

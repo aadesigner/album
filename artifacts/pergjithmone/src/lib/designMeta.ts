@@ -39,6 +39,11 @@ export function normalizeCatKey(raw: string | null | undefined): string {
 // Maps normalized DB category name / slug / English → DESIGNS category key
 const DB_CAT_TO_DESIGN_CAT_RAW: Record<string, string> = {
   'Dasmë': 'Wedding', 'Dasëm': 'Wedding', 'Wedding': 'Wedding', 'Dasma': 'Wedding', 'dasme': 'Wedding',
+  // Admin often renames Dasmë → Love / Dashuri; must still open Wedding styles.
+  'Love': 'Wedding', 'love': 'Wedding', 'Dashuri': 'Wedding', 'Dashuria': 'Wedding',
+  'Dashurinë': 'Wedding', 'Romance': 'Wedding', 'Romantic': 'Wedding', 'Romantik': 'Wedding',
+  'Romantike': 'Wedding', 'Couple': 'Wedding', 'Couples': 'Wedding',
+  'Çifte': 'Wedding', 'Cifte': 'Wedding', 'Portrait': 'Wedding',
   'Udhëtime': 'Travel', 'Udhëtim': 'Travel', 'Travel': 'Travel', 'udhetime': 'Travel',
   'Familje': 'Baby & Family', 'Fëmijë': 'Baby & Family', 'Bebe': 'Baby & Family',
   'Fëmijëri': 'Baby & Family', 'Family': 'Baby & Family', 'Baby': 'Baby & Family', 'familje': 'Baby & Family',
@@ -48,11 +53,60 @@ const DB_CAT_TO_DESIGN_CAT_RAW: Record<string, string> = {
   'Birthday': 'Celebration', 'Celebrations': 'Celebration', 'Celebration': 'Celebration',
   'Miqësi': 'Friendship', 'miqesi': 'Friendship', 'Friendship': 'Friendship', 'Friends': 'Friendship',
   'Natyrë': 'Travel', 'Peizazh': 'Travel', 'Nature': 'Travel',
-  'Çifte': 'Wedding', 'Dashurinë': 'Wedding', 'Portrait': 'Wedding', 'Couples': 'Wedding',
   'Sport': 'Travel', 'Arkitekturë': 'Travel', 'Graduim': 'Celebration',
   'Modern': 'Travel',
   'Vendndodhje': 'Travel', 'Locations': 'Travel',
 };
+
+/** Fuzzy match for admin-renamed categories that missed the alias table. */
+function fuzzyDesignCategory(normalized: string): string {
+  if (!normalized) return '';
+  if (
+    normalized.includes('love')
+    || normalized.includes('dashuri')
+    || normalized.includes('dasm')
+    || normalized.includes('wedding')
+    || normalized.includes('cift')
+    || normalized.includes('couple')
+    || normalized.includes('romanc')
+    || normalized.includes('romantik')
+  ) {
+    return 'Wedding';
+  }
+  if (
+    normalized.includes('travel')
+    || normalized.includes('udhetim')
+    || normalized.includes('trip')
+    || normalized.includes('city')
+    || normalized.includes('vend')
+  ) {
+    return 'Travel';
+  }
+  if (
+    normalized.includes('famil')
+    || normalized.includes('baby')
+    || normalized.includes('bebe')
+    || normalized.includes('femij')
+  ) {
+    return 'Baby & Family';
+  }
+  if (
+    normalized.includes('friend')
+    || normalized.includes('miq')
+  ) {
+    return 'Friendship';
+  }
+  if (
+    normalized.includes('celebr')
+    || normalized.includes('birthday')
+    || normalized.includes('ditelind')
+    || normalized.includes('festa')
+    || normalized.includes('party')
+  ) {
+    return 'Celebration';
+  }
+  return '';
+}
 
 export const DB_CAT_TO_DESIGN_CAT: Record<string, string> = Object.fromEntries(
   Object.entries(DB_CAT_TO_DESIGN_CAT_RAW).flatMap(([k, v]) => [
@@ -74,6 +128,11 @@ export function resolveDesignCategory(cat: {
     const hit = DB_CAT_TO_DESIGN_CAT[c] || DB_CAT_TO_DESIGN_CAT[normalizeCatKey(c)];
     if (hit) return hit;
   }
+  // Last resort: "Love", "Our Love Story", renamed Dasmë, etc.
+  for (const c of candidates) {
+    const fuzzy = fuzzyDesignCategory(normalizeCatKey(c));
+    if (fuzzy) return fuzzy;
+  }
   return '';
 }
 
@@ -90,7 +149,12 @@ export function resolveDesignCategoryFromQuery(
   }
   const key = String(slug || '').trim();
   if (!key) return '';
-  return DB_CAT_TO_DESIGN_CAT[key] || DB_CAT_TO_DESIGN_CAT[normalizeCatKey(key)] || '';
+  return (
+    DB_CAT_TO_DESIGN_CAT[key]
+    || DB_CAT_TO_DESIGN_CAT[normalizeCatKey(key)]
+    || fuzzyDesignCategory(normalizeCatKey(key))
+    || ''
+  );
 }
 
 type DbCategoryRow = {

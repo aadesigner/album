@@ -684,10 +684,14 @@ export default function Wizard() {
                   ))}
                 </div>
                 {shownDesigns.length === 0 && (
-                  <p className="text-center text-sm text-neutral-500 py-10">
-                    {lang === 'sq'
-                      ? 'Nuk ka stilet e gatshme për këtë kategori.'
-                      : 'No ready-made styles in this category yet.'}
+                  <p className="text-center text-sm text-neutral-500 py-10 max-w-md mx-auto">
+                    {!designCategoryKey
+                      ? (lang === 'sq'
+                        ? 'Kjo kategori nuk është lidhur me një grup stilesh. Në Admin → Kategori, përdorni një emër si Dasmë / Love / Udhëtime, ose krijoni stile në Design Studio.'
+                        : 'This category is not linked to a style group yet. In Admin → Categories, use a name like Wedding / Love / Travel, or create styles in Design Studio.')
+                      : (lang === 'sq'
+                        ? 'Nuk ka stilet e gatshme për këtë kategori.'
+                        : 'No ready-made styles in this category yet.')}
                   </p>
                 )}
 

@@ -4,6 +4,7 @@ import {
   usersTable,
   ordersTable,
   projectsTable,
+  projectPagesTable,
   categoriesTable,
   subcategoriesTable,
   templatesTable,
@@ -38,7 +39,14 @@ import { parseEditorElements, EDITOR_ELEMENTS_MAX } from "../lib/editorElements"
 import { invalidateIpBlocklistCache } from "../lib/ipBlocklist";
 import { queueProjectPdfGeneration, deleteProjectPdfFile } from "../lib/generateProjectPdf";
 import { logger } from "../lib/logger";
-import { hasPersistentStorage, dataRoot } from "../lib/dataDir";
+import { hasPersistentStorage, resolveDataRoot } from "../lib/dataDir";
+import {
+  collectUploadFilenamesFromPages,
+  resolveAlbumUploadFiles,
+  safeZipDownloadBasename,
+  zipEntryName,
+} from "../lib/albumUploadImages";
+import { streamStoreZip } from "../lib/zipStoreStream";
 import {
   ADMIN_STATS_TZ,
   STATS_TTL_MS,
@@ -1022,6 +1030,84 @@ router.delete(
   },
 );
 
+// GET /admin/orders/:orderId/images-zip — STORE zip of unique client-uploaded
+// photos actually used in the album (on-demand from /data uploads; no pre-build).
+router.get(
+  "/admin/orders/:orderId/images-zip",
+  // <a download> cannot set Authorization — same ?token= bridge as PDF download.
+  (req, _res, next) => {
+    if (!req.headers.authorization && typeof req.query.token === "string" && req.query.token) {
+      req.headers.authorization = `Bearer ${req.query.token}`;
+    }
+    next();
+  },
+  requireAdmin,
+  async (req, res): Promise<void> => {
+    const orderId = parseInt(req.params.orderId as string, 10);
+    if (isNaN(orderId)) {
+      res.status(400).json({ error: "Invalid order ID" });
+      return;
+    }
+
+    const [order] = await db
+      .select({
+        id: ordersTable.id,
+        projectId: ordersTable.projectId,
+        projectTitle: projectsTable.title,
+      })
+      .from(ordersTable)
+      .leftJoin(projectsTable, eq(ordersTable.projectId, projectsTable.id))
+      .where(eq(ordersTable.id, orderId))
+      .limit(1);
+    if (!order) {
+      res.status(404).json({ error: "Order not found" });
+      return;
+    }
+
+    const pages = await db
+      .select({ contentJson: projectPagesTable.contentJson })
+      .from(projectPagesTable)
+      .where(eq(projectPagesTable.projectId, order.projectId));
+
+    const filenames = collectUploadFilenamesFromPages(pages.map((p) => p.contentJson));
+    const files = resolveAlbumUploadFiles(filenames);
+    if (files.length === 0) {
+      res.status(404).json({
+        error: filenames.length
+          ? "Album photos are referenced but missing on disk. Check the /data volume."
+          : "This album has no uploaded client photos to download.",
+      });
+      return;
+    }
+
+    const downloadName = safeZipDownloadBasename(order.projectTitle, order.id);
+    // application/zip is not compressible — still opt out so middleware never wraps bytes.
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", `attachment; filename="${downloadName}"`);
+    res.setHeader("Cache-Control", "no-store");
+    (req as { headers: Record<string, unknown> }).headers["x-no-compression"] = "1";
+
+    try {
+      const result = await streamStoreZip(
+        files.map((f) => ({ name: zipEntryName(f.filename), path: f.path })),
+        res,
+      );
+      logger.info(
+        { orderId, projectId: order.projectId, files: result.files, bytes: result.bytes },
+        "Admin album images zip streamed",
+      );
+      res.end();
+    } catch (err) {
+      logger.error({ err, orderId }, "Admin album images zip failed");
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Failed to build photos zip" });
+      } else {
+        res.destroy(err instanceof Error ? err : undefined);
+      }
+    }
+  },
+);
+
 // POST /admin/orders/:orderId/regenerate-pdf — re-queue print PDF (e.g. after
 // a failed generation left pdfUrl null while the order row exists).
 router.post(
@@ -1401,7 +1487,7 @@ router.get(
       pendingBooksLimit: parseInt(map["pending_books_limit"] || "10", 10),
       // Disk that holds uploads / wallpapers / category covers across deploys.
       persistentStorage: hasPersistentStorage(),
-      dataRoot,
+      dataRoot: resolveDataRoot(),
       ...readOfferBarSettings(map),
       ...readClaritySettings(map),
       ...readWebThemeSettings(map),

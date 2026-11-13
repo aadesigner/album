@@ -10,7 +10,7 @@ import {
   TrendingUp, Users, ShoppingBag, Eye, MessageCircle,
   UserPlus, Printer, Truck, FolderOpen, RefreshCw,
   Target, Wallet, Activity, Clock, ArrowUpRight, ArrowDownRight,
-  Minus, BookOpen,
+  Minus, BookOpen, FolderArchive,
 } from 'lucide-react';
 import { Link } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
@@ -275,6 +275,13 @@ function PendingPrintingWidget() {
     return `${withBase}${join}token=${encodeURIComponent(token)}`;
   };
 
+  const photosZipHref = (orderId: number) => {
+    const token = getToken();
+    const path = `${BASE}/api/admin/orders/${orderId}/images-zip`;
+    if (!token) return path;
+    return `${path}?token=${encodeURIComponent(token)}`;
+  };
+
   return (
     <div className="overflow-hidden" style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: theme.radius, boxShadow: '0 8px 24px rgba(40,16,28,0.045)' }}>
       <div className="flex items-center justify-between gap-3 px-4 py-3.5" style={{ borderBottom: `1px solid ${theme.line}` }}>
@@ -310,6 +317,9 @@ function PendingPrintingWidget() {
                 {o.pdfUrl ? (
                   <a href={pdfHref(o.pdfUrl)} target="_blank" rel="noopener noreferrer" className="text-[10px] font-semibold" style={{ color: theme.accentDeep }}>PDF</a>
                 ) : null}
+                <a href={photosZipHref(o.id)} className="inline-flex items-center gap-0.5 text-[10px] font-semibold" style={{ color: '#2F6B56' }} title="Download client photos zip">
+                  <FolderArchive size={10} /> Photos
+                </a>
                 <button
                   onClick={() => handleShip(o.id)}
                   disabled={shippingId === o.id}
@@ -345,11 +355,16 @@ function PendingPrintingWidget() {
                   <td className="px-4 sm:px-5 py-3 text-xs whitespace-nowrap" style={{ color: theme.muted }}>{format(new Date(o.createdAt), 'MMM d, HH:mm')}</td>
                   <td className="px-4 sm:px-5 py-3 font-semibold text-xs whitespace-nowrap" style={{ color: theme.ink }}>{fmtLek(o.priceLek)}</td>
                   <td className="px-4 sm:px-5 py-3">
-                    {o.pdfUrl ? (
-                      <a href={pdfHref(o.pdfUrl)} target="_blank" rel="noopener noreferrer" className="text-[10px] font-semibold hover:underline" style={{ color: theme.accentDeep }}>PDF</a>
-                    ) : (
-                      <span className="text-[10px] italic" style={{ color: theme.muted }}>No PDF</span>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {o.pdfUrl ? (
+                        <a href={pdfHref(o.pdfUrl)} target="_blank" rel="noopener noreferrer" className="text-[10px] font-semibold hover:underline" style={{ color: theme.accentDeep }}>PDF</a>
+                      ) : (
+                        <span className="text-[10px] italic" style={{ color: theme.muted }}>No PDF</span>
+                      )}
+                      <a href={photosZipHref(o.id)} className="inline-flex items-center gap-0.5 text-[10px] font-semibold hover:underline" style={{ color: '#2F6B56' }} title="Download client photos zip">
+                        <FolderArchive size={10} /> Photos
+                      </a>
+                    </div>
                   </td>
                   <td className="px-4 sm:px-5 py-3 text-right">
                     <button

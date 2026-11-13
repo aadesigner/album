@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { AdminLayout, ADMIN } from '@/components/layout/AdminLayout';
 import {
   useListAdminUsers, useUpdateAdminUser, useDeleteAdminUser,
@@ -6,7 +7,7 @@ import {
   getListAdminUsersQueryKey, getGetAdminStatsQueryKey,
 } from '@workspace/api-client-react-tsconfig';
 import { format } from 'date-fns';
-import { Search, UserPlus, Trash2, ShieldBan, ShieldCheck, RefreshCw, Images, Eye, ExternalLink, Download, X, Pencil, KeyRound, ShoppingBag, FolderOpen } from 'lucide-react';
+import { Search, UserPlus, Trash2, ShieldBan, ShieldCheck, RefreshCw, Images, Eye, ExternalLink, Download, X, Pencil, KeyRound, ShoppingBag, FolderOpen, FolderArchive } from 'lucide-react';
 import { PhoneInput } from '@/components/ui/PhoneInput';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,12 +17,26 @@ import { useAuth } from '@/contexts/AuthContext';
 const BASE = (import.meta as any).env?.BASE_URL?.replace(/\/$/, '') || '';
 
 /** pdfUrl is auth-gated — append access token so iframe/<a> work. */
-function authedPdfUrl(pdfUrl: string, token: string | null): string {
+function authedPdfUrl(
+  pdfUrl: string,
+  token: string | null,
+  opts?: { download?: boolean },
+): string {
   if (!pdfUrl) return pdfUrl;
   const withBase = pdfUrl.startsWith('http') ? pdfUrl : `${BASE}${pdfUrl.startsWith('/') ? '' : '/'}${pdfUrl}`;
-  if (!token) return withBase;
-  const join = withBase.includes('?') ? '&' : '?';
-  return `${withBase}${join}token=${encodeURIComponent(token)}`;
+  const params = new URLSearchParams();
+  if (token) params.set('token', token);
+  // Force attachment only for explicit downloads — View uses inline (default).
+  if (opts?.download) params.set('download', '1');
+  const qs = params.toString();
+  if (!qs) return withBase;
+  return `${withBase}${withBase.includes('?') ? '&' : '?'}${qs}`;
+}
+
+function authedOrderImagesZipUrl(orderId: number, token: string | null): string {
+  const path = `${BASE}/api/admin/orders/${orderId}/images-zip`;
+  if (!token) return path;
+  return `${path}?token=${encodeURIComponent(token)}`;
 }
 
 /** Internal placeholder emails for phone-only accounts — never show as a real email. */
@@ -345,9 +360,13 @@ function UserAlbumsModal({ userId, userName, onClose }: { userId: number; userNa
   const queryClient = useQueryClient();
   const { data, isLoading, refetch } = useListAdminOrders({ page: 1, limit: 100, userId } as any);
   const updateOrder = useUpdateAdminOrder();
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  /** Raw API pdf path (e.g. /api/projects/1/pdf-download) — not the authed URL. */
+  const [pdfRaw, setPdfRaw] = useState<string | null>(null);
 
   const orders = (data as any)?.data || [];
+  const token = getToken();
+  const pdfViewUrl = pdfRaw ? authedPdfUrl(pdfRaw, token) : null;
+  const pdfDownloadUrl = pdfRaw ? authedPdfUrl(pdfRaw, token, { download: true }) : null;
 
   const handleStatusChange = async (orderId: number, status: string) => {
     await updateOrder.mutateAsync({ orderId, data: { status: status as any } });
@@ -356,10 +375,6 @@ function UserAlbumsModal({ userId, userName, onClose }: { userId: number; userNa
       queryClient.invalidateQueries({ queryKey: ['admin-stats'] }),
       queryClient.invalidateQueries({ queryKey: getGetAdminStatsQueryKey() }),
     ]);
-  };
-
-  const openPdf = (raw: string) => {
-    setPdfUrl(authedPdfUrl(raw, getToken()));
   };
 
   return (
@@ -393,7 +408,7 @@ function UserAlbumsModal({ userId, userName, onClose }: { userId: number; userNa
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-rose-50 sticky top-0 bg-white">
-                  {['#', 'Album', 'Pages', 'Amount', 'Date', 'PDF', 'Status'].map(h => (
+                  {['#', 'Album', 'Pages', 'Amount', 'Date', 'Files', 'Status'].map(h => (
                     <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-neutral-300 uppercase tracking-wider whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -407,27 +422,38 @@ function UserAlbumsModal({ userId, userName, onClose }: { userId: number; userNa
                     <td className="px-4 py-3 font-semibold text-neutral-700 text-xs whitespace-nowrap">{Number(o.priceLek).toLocaleString()} L</td>
                     <td className="px-4 py-3 text-xs text-neutral-400 whitespace-nowrap">{format(new Date(o.createdAt), 'MMM d, yy')}</td>
                     <td className="px-4 py-3">
-                      {o.pdfUrl ? (
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            onClick={() => openPdf(o.pdfUrl)}
-                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[10px] font-semibold transition-opacity hover:opacity-80"
-                            style={{ background: ADMIN.blushSoft, color: ADMIN.blushDeep }}
-                            title="View PDF"
-                          >
-                            <Eye size={10} /> View
-                          </button>
-                          <a
-                            href={authedPdfUrl(o.pdfUrl, getToken())} download
-                            className="p-1.5 rounded-lg text-neutral-300 hover:bg-rose-50 hover:text-rose-500 transition-colors"
-                            title="Download PDF"
-                          >
-                            <Download size={12} />
-                          </a>
-                        </div>
-                      ) : (
-                        <span className="text-[10px] text-neutral-300 italic">No PDF</span>
-                      )}
+                      <div className="flex items-center gap-1.5">
+                        {o.pdfUrl ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setPdfRaw(o.pdfUrl)}
+                              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[10px] font-semibold transition-opacity hover:opacity-80"
+                              style={{ background: ADMIN.blushSoft, color: ADMIN.blushDeep }}
+                              title="View PDF"
+                            >
+                              <Eye size={10} /> View
+                            </button>
+                            <a
+                              href={authedPdfUrl(o.pdfUrl, token, { download: true })}
+                              className="p-1.5 rounded-lg text-neutral-300 hover:bg-rose-50 hover:text-rose-500 transition-colors"
+                              title="Download PDF"
+                            >
+                              <Download size={12} />
+                            </a>
+                          </>
+                        ) : (
+                          <span className="text-[10px] text-neutral-300 italic">No PDF</span>
+                        )}
+                        <a
+                          href={authedOrderImagesZipUrl(o.id, token)}
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[10px] font-semibold transition-opacity hover:opacity-80"
+                          style={{ background: '#F0F7F4', color: '#2F6B56' }}
+                          title="Download zip of client photos used in this album"
+                        >
+                          <FolderArchive size={10} /> Photos
+                        </a>
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <select
@@ -447,28 +473,36 @@ function UserAlbumsModal({ userId, userName, onClose }: { userId: number; userNa
           )}
         </div>
 
-        {pdfUrl && (
-          <div className="fixed inset-0 z-[60] flex flex-col bg-black/80" onClick={e => e.target === e.currentTarget && setPdfUrl(null)}>
-            <div className="flex items-center justify-between px-5 py-3 bg-white border-b border-rose-100">
+        {pdfViewUrl && createPortal(
+          <div
+            className="fixed inset-0 z-[80] flex flex-col bg-black/80"
+            onClick={e => e.target === e.currentTarget && setPdfRaw(null)}
+          >
+            <div className="flex items-center justify-between px-5 py-3 bg-white border-b border-rose-100 shrink-0">
               <span className="font-semibold text-sm text-neutral-700">PDF Preview</span>
               <div className="flex items-center gap-2">
-                <a href={pdfUrl} target="_blank" rel="noopener noreferrer"
+                <a href={pdfViewUrl} target="_blank" rel="noopener noreferrer"
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 text-xs font-medium transition-colors">
                   <ExternalLink size={12} /> Open in tab
                 </a>
-                <a href={pdfUrl} download
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 text-xs font-medium transition-colors">
-                  <Download size={12} /> Download
-                </a>
-                <button onClick={() => setPdfUrl(null)} className="p-1.5 rounded-lg hover:bg-rose-50 text-neutral-400 hover:text-rose-500 transition-colors">
+                {pdfDownloadUrl && (
+                  <a
+                    href={pdfDownloadUrl}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 text-xs font-medium transition-colors"
+                  >
+                    <Download size={12} /> Download
+                  </a>
+                )}
+                <button type="button" onClick={() => setPdfRaw(null)} className="p-1.5 rounded-lg hover:bg-rose-50 text-neutral-400 hover:text-rose-500 transition-colors">
                   <X size={16} />
                 </button>
               </div>
             </div>
-            <div className="flex-1 overflow-hidden">
-              <iframe src={pdfUrl} className="w-full h-full border-0" title="Order PDF" />
+            <div className="flex-1 overflow-hidden min-h-0">
+              <iframe src={pdfViewUrl} className="w-full h-full border-0" title="Order PDF" />
             </div>
-          </div>
+          </div>,
+          document.body,
         )}
       </div>
     </div>

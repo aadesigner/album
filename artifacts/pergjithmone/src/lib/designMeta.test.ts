@@ -47,4 +47,12 @@ describe("resolveDesignCategory", () => {
     expect(resolveDesignCategory({ nameAl: "Dasmë" })).toBe("Wedding");
     expect(resolveDesignCategory({ nameEn: "Wedding" })).toBe("Wedding");
   });
+
+  it("maps Love / Dashuri admin renames to Wedding styles", () => {
+    expect(resolveDesignCategory({ slug: "love", nameEn: "Love", nameAl: "Dashuri" })).toBe("Wedding");
+    expect(resolveDesignCategory({ nameEn: "Love" })).toBe("Wedding");
+    expect(resolveDesignCategory({ nameAl: "Dashuri" })).toBe("Wedding");
+    expect(resolveDesignCategory({ nameEn: "Our Love Story" })).toBe("Wedding");
+    expect(resolveDesignCategoryFromQuery("love", null, DESIGNS)).toBe("Wedding");
+  });
 });

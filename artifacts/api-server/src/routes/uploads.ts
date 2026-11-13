@@ -5,7 +5,13 @@ import fs from "fs";
 import sharp from "sharp";
 import { logger } from "../lib/logger";
 import { getSecuritySettings } from "../lib/securitySettings";
-import { ensureDataDirs, uploadFilePathCandidates, uploadsDir } from "../lib/dataDir";
+import {
+  ensureDataDirs,
+  getUploadsDir,
+  hasPersistentStorage,
+  uploadFilePathCandidates,
+  uploadsDir,
+} from "../lib/dataDir";
 import { sniffImageFormat } from "../lib/imageSniff";
 
 const router: IRouter = Router();
@@ -14,7 +20,17 @@ ensureDataDirs();
 export { uploadsDir };
 
 const storage = multer.diskStorage({
-  destination: uploadsDir,
+  // Resolve on every upload so we never bake an ephemeral /app path at boot.
+  destination: (_req, _file, cb) => {
+    try {
+      ensureDataDirs();
+      const dir = getUploadsDir();
+      fs.mkdirSync(dir, { recursive: true });
+      cb(null, dir);
+    } catch (err) {
+      cb(err as Error, getUploadsDir());
+    }
+  },
   filename: (_req, file, cb) => {
     const unique = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const ext = path.extname(file.originalname);
@@ -146,6 +162,23 @@ async function compressUpload(
   return { finalPath: outputPath, width: info.width, height: info.height };
 }
 
+/** Block uploads onto ephemeral disk in production — otherwise Design Studio /
+ *  category covers / album photos look fine until the next Railway build wipes them. */
+function requirePersistentUploads(_req: Request, res: Response, next: NextFunction) {
+  if (process.env.NODE_ENV === "production" && !hasPersistentStorage()) {
+    logger.error(
+      { uploadsDir: getUploadsDir() },
+      "Rejecting upload: no persistent volume at /data",
+    );
+    res.status(503).json({
+      error:
+        "Photo storage is not mounted. On Railway → api-server → Volumes, attach a volume mounted at /data, then redeploy. Without it every new build deletes Design Studio and album photos.",
+    });
+    return;
+  }
+  next();
+}
+
 // POST /uploads/image
 // Intentionally not behind requireAuth: the AI-album flow lets a visitor
 // pick a category and upload photos before they've registered, so they
@@ -154,6 +187,7 @@ async function compressUpload(
 // attached to a project, at which point that project itself is auth-gated.
 router.post(
   "/uploads/image",
+  requirePersistentUploads,
   receiveImage,
   async (req, res): Promise<void> => {
     if (!req.file) {
