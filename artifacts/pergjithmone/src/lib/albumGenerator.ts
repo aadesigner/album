@@ -2,9 +2,10 @@
 // Client-side layout planner (not an LLM). Builds a narrative album by:
 // - keeping upload order (first photo opens, last photo closes)
 // - pairing facing pages into designed spreads
+// - category dedication pages (headline + authentic prose) every 3–4 pages
 // - preferring category catalog covers + editorial photo covers
 // - putting the lead photo of each page in the largest frame
-// - using each image once, with blank captions for the user to fill
+// - short category captions on photo+text breathing pages
 
 import {
   LAYOUTS,
@@ -22,6 +23,11 @@ import {
   type EditorElement,
 } from './designs';
 import { layoutZoneToElement } from './editorLayouts';
+import {
+  captionsFor,
+  narrativesFor,
+  type NarrativePiece,
+} from './albumNarratives';
 
 function rand(): number {
   if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
@@ -456,7 +462,12 @@ function prepareCover(
   const userPhoto = nextPhoto();
   let source = sideEls;
 
-  if (userPhoto) {
+  // Static full-color backs stay a solid plate — never bake wallpaper/photos
+  // onto them (that recreated letterboxed front chrome on square albums).
+  const solidBackOnly = side === 'back' && !hasCoverArt
+    && sideEls.every((e) => e.type === 'background');
+
+  if (userPhoto && !solidBackOnly) {
     if (hasFramedStock) {
       // City / postcard frames: drop the stock photo, keep the user's.
       source = sideEls.map((el) => (
@@ -475,7 +486,7 @@ function prepareCover(
         return true;
       });
     }
-  } else if (!hasCoverArt && design.thumbPhoto) {
+  } else if (!solidBackOnly && !hasCoverArt && design.thumbPhoto) {
     source = elementsWithCoverWallpaper(sideEls, design.thumbPhoto);
     const baked = resolveWallpaperUrl(design.thumbPhoto);
     source = source.filter((el) => {
@@ -669,12 +680,190 @@ function buildPhotoCover(
   return els;
 }
 
+/** Indices of dedication / text-only pages — skip opener + closer. */
+export function planNarrativeSlots(pageCount: number): Set<number> {
+  const slots = new Set<number>();
+  if (pageCount < 5) return slots;
+  let i = 3 + Math.floor(rand() * 2); // page 4 or 5 (1-based)
+  while (i < pageCount - 1) {
+    slots.add(i);
+    i += 3 + Math.floor(rand() * 2); // every 3–4 pages
+  }
+  return slots;
+}
+
+function narrativeTypeface(categoryKey: string): {
+  title: string;
+  body: string;
+  titleItalic?: boolean;
+} {
+  if (categoryKey === 'Wedding' || categoryKey === 'Portrait') {
+    return { title: "'Great Vibes', cursive", body: "Georgia, 'Times New Roman', serif", titleItalic: false };
+  }
+  if (categoryKey === 'Travel' || categoryKey === 'Locations') {
+    return { title: "'Londrina Solid', cursive", body: "Georgia, 'Times New Roman', serif" };
+  }
+  if (categoryKey === 'Celebration') {
+    return { title: "Georgia, 'Times New Roman', serif", body: "Arial, 'Helvetica Neue', sans-serif" };
+  }
+  return {
+    title: "Georgia, 'Times New Roman', serif",
+    body: "Georgia, 'Times New Roman', serif",
+    titleItalic: true,
+  };
+}
+
+/** Full-bleed dedication page — headline + authentic paragraphs. */
+export function buildNarrativePage(
+  piece: NarrativePiece,
+  canvasH: number,
+  paper: string,
+  categoryKey: string,
+  style: 0 | 1 | 2 = 0,
+): DE[] {
+  const tone = CATEGORY_TONES[categoryKey] ?? CATEGORY_TONES.Modern;
+  const type = narrativeTypeface(categoryKey);
+  const ink = '#1A1612';
+  const muted = '#6A5C4E';
+  const els: DE[] = [
+    { type: 'background', x: 0, y: 0, w: DESIGN_W, h: canvasH, rotation: 0, bgColor: paper || '#FFFFFF' },
+  ];
+
+  const titleSize = categoryKey === 'Wedding' ? 52 : categoryKey === 'Travel' ? 40 : 36;
+  const bodySize = 15;
+  const bodyH = Math.min(canvasH * 0.42, 280);
+
+  if (style === 1) {
+    // Editorial: headline top-left, rule, body below.
+    els.push({
+      type: 'text',
+      text: piece.headline,
+      x: 48, y: canvasH * 0.14, w: DESIGN_W - 96, h: 72,
+      rotation: 0,
+      fontSize: titleSize,
+      fill: ink,
+      align: 'left',
+      fontFamily: type.title,
+      fontStyle: type.titleItalic ? 'italic' : 'normal',
+      lineHeight: 1.05,
+    });
+    els.push({
+      type: 'shape',
+      shapeKind: 'rect',
+      x: 48, y: canvasH * 0.14 + 78, w: 72, h: 2,
+      rotation: 0,
+      fill: tone.accent || muted,
+      opacity: 1,
+      strokeWidth: 0,
+    });
+    els.push({
+      type: 'text',
+      text: piece.body,
+      x: 48, y: canvasH * 0.14 + 100, w: DESIGN_W - 96, h: bodyH,
+      rotation: 0,
+      fontSize: bodySize,
+      fill: muted,
+      align: 'left',
+      fontFamily: type.body,
+      fontStyle: 'normal',
+      lineHeight: 1.55,
+    });
+  } else if (style === 2) {
+    // Centered soft plate with generous margins.
+    els.push({
+      type: 'shape',
+      shapeKind: 'rect',
+      x: 36, y: canvasH * 0.12, w: DESIGN_W - 72, h: canvasH * 0.76,
+      rotation: 0,
+      fill: '#000000',
+      opacity: 0.03,
+      strokeWidth: 0,
+    });
+    els.push({
+      type: 'text',
+      text: piece.headline,
+      x: 56, y: canvasH * 0.22, w: DESIGN_W - 112, h: 80,
+      rotation: 0,
+      fontSize: titleSize,
+      fill: ink,
+      align: 'center',
+      fontFamily: type.title,
+      fontStyle: type.titleItalic ? 'italic' : 'normal',
+      lineHeight: 1.05,
+    });
+    els.push({
+      type: 'text',
+      text: piece.body,
+      x: 64, y: canvasH * 0.36, w: DESIGN_W - 128, h: bodyH,
+      rotation: 0,
+      fontSize: bodySize,
+      fill: muted,
+      align: 'center',
+      fontFamily: type.body,
+      fontStyle: 'normal',
+      lineHeight: 1.55,
+    });
+  } else {
+    // Classic centered dedication.
+    els.push({
+      type: 'text',
+      text: piece.headline,
+      x: 40, y: canvasH * 0.22, w: DESIGN_W - 80, h: 80,
+      rotation: 0,
+      fontSize: titleSize,
+      fill: ink,
+      align: 'center',
+      fontFamily: type.title,
+      fontStyle: type.titleItalic ? 'italic' : 'normal',
+      lineHeight: 1.05,
+    });
+    els.push({
+      type: 'shape',
+      shapeKind: 'rect',
+      x: (DESIGN_W - 56) / 2, y: canvasH * 0.22 + 88, w: 56, h: 1.5,
+      rotation: 0,
+      fill: tone.accent || muted,
+      opacity: 0.85,
+      strokeWidth: 0,
+    });
+    els.push({
+      type: 'text',
+      text: piece.body,
+      x: 56, y: canvasH * 0.22 + 110, w: DESIGN_W - 112, h: bodyH,
+      rotation: 0,
+      fontSize: bodySize,
+      fill: muted,
+      align: 'center',
+      fontFamily: type.body,
+      fontStyle: 'normal',
+      lineHeight: 1.55,
+    });
+  }
+
+  if (piece.signoff) {
+    els.push({
+      type: 'text',
+      text: piece.signoff,
+      x: 48, y: canvasH * 0.82, w: DESIGN_W - 96, h: 36,
+      rotation: 0,
+      fontSize: 13,
+      fill: muted,
+      align: 'center',
+      fontFamily: type.body,
+      fontStyle: 'italic',
+      letterSpacing: 0.5,
+    });
+  }
+  return els;
+}
+
 /** Lead photo of the group goes in the largest frame. */
 function elementsForLayout(
   layout: LayoutDef,
   canvasH: number,
   paper: string,
   nextPhoto: () => string | undefined,
+  nextCaption?: () => string | undefined,
 ): DE[] {
   const photoIndexes = layout.zones
     .map((z, i) => ({ z, i, area: z.w * z.h }))
@@ -701,7 +890,9 @@ function elementsForLayout(
       });
       return;
     }
-    zoneEls.push({ ...mapped, text: '' });
+    // Fill text zones with a short authentic caption when available.
+    const caption = nextCaption?.() || '';
+    zoneEls.push({ ...mapped, text: caption });
   });
 
   const paperBg: DE = {
@@ -743,7 +934,7 @@ export function generateAlbum(
   const pool = shuffle(designsForCategory(cat, catalogDesigns));
   const canvasH = getCanvasHeight(bookSize?.widthCm, bookSize?.heightCm);
   const paper = (CATEGORY_TONES[cat] ?? CATEGORY_TONES.Modern).paper;
-  const { frontUrl, backUrl, story } = splitPhotoRoles(photoUrls);
+  const { frontUrl, backUrl, story: storyBase } = splitPhotoRoles(photoUrls);
 
   const takeOnce = (url?: string): (() => string | undefined) => {
     let used = false;
@@ -759,6 +950,7 @@ export function generateAlbum(
   let backDesignId = 'photo-back';
   let frontCover: EditorElement[];
   let backCover: EditorElement[];
+  let backPhotoConsumed = false;
   if (pool.length > 0) {
     const design = pickWeighted(pool, coverDesignWeight);
     frontDesignId = design.id;
@@ -767,14 +959,24 @@ export function generateAlbum(
       prepareCover(design, canvasH, takeOnce(frontUrl), cat, lang, 'front'),
       'cover-front',
     );
+    const takeBack = takeOnce(backUrl);
     backCover = withIds(
-      prepareCover(design, canvasH, takeOnce(backUrl), cat, lang, 'back'),
+      prepareCover(design, canvasH, takeBack, cat, lang, 'back'),
       'cover-back',
+    );
+    // Solid full-color backs ignore the reserved photo — return it to the story.
+    backPhotoConsumed = backCover.some((e) =>
+      (e.type === 'image' || e.type === 'background') && !!e.src && e.src === backUrl,
     );
   } else {
     frontCover = withIds(buildPhotoCover(canvasH, frontUrl, cat, lang, 'front'), 'cover-front');
     backCover = withIds(buildPhotoCover(canvasH, backUrl, cat, lang, 'back'), 'cover-back');
+    backPhotoConsumed = !!backUrl;
   }
+
+  const story = (!backPhotoConsumed && backUrl)
+    ? [...storyBase, backUrl]
+    : storyBase;
 
   const paperBg: DE = {
     type: 'background',
@@ -794,18 +996,52 @@ export function generateAlbum(
     return url;
   };
 
-  const planned = planPageLayouts(story.length, innerPageCount, cat);
+  const narrativeSlots = planNarrativeSlots(innerPageCount);
+  const photoPageCount = Math.max(1, innerPageCount - narrativeSlots.size);
+  const plannedPhoto = planPageLayouts(story.length, photoPageCount, cat);
   const fallbackLayout =
     findAllowedLayout('full')
     || findAllowedLayout('bordered-single')
     || LAYOUTS.find((l) => photoSlotCount(l) === 1)
     || LAYOUTS[0];
 
+  // Map photo layouts onto non-narrative indices only.
+  const planned: (LayoutDef | null)[] = Array.from({ length: innerPageCount }, () => null);
+  let photoPlanIdx = 0;
+  for (let p = 0; p < innerPageCount; p++) {
+    if (narrativeSlots.has(p)) continue;
+    planned[p] = plannedPhoto[photoPlanIdx] || null;
+    photoPlanIdx += 1;
+  }
+
+  const narrativePool = shuffle(narrativesFor(cat, lang));
+  let narrativeIdx = 0;
+  const captionPool = shuffle(captionsFor(cat, lang));
+  let captionIdx = 0;
+  const nextCaption = (): string | undefined => {
+    if (!captionPool.length) return undefined;
+    // Use each caption once before recycling — keeps pages distinct.
+    const line = captionPool[captionIdx % captionPool.length];
+    captionIdx += 1;
+    return line;
+  };
+
+  const whitePaper = '#FFFFFF';
   const innerPages: EditorElement[][] = [];
   for (let p = 0; p < innerPageCount; p++) {
+    if (narrativeSlots.has(p)) {
+      const piece = narrativePool[narrativeIdx % narrativePool.length];
+      narrativeIdx += 1;
+      const style = (narrativeIdx % 3) as 0 | 1 | 2;
+      innerPages.push(withIds(
+        buildNarrativePage(piece, canvasH, whitePaper, cat, style),
+        `inner-story-${p}`,
+      ));
+      continue;
+    }
+
     const layout = planned[p] || fallbackLayout;
     if (!layout) {
-      // Absolute last resort — still never leave a bare paper sheet.
       const url = nextStoryPhoto();
       innerPages.push(withIds(
         url
@@ -821,7 +1057,18 @@ export function generateAlbum(
       ));
       continue;
     }
-    innerPages.push(withIds(elementsForLayout(layout, canvasH, paper, nextStoryPhoto), `inner-${p}`));
+    // Occasional short captions on layouts that already have text zones.
+    const hasTextZone = layout.zones.some((z) => z.type === 'text');
+    innerPages.push(withIds(
+      elementsForLayout(
+        layout,
+        canvasH,
+        paper,
+        nextStoryPhoto,
+        hasTextZone ? nextCaption : undefined,
+      ),
+      `inner-${p}`,
+    ));
   }
 
   return {
@@ -840,7 +1087,8 @@ export function generateAlbum(
 /**
  * Suggested inner page count.
  * Dense enough that a 32-photo album can fill typical minPages (≈30)
- * without blank sheets — prefer ≤1.25 photos/page when possible.
+ * without blank sheets — prefer ≤1.25 photos/page when possible,
+ * plus room for category dedication pages (~1 every 3–4 pages).
  */
 export function suggestInnerPageCount(photoCount: number, minPages = 4): number {
   if (photoCount <= 0) return minPages;
@@ -848,7 +1096,10 @@ export function suggestInnerPageCount(photoCount: number, minPages = 4): number 
   const story = Math.max(0, photoCount - coverTake);
   if (story === 0) return minPages;
   const packed = Math.max(minPages, Math.ceil(story / 1.25));
-  // When we have enough story photos for minPages, don't invent extra blanks.
-  if (story >= minPages) return Math.min(packed, story);
-  return packed;
+  const narrativeRoom = Math.floor(packed / 4);
+  const withStory = packed + narrativeRoom;
+  // When we have enough story photos for minPages, keep a little headroom
+  // for dedication pages instead of packing photos only.
+  if (story >= minPages) return Math.min(withStory, story + narrativeRoom);
+  return withStory;
 }

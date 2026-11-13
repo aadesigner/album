@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { generateAlbum, suggestInnerPageCount } from "./albumGenerator";
+import { generateAlbum, suggestInnerPageCount, planNarrativeSlots } from "./albumGenerator";
+import { narrativesFor } from "./albumNarratives";
 
 const PHOTOS = Array.from({ length: 28 }, (_, i) => `https://cdn.example/p${i}.jpg`);
 
@@ -45,16 +46,48 @@ describe("generateAlbum", () => {
     expect(new Set(srcs).size).toBe(srcs.length);
   });
 
-  it("fills every inner page with a layout and at least one photo", () => {
+  it("fills photo pages with images and inserts category dedication pages", () => {
     const album = generateAlbum("Wedding", PHOTOS, 30, "en", { widthCm: 21, heightCm: 28 });
     expect(album.innerPages).toHaveLength(30);
+    let photoPages = 0;
+    let storyPages = 0;
     for (const page of album.innerPages) {
       const imgs = page.filter((e) => e.type === "image" && e.src);
-      expect(imgs.length).toBeGreaterThanOrEqual(1);
+      const texts = page.filter((e) => e.type === "text" && (e.text || "").trim());
+      if (imgs.length >= 1) {
+        photoPages += 1;
+      } else if (texts.length >= 2) {
+        storyPages += 1;
+      } else {
+        expect(imgs.length).toBeGreaterThanOrEqual(1);
+      }
     }
-    // Catalog template ids — not the old photo-forward fallbacks
+    expect(photoPages).toBeGreaterThan(10);
+    expect(storyPages).toBeGreaterThanOrEqual(2);
     expect(album.meta.frontDesignId).not.toBe("photo-front");
     expect(album.meta.backDesignId).toBe(album.meta.frontDesignId);
+  });
+
+  it("uses authentic Albanian headlines on dedication pages", () => {
+    const album = generateAlbum("Wedding", PHOTOS, 16, "sq", { widthCm: 21, heightCm: 28 });
+    const headlines = album.innerPages
+      .filter((page) => !page.some((e) => e.type === "image" && e.src))
+      .flatMap((page) => page.filter((e) => e.type === "text"))
+      .map((e) => (e.text || "").trim());
+    expect(headlines.some((t) => /dashuria|ne dy|përjetë|perjete/i.test(t))).toBe(true);
+    expect(headlines.join(" ")).not.toMatch(/as an ai|delve|tapestry|in today's fast/i);
+  });
+
+  it("planNarrativeSlots skips opener and closer", () => {
+    const slots = planNarrativeSlots(12);
+    expect(slots.has(0)).toBe(false);
+    expect(slots.has(11)).toBe(false);
+    expect(slots.size).toBeGreaterThanOrEqual(1);
+  });
+
+  it("ships category narrative copy for Wedding and Travel", () => {
+    expect(narrativesFor("Wedding", "sq").length).toBeGreaterThan(0);
+    expect(narrativesFor("Travel", "sq")[0].headline.length).toBeGreaterThan(3);
   });
 
   it("never leaves placeholder caption copy on pages", () => {
@@ -108,7 +141,7 @@ describe("generateAlbum", () => {
     expect(sig(a) === sig(b) && a.meta.frontDesignId === b.meta.frontDesignId).toBe(false);
   });
 
-  it("keeps upload order and uses first/last photos as covers", () => {
+  it("keeps upload order and uses first photo on the front cover", () => {
     const ordered = Array.from({ length: 12 }, (_, i) => `https://cdn.example/seq-${i}.jpg`);
     const album = generateAlbum("Wedding", ordered, 8, "en", { widthCm: 21, heightCm: 28 });
 
@@ -116,14 +149,27 @@ describe("generateAlbum", () => {
       page.filter((e) => (e.type === "image" || e.type === "background") && e.src).map((e) => e.src as string);
 
     expect(coverSrcs(album.frontCover).some((src) => src.includes("seq-0.jpg"))).toBe(true);
-    expect(coverSrcs(album.backCover).some((src) => src.includes("seq-11.jpg"))).toBe(true);
+    // Photo/city backs are a static full-color plate; text-only wedding backs may
+    // still bake the last upload as wallpaper — either way the first photo is front.
+    const backHasLast = coverSrcs(album.backCover).some((src) => src.includes("seq-11.jpg"));
+    const backIsSolid = album.backCover.every((e) => e.type === "background" && !e.src);
+    expect(backHasLast || backIsSolid).toBe(true);
 
     const innerSrcs = album.innerPages.flatMap((page) =>
       page.filter((e) => e.type === "image" && e.src).map((e) => e.src as string),
     );
     const indexes = innerSrcs.map((src) => ordered.indexOf(src));
-    expect(indexes.every((i) => i > 0 && i < ordered.length - 1)).toBe(true);
+    expect(indexes.every((i) => i > 0)).toBe(true);
     expect(indexes).toEqual([...indexes].sort((a, b) => a - b));
+  });
+
+  it("keeps travel/city backs as a static full-color plate on square albums", () => {
+    const album = generateAlbum("Travel", PHOTOS, 8, "en", { widthCm: 21, heightCm: 21 });
+    const bg = album.backCover.find((e) => e.type === "background");
+    expect(bg?.bgColor).toBeTruthy();
+    expect(album.backCover.some((e) => e.type === "image" || e.type === "shape")).toBe(false);
+    expect(bg?.w).toBe(600);
+    expect(bg?.h).toBe(600);
   });
 
   it("opens on a single-photo page when photos remain", () => {

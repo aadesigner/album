@@ -31,6 +31,7 @@ import {
   clampKonvaDragAbs,
   sanitizeElementPos,
   blankCoverElements,
+  staticBackCoverElements,
   reorderLayerByVisualIndex,
   DESIGNS,
   TRAVEL_LAYOUT_REV,
@@ -200,9 +201,29 @@ describe("front/back design helpers", () => {
     expect(norm?.backElements).toEqual(back);
   });
 
-  it("falls back backElements to front when unset", () => {
+  it("falls back backElements to front when unset for text-only covers", () => {
     const d = DESIGNS[0];
     expect(designBackElements(d)).toEqual(designFrontElements(d));
+  });
+
+  it("uses a static full-color plate for photo/city backs when backElements is unset", () => {
+    const d = DESIGNS.find((x) => x.id === "vienna")!;
+    expect(Array.isArray(d.backElements)).toBe(true);
+    const back = designBackElements(d);
+    expect(back).toHaveLength(1);
+    expect(back[0]).toMatchObject({ type: "background", bgColor: "#2A2038" });
+    expect(back.some((e) => e.type === "image" || e.type === "shape")).toBe(false);
+  });
+
+  it("staticBackCoverElements picks the front brand color", () => {
+    const d = DESIGNS.find((x) => x.id === "london")!;
+    expect(staticBackCoverElements(d)[0].bgColor).toBe("#1B2A4A");
+  });
+
+  it("fitDesignToCanvas keeps static backs full-bleed on square albums", () => {
+    const squareH = getCanvasHeight(21, 21);
+    const back = fitDesignToCanvas(designBackElements(DESIGNS.find((x) => x.id === "vienna")!), squareH);
+    expect(back[0]).toMatchObject({ type: "background", x: 0, y: 0, w: DESIGN_W, h: squareH, bgColor: "#2A2038" });
   });
 
   it("merges custom designs into catalog", () => {

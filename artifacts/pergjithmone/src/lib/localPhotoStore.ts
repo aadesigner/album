@@ -220,6 +220,35 @@ function collectLocalPhotoSrcsFromValue(value: unknown, into: Set<string>) {
   }
 }
 
+/** Prefer IndexedDB; fall back to an in-memory blob URL from this session. */
+async function resolveLocalPhotoBlob(src: string): Promise<Blob | null> {
+  const id = localPhotoIdFromSrc(src);
+  const fromDb = await getLocalPhotoBlob(id);
+  if (fromDb) return fromDb;
+  const cachedUrl = blobUrlCache.get(src);
+  if (!cachedUrl) return null;
+  try {
+    const res = await fetch(cachedUrl);
+    if (!res.ok) return null;
+    return await res.blob();
+  } catch {
+    return null;
+  }
+}
+
+export class MissingLocalPhotosError extends Error {
+  readonly code = 'MISSING_LOCAL_PHOTOS';
+  readonly ids: string[];
+  constructor(ids: string[]) {
+    const short = ids.map((id) => id.slice(0, 8)).join(', ');
+    super(
+      `Photo missing on this device (${short}…). Re-add it on the device where you built the album.`,
+    );
+    this.name = 'MissingLocalPhotosError';
+    this.ids = ids;
+  }
+}
+
 /**
  * Upload every `local-photo:` referenced in page content to the server and
  * rewrite srcs to `/api/uploads/files/...` so PDF/print can read them.
@@ -227,24 +256,34 @@ function collectLocalPhotoSrcsFromValue(value: unknown, into: Set<string>) {
  */
 export async function materializeLocalPhotosInPages<T extends { src?: string }>(
   pages: Record<number, T[]>,
+  opts?: { onProgress?: (done: number, total: number) => void },
 ): Promise<{ pages: Record<number, T[]>; replacements: Map<string, string> }> {
   const needed = new Set<string>();
   collectLocalPhotoSrcsFromValue(pages, needed);
   if (needed.size === 0) return { pages, replacements: new Map() };
 
+  const srcs = [...needed];
+  const missing: string[] = [];
+  const blobs = new Map<string, Blob>();
+  for (const src of srcs) {
+    const blob = await resolveLocalPhotoBlob(src);
+    if (!blob) missing.push(localPhotoIdFromSrc(src));
+    else blobs.set(src, blob);
+  }
+  if (missing.length) throw new MissingLocalPhotosError(missing);
+
   const uploaded = new Map<string, string>();
-  for (const src of needed) {
+  let done = 0;
+  opts?.onProgress?.(0, srcs.length);
+  for (const src of srcs) {
+    const blob = blobs.get(src)!;
     const id = localPhotoIdFromSrc(src);
-    const blob = await getLocalPhotoBlob(id);
-    if (!blob) {
-      throw new Error(
-        `Photo missing on this device (${id.slice(0, 8)}…). Re-add it on the device where you built the album.`,
-      );
-    }
     const ext = (blob.type.split('/')[1] || 'jpeg').replace('jpeg', 'jpg');
     const file = new File([blob], `${id}.${ext}`, { type: blob.type || 'image/jpeg' });
     const serverUrl = await uploadImageToApi(file);
     uploaded.set(src, serverUrl);
+    done += 1;
+    opts?.onProgress?.(done, srcs.length);
   }
 
   const rewrite = (value: unknown): unknown => {

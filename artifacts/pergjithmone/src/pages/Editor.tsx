@@ -78,7 +78,7 @@ import {
 } from '@/lib/designs';
 import { parseEditorElements, makeStickerElement, type EditorElementAsset } from '@/lib/editorElements';
 import { resolvePublicImageSrc } from '@/lib/categoryImages';
-import { mergeEditorLayouts, layoutZoneToElement, isLayoutSlotFrame } from '@/lib/editorLayouts';
+import { mergeEditorLayouts, layoutZoneToElement, isLayoutSlotFrame, stripLayoutSlots } from '@/lib/editorLayouts';
 import { isStrokeOnlyShape, shapePathForElement } from '@/lib/shapes';
 import { getEmptyInnerPageNumbers } from '@/lib/pageContent';
 import { PageThumb, DesignCatalogThumb } from '@/components/PageThumb';
@@ -86,6 +86,7 @@ import { uploadErrorMessage } from '@/lib/uploadImage';
 import {
   listLocalPhotoSrcs,
   materializeLocalPhotosInPages,
+  MissingLocalPhotosError,
   storeBuilderPhoto,
 } from '@/lib/localPhotoStore';
 import { LocalPhotoImg } from '@/components/LocalPhotoImg';
@@ -209,6 +210,16 @@ function findRemovableAt(els: EditorElement[], x: number, y: number): EditorElem
     const e = els[i];
     if (e.type === 'background' || e.type === 'placeholder') continue;
     if (isLayoutSlotFrame(e)) continue;
+    if (x >= e.x && x <= e.x + e.w && y >= e.y && y <= e.y + e.h) return e;
+  }
+  return null;
+}
+
+/** Layout slot under pointer (placeholder or locked photo/text cell). */
+function findLayoutSlotAt(els: EditorElement[], x: number, y: number): EditorElement | null {
+  for (let i = els.length - 1; i >= 0; i--) {
+    const e = els[i];
+    if (!isLayoutSlotFrame(e)) continue;
     if (x >= e.x && x <= e.x + e.w && y >= e.y && y <= e.y + e.h) return e;
   }
   return null;
@@ -1089,10 +1100,15 @@ function KPlaceholderEl({el,isSelected,isDropTarget,onSelect,onOpenPhotos,shapeR
 // Page Canvas
 // ─────────────────────────────────────────────────────────────────────────────
 
-function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos,onDelete,onGestureStart,onElementDragActive,onPageSwipe,onDropPhoto,onDropFiles,onDropSticker,onRequestLayout,needsLayout,isActive,pageW,pageH,canvasH,shapeRefs,side,isMobile}: {
+function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos,onDelete,onClearLayout,onClearSlotPhoto,onGestureStart,onElementDragActive,onPageSwipe,onDropPhoto,onDropFiles,onDropSticker,onRequestLayout,needsLayout,isActive,pageW,pageH,canvasH,shapeRefs,side,isMobile}: {
   page:PageDef; elements:EditorElement[]; selectedId:string|null;
   onSelectId:(id:string|null)=>void; onChangeEl:(id:string,c:Partial<EditorElement>)=>void;
-  onOpenPhotos?:()=>void; onDelete?:(id?: string)=>void; onGestureStart?:()=>void;
+  onOpenPhotos?:()=>void; onDelete?:(id?: string)=>void;
+  /** Remove the whole photo layout grid from this page. */
+  onClearLayout?:()=>void;
+  /** Empty a filled layout photo slot back to placeholder. */
+  onClearSlotPhoto?:(id:string)=>void;
+  onGestureStart?:()=>void;
   onElementDragActive?:(active:boolean)=>void;
   onPageSwipe?:(dir:1|-1)=>void;
   /** Place a library photo into a layout slot only (targetId required for photos). */
@@ -1153,7 +1169,8 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
   // The box never shrinks below whatever height it started editing at
   // (the template's design height), but grows to fit longer text.
   const editMinHRef=useRef(0);
-  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; id: string } | null>(null);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; id: string | null; kind: 'element' | 'layout' } | null>(null);
+  const hasLayout = pageHasPhotoLayout(elements);
 
   useEffect(() => {
     if (!ctxMenu) return;
@@ -1554,19 +1571,25 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
     <div
       ref={wrapRef}
       style={{position:'relative',width:pageW,height:pageH,flexShrink:0,overflow:'hidden',touchAction:'none',isolation:'isolate'}}
-      onContextMenu={onDelete ? (e) => {
+      onContextMenu={(onDelete || onClearLayout) ? (e) => {
         e.preventDefault();
         e.stopPropagation();
         const { x, y } = clientToDesign(e.clientX, e.clientY);
-        const hit = findRemovableAt(elements, x, y);
-        if (!hit) {
-          setCtxMenu(null);
-          return;
-        }
         if (editId) commitEdit();
         setPhotoAdjustId(null);
-        onSelectId(hit.id);
-        setCtxMenu({ x: e.clientX, y: e.clientY, id: hit.id });
+        const free = onDelete ? findRemovableAt(elements, x, y) : null;
+        if (free) {
+          onSelectId(free.id);
+          setCtxMenu({ x: e.clientX, y: e.clientY, id: free.id, kind: 'element' });
+          return;
+        }
+        const slot = onClearLayout ? findLayoutSlotAt(elements, x, y) : null;
+        if (slot || (onClearLayout && hasLayout)) {
+          if (slot) onSelectId(slot.id);
+          setCtxMenu({ x: e.clientX, y: e.clientY, id: slot?.id ?? null, kind: 'layout' });
+          return;
+        }
+        setCtxMenu(null);
       } : undefined}
       onDragOver={(onDropPhoto || onDropFiles || onDropSticker) ? (e) => {
         if (dataTransferHasElement(e.dataTransfer)) {
@@ -2107,6 +2130,41 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
         </button>
       )}
 
+      {/* Remove layout — top-right X when a photo layout is on the page */}
+      {isActive && hasLayout && onClearLayout && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            onClearLayout();
+            setCtxMenu(null);
+            onSelectId(null);
+          }}
+          title={chipLang === 'sq' ? 'Hiq paraqitjen' : 'Remove layout'}
+          style={{
+            position: 'absolute',
+            top: 8,
+            right: 8,
+            zIndex: 46,
+            width: 28,
+            height: 28,
+            borderRadius: '50%',
+            border: '2px solid rgba(255,255,255,0.95)',
+            background: 'rgba(220,38,38,0.9)',
+            color: '#fff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            boxShadow: '0 2px 10px rgba(0,0,0,0.28)',
+            pointerEvents: 'auto',
+          }}
+        >
+          <X size={14} strokeWidth={2.5} />
+        </button>
+      )}
+
       {/* ── Image / text chrome — delete + opacity + Move / Adjust-photo ── */}
       {isActive && selectedId && !editId && (()=>{
         const sel=elements.find(e=>e.id===selectedId&&(e.type==='image'||e.type==='text'||e.type==='placeholder'||e.type==='shape'));
@@ -2295,15 +2353,50 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
       {isActive && <div style={{position:'absolute',inset:0,pointerEvents:'none',
         outline:'2.5px solid rgba(59,130,246,0.65)',outlineOffset:'-1px'}}/>}
 
-      {ctxMenu && onDelete && (() => {
-        const hit = elements.find((e) => e.id === ctxMenu.id);
-        const label = hit?.type === 'text'
-          ? (chipLang === 'sq' ? 'Tekst' : 'Text')
-          : hit?.type === 'image'
-            ? (chipLang === 'sq' ? 'Foto' : 'Photo')
-            : hit?.type === 'shape'
-              ? (chipLang === 'sq' ? 'Formë' : 'Shape')
-              : (chipLang === 'sq' ? 'Element' : 'Element');
+      {ctxMenu && (onDelete || onClearLayout) && (() => {
+        const hit = ctxMenu.id ? elements.find((e) => e.id === ctxMenu.id) : null;
+        const isLayoutMenu = ctxMenu.kind === 'layout';
+        const filledSlot = !!(hit && hit.type === 'image' && hit.src && isLayoutSlotFrame(hit));
+        const label = isLayoutMenu
+          ? (chipLang === 'sq' ? 'Paraqitje' : 'Layout')
+          : hit?.type === 'text'
+            ? (chipLang === 'sq' ? 'Tekst' : 'Text')
+            : hit?.type === 'image'
+              ? (chipLang === 'sq' ? 'Foto' : 'Photo')
+              : hit?.type === 'shape'
+                ? (chipLang === 'sq' ? 'Formë' : 'Shape')
+                : (chipLang === 'sq' ? 'Element' : 'Element');
+        const menuBtn = (opts: {
+          onClick: () => void;
+          children: React.ReactNode;
+          danger?: boolean;
+        }) => (
+          <button
+            type="button"
+            onMouseDown={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              setCtxMenu(null);
+              opts.onClick();
+            }}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '8px 12px',
+              border: 'none',
+              background: 'transparent',
+              cursor: 'pointer',
+              fontSize: 13,
+              fontWeight: 600,
+              color: opts.danger ? '#B91C1C' : '#1a1a1a',
+              textAlign: 'left',
+            }}
+          >
+            {opts.children}
+          </button>
+        );
         return (
           <div
             style={{
@@ -2311,7 +2404,7 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
               left: Math.max(8, Math.min(ctxMenu.x, (typeof window !== 'undefined' ? window.innerWidth : 400) - 168)),
               top: Math.max(8, Math.min(ctxMenu.y, (typeof window !== 'undefined' ? window.innerHeight : 400) - 96)),
               zIndex: 80,
-              minWidth: 148,
+              minWidth: 168,
               borderRadius: 12,
               padding: '4px 0',
               background: '#FFFFFF',
@@ -2332,33 +2425,25 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
             }}>
               {label}
             </p>
-            <button
-              type="button"
-              onMouseDown={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                const id = ctxMenu.id;
-                setCtxMenu(null);
-                onDelete(id);
-              }}
-              style={{
-                width: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '8px 12px',
-                border: 'none',
-                background: 'transparent',
-                cursor: 'pointer',
-                fontSize: 13,
-                fontWeight: 600,
-                color: '#B91C1C',
-                textAlign: 'left',
-              }}
-            >
-              <Trash2 size={14} />
-              {chipLang === 'sq' ? 'Hiq' : 'Remove'}
-            </button>
+            {isLayoutMenu ? (
+              <>
+                {filledSlot && onClearSlotPhoto && ctxMenu.id && menuBtn({
+                  onClick: () => onClearSlotPhoto(ctxMenu.id!),
+                  children: (<><X size={14} />{chipLang === 'sq' ? 'Hiq foton' : 'Clear photo'}</>),
+                })}
+                {onClearLayout && menuBtn({
+                  danger: true,
+                  onClick: () => onClearLayout(),
+                  children: (<><Trash2 size={14} />{chipLang === 'sq' ? 'Hiq paraqitjen' : 'Remove layout'}</>),
+                })}
+              </>
+            ) : (
+              onDelete && ctxMenu.id && menuBtn({
+                danger: true,
+                onClick: () => onDelete(ctxMenu.id!),
+                children: (<><Trash2 size={14} />{chipLang === 'sq' ? 'Hiq' : 'Remove'}</>),
+              })
+            )}
           </div>
         );
       })()}
@@ -2434,11 +2519,14 @@ function LockedPageView({pageW,pageH,role,side}: {pageW:number;pageH:number;role
 // Spread View — realistic book
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SpreadView = React.memo(function SpreadView({spread,spreadContent,selectedId,activeSide,onActiveSide,onSelectId,onChangeEl,onOpenPhotos,onDelete,onGestureStart,onElementDragActive,onPageSwipe,onDropPhoto,onDropFiles,onDropSticker,onRequestLayout,pageW,pageH,canvasH,shapeRefs,isMobile,readOnly}: {
+const SpreadView = React.memo(function SpreadView({spread,spreadContent,selectedId,activeSide,onActiveSide,onSelectId,onChangeEl,onOpenPhotos,onDelete,onClearLayout,onClearSlotPhoto,onGestureStart,onElementDragActive,onPageSwipe,onDropPhoto,onDropFiles,onDropSticker,onRequestLayout,pageW,pageH,canvasH,shapeRefs,isMobile,readOnly}: {
   spread:SpreadDef; spreadContent:Record<number,EditorElement[]>;
   selectedId:string|null; activeSide:'left'|'right'; onActiveSide:(s:'left'|'right')=>void;
   onSelectId:(id:string|null)=>void; onChangeEl:(pid:number,eid:string,c:Partial<EditorElement>)=>void;
-  onOpenPhotos?:()=>void; onDelete?:(id?: string)=>void; onGestureStart?:()=>void;
+  onOpenPhotos?:()=>void; onDelete?:(id?: string)=>void;
+  onClearLayout?:(pageId:number)=>void;
+  onClearSlotPhoto?:(pageId:number, id:string)=>void;
+  onGestureStart?:()=>void;
   onElementDragActive?:(active:boolean)=>void;
   onPageSwipe?:(dir:1|-1)=>void;
   onDropPhoto?:(pageId:number, url:string, targetId:string|null, at:{x:number;y:number})=>void;
@@ -2485,6 +2573,8 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
         onChangeEl={readOnly ? ()=>{} : (eid,c)=>onChangeEl(page.dbId,eid,c)}
         onOpenPhotos={readOnly ? undefined : onOpenPhotos}
         onDelete={readOnly ? undefined : onDelete}
+        onClearLayout={readOnly || !onClearLayout ? undefined : () => onClearLayout(page.dbId)}
+        onClearSlotPhoto={readOnly || !onClearSlotPhoto ? undefined : (id) => onClearSlotPhoto(page.dbId, id)}
         onGestureStart={readOnly ? undefined : onGestureStart}
         onElementDragActive={readOnly ? undefined : onElementDragActive}
         onPageSwipe={onPageSwipe}
@@ -2525,6 +2615,8 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
               onChangeEl={readOnly ? ()=>{} : (eid,c)=>onChangeEl(soloPage.dbId,eid,c)}
               onOpenPhotos={readOnly ? undefined : onOpenPhotos}
               onDelete={readOnly ? undefined : onDelete}
+              onClearLayout={readOnly || !onClearLayout ? undefined : () => onClearLayout(soloPage.dbId)}
+              onClearSlotPhoto={readOnly || !onClearSlotPhoto ? undefined : (id) => onClearSlotPhoto(soloPage.dbId, id)}
               onGestureStart={readOnly ? undefined : onGestureStart}
               onElementDragActive={readOnly ? undefined : onElementDragActive}
               onPageSwipe={onPageSwipe}
@@ -2575,6 +2667,8 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
                 onChangeEl={readOnly ? ()=>{} : (eid,c)=>onChangeEl(page.dbId,eid,c)}
                 onOpenPhotos={readOnly ? undefined : onOpenPhotos}
                 onDelete={readOnly ? undefined : onDelete}
+                onClearLayout={readOnly || !onClearLayout ? undefined : () => onClearLayout(page.dbId)}
+                onClearSlotPhoto={readOnly || !onClearSlotPhoto ? undefined : (id) => onClearSlotPhoto(page.dbId, id)}
                 onGestureStart={readOnly ? undefined : onGestureStart}
                 onElementDragActive={readOnly ? undefined : onElementDragActive}
                 onPageSwipe={onPageSwipe}
@@ -3842,44 +3936,55 @@ function OrderModal({project,onClose,lang,flushSave,prepareForPrint}: {
   project:any; onClose:()=>void; lang:'sq'|'en';
   flushSave?:()=>Promise<void>;
   /** Upload device-local photos to the server and rewrite page srcs for PDF. */
-  prepareForPrint?:()=>Promise<void>;
+  prepareForPrint?: (onProgress?: (done: number, total: number) => void) => Promise<void>;
 }) {
   const createOrder=useCreateOrder();
   const queryClient=useQueryClient();
   const {getToken}=useAuth();
   const [st,setSt]=useState<'idle'|'loading'|'done'|'error'>('idle');
   const [errMsg,setErrMsg]=useState<string>('');
-  /** Always keep a tappable WhatsApp URL — auto-open often fails after long photo uploads. */
+  const [uploadProgress,setUploadProgress]=useState<{done:number;total:number}|null>(null);
+  /** Always keep a tappable WhatsApp URL — popup blockers fail after long uploads. */
   const [waUrl,setWaUrl]=useState<string|null>(null);
+  const busy = st === 'loading';
+
+  // Stay on this page while photos upload — no blank tab, no dismiss, warn on leave.
+  useEffect(() => {
+    if (!busy) return;
+    const blockUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    const blockKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    window.addEventListener('beforeunload', blockUnload);
+    window.addEventListener('keydown', blockKey, true);
+    return () => {
+      window.removeEventListener('beforeunload', blockUnload);
+      window.removeEventListener('keydown', blockKey, true);
+    };
+  }, [busy]);
 
   const go=async()=>{
     if (st==='loading') return;
     setSt('loading');
     setErrMsg('');
     setWaUrl(null);
-    // Placeholder tab must open in the same user gesture. After prepareForPrint
-    // (can take many seconds) browsers often block navigating that tab — we
-    // always show a green Open WhatsApp button as the reliable path.
-    const waTab=window.open('about:blank','_blank');
+    setUploadProgress(null);
     try{
-      if (waTab && !waTab.closed) {
-        try {
-          waTab.document.title = lang==='sq' ? 'Duke hapur WhatsApp…' : 'Opening WhatsApp…';
-          waTab.document.body.innerHTML = `<p style="font-family:system-ui;padding:24px;color:#444">${
-            lang==='sq'
-              ? 'Ju lutem prisni — po përgatitim porosinë…'
-              : 'Please wait — preparing your order…'
-          }</p>`;
-        } catch { /* cross-origin / restricted about:blank */ }
+      // Stay in this modal — never open a blank WhatsApp tab first. After a long
+      // upload the browser blocks popups; the green button below is the reliable path.
+      if (flushSave) await flushSave();
+      if (prepareForPrint) {
+        await prepareForPrint((done, total) => setUploadProgress({ done, total }));
       }
-
-      // Flush any in-flight autosave first, then upload device photos and
-      // persist the rewritten URLs — otherwise a racing autosave can write
-      // stale `local-photo:` srcs back and the print PDF comes out blank.
-      if (flushSave) await flushSave();
-      if (prepareForPrint) await prepareForPrint();
       if (flushSave) await flushSave();
 
+      setUploadProgress(null);
       const o=await createOrder.mutateAsync({data:{projectId:project.id}});
       const id=(o as any)?.id;
       if (!id) throw new Error('Order created but no id returned');
@@ -3899,15 +4004,6 @@ function OrderModal({project,onClose,lang,flushSave,prepareForPrint}: {
       if (!url) throw new Error(lang==='sq'?'Lidhja e WhatsApp mungon.':'WhatsApp link missing.');
       setWaUrl(url);
 
-      let opened=false;
-      if (waTab && !waTab.closed) {
-        try { waTab.location.href=url; opened=true; } catch { try{waTab.close();}catch{/* ignore */} }
-      }
-      if (!opened) {
-        const w=window.open(url,'_blank','noopener,noreferrer');
-        opened=!!w;
-      }
-
       // Keep project lists / album status in sync for this client immediately.
       void queryClient.invalidateQueries({queryKey:getGetProjectQueryKey(project.id)});
       void queryClient.invalidateQueries({queryKey:getListProjectsQueryKey()});
@@ -3920,12 +4016,17 @@ function OrderModal({project,onClose,lang,flushSave,prepareForPrint}: {
 
       setSt('done');
     }catch(e:any){
-      try{waTab?.close();}catch{/* ignore */}
       const status=e?.status;
       const emptyPages=Array.isArray(e?.data?.emptyPages)?e.data.emptyPages as number[]:null;
       const apiErr=typeof e?.data?.error==='string'?e.data.error:null;
       let msg:string;
-      if (emptyPages && emptyPages.length>0) {
+      if (e instanceof MissingLocalPhotosError || e?.code === 'MISSING_LOCAL_PHOTOS') {
+        const ids = Array.isArray(e?.ids) ? e.ids as string[] : [];
+        const short = ids.slice(0, 3).map((id: string) => id.slice(0, 8)).join(', ');
+        msg = lang==='sq'
+          ? `Mungon një foto në këtë pajisje${short ? ` (${short}…)` : ''}. Shtoje përsëri këtu — fotot ruhen vetëm në telefonin/kompjuterin ku u ndërtua albumi.`
+          : `Photo missing on this device${short ? ` (${short}…)` : ''}. Re-add it here — photos stay on the device where you built the album.`;
+      } else if (emptyPages && emptyPages.length>0) {
         msg = lang==='sq'
           ? (emptyPages.length===1
               ? `Faqja ${emptyPages[0]} është ende bosh. Shto foto ose tekst përpara se të porosisësh.`
@@ -3938,22 +4039,30 @@ function OrderModal({project,onClose,lang,flushSave,prepareForPrint}: {
           || (typeof e?.message==='string'?e.message:null)
           || (lang==='sq'?'Ndodhi një gabim.':'An error occurred.');
       }
-      // Surface rate-limit / cap errors clearly — silent failures were why
-      // WhatsApp could open (or look like it did) without an admin order.
       setErrMsg(status===429
         ? (lang==='sq'?'Shumë kërkesa — provo përsëri pas pak.':'Too many requests — try again shortly.')
         : msg);
       setSt('error');
+      setUploadProgress(null);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center" style={{background:'rgba(0,0,0,0.55)'}}>
+    <div
+      className="fixed inset-0 z-50 flex items-end md:items-center justify-center"
+      style={{background:'rgba(0,0,0,0.55)'}}
+      onClick={busy ? (e) => e.stopPropagation() : undefined}
+    >
       <motion.div initial={{y:60,opacity:0}} animate={{y:0,opacity:1}} exit={{y:60,opacity:0}}
-        className="bg-white w-full md:max-w-sm md:rounded-2xl rounded-t-2xl p-6 shadow-2xl">
+        className="bg-white w-full md:max-w-sm md:rounded-2xl rounded-t-2xl p-6 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between mb-5">
           <h3 className="font-serif text-lg font-medium">{lang==='sq'?'Konfirmo Porosinë':'Confirm Order'}</h3>
-          <button onClick={onClose}><X size={18} className="text-neutral-400"/></button>
+          {!busy && (
+            <button type="button" onClick={onClose} aria-label="Close">
+              <X size={18} className="text-neutral-400"/>
+            </button>
+          )}
         </div>
         <div className="bg-neutral-50 rounded-xl p-4 mb-5 space-y-2.5 text-sm">
           {([['Album',project.title||'My Album'],[lang==='sq'?'Faqe':'Pages',`${project.pageCount??30}`],
@@ -3971,8 +4080,8 @@ function OrderModal({project,onClose,lang,flushSave,prepareForPrint}: {
             <p className="font-medium text-green-700 text-sm">{lang==='sq'?'Porosia u regjistrua!':'Order registered!'}</p>
             <p className="text-xs text-neutral-400">
               {lang==='sq'
-                ? 'Nëse WhatsApp nuk u hap vetë, prek butonin më poshtë.'
-                : 'If WhatsApp did not open automatically, tap the button below.'}
+                ? 'Prek butonin për të dërguar porosinë në WhatsApp.'
+                : 'Tap the button to send your order on WhatsApp.'}
             </p>
             {waUrl && (
               <a
@@ -3986,33 +4095,53 @@ function OrderModal({project,onClose,lang,flushSave,prepareForPrint}: {
                 <span>{lang==='sq'?'Hap WhatsApp':'Open WhatsApp'}</span>
               </a>
             )}
-            <button onClick={onClose} className="mt-1 px-6 py-2 bg-neutral-900 text-white rounded-full text-sm">{lang==='sq'?'Mbyll':'Close'}</button>
+            <button type="button" onClick={onClose} className="mt-1 px-6 py-2 bg-neutral-900 text-white rounded-full text-sm">{lang==='sq'?'Mbyll':'Close'}</button>
           </div>
         ):st==='error'?(
           <div className="text-center py-2 space-y-3">
-            <p className="text-red-500 text-sm">{errMsg||(lang==='sq'?'Ndodhi një gabim.':'An error occurred.')}</p>
-            <button onClick={go} className="px-5 py-2 rounded-full text-sm bg-neutral-900 text-white">
+            <p className="text-red-500 text-sm leading-relaxed">{errMsg||(lang==='sq'?'Ndodhi një gabim.':'An error occurred.')}</p>
+            <button type="button" onClick={go} className="px-5 py-2 rounded-full text-sm bg-neutral-900 text-white">
               {lang==='sq'?'Provo përsëri':'Try again'}
+            </button>
+            <button type="button" onClick={onClose} className="block mx-auto text-xs text-neutral-400 underline">
+              {lang==='sq'?'Mbyll':'Close'}
             </button>
           </div>
         ):(
           <>
-            <button onClick={go} disabled={st==='loading'}
+            <button type="button" onClick={go} disabled={busy}
               className="w-full py-3.5 rounded-xl font-medium text-sm flex items-center justify-center gap-2 text-white disabled:opacity-60"
               style={{background:'#25D366'}}>
-              {st==='loading'?<Loader2 size={18} className="animate-spin"/>:<span>📱</span>}
+              {busy?<Loader2 size={18} className="animate-spin"/>:<span>📱</span>}
               <span>
-                {st==='loading'
+                {busy
                   ? (lang==='sq'?'Duke përgatitur…':'Preparing…')
                   : (lang==='sq'?'Porosit via WhatsApp':'Order via WhatsApp')}
               </span>
             </button>
-            {st==='loading' && (
-              <p className="text-[11px] text-neutral-400 text-center mt-3 leading-relaxed">
-                {lang==='sq'
-                  ? 'Ngarkimi i fotove mund të zgjasë pak. Mos e mbyllni këtë dritare.'
-                  : 'Uploading photos can take a moment. Please keep this window open.'}
-              </p>
+            {busy && (
+              <div className="mt-3 space-y-2">
+                <p className="text-[11px] text-neutral-500 text-center leading-relaxed">
+                  {uploadProgress && uploadProgress.total > 0
+                    ? (lang==='sq'
+                        ? `Duke ngarkuar fotot ${uploadProgress.done}/${uploadProgress.total}… Mos e mbyllni këtë faqe.`
+                        : `Uploading photos ${uploadProgress.done}/${uploadProgress.total}… Keep this page open.`)
+                    : (lang==='sq'
+                        ? 'Ju lutem prisni — po përgatitim porosinë. Mos e mbyllni këtë faqe.'
+                        : 'Please wait — preparing your order. Keep this page open.')}
+                </p>
+                {uploadProgress && uploadProgress.total > 0 && (
+                  <div className="h-1.5 rounded-full bg-neutral-100 overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{
+                        width: `${Math.round((uploadProgress.done / uploadProgress.total) * 100)}%`,
+                        background: '#25D366',
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
             )}
           </>
         )}
@@ -4243,8 +4372,13 @@ export default function Editor() {
   }, [projectId]);
 
   /** Upload on-device photos used in the album so server PDF/print can read them. */
-  const prepareForPrint = useCallback(async () => {
-    const { pages, replacements } = await materializeLocalPhotosInPages(liveContent.current);
+  const prepareForPrint = useCallback(async (
+    onProgress?: (done: number, total: number) => void,
+  ) => {
+    const { pages, replacements } = await materializeLocalPhotosInPages(
+      liveContent.current,
+      { onProgress },
+    );
     liveContent.current = pages;
     if (replacements.size > 0) {
       setPagesContent(pages);
@@ -5029,8 +5163,9 @@ export default function Editor() {
     const layout=editorLayouts.find(l=>l.id===layoutId); if(!layout) return;
     const ts=Date.now();
     // Keep free text + admin icon stickers when swapping layouts (photos use slots).
+    // Drop previous layout slots / locked layout text so replace is clean.
     const keepFree=(liveContent.current[activePageId]??[]).filter(e=>
-      e.sticker || e.type==='text' || e.type==='shape',
+      e.sticker || e.type==='shape' || (e.type==='text' && !isLayoutSlotFrame(e)) || (e.type==='image' && !isLayoutSlotFrame(e) && !e.sticker && (e.id||'').startsWith('img-')),
     );
     const newEls:EditorElement[]=layout.zones.map((z,i)=>layoutZoneToElement(z,canvasH,{
       id:`${layoutId}-${i}-${ts}`,
@@ -5041,6 +5176,24 @@ export default function Editor() {
     setLayoutGateOpen(false);
     setShowSheet(false);
   },[activePageId,lang,updatePage,canvasH,editorLayouts,isOrdered]);
+
+  const clearLayout=useCallback((pageId:number)=>{
+    if (isOrdered) return;
+    const els = liveContent.current[pageId] ?? [];
+    if (!pageHasPhotoLayout(els)) return;
+    updatePage(pageId, stripLayoutSlots(els));
+    setSelectedId(null);
+  }, [isOrdered, updatePage]);
+
+  const clearSlotPhoto=useCallback((pageId:number, id:string)=>{
+    if (isOrdered) return;
+    const els = liveContent.current[pageId] ?? [];
+    const target = els.find(e => e.id === id);
+    if (!target || !isLayoutSlotFrame(target) || target.type !== 'image') return;
+    updatePage(pageId, els.map(e => e.id === id
+      ? { ...e, type: 'placeholder' as const, src: undefined, cropFocusX: undefined, cropFocusY: undefined, cropZoom: undefined, slotLocked: true }
+      : e));
+  }, [isOrdered, updatePage]);
 
   const applyDesign=useCallback((design:DesignDef)=>{
     if (isOrdered) return;
@@ -5621,6 +5774,8 @@ export default function Editor() {
                   selectedId={selectedId} activeSide={activeSide}
                   onActiveSide={setActiveSide}
                   onSelectId={setSelectedId} onChangeEl={changeEl} onOpenPhotos={openPhotos} onDelete={deleteSelected}
+                  onClearLayout={isOrdered ? undefined : clearLayout}
+                  onClearSlotPhoto={isOrdered ? undefined : clearSlotPhoto}
                   onGestureStart={beginHistoryGesture}
                   onElementDragActive={onElementDragActive}
                   onPageSwipe={isMobile ? onPageSwipe : undefined}

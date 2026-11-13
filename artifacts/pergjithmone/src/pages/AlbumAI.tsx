@@ -883,6 +883,20 @@ function AlbumAIView() {
     }
   }, [categories, bookSizes, createProject, addProjectPage, getToken, lang, setLocation, siteSettings, photos]);
 
+  /** Keep the wizard in view when the step changes (Continue is often at the bottom). */
+  const scrollWizardIntoView = useCallback(() => {
+    const run = () => {
+      const el = document.getElementById('fillo');
+      if (!el) return;
+      const top = el.getBoundingClientRect().top + window.scrollY - 72;
+      window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+    };
+    // Wait for AnimatePresence to swap the step panel before scrolling.
+    requestAnimationFrame(() => {
+      setTimeout(run, 80);
+    });
+  }, []);
+
   // Step 2 "Continue" → move to the size-confirmation step instead of
   // generating immediately, so the user sees (and can change) the size/price
   // before the project is created.
@@ -897,7 +911,8 @@ function AlbumAIView() {
       return;
     }
     setStep(3);
-  }, [canGenerate, categoryId, generating, isAuthenticated, photos, setLocation]);
+    scrollWizardIntoView();
+  }, [canGenerate, categoryId, generating, isAuthenticated, photos, setLocation, scrollWizardIntoView]);
 
   const handleGenerate = useCallback(() => {
     if (!canGenerate || categoryId === null || generating || !selectedSize) return;
@@ -912,7 +927,8 @@ function AlbumAIView() {
   const handleCategorySelect = useCallback((catId: number) => {
     setCategoryId(catId);
     setStep(2);
-  }, []);
+    scrollWizardIntoView();
+  }, [scrollWizardIntoView]);
 
   // Resume after a login/register redirect: restore the chosen category
   // AND the already-uploaded photos (by URL — no need to re-upload), then
@@ -947,8 +963,9 @@ function AlbumAIView() {
         })();
       }
       setStep(3);
+      scrollWizardIntoView();
     } catch (e) { console.error('Failed to resume album selection', e); }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, scrollWizardIntoView]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault(); setDragActive(false);
@@ -982,7 +999,10 @@ function AlbumAIView() {
           {!generating && <WizardRail step={step} lang={lang} />}
           {step > 1 && !generating && (
             <button
-              onClick={() => setStep(s => (s - 1) as 1 | 2)}
+              onClick={() => {
+                setStep(s => (s - 1) as 1 | 2);
+                scrollWizardIntoView();
+              }}
               className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.12em] font-semibold text-neutral-400 hover:text-neutral-800 mb-6 transition-colors group"
             >
               <ArrowLeft size={13} className="transition-transform group-hover:-translate-x-0.5" />

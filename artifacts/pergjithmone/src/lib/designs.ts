@@ -1238,6 +1238,10 @@ function CITY(
   const accent = opts?.accent ?? 'rgba(255,255,255,0.35)';
   const layout = opts?.layout ?? 'postcard';
 
+  // Outside back is a static full-bleed brand plate — never a letterboxed copy
+  // of the front chrome (square albums used to show only the top color band).
+  const solidBack = [BG(paper)];
+
   if (layout === 'split') {
     return {
       id, name, category: 'Travel', thumbPhoto,
@@ -1257,6 +1261,7 @@ function CITY(
         SH('rect', 220, 148, 160, 3, accent, { opacity: 1, strokeWidth: 0 }),
         IMG(thumbPhoto, 24, 172, DESIGN_W - 48, DESIGN_H - 196),
       ],
+      backElements: solidBack,
     };
   }
 
@@ -1279,6 +1284,7 @@ function CITY(
           fontFamily: "'Londrina Solid', cursive", letterSpacing: 5,
         }),
       ],
+      backElements: solidBack,
     };
   }
 
@@ -1302,6 +1308,7 @@ function CITY(
       IMG(thumbPhoto, 32, 168, DESIGN_W - 64, 520),
       SH('rect', 32, 168, DESIGN_W - 64, 520, '#000000', { opacity: 0.06, strokeWidth: 0 }),
     ],
+    backElements: solidBack,
   };
 }
 
@@ -1829,15 +1836,33 @@ export function designCatalogFace(d: Pick<DesignDef, 'thumbPhoto' | 'elements'>)
   return { kind: 'elements', elements: [] };
 }
 
+/** Solid brand plate from a design's background / thumb color. */
+export function staticBackCoverElements(d: Pick<DesignDef, 'elements' | 'thumb'>): DE[] {
+  const front = Array.isArray(d.elements) ? d.elements : [];
+  const bg = front.find((e) => e.type === 'background');
+  const thumbBg = d.thumb && typeof (d.thumb as { background?: unknown }).background === 'string'
+    ? String((d.thumb as { background: string }).background)
+    : undefined;
+  const color = bg?.bgColor || bg?.bgGradientFrom || thumbBg || '#2A2A2A';
+  return [BG(color)];
+}
+
 /**
  * Back cover elements.
- * - Missing `backElements` → fall back to front (legacy designs).
  * - Explicit array (even empty / background-only) → trust it; Design Studio
  *   may intentionally clear the back without copying the front.
+ * - Missing `backElements` + photo/city front → static full-color plate
+ *   (avoids letterboxed front chrome on square books).
+ * - Otherwise fall back to front (legacy text-only covers).
  */
 export function designBackElements(d: DesignDef): DE[] {
   if (Array.isArray(d.backElements)) return d.backElements;
-  return designFrontElements(d);
+  const front = designFrontElements(d);
+  const hasPhotoArt = front.some((e) =>
+    (e.type === 'image' && !!e.src) || (e.type === 'background' && !!e.src),
+  );
+  if (hasPhotoArt) return staticBackCoverElements(d);
+  return front;
 }
 
 /** Per-design layout override: legacy DE[] = both sides, or explicit front/back. */

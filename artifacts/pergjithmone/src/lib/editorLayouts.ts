@@ -91,6 +91,7 @@ export function layoutZoneToElement(
   return {
     id: opts.id,
     type: 'text',
+    slotLocked: true,
     ...rect,
     text: opts.text ?? layoutPlaceholderText(opts.lang),
     fontSize: layoutTextFontSize(rect.h),
@@ -100,6 +101,17 @@ export function layoutZoneToElement(
     verticalAlign: 'middle',
     lineHeight: 1.2,
   };
+}
+
+/** Drop the photo/text layout grid; keep free photos, stickers, shapes, and free text. */
+export function stripLayoutSlots(els: EditorElement[]): EditorElement[] {
+  return els.filter((e) => {
+    if (e.type === 'background') return true;
+    if (e.sticker) return true;
+    if (e.type === 'shape') return true;
+    if (isLayoutSlotFrame(e)) return false;
+    return true;
+  });
 }
 
 /** Photo cells from a layout — frame stays put; bitmap pans inside. */
