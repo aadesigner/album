@@ -27,7 +27,7 @@ import {
   resolveDisplayUrl,
 } from '@/lib/localPhotoStore';
 import { LocalPhotoImg } from '@/components/LocalPhotoImg';
-import { ACCEPT_SAFE_IMAGES } from '@/lib/acceptedImages';
+import { ACCEPT_SAFE_IMAGES, isSafeImageFile } from '@/lib/acceptedImages';
 import { pendingBooksLimitMessage } from '@/lib/projectErrors';
 import { SizeCard } from './Wizard';
 import { CategoryCoverImg, coverPressable } from '@/components/CategoryCoverImg';
@@ -668,7 +668,8 @@ function AlbumAIView() {
   }, [pumpQueue]);
 
   const addFiles = useCallback((files: FileList | File[]) => {
-    const imgFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+    // Accept HEIC/empty MIME from phones — same gate as the editor.
+    const imgFiles = Array.from(files).filter(f => isSafeImageFile(f));
     if (!imgFiles.length) return;
     setPhotos(prev => {
       const room = MAX_PHOTOS - prev.length;

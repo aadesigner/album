@@ -1,27 +1,34 @@
 import { SAFE_IMAGE_NAME } from './acceptedImages';
 
-// Client-side photo compression — runs before any upload leaves the browser.
+// Client-side photo compression — runs before IndexedDB cache (builder) and
+// before any order-time server upload.
 //
-// Why: phone cameras routinely produce 8-20MB photos. Uploading those in full
-// over a slow connection is what makes "uploading" feel like it hangs, and it
-// also means the server has to receive, store, and re-encode a huge original
-// just to throw most of it away. Shrinking to print-quality dimensions and a
-// high-quality JPEG *before* the network request keeps uploads fast and caps
-// what we ever send, without any visible quality loss for anything this app
-// does with a photo (screen editing + print-resolution PDF export).
+// Why: phone cameras routinely produce 8-20MB photos. Shrinking to
+// print-quality dimensions and a high-quality JPEG keeps the device cache
+// small and order uploads fast, without visible quality loss for screen
+// editing + print PDF export.
 //
-// The server (artifacts/api-server/src/routes/uploads.ts) still re-compresses
-// on receipt as a second safety net (e.g. for non-browser clients), but doing
-// it here first is what actually fixes upload speed.
+// Builder photos stay on-device (IndexedDB). We MUST store a browser-displayable
+// JPEG/PNG/WebP — never raw HEIC passthrough — or the album canvas goes blank.
 
-// Matches the server's MAX_DIMENSION so we never resize twice in a way that
-// could compound artifacts — this is the single source of truth for "how
-// large does a photo ever need to be in this app".
 const MAX_DIMENSION = 2600;
 const HARD_LIMIT_BYTES = 3 * 1024 * 1024; // 3MB per photo after we can re-encode
-/** Phone HEIC/AVIF we cannot decode locally still goes to the server for conversion. */
 const PASSTHROUGH_LIMIT_BYTES = 20 * 1024 * 1024;
 const QUALITY_STEPS = [0.92, 0.85, 0.78, 0.7, 0.6, 0.5];
+
+export class ImageTooLargeError extends Error {
+  constructor(public sizeBytes: number) {
+    super(`Photo is ${(sizeBytes / (1024 * 1024)).toFixed(1)}MB even after compression (limit 3MB).`);
+    this.name = 'ImageTooLargeError';
+  }
+}
+
+export class ImageUndecodableError extends Error {
+  constructor() {
+    super('Could not decode this photo in the browser');
+    this.name = 'ImageUndecodableError';
+  }
+}
 
 function isLikelyImageFile(file: File): boolean {
   const type = String(file.type || '').toLowerCase();
@@ -34,21 +41,36 @@ function fileLooksLike(file: File, mime: string, ext: RegExp): boolean {
   return String(file.type || '').toLowerCase() === mime || ext.test(file.name || '');
 }
 
-export class ImageTooLargeError extends Error {
-  constructor(public sizeBytes: number) {
-    super(`Photo is ${(sizeBytes / (1024 * 1024)).toFixed(1)}MB even after compression (limit 3MB).`);
-    this.name = 'ImageTooLargeError';
+function looksLikeHeic(file: File): boolean {
+  const type = String(file.type || '').toLowerCase();
+  if (type === 'image/heic' || type === 'image/heif') return true;
+  return /\.(heic|heif)$/i.test(file.name || '');
+}
+
+async function sniffHeicBrand(file: Blob): Promise<boolean> {
+  try {
+    const head = new Uint8Array(await file.slice(0, 32).arrayBuffer());
+    if (head.length < 12) return false;
+    // ISO-BMFF ftyp box — HEIC/HEIF brands in bytes 8..
+    const asAscii = String.fromCharCode(...head.subarray(4, 8));
+    if (asAscii !== 'ftyp') return false;
+    const brands = String.fromCharCode(...head.subarray(8, Math.min(head.length, 32))).toLowerCase();
+    return /heic|heix|heif|mif1|msf1|heim|heis/.test(brands);
+  } catch {
+    return false;
   }
 }
 
-async function decodeToBitmap(file: File): Promise<ImageBitmap | HTMLImageElement> {
+async function decodeToBitmap(file: Blob): Promise<ImageBitmap | HTMLImageElement> {
   if ('createImageBitmap' in window) {
     try {
-      const bmp = await createImageBitmap(file);
+      // Prefer EXIF/HEIF orientation when the browser supports the option.
+      const bmp = await (createImageBitmap as any)(file, { imageOrientation: 'from-image' })
+        .catch(() => createImageBitmap(file));
       if (bmp && bmp.width > 0 && bmp.height > 0) return bmp;
       if (bmp && 'close' in bmp) bmp.close();
     } catch {
-      // Fall through to the <img> path below (some formats/browsers reject createImageBitmap).
+      // Fall through to the <img> path / HEIC WASM below.
     }
   }
   const url = URL.createObjectURL(file);
@@ -65,6 +87,27 @@ async function decodeToBitmap(file: File): Promise<ImageBitmap | HTMLImageElemen
   }
 }
 
+/** Lazy WASM fallback — only downloaded when native HEIC decode fails. */
+async function decodeHeicWithWasm(file: Blob): Promise<ImageBitmap | HTMLImageElement> {
+  const { heicTo } = await import('heic-to');
+  const jpegBlob = await heicTo({ blob: file, type: 'image/jpeg', quality: 0.92 }) as Blob;
+  return decodeToBitmap(jpegBlob);
+}
+
+async function decodeBuilderSource(file: File): Promise<ImageBitmap | HTMLImageElement> {
+  try {
+    return await decodeToBitmap(file);
+  } catch (nativeErr) {
+    const heic = looksLikeHeic(file) || (await sniffHeicBrand(file));
+    if (!heic) throw nativeErr;
+    try {
+      return await decodeHeicWithWasm(file);
+    } catch {
+      throw new ImageUndecodableError();
+    }
+  }
+}
+
 function getSize(src: ImageBitmap | HTMLImageElement) {
   return 'width' in src && 'height' in src
     ? { w: (src as any).width as number, h: (src as any).height as number }
@@ -78,39 +121,38 @@ function canvasToBlob(canvas: HTMLCanvasElement, mime: string, quality?: number)
 }
 
 /**
- * Resizes + re-encodes an image file entirely in the browser, aiming for the
- * smallest file that still looks essentially identical, and never returning
- * something larger than 3MB. Non-image files, GIFs (to preserve animation),
- * and anything the browser can't decode are passed through untouched — the
- * server-side pipeline and hard-limit check are the backstop for those.
+ * Resizes + re-encodes entirely in the browser for the album builder cache.
+ * Always returns a displayable JPEG/PNG/WebP File — never raw HEIC.
  */
 export async function compressImageFile(file: File): Promise<File> {
-  // Animated GIFs would be flattened to a single frame by a canvas re-encode —
-  // leave them alone and let the size-limit check below gate them instead.
   const keepGif = fileLooksLike(file, 'image/gif', /\.gif$/i);
   const keepPng = fileLooksLike(file, 'image/png', /\.png$/i);
   const keepWebp = fileLooksLike(file, 'image/webp', /\.webp$/i);
   if (!isLikelyImageFile(file) || keepGif) {
     if (file.size > HARD_LIMIT_BYTES) throw new ImageTooLargeError(file.size);
-    return file;
+    // GIF: keep as-is when small enough (animation). Still displayable.
+    if (keepGif) return file;
+    // Unknown non-image — reject rather than caching junk.
+    throw new ImageUndecodableError();
   }
   // Stickers / logos: never flatten alpha through a JPEG round-trip.
   if ((keepPng || keepWebp) && file.size <= HARD_LIMIT_BYTES) return file;
 
   let source: ImageBitmap | HTMLImageElement;
   try {
-    source = await decodeToBitmap(file);
-  } catch {
-    // Couldn't decode client-side (HEIC on desktop, empty MIME, etc.) —
-    // send the original through so the server can convert it.
+    source = await decodeBuilderSource(file);
+  } catch (err) {
+    if (err instanceof ImageUndecodableError) throw err;
+    // Last chance: if it already looks like JPEG and is under the cap, keep it.
+    if (/image\/(jpeg|jpg|png|webp)/i.test(file.type) && file.size <= HARD_LIMIT_BYTES) return file;
     if (file.size > PASSTHROUGH_LIMIT_BYTES) throw new ImageTooLargeError(file.size);
-    return file;
+    throw new ImageUndecodableError();
   }
 
   const { w, h } = getSize(source);
   if (!w || !h) {
-    if (file.size > PASSTHROUGH_LIMIT_BYTES) throw new ImageTooLargeError(file.size);
-    return file;
+    if ('close' in source) (source as ImageBitmap).close();
+    throw new ImageUndecodableError();
   }
 
   const scale = Math.min(1, MAX_DIMENSION / Math.max(w, h));
@@ -121,12 +163,14 @@ export async function compressImageFile(file: File): Promise<File> {
   canvas.width = targetW;
   canvas.height = targetH;
   const ctx = canvas.getContext('2d', { alpha: true });
-  if (!ctx) return file;
+  if (!ctx) {
+    if ('close' in source) (source as ImageBitmap).close();
+    throw new ImageUndecodableError();
+  }
   ctx.clearRect(0, 0, targetW, targetH);
   ctx.drawImage(source as any, 0, 0, targetW, targetH);
   if ('close' in source) (source as ImageBitmap).close();
 
-  // Keep PNG/WebP with alpha as PNG. Photos without alpha become JPEG.
   const hasAlpha = (keepPng || keepWebp) && (await pngHasAlpha(canvas, ctx));
   let mime = keepPng || hasAlpha ? 'image/png' : 'image/jpeg';
   let ext = keepPng || hasAlpha ? 'png' : 'jpg';
@@ -134,7 +178,6 @@ export async function compressImageFile(file: File): Promise<File> {
   let blob: Blob | null = null;
   if (keepPng || hasAlpha) {
     blob = await canvasToBlob(canvas, mime);
-    // Huge opaque PNGs: fall back to JPEG so the 3MB cap still holds.
     if (!hasAlpha && blob.size > HARD_LIMIT_BYTES) {
       for (const q of QUALITY_STEPS) {
         blob = await canvasToBlob(canvas, 'image/jpeg', q);
@@ -150,11 +193,8 @@ export async function compressImageFile(file: File): Promise<File> {
     }
   }
 
-  if (!blob) return file;
+  if (!blob) throw new ImageUndecodableError();
 
-  // Resizing to MAX_DIMENSION handles the overwhelming majority of cases;
-  // this loop is just a defensive backstop for unusually dense/detailed
-  // images that are still too big even at the lowest quality step.
   let attemptCanvas = canvas, attemptW = targetW, attemptH = targetH;
   while (blob.size > HARD_LIMIT_BYTES && Math.max(attemptW, attemptH) > 800) {
     attemptW = Math.round(attemptW * 0.8);
@@ -170,28 +210,27 @@ export async function compressImageFile(file: File): Promise<File> {
 
   if (blob.size > HARD_LIMIT_BYTES) throw new ImageTooLargeError(blob.size);
 
-  // Only use the compressed result if it's actually smaller — for already-
-  // small/efficiently-encoded files, re-encoding can occasionally lose.
-  if (blob.size >= file.size) return file;
+  // Prefer compressed when smaller; for HEIC sources always use the JPEG we made
+  // so IndexedDB holds something every browser can paint.
+  if (blob.size >= file.size && !looksLikeHeic(file) && !(await sniffHeicBrand(file))) {
+    if (/image\/(jpeg|jpg|png|webp)/i.test(file.type) || SAFE_IMAGE_NAME.test(file.name || '')) {
+      return file;
+    }
+  }
 
-  const newName = file.name.replace(/\.[^.]+$/, '') + `.${ext}`;
+  const newName = (file.name || 'photo').replace(/\.[^.]+$/, '') + `.${ext}`;
   return new File([blob], newName, { type: mime, lastModified: Date.now() });
 }
 
-// Cheap alpha-channel check: sample the canvas's pixel data for any
-// non-opaque pixel. Only called for PNGs, and only once per upload.
 async function pngHasAlpha(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D): Promise<boolean> {
   try {
     const { width, height } = canvas;
-    // Sampling the full image is cheap enough at these resolutions and this
-    // only runs once per PNG upload.
     const data = ctx.getImageData(0, 0, width, height).data;
     for (let i = 3; i < data.length; i += 4) {
       if (data[i] < 255) return true;
     }
     return false;
   } catch {
-    // getImageData can throw on tainted canvases; assume alpha to be safe.
     return true;
   }
 }

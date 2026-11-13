@@ -1,4 +1,4 @@
-import { compressImageFile, ImageTooLargeError } from './imageCompression';
+import { compressImageFile, ImageTooLargeError, ImageUndecodableError } from './imageCompression';
 import { authFetch } from './authFetch';
 
 export class UploadFailedError extends Error {
@@ -53,7 +53,23 @@ export function uploadErrorMessage(err: unknown, lang: 'sq' | 'en'): string {
       ? `Fotoja është ${mb}MB edhe pas ngjeshjes (limiti 3MB). Provoni një foto më të vogël.`
       : `Photo is ${mb}MB even after compression (limit 3MB). Try a smaller photo.`;
   }
+  if (err instanceof ImageUndecodableError) {
+    return lang === 'sq'
+      ? 'Kjo foto nuk u lexua në telefon/kompjuter. Provoni ta ruani si JPG dhe shtojeni përsëri.'
+      : 'This photo could not be read on this device. Save it as JPG and add it again.';
+  }
   const raw = err instanceof Error ? err.message : '';
+  const name = err instanceof Error ? err.name : '';
+  if (name === 'QuotaExceededError' || /DEVICE_STORAGE_FULL|quota/i.test(raw)) {
+    return lang === 'sq'
+      ? 'Memoria e shfletuesit është e mbushur. Fshini foto të vjetra ose hapni hapësirë dhe provoni përsëri.'
+      : 'Browser storage is full. Free some space or remove old photos, then try again.';
+  }
+  if (/IndexedDB/i.test(raw)) {
+    return lang === 'sq'
+      ? 'Ruajtja lokale e fotove dështoi. Çaktivizoni mënyrën private dhe provoni përsëri.'
+      : 'Could not save photos on this device. Turn off private/incognito mode and try again.';
+  }
   if (/too many uploads|slow down|429/i.test(raw)) {
     return lang === 'sq'
       ? 'Shumë ngarkime njëherësh. Pritni pak dhe provoni përsëri.'

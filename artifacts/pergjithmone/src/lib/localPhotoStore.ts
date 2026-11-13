@@ -63,11 +63,31 @@ function idbReq<T>(req: IDBRequest<T>): Promise<T> {
   });
 }
 
-/** Compress + store on this device. Returns `local-photo:{uuid}` src. */
+function waitTx(tx: IDBTransaction): Promise<void> {
+  return new Promise((resolve, reject) => {
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error || new Error('IndexedDB transaction failed'));
+    tx.onabort = () => reject(tx.error || new Error('IndexedDB transaction aborted'));
+  });
+}
+
+function isQuotaError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const e = err as { name?: string; message?: string };
+  return e.name === 'QuotaExceededError' || /quota/i.test(String(e.message || ''));
+}
+
+/** Compress + store on this device. Returns `local-photo:{uuid}` src. Never hits the server. */
 export async function storeBuilderPhoto(projectId: number, file: File | Blob): Promise<string> {
-  const compressed = file instanceof File
-    ? await compressImageFile(file)
-    : file;
+  let compressed: Blob;
+  try {
+    compressed = file instanceof File
+      ? await compressImageFile(file)
+      : file;
+  } catch (err) {
+    throw err;
+  }
+
   const id = (typeof crypto !== 'undefined' && crypto.randomUUID)
     ? crypto.randomUUID()
     : `p${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
@@ -78,13 +98,30 @@ export async function storeBuilderPhoto(projectId: number, file: File | Blob): P
     mime: compressed.type || 'image/jpeg',
     createdAt: Date.now(),
   };
+
   const db = await openDb();
   try {
-    await idbReq(db.transaction(STORE, 'readwrite').objectStore(STORE).put(record));
+    const tx = db.transaction(STORE, 'readwrite');
+    tx.objectStore(STORE).put(record);
+    await waitTx(tx);
+  } catch (err) {
+    if (isQuotaError(err)) {
+      const quotaErr = new Error('DEVICE_STORAGE_FULL');
+      quotaErr.name = 'QuotaExceededError';
+      throw quotaErr;
+    }
+    throw err;
   } finally {
     db.close();
   }
-  return toLocalPhotoSrc(id);
+
+  const src = toLocalPhotoSrc(id);
+  // Warm the blob URL so the library thumb + Konva paint immediately.
+  try {
+    const url = URL.createObjectURL(compressed);
+    blobUrlCache.set(src, url);
+  } catch { /* ignore */ }
+  return src;
 }
 
 export async function getLocalPhotoBlob(id: string): Promise<Blob | null> {
@@ -140,10 +177,7 @@ export async function deleteLocalPhotosForProject(projectId: number): Promise<vo
       }
       store.delete(row.id);
     }
-    await new Promise<void>((resolve, reject) => {
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error || new Error('delete failed'));
-    });
+    await waitTx(tx);
   } finally {
     db.close();
   }
@@ -161,10 +195,7 @@ export async function reassignLocalPhotos(fromProjectId: number, toProjectId: nu
     for (const row of rows) {
       store.put({ ...row, projectId: toProjectId });
     }
-    await new Promise<void>((resolve, reject) => {
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error || new Error('reassign failed'));
-    });
+    await waitTx(tx);
   } finally {
     db.close();
   }
@@ -192,6 +223,7 @@ function collectLocalPhotoSrcsFromValue(value: unknown, into: Set<string>) {
 /**
  * Upload every `local-photo:` referenced in page content to the server and
  * rewrite srcs to `/api/uploads/files/...` so PDF/print can read them.
+ * Only used at order time — not while editing.
  */
 export async function materializeLocalPhotosInPages<T extends { src?: string }>(
   pages: Record<number, T[]>,

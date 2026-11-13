@@ -3522,7 +3522,7 @@ function EditorArtGrid({
 }
 
 function Sidebar({tab,onTab,photos,onUpload,uploading,onAddPhoto,onAddText,onAddSticker,editorElements,onLayout,onApplyDesign,selectedId,onDelete,lang,designs,layouts,showDesigns,photosOnCover}: {
-  tab:SideTab; onTab:(t:SideTab)=>void; photos:string[]; onUpload:(f:File)=>void; uploading:boolean;
+  tab:SideTab; onTab:(t:SideTab)=>void; photos:string[]; onUpload:(f:File|File[])=>void; uploading:boolean;
   onAddPhoto:(url:string)=>void; onAddText:(s?:{fontSize?:number;fontStyle?:string;align?:'left'|'center'|'right'})=>void;
   onAddSticker:(url:string)=>void; editorElements: EditorElementAsset[];
   onLayout:(id:string)=>void;
@@ -3588,14 +3588,15 @@ function Sidebar({tab,onTab,photos,onUpload,uploading,onAddPhoto,onAddText,onAdd
             onDrop={e=>{
               if (!dataTransferHasImageFiles(e.dataTransfer)) return;
               e.preventDefault();
-              imageFilesFromDataTransfer(e.dataTransfer).forEach(f=>onUpload(f));
+              const files=imageFilesFromDataTransfer(e.dataTransfer);
+              if (files.length) onUpload(files);
             }}>
             <input ref={fileRef} type="file" accept={ACCEPT_SAFE_IMAGES} multiple className="hidden"
-              onChange={e=>{Array.from(e.target.files||[]).forEach(f=>onUpload(f));e.target.value='';}}/>
+              onChange={e=>{const files=Array.from(e.target.files||[]); e.target.value=''; if(files.length) onUpload(files);}}/>
             <button onClick={()=>fileRef.current?.click()} disabled={uploading}
               className="w-full py-2.5 border-2 border-dashed border-neutral-300 rounded-xl text-xs text-neutral-500 hover:border-neutral-600 flex items-center justify-center gap-1.5 transition-colors disabled:opacity-60">
               {uploading?<Loader2 size={13} className="animate-spin"/>:<Plus size={13}/>}
-              {lang==='sq'?'Ngarko foto · ose tërhiq këtu':'Upload photos · or drop here'}
+              {lang==='sq'?'Shto foto · ose tërhiq këtu':'Add photos · or drop here'}
             </button>
             <p className="text-[10px] text-neutral-400 leading-snug">
               {photosOnCover
@@ -3681,7 +3682,7 @@ function Sidebar({tab,onTab,photos,onUpload,uploading,onAddPhoto,onAddText,onAdd
 // ─────────────────────────────────────────────────────────────────────────────
 
 function MobileSheet({tab,show,onClose,photos,onUpload,uploading,onAddPhoto,onLayout,onAddText,onAddSticker,editorElements,onApplyDesign,lang,designs,layouts,showDesigns,photosOnCover}: {
-  tab:SideTab; show:boolean; onClose:()=>void; photos:string[]; onUpload:(f:File)=>void; uploading:boolean;
+  tab:SideTab; show:boolean; onClose:()=>void; photos:string[]; onUpload:(f:File|File[])=>void; uploading:boolean;
   onAddPhoto:(url:string)=>void; onLayout:(id:string)=>void; onAddText:(s?:{fontSize?:number;fontStyle?:string;align?:'left'|'center'|'right'})=>void;
   onAddSticker:(url:string)=>void; editorElements: EditorElementAsset[];
   onApplyDesign:(d:DesignDef)=>void; lang:'sq'|'en';
@@ -3766,14 +3767,15 @@ function MobileSheet({tab,show,onClose,photos,onUpload,uploading,onAddPhoto,onLa
                 onDrop={e=>{
                   if (!dataTransferHasImageFiles(e.dataTransfer)) return;
                   e.preventDefault();
-                  imageFilesFromDataTransfer(e.dataTransfer).forEach(f=>onUpload(f));
+                  const files=imageFilesFromDataTransfer(e.dataTransfer);
+                  if (files.length) onUpload(files);
                 }}>
                 <input ref={fileRef} type="file" accept={ACCEPT_SAFE_IMAGES} multiple className="hidden"
-                  onChange={e=>{Array.from(e.target.files||[]).forEach(f=>onUpload(f));e.target.value='';}}/>
+                  onChange={e=>{const files=Array.from(e.target.files||[]); e.target.value=''; if(files.length) onUpload(files);}}/>
                 <button onClick={()=>fileRef.current?.click()} disabled={uploading}
                   className="w-full py-3 border-2 border-dashed border-neutral-300 rounded-xl text-sm flex items-center justify-center gap-2 text-neutral-500 disabled:opacity-60">
                   {uploading?<Loader2 size={15} className="animate-spin"/>:<Plus size={15}/>}
-                  {lang==='sq'?'Ngarko foto · ose tërhiq këtu':'Upload photos · or drop here'}
+                  {lang==='sq'?'Shto foto · ose tërhiq këtu':'Add photos · or drop here'}
                 </button>
                 <p className="text-[11px] text-neutral-400 leading-snug px-0.5">
                   {photosOnCover
@@ -4581,16 +4583,28 @@ export default function Editor() {
     setSelectedId(null);
   },[selectedId,activePageId,updatePage,isOrdered]);
 
-  const upload=useCallback(async(file:File)=>{
+  /** Cache photos on this device only — server upload happens at order time. */
+  const upload=useCallback(async(input:File|File[])=>{
     if (isOrdered) return;
+    const files = Array.isArray(input) ? input : [input];
+    if (!files.length) return;
     setUploading(true);
     try {
-      const url=await storeBuilderPhoto(projectId, file);
-      setPhotos(prev=>[url,...prev]);
-    } catch(e){
-      console.error('Upload failed',e);
-      alert(uploadErrorMessage(e, lang==='sq'?'sq':'en'));
-    } finally{setUploading(false);}
+      const added: string[] = [];
+      for (const file of files) {
+        try {
+          const url = await storeBuilderPhoto(projectId, file);
+          added.push(url);
+        } catch (e) {
+          console.error('Local photo cache failed', e);
+          alert(uploadErrorMessage(e, lang==='sq'?'sq':'en'));
+          break;
+        }
+      }
+      if (added.length) setPhotos(prev => [...added, ...prev]);
+    } finally {
+      setUploading(false);
+    }
   },[projectId,lang,isOrdered]);
 
   const pageRoleById = useMemo(() => {
