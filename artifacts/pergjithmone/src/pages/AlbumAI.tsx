@@ -1578,8 +1578,8 @@ function AlbumAIView() {
                   <p className="text-neutral-500 text-[15px] leading-relaxed">
                     {L(
                       lang,
-                      'E nisim ne. Ju e mbaroni. Printojmë kur jeni gati. I njëjti printim, e njëjta letër 200g, kudo në Shqipëri.',
-                      'We start it. You finish it. We print when you are ready. The same print, the same 200g paper, anywhere in Albania.',
+                      'E nisim ne. Ju e mbaroni. Printojmë kur jeni gati. I njëjti printim, e njëjta letër premium 170gsm, kudo në Shqipëri.',
+                      'We start it. You finish it. We print when you are ready. The same print, the same premium 170gsm paper, anywhere in Albania.',
                     )}
                   </p>
                 </div>

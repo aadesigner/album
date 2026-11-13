@@ -25,7 +25,7 @@ export const PAGE_DEFAULTS: Record<PageSlug, Record<string, unknown>> = {
       browse: bi('Shiko të gjitha stilet', 'Browse all styles'),
     },
     ticker: [
-      bi('letër mat 200g', 'matte 200g paper'),
+      bi('letër premium 170gsm', 'premium 170gsm paper'),
       bi('hapje e sheshtë', 'lay-flat binding'),
       bi('printim premium', 'premium printing'),
       bi('dërgesë në 10–16 ditë', '10–16 day delivery'),
@@ -75,7 +75,7 @@ export const PAGE_DEFAULTS: Record<PageSlug, Record<string, unknown>> = {
     materials: {
       kicker: bi('çfarë e bën të veçantë', 'what makes it special'),
       items: [
-        { title: bi('Letër mat 200g', 'Matte 200g paper'), desc: bi('Cilësi premium, pa pasqyrim', 'Premium quality, no glare') },
+        { title: bi('Letër premium 170gsm', 'Premium 170gsm paper'), desc: bi('Cilësi premium, pa pasqyrim', 'Premium quality, no glare') },
         { title: bi('Lidhje e sheshtë', 'Lay-flat binding'), desc: bi('Hapet fare, pa humbje të fotos', 'Full open, no image loss') },
         { title: bi('Printim CMYK', 'CMYK printing'), desc: bi('Ngjyra të gjalla, të sakta', 'Vivid, accurate colours') },
         { title: bi('Kuti mbrojtëse', 'Protective box'), desc: bi('Dërgesë e sigurt, gjithmonë', 'Safe delivery, always') },
@@ -101,7 +101,7 @@ export const PAGE_DEFAULTS: Record<PageSlug, Record<string, unknown>> = {
         {
           title: bi('Porositni dhe merrni', 'Order and receive'),
           desc: bi('Printuar dhe dërguar te dera juaj brenda 10–16 ditëve pune.', 'Printed and delivered straight to your door within 10–16 working days.'),
-          detail: bi('Printim me cilësi galerie, letër mat 200g, lidhje e sheshtë. Dërgesë e sigurt me kuti mbrojtëse. Garanci kthimi 30 ditë.', 'Gallery-quality printing, matte 200g paper, lay-flat binding. Safe delivery with protective box. 30-day return guarantee.'),
+          detail: bi('Printim me cilësi galerie, letër premium 170gsm, kopertinë e fortë e personalizuar. Dërgesë e sigurt me kuti mbrojtëse. Garanci kthimi 30 ditë.', 'Gallery-quality printing, premium 170gsm paper, personalized hardcover. Safe delivery with protective box. 30-day return guarantee.'),
         },
       ],
     },
@@ -131,12 +131,12 @@ export const PAGE_DEFAULTS: Record<PageSlug, Record<string, unknown>> = {
       { title: bi('Zgjidhni rastin', 'Pick your occasion'), desc: bi('Filloni me dasëm, udhëtim, familje ose çfarëdo rasti të veçantë. Çdo kategori ka modele të bëra enkas për ato momente.', 'Start with wedding, travel, family or any special moment. Each category comes with layouts crafted for those exact memories.'), visual: bi('Dasmë · Udhëtim · Familje · Ditëlindje · Miqësi', 'Wedding · Travel · Family · Birthday · Friendship') },
       { title: bi('Ngarkoni fotot tuaja', 'Upload your photos'), desc: bi('Shtoni fotot nga celulari ose kompjuteri. Mbështesim çdo format dhe rezolucion. Sistemi organizon fotot automatikisht.', 'Add photos from your phone or computer. We support every format and resolution. The system arranges them automatically.'), visual: bi('JPG · PNG · HEIC · Tërhiq e lësho', 'JPG · PNG · HEIC · Drag & Drop') },
       { title: bi('Ndryshoni çdo faqe', 'Personalise every page'), desc: bi('Lëvizni fotot, ndryshoni tekstet, zgjidhni shkronjat dhe kopertinën. Çdo detaj i albumit tuaj, si ta doni ju.', 'Move photos, edit text, pick fonts, personalise the cover. Full control over every detail — the way only you would want it.'), visual: bi('Tekst · Ngjyra · Shkronjat · Faqet', 'Text · Colors · Fonts · Layouts') },
-      { title: bi('Printim dhe dërgim', 'Printing & Delivery'), desc: bi('Ne printojmë albumin tuaj me letër premium 200g dhe hapje e sheshtë. Arrin te ju i paketuar me kujdes brenda 10–16 ditësh.', 'We print your album on premium 200g paper with lay-flat binding. It arrives carefully packaged within 10–16 working days.'), visual: bi('200g letër mat · hapje e sheshtë · kuti e fortë', '200g Matte paper · Lay-flat · Premium box') },
+      { title: bi('Printim dhe dërgim', 'Printing & Delivery'), desc: bi('Ne printojmë albumin tuaj me letër premium 170gsm dhe kopertinë e fortë e personalizuar. Arrin te ju i paketuar me kujdes brenda 10–16 ditësh.', 'We print your album on premium 170gsm paper with a personalized hardcover. It arrives carefully packaged within 10–16 working days.'), visual: bi('170gsm letër premium · kopertinë e fortë e personalizuar · kuti e fortë', '170gsm premium paper · Personalized hardcover · Premium box') },
     ],
     quality: {
       kicker: bi('Standardet e cilësisë', 'Quality standards'),
       items: [
-        { value: bi('200g', '200g'), label: bi('Letër premium', 'Premium paper'), desc: bi('Mat, pa reflektime', 'Matte, glare-free') },
+        { value: bi('170gsm', '170gsm'), label: bi('Letër premium', 'Premium paper'), desc: bi('Mat, pa reflektime', 'Matte, glare-free') },
         { value: bi('180°', '180°'), label: bi('Hapje e sheshtë', 'Lay-flat binding'), desc: bi('Asnjë buzë e bardhë', 'Zero white border') },
         { value: bi('300', '300'), label: bi('Rezolucion printimi', 'Print resolution'), desc: bi('DPI — të mprehta gjithmonë', 'DPI — always sharp') },
         { value: bi('30', '30'), label: bi('Garanci cilësie', 'Quality guarantee'), desc: bi('ditë rikthim falas', 'day free return') },
@@ -158,7 +158,7 @@ export const PAGE_DEFAULTS: Record<PageSlug, Record<string, unknown>> = {
   },
 
   pricing: {
-    seo: { title: bi('Çmimet', 'Pricing'), description: bi('Çmime të qarta për albume foto premium — nga 3.000 lekë. Letër mat 200g, hapje e sheshtë, printim galerie. Dërgesa falas mbi 5.000 lekë.', 'Clear pricing for premium photo albums — from 3,000 lek. Matte 200g paper, lay-flat binding, gallery-quality printing. Free delivery over 5,000 lek.') },
+    seo: { title: bi('Çmimet', 'Pricing'), description: bi('Çmime të qarta për albume foto premium — nga 3.000 lekë. Letër premium 170gsm, kopertinë e fortë e personalizuar. Dërgesa falas mbi 5.000 lekë.', 'Clear pricing for premium photo albums — from 3,000 lek. Premium 170gsm paper, personalized hardcover. Free delivery over 5,000 lek.') },
     hero: {
       kicker: bi('— çmimet', '— pricing'),
       title: bi('Çmime të qarta, pa surpriza', 'Clear pricing, no surprises'),
@@ -169,12 +169,12 @@ export const PAGE_DEFAULTS: Record<PageSlug, Record<string, unknown>> = {
         name: bi('Katror', 'Square'),
         desc: bi('Perfekt për Instagram, dhurata dhe albume të përditshme.', 'Perfect for Instagram, gifts and everyday albums.'),
         badge: bi('Më e kërkuara', 'Most popular'),
-        extra: bi('+100 LEK / fletë shtesë', '+100 LEK / extra leaf'),
+        extra: bi('+50 LEK / faqe shtesë', '+50 LEK / extra page'),
         cta: bi('Krijo albumin tuaj', 'Create your album'),
         features: [
-          bi('Kopertinë e fortë me printim cilësor', 'Hard cover with quality printing'),
-          bi('Letër premium mat 200g', 'Premium matte 200g paper'),
-          bi('Hapje e sheshtë', 'Lay-flat binding'),
+          bi('Letër premium 170gsm', 'Premium 170gsm paper'),
+          bi('Kopertinë e fortë e personalizuar', 'Personalized hardcover'),
+          bi('+50 LEK / faqe shtesë', '+50 LEK / extra page'),
           bi('24 faqe të përfshira (12 fletë)', '24 pages included (12 leaves)'),
           bi('Paketim premium', 'Premium packaging'),
         ],
@@ -183,12 +183,12 @@ export const PAGE_DEFAULTS: Record<PageSlug, Record<string, unknown>> = {
         name: bi('Portret', 'Portrait'),
         desc: bi('Elegancë klasike për dasma dhe ngjarje madhështore.', 'Classic elegance for weddings and grand occasions.'),
         badge: bi('', ''),
-        extra: bi('+150 LEK / fletë shtesë', '+150 LEK / extra leaf'),
+        extra: bi('+75 LEK / faqe shtesë', '+75 LEK / extra page'),
         cta: bi('Krijo albumin tuaj', 'Create your album'),
         features: [
-          bi('Kopertinë e fortë me printim cilësor', 'Hard cover with quality printing'),
-          bi('Letër premium mat 200g', 'Premium matte 200g paper'),
-          bi('Hapje e sheshtë', 'Lay-flat binding'),
+          bi('Letër premium 170gsm', 'Premium 170gsm paper'),
+          bi('Kopertinë e fortë e personalizuar', 'Personalized hardcover'),
+          bi('+75 LEK / faqe shtesë', '+75 LEK / extra page'),
           bi('24 faqe të përfshira (12 fletë)', '24 pages included (12 leaves)'),
           bi('Paketim premium', 'Premium packaging'),
         ],
@@ -200,7 +200,7 @@ export const PAGE_DEFAULTS: Record<PageSlug, Record<string, unknown>> = {
       badge: bi('✦ Falas mbi 5,000 LEK', '✦ Free over 5,000 LEK'),
     },
     quality: [
-      { num: bi('200g', '200g'), label: bi('letër mat premium', 'premium matte paper'), sub: bi('pa reflektime', 'glare-free') },
+      { num: bi('170gsm', '170gsm'), label: bi('letër premium', 'premium paper'), sub: bi('cilësi e lartë', 'high quality') },
       { num: bi('300', '300'), label: bi('DPI printim', 'DPI printing'), sub: bi('gjithmonë të mprehta', 'always sharp') },
       { num: bi('30d', '30d'), label: bi('garanci cilësie', 'quality guarantee'), sub: bi('rikthim falas', 'free returns') },
     ],
@@ -223,16 +223,16 @@ export const PAGE_DEFAULTS: Record<PageSlug, Record<string, unknown>> = {
   },
 
   examples: {
-    seo: { title: bi('Shembuj Albumeve', 'Photo Album Examples'), description: bi('Shikoni albume reale Përgjithmonë — dasma, udhëtime, familje. Letër mat 200g, hapje e sheshtë, printim galerie. Dërgesa në Shqipëri.', 'See real Përgjithmonë photo albums — weddings, travel, family. Matte 200g paper, lay-flat binding, gallery print. Delivered across Albania.') },
+    seo: { title: bi('Shembuj Albumeve', 'Photo Album Examples'), description: bi('Shikoni albume reale Përgjithmonë — dasma, udhëtime, familje. Letër premium 170gsm, hapje e sheshtë, printim galerie. Dërgesa në Shqipëri.', 'See real Përgjithmonë photo albums — weddings, travel, family. Premium 170gsm paper, lay-flat binding, gallery print. Delivered across Albania.') },
     hero: {
       kicker: bi('albume reale', 'real albums'),
       title: bi('Nga telefoni, në një album që e mbani në dorë', 'From your phone, into an album you can hold'),
-      body: bi('Hapni një album të vërtetë: kopertinë e fortë, faqe që hapen fare, letër mat 200g. Pastaj krijojeni tuajin — faqe pas faqeje, ose me AI.', 'Open a real album: hardcover, lay-flat spreads, matte 200g paper. Then make yours — page by page, or with AI.'),
+      body: bi('Hapni një album të vërtetë: kopertinë e fortë e personalizuar, letër premium 170gsm. Pastaj krijojeni tuajin — faqe pas faqeje, ose me AI.', 'Open a real album: personalized hardcover, premium 170gsm paper. Then make yours — page by page, or with AI.'),
       cta: bi('Hap albumin demonstrues', 'Open the demo album'),
       secondaryCta: bi('Krijo tënden', 'Create yours'),
     },
     stats: [
-      { value: bi('200g', '200g'), label: bi('letër mat premium', 'premium matte paper') },
+      { value: bi('170gsm', '170gsm'), label: bi('letër premium', 'premium paper') },
       { value: bi('Hapje e sheshtë', 'Lay-flat'), label: bi('faqe që hapen fare', 'spreads that open fully') },
       { value: bi('10–16 ditë', '10–16 days'), label: bi('dërgesë në Shqipëri', 'delivered in Albania') },
     ],
@@ -240,7 +240,7 @@ export const PAGE_DEFAULTS: Record<PageSlug, Record<string, unknown>> = {
       byline: bi('Ana & Erjon · Dasmë, Sarandë', 'Ana & Erjon · Wedding, Saranda'),
       browse: bi('Shfletoni faqet e brendshme', 'Browse the inside pages'),
       rotate: bi('Tërhiqeni albumin për ta rrotulluar', 'Drag the album to rotate'),
-      caption: bi('Kopertinë e fortë · hapje e sheshtë · letër mat 200g', 'Hardcover · lay-flat binding · matte 200g paper'),
+      caption: bi('Kopertinë e fortë e personalizuar · letër premium 170gsm', 'Personalized hardcover · premium 170gsm paper'),
       cta: bi('Fillo me këtë stil dasme', 'Start with this wedding style'),
       coverTitle: bi('Ana & Erjon', 'Ana & Erjon'),
       coverSub: bi('12 Qershor 2023  ·  Sarandë', '12 June 2023  ·  Saranda'),
@@ -302,7 +302,7 @@ export const PAGE_DEFAULTS: Record<PageSlug, Record<string, unknown>> = {
       title: bi('Printuar si një objekt, jo si një skedar', 'Printed as an object, not a file'),
       body: bi('I njëjti standard për çdo album: letër galerie, hapje e sheshtë, kopertinë e fortë dhe dërgesë e kujdesshme në Shqipëri.', 'The same standard for every album: gallery paper, lay-flat opening, hardcover, and careful delivery across Albania.'),
       items: [
-        { title: bi('Letër mat 200g', 'Matte 200g paper'), desc: bi('E butë në prekje, pa shkëlqim. Ngjyrat qëndrojnë të pasura në dritë ditore.', 'Soft to the touch, no glare. Colours stay rich in daylight.') },
+        { title: bi('Letër premium 170gsm', 'Premium 170gsm paper'), desc: bi('E butë në prekje, pa shkëlqim. Ngjyrat qëndrojnë të pasura në dritë ditore.', 'Soft to the touch, no glare. Colours stay rich in daylight.') },
         { title: bi('Hapje e sheshtë', 'Lay-flat binding'), desc: bi('Faqja dyshe hapet fare — asnjë foto nuk humbet në mes të albumit.', 'The spread opens fully — no photo lost in the gutter.') },
         { title: bi('Kopertinë e fortë', 'Hardcover'), desc: bi('Lidhje e qëndrueshme, e menduar të rrijë në tryezë dhe në raft.', 'A durable cover, meant to live on a table and a shelf.') },
         { title: bi('Kuti & dërgesë', 'Box & delivery'), desc: bi('Paketim mbrojtës. 10–16 ditë në Shqipëri. Mund të paguani edhe në dorëzim.', 'Protective packaging. 10–16 days in Albania. Cash on delivery too.') },
@@ -357,7 +357,7 @@ export const PAGE_DEFAULTS: Record<PageSlug, Record<string, unknown>> = {
     },
     items: [
       { q: bi('Sa kohë duhet për të marrë albumin tim?', 'How long does it take to receive my album?'), a: bi('Pas konfirmimit të porosisë, procesi i printimit kërkon 2–3 ditë pune. Dërgesa merr 1–2 ditë shtesë për qytetet brenda Shqipërisë.', 'After order confirmation, the printing process takes 2–3 working days. Delivery takes an additional 1–2 days for cities within Albania.') },
-      { q: bi('Çfarë cilësi letre përdorni?', 'What quality paper do you use?'), a: bi('Ne përdorim letër premium mat prej 200g. Është një letër luksoze, e butë në prekje, që thekson ngjyrat pa krijuar reflekse shqetësuese.', 'We use premium matte 200g paper. It is a luxurious, soft-to-the-touch paper that enhances colours without any distracting glare.') },
+      { q: bi('Çfarë cilësi letre përdorni?', 'What quality paper do you use?'), a: bi('Ne përdorim letër premium 170gsm. Është një letër luksoze, e butë në prekje, që thekson ngjyrat pa krijuar reflekse shqetësuese.', 'We use premium premium 170gsm paper. It is a luxurious, soft-to-the-touch paper that enhances colours without any distracting glare.') },
       { q: bi('A mund të ndryshoj albumin pasi ta kem porositur?', 'Can I change my album after ordering?'), a: bi('Pasi të klikoni butonin "Porosit" dhe të konfirmoni dizajnin përfundimtar, albumi kalon menjëherë në procesin e printimit. Për këtë arsye, ndryshimet pas këtij hapi nuk janë të mundura.', 'Once you click the "Order" button and confirm your final design, the album immediately enters the printing process. Changes after this point are therefore not possible.') },
       { q: bi('Si mund të paguaj?', 'How can I pay?'), a: bi('Për momentin paguani kur t’ju vijë albumi — para në dorëzim. Korrieri e sjell, ju e paguani.', 'We currently offer payment on delivery (Cash on Delivery). Once the courier delivers your album, you pay the amount.') },
       { q: bi('Sa faqe mund të ketë maksimalisht një album?', 'What is the maximum number of pages an album can have?'), a: bi('Albumet tona bazë vijnë me 24 faqe (12 fletë). Ju mund të shtoni deri në 100 faqe (50 fletë) me një kosto shtesë për fletë.', 'Our base albums come with 24 pages (12 leaves). You can add up to 100 pages (50 leaves) at an additional cost per leaf.') },
@@ -401,7 +401,7 @@ export const PAGE_DEFAULTS: Record<PageSlug, Record<string, unknown>> = {
   'album-ai': {
     seo: {
       title: bi('Album me AI — Përgjithmonë', 'AI Album — Përgjithmonë'),
-      description: bi('Shtoni 25–40 foto. Ne i bëjmë albumin — kopertinë e fortë, letër mat 200g, hapje e sheshtë. Pastaj e rregulloni ju, para se t’i printojmë.', 'Upload 25–40 photos. We turn them into a hardcover album on matte 200g paper with lay-flat spreads — then you refine it before we print.'),
+      description: bi('Shtoni 25–40 foto. Ne i bëjmë albumin — kopertinë e fortë e personalizuar, letër premium 170gsm. Pastaj e rregulloni ju, para se t’i printojmë.', 'Upload 25–40 photos. We turn them into a personalized hardcover album on premium 170gsm paper — then you refine it before we print.'),
     },
     hero: {
       eyebrow: bi('fotot tuaja, në album', 'your photos, in an album'),
@@ -409,7 +409,7 @@ export const PAGE_DEFAULTS: Record<PageSlug, Record<string, unknown>> = {
       sub: bi('Zgjidhni rastin. Shtoni 25–40 foto. Ne i vendosim në faqe — pastaj i rregulloni ju, para se t’i printojmë.', 'Pick the memory. Lay 25–40 photos. We place them on the pages — then you touch them, before we print.'),
       cta: bi('Shtoni fotot këtu', 'Drop photos here'),
       secondary: bi('Ose bëjeni vetë', 'Or design it yourself'),
-      note: bi('25–40 foto  ·  pastaj i rregulloni  ·  letër 200g', '25–40 photos  ·  then you refine them  ·  200g paper'),
+      note: bi('25–40 foto  ·  pastaj i rregulloni  ·  letër 170gsm', '25–40 photos  ·  then you refine them  ·  170gsm paper'),
     },
     story: {
       kicker: bi('nga rrëmuja, te rregulli', 'from the pile, into order'),

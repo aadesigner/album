@@ -643,9 +643,9 @@ export default function AdminSettings() {
                   )} />
                   <FormField control={form.control} name="extraSpreadPriceLek" render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Extra Spread Price (LEK)</FormLabel>
+                      <FormLabel>Extra Page Price (LEK)</FormLabel>
                       <FormControl><Input type="number" {...field} /></FormControl>
-                      <FormDescription>Per 2 extra pages</FormDescription>
+                      <FormDescription>Per extra page beyond the base page count</FormDescription>
                     </FormItem>
                   )} />
                 </div>
@@ -658,8 +658,8 @@ export default function AdminSettings() {
                       const base  = Number(form.watch('basePriceLek') || 3000);
                       const minPg = Number(form.watch('minPages') || 24);
                       const extra = Number(form.watch('extraSpreadPriceLek') || 100);
-                      const extraSpreads = Math.max(0, Math.ceil((pages - minPg) / 2));
-                      const total = base + extraSpreads * extra;
+                      const extraPages = Math.max(0, pages - minPg);
+                      const total = base + extraPages * extra;
                       return (
                         <div key={pages} className="text-center p-2.5 rounded-xl bg-white" style={{ border: `1px solid ${ADMIN.line}` }}>
                           <p className="text-[10px] mb-0.5" style={{ color: ADMIN.muted }}>{pages}p</p>

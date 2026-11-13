@@ -20,16 +20,38 @@ export function buildWhatsAppOrderMessage(opts: {
   orderId: number;
   lang: "sq" | "en";
   albumTitle?: string | null;
+  pageCount?: number | null;
+  priceLek?: number | null;
 }): string {
   const title = String(opts.albumTitle || "").trim().slice(0, 80);
+  const pages =
+    opts.pageCount != null && Number.isFinite(Number(opts.pageCount))
+      ? Math.max(0, Math.floor(Number(opts.pageCount)))
+      : null;
+  const price =
+    opts.priceLek != null && Number.isFinite(Number(opts.priceLek))
+      ? Math.max(0, Math.floor(Number(opts.priceLek)))
+      : null;
+  const priceLabel =
+    price != null ? `${price.toLocaleString("en-US")} LEK` : null;
+
   if (opts.lang === "sq") {
-    return title
+    const head = title
       ? `Përshëndetje, dua të porosis albumin "${title}". (Porosia #${opts.orderId})`
       : `Përshëndetje, dua të porosis këtë album. (Porosia #${opts.orderId})`;
+    const bits: string[] = [];
+    if (pages != null) bits.push(`${pages} faqe`);
+    if (priceLabel) bits.push(`totali me dorëzim: ${priceLabel}`);
+    return bits.length ? `${head} — ${bits.join(", ")}.` : head;
   }
-  return title
+
+  const head = title
     ? `Hello, I would like to order the photobook "${title}". (Order #${opts.orderId})`
     : `Hello, I would like to order this photobook. (Order #${opts.orderId})`;
+  const bits: string[] = [];
+  if (pages != null) bits.push(`${pages} pages`);
+  if (priceLabel) bits.push(`pay on delivery: ${priceLabel}`);
+  return bits.length ? `${head} — ${bits.join(", ")}.` : head;
 }
 
 export function buildWhatsAppSendUrl(phoneRaw: string, message: string): string {

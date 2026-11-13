@@ -160,7 +160,9 @@ const uploadsLimiter = createDynamicLimiter({
   windowMsKey: "rateLimitUploadsWindowMs",
   maxKey: "rateLimitUploadsMax",
   message: "Too many uploads, please slow down.",
-  skipSafeMethods: false,
+  // Only throttle POST uploads — GET /api/uploads/files/* must stay free or
+  // album photos + Design Studio icons 429 and paint as grey squares in PDF.
+  skipSafeMethods: true,
   keyByUser: true,
 });
 

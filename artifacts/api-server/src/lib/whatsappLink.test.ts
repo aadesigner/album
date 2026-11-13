@@ -38,4 +38,27 @@ describe("buildWhatsAppOrderMessage", () => {
     expect(buildWhatsAppOrderMessage({ orderId: 9, lang: "en" })).toContain("#9");
     expect(buildWhatsAppOrderMessage({ orderId: 9, lang: "sq", albumTitle: "Dasma" })).toContain("Dasma");
   });
+
+  it("includes pages and COD total when provided", () => {
+    const en = buildWhatsAppOrderMessage({
+      orderId: 9,
+      lang: "en",
+      pageCount: 36,
+      priceLek: 3300,
+    });
+    expect(en).toContain("36 pages");
+    expect(en).toContain("pay on delivery");
+    expect(en).toContain("3,300 LEK");
+
+    const sq = buildWhatsAppOrderMessage({
+      orderId: 9,
+      lang: "sq",
+      albumTitle: "Dasma",
+      pageCount: 36,
+      priceLek: 3300,
+    });
+    expect(sq).toContain("36 faqe");
+    expect(sq).toContain("totali me dorëzim");
+    expect(sq).toContain("3,300 LEK");
+  });
 });

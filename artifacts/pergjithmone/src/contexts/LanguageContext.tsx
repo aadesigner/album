@@ -77,9 +77,10 @@ const translations: Translations = {
   'wizard.s3.title': { sq: 'Zgjidhni Madhësinë', en: 'Choose Your Size' },
   'wizard.s3.subtitle': { sq: 'Madhësia nuk mund të ndryshohet pasi të keni krijuar albumin.', en: 'The size cannot be changed after you create the album.' },
   'wizard.s3.basePages': { sq: 'faqe bazë të përfshira', en: 'base pages included' },
-  'wizard.s3.extraPage': { sq: 'LEK / fletë shtesë', en: 'LEK / extra sheet' },
-  'wizard.s3.paper': { sq: 'Letër premium mat 200g', en: 'Premium matte 200g paper' },
-  'wizard.s3.layflat': { sq: 'Hapje e sheshtë', en: 'Lay-flat binding' },
+  'wizard.s3.extraPage': { sq: 'LEK / faqe shtesë', en: 'LEK / extra page' },
+  'wizard.s3.paper': { sq: 'Letër premium 170gsm', en: 'Premium 170gsm paper' },
+  'wizard.s3.hardcover': { sq: 'Kopertinë e fortë e personalizuar', en: 'Personalized hardcover' },
+  'wizard.s3.layflat': { sq: 'Kopertinë e fortë e personalizuar', en: 'Personalized hardcover' },
   'wizard.s3.create': { sq: 'Krijo Albumin', en: 'Create Album' },
   'wizard.s3.creating': { sq: 'Duke krijuar...', en: 'Creating...' },
 

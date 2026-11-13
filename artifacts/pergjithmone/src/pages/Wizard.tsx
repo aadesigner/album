@@ -133,7 +133,7 @@ export function SizeCard({ size, isSelected, onClick, lang, t }: any) {
         <div className="space-y-2 border-t border-neutral-100 pt-3">
           {[
             t('wizard.s3.paper'),
-            t('wizard.s3.layflat'),
+            t('wizard.s3.hardcover'),
             `+${size.pricePerExtraSpread} ${t('wizard.s3.extraPage')}`,
           ].map((feat, i) => (
             <div key={i} className="flex items-center gap-2">

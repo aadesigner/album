@@ -122,14 +122,15 @@ function BookSizeFormModal({ size, onClose }: { size: BookSize | null; onClose: 
               <Input type="number" min="0" value={form.priceBase} onChange={e => setForm(f => ({ ...f, priceBase: e.target.value }))} required />
             </div>
             <div>
-              <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Extra Spread Price (LEK)</label>
+              <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Extra Page Price (LEK)</label>
               <Input type="number" min="0" value={form.pricePerExtraSpread} onChange={e => setForm(f => ({ ...f, pricePerExtraSpread: e.target.value }))} />
+              <p className="text-[11px] text-neutral-400 mt-1">Charged per page above the minimum.</p>
             </div>
           </div>
           <div>
             <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide block mb-1.5">Minimum Pages</label>
             <Input type="number" min="1" value={form.minPages} onChange={e => setForm(f => ({ ...f, minPages: e.target.value }))} />
-            <p className="text-[11px] text-neutral-400 mt-1">Base page count included in the price before extra spreads are added.</p>
+            <p className="text-[11px] text-neutral-400 mt-1">Base page count included in the price before extra pages are added.</p>
           </div>
           <label className="flex items-center gap-2 text-sm font-medium text-neutral-600 cursor-pointer">
             <input type="checkbox" checked={form.isActive} onChange={e => setForm(f => ({ ...f, isActive: e.target.checked }))} className="rounded border-input" />
@@ -226,7 +227,7 @@ export default function AdminBookSizes() {
             <table className="w-full text-sm text-left">
               <thead style={{ background: ADMIN.bg }}>
                 <tr style={{ borderBottom: `1px solid ${ADMIN.line}` }}>
-                  {['Label', 'Dimensions', 'Base Price', 'Extra Spread', 'Min Pages', 'Status', 'Actions'].map((h, i) => (
+                  {['Label', 'Dimensions', 'Base Price', 'Extra / Page', 'Min Pages', 'Status', 'Actions'].map((h, i) => (
                     <th key={h} className={`px-4 sm:px-6 py-3.5 font-medium text-[10px] uppercase tracking-wider ${i === 6 ? 'text-right' : ''}`} style={{ color: ADMIN.muted }}>{h}</th>
                   ))}
                 </tr>

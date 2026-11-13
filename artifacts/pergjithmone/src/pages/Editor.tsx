@@ -81,6 +81,7 @@ import { resolvePublicImageSrc } from '@/lib/categoryImages';
 import { mergeEditorLayouts, layoutZoneToElement, isLayoutSlotFrame, stripLayoutSlots } from '@/lib/editorLayouts';
 import { isStrokeOnlyShape, shapePathForElement } from '@/lib/shapes';
 import { getEmptyInnerPageNumbers } from '@/lib/pageContent';
+import { albumPriceBreakdown } from '@/lib/albumPricing';
 import { PageThumb, DesignCatalogThumb } from '@/components/PageThumb';
 import { uploadErrorMessage } from '@/lib/uploadImage';
 import {
@@ -3863,11 +3864,13 @@ function MobileSheet({tab,show,onClose,photos,onUpload,uploading,onAddPhoto,onLa
 // Order Modal
 // ─────────────────────────────────────────────────────────────────────────────
 
-function OrderModal({project,onClose,lang,flushSave,prepareForPrint}: {
+function OrderModal({project,onClose,lang,flushSave,prepareForPrint,bookSize,fallbackPricing}: {
   project:any; onClose:()=>void; lang:'sq'|'en';
   flushSave?:()=>Promise<void>;
   /** Upload device-local photos to the server and rewrite page srcs for PDF. */
   prepareForPrint?: (onProgress?: (done: number, total: number) => void) => Promise<void>;
+  bookSize?: { priceBase?: number; minPages?: number; pricePerExtraSpread?: number } | null;
+  fallbackPricing?: { basePriceLek?: number; minPages?: number; extraSpreadPriceLek?: number } | null;
 }) {
   const createOrder=useCreateOrder();
   const queryClient=useQueryClient();
@@ -3880,6 +3883,23 @@ function OrderModal({project,onClose,lang,flushSave,prepareForPrint}: {
   const [waOpened,setWaOpened]=useState(false);
   const [orderId,setOrderId]=useState<number|null>(null);
   const busy = st === 'loading';
+
+  const priceBreakdown = useMemo(() => {
+    const fromPages = Array.isArray(project?.pages)
+      ? project.pages.filter((p: any) => p?.pageType === 'inner').length
+      : 0;
+    const innerPages = fromPages || Number(project?.pageCount) || 30;
+    const base = Number(bookSize?.priceBase)
+      || Number(fallbackPricing?.basePriceLek)
+      || 3000;
+    const minPages = Number(bookSize?.minPages)
+      || Number(fallbackPricing?.minPages)
+      || 30;
+    const perExtra = Number(bookSize?.pricePerExtraSpread)
+      || Number(fallbackPricing?.extraSpreadPriceLek)
+      || 50;
+    return albumPriceBreakdown(innerPages, base, minPages, perExtra);
+  }, [project, bookSize, fallbackPricing]);
 
   // Stay on this page while photos upload — no blank tab, no dismiss, warn on leave.
   useEffect(() => {
@@ -4008,14 +4028,40 @@ function OrderModal({project,onClose,lang,flushSave,prepareForPrint}: {
           )}
         </div>
         <div className="bg-neutral-50 rounded-xl p-4 mb-5 space-y-2.5 text-sm">
-          {([['Album',project.title||'My Album'],[lang==='sq'?'Faqe':'Pages',`${project.pageCount??30}`],
-             [lang==='sq'?'Çmimi total':'Total price',`${(project.totalPriceLek||3000).toLocaleString()} LEK`],
-             [lang==='sq'?'Dërgesa':'Delivery',lang==='sq'?'10–16 ditë pune':'10–16 working days'],
-          ] as [string,string][]).map(([k,v])=>(
-            <div key={k} className="flex justify-between">
-              <span className="text-neutral-400">{k}</span><span className="font-medium text-neutral-800">{v}</span>
+          <div className="flex justify-between">
+            <span className="text-neutral-400">Album</span>
+            <span className="font-medium text-neutral-800 text-right max-w-[60%] truncate">{project.title||'My Album'}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-neutral-400">{lang==='sq'?'Faqe':'Pages'}</span>
+            <span className="font-medium text-neutral-800">{priceBreakdown.innerPages}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-neutral-400">{lang==='sq'?'Çmimi bazë':'Base price'}</span>
+            <span className="font-medium text-neutral-800">{priceBreakdown.basePriceLek.toLocaleString()} LEK</span>
+          </div>
+          {priceBreakdown.extraPages > 0 && (
+            <div className="flex justify-between">
+              <span className="text-neutral-400">
+                {lang==='sq'
+                  ? `+${priceBreakdown.extraPages} faqe × ${priceBreakdown.pricePerExtraPageLek}`
+                  : `+${priceBreakdown.extraPages} pages × ${priceBreakdown.pricePerExtraPageLek}`}
+              </span>
+              <span className="font-medium text-neutral-800">{priceBreakdown.extraTotalLek.toLocaleString()} LEK</span>
             </div>
-          ))}
+          )}
+          <div className="flex justify-between">
+            <span className="text-neutral-400">{lang==='sq'?'Dërgesa':'Delivery'}</span>
+            <span className="font-medium text-neutral-800">{lang==='sq'?'10–16 ditë pune':'10–16 working days'}</span>
+          </div>
+          <div className="pt-2 mt-1 border-t border-neutral-200 flex justify-between items-baseline gap-3">
+            <span className="text-neutral-700 font-semibold text-[13px]">
+              {lang==='sq'?'Paguaj me dorëzim':'Pay on delivery'}
+            </span>
+            <span className="font-semibold text-neutral-900 text-base tabular-nums">
+              {priceBreakdown.totalPriceLek.toLocaleString()} LEK
+            </span>
+          </div>
         </div>
         {st==='done'?(
           <div className="text-center py-3 space-y-3">
@@ -5875,6 +5921,12 @@ export default function Editor() {
             lang={lang}
             flushSave={flushSave}
             prepareForPrint={prepareForPrint}
+            bookSize={bookSize}
+            fallbackPricing={{
+              basePriceLek: Number((appSettings as any)?.basePriceLek) || undefined,
+              minPages: Number((appSettings as any)?.minPages) || undefined,
+              extraSpreadPriceLek: Number((appSettings as any)?.extraSpreadPriceLek) || undefined,
+            }}
           />
         )}
       </AnimatePresence>

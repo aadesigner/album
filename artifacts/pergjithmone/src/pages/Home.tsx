@@ -1070,8 +1070,8 @@ const MATERIALS = [
         <path d="M13 12h6M13 16h4"/>
       </svg>
     ),
-    title: { sq: 'Letër mat 200g', en: 'Matte 200g paper' },
-    desc: { sq: 'Cilësi premium, pa pasqyrim', en: 'Premium quality, no glare' },
+    title: { sq: 'Letër premium 170gsm', en: 'Premium 170gsm paper' },
+    desc: { sq: 'Cilësi e lartë printimi', en: 'High-quality print stock' },
   },
   {
     icon: (

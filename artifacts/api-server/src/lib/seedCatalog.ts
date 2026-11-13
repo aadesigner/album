@@ -6,7 +6,7 @@ import {
   appSettingsTable,
   layoutsTable,
 } from "@workspace/db-tsconfig";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { logger } from "./logger";
 import { BUILTIN_LAYOUTS, RETIRED_LAYOUT_SLUGS } from "./builtinLayouts";
 import { isPageContentSettingKey } from "./marketingPages";
@@ -50,7 +50,7 @@ const DEFAULT_BOOK_SIZES = [
     heightCm: "21.00",
     label: "Katror",
     priceBase: 3000,
-    pricePerExtraSpread: 100,
+    pricePerExtraSpread: 50,
     minPages: 30,
   },
   {
@@ -58,7 +58,7 @@ const DEFAULT_BOOK_SIZES = [
     heightCm: "28.00",
     label: "Portret",
     priceBase: 3500,
-    pricePerExtraSpread: 100,
+    pricePerExtraSpread: 75,
     minPages: 30,
   },
 ] as const;
@@ -216,6 +216,44 @@ export async function seedCatalog(): Promise<void> {
           "Updated book size base price from legacy default",
         );
       }
+    }
+  }
+
+  // One-shot: small (21×21) → +50 LEK/page, big (21×28) → +75 LEK/page.
+  {
+    const flagKey = "book_size_extra_page_prices_v1";
+    const [flag] = await db
+      .select({ id: appSettingsTable.id })
+      .from(appSettingsTable)
+      .where(eq(appSettingsTable.key, flagKey))
+      .limit(1);
+    if (!flag) {
+      const targets: Array<{ widthCm: string; heightCm: string; to: number }> = [
+        { widthCm: "21.00", heightCm: "21.00", to: 50 },
+        { widthCm: "21.00", heightCm: "28.00", to: 75 },
+      ];
+      for (const t of targets) {
+        const updated = await db
+          .update(bookSizesTable)
+          .set({ pricePerExtraSpread: t.to })
+          .where(
+            and(
+              eq(bookSizesTable.widthCm, t.widthCm),
+              eq(bookSizesTable.heightCm, t.heightCm),
+            ),
+          )
+          .returning({ id: bookSizesTable.id, label: bookSizesTable.label });
+        if (updated.length > 0) {
+          logger.info(
+            { to: t.to, sizes: updated.map((r) => r.label) },
+            "Set book size extra-page price",
+          );
+        }
+      }
+      await db.insert(appSettingsTable).values({
+        key: flagKey,
+        value: JSON.stringify({ square: 50, portrait: 75 }),
+      });
     }
   }
 

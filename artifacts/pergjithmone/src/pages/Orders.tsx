@@ -116,7 +116,12 @@ export default function Orders() {
                       {lang === 'sq' ? 'Data:' : 'Date:'}{' '}
                       {format(new Date(order.createdAt), 'dd MMM, yyyy HH:mm', { locale: lang === 'sq' ? sqLocale : undefined })}
                     </p>
-                    <p className="font-medium text-foreground">{order.priceLek} LEK</p>
+                    <p className="font-medium text-foreground">
+                      {Number(order.priceLek || 0).toLocaleString()} LEK
+                      <span className="text-muted-foreground font-normal text-sm ml-1.5">
+                        {lang === 'sq' ? '(me dorëzim)' : '(on delivery)'}
+                      </span>
+                    </p>
                   </div>
                 </div>
 

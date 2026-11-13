@@ -1,6 +1,12 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db-tsconfig";
-import { ordersTable, projectsTable, appSettingsTable } from "@workspace/db-tsconfig";
+import {
+  ordersTable,
+  projectsTable,
+  projectPagesTable,
+  bookSizesTable,
+  appSettingsTable,
+} from "@workspace/db-tsconfig";
 import { eq, and, gte, count } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { queueProjectPdfGeneration } from "../lib/generateProjectPdf";
@@ -9,6 +15,7 @@ import { getSecuritySettings } from "../lib/securitySettings";
 import { findEmptyInnerPageNumbers } from "../lib/projectEditGuard";
 import { invalidateAdminStatsCache } from "../lib/adminStatsCache";
 import { buildWhatsAppOrderMessage, buildWhatsAppSendUrl } from "../lib/whatsappLink";
+import { albumPriceBreakdown } from "../lib/albumPricing";
 
 const router: IRouter = Router();
 
@@ -92,15 +99,42 @@ router.post("/orders", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  // Create the order and flip the project's status together — a partial
-  // write here would either leave an order with a project stuck as "draft"
-  // or (worse) silently drop the order after the project already looks
-  // ordered to the user.
+  // Fresh total from current inner pages × book-size rates (never trust a stale
+  // totalPriceLek left over from before the client added pages).
   const settingsRows = await db.select().from(appSettingsTable);
   const settingsMap: Record<string, string> = {};
   for (const row of settingsRows) settingsMap[row.key] = row.value;
   const fallbackPrice = parseInt(settingsMap["base_price_lek"] || "3000", 10);
-  const priceLek = Math.max(0, Number(project.totalPriceLek) || fallbackPrice);
+  const fallbackMin = parseInt(settingsMap["min_pages"] || "30", 10);
+  const fallbackExtra = parseInt(settingsMap["extra_spread_price_lek"] || "50", 10);
+
+  const [{ value: innerRaw }] = await db
+    .select({ value: count() })
+    .from(projectPagesTable)
+    .where(
+      and(
+        eq(projectPagesTable.projectId, projectId),
+        eq(projectPagesTable.pageType, "inner"),
+      ),
+    );
+  const innerCount = Number(innerRaw) || Number(project.pageCount) || fallbackMin;
+
+  const [bookSize] = await db
+    .select()
+    .from(bookSizesTable)
+    .where(eq(bookSizesTable.id, project.bookSizeId))
+    .limit(1);
+
+  const breakdown = albumPriceBreakdown(
+    innerCount,
+    bookSize?.priceBase || fallbackPrice,
+    bookSize?.minPages || fallbackMin,
+    bookSize?.pricePerExtraSpread || fallbackExtra,
+  );
+  const priceLek = Math.max(
+    0,
+    breakdown.totalPriceLek || Number(project.totalPriceLek) || fallbackPrice,
+  );
 
   const order = await db.transaction(async (tx) => {
     const [ord] = await tx
@@ -115,7 +149,11 @@ router.post("/orders", requireAuth, async (req, res): Promise<void> => {
 
     await tx
       .update(projectsTable)
-      .set({ status: "ordered" })
+      .set({
+        status: "ordered",
+        pageCount: innerCount,
+        totalPriceLek: priceLek,
+      })
       .where(eq(projectsTable.id, projectId));
 
     return ord;
@@ -196,7 +234,11 @@ router.get(
       || req.query.lang === "sq";
 
     const [project] = await db
-      .select({ title: projectsTable.title })
+      .select({
+        title: projectsTable.title,
+        pageCount: projectsTable.pageCount,
+        totalPriceLek: projectsTable.totalPriceLek,
+      })
       .from(projectsTable)
       .where(eq(projectsTable.id, order.projectId))
       .limit(1);
@@ -205,6 +247,8 @@ router.get(
       orderId: order.id,
       lang: isAlbanian ? "sq" : "en",
       albumTitle: project?.title,
+      pageCount: project?.pageCount ?? null,
+      priceLek: order.priceLek ?? project?.totalPriceLek ?? null,
     });
 
     let url: string;

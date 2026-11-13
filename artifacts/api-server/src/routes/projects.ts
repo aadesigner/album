@@ -24,21 +24,11 @@ import {
   getProjectEditBlock,
 } from "../lib/projectEditGuard";
 import { deleteUploadFiles, extractUploadFilenamesFromPages } from "../lib/uploadCleanup";
+import { calcAlbumPriceLek } from "../lib/albumPricing";
 import path from "path";
 import fs from "fs";
 
 const router: IRouter = Router();
-
-function calcPrice(
-  pageCount: number,
-  basePriceLek: number,
-  minPages: number,
-  extraSpreadPriceLek: number,
-): number {
-  // pageCount = editable inner pages only (covers/linings are not counted)
-  const extraSpreads = Math.max(0, Math.ceil((pageCount - minPages) / 2));
-  return basePriceLek + extraSpreads * extraSpreadPriceLek;
-}
 
 async function countInnerPages(projectId: number): Promise<number> {
   const [{ value }] = await db
@@ -53,12 +43,44 @@ async function countInnerPages(projectId: number): Promise<number> {
   return Number(value) || 0;
 }
 
+/** Keep pageCount + totalPriceLek aligned with current inners and book-size rates. */
 async function syncInnerPageCount(projectId: number): Promise<number> {
   const innerCount = await countInnerPages(projectId);
-  await db
-    .update(projectsTable)
-    .set({ pageCount: innerCount })
-    .where(eq(projectsTable.id, projectId));
+  const [project] = await db
+    .select({
+      bookSizeId: projectsTable.bookSizeId,
+      status: projectsTable.status,
+    })
+    .from(projectsTable)
+    .where(eq(projectsTable.id, projectId))
+    .limit(1);
+  if (!project) return innerCount;
+
+  const [bookSize] = await db
+    .select()
+    .from(bookSizesTable)
+    .where(eq(bookSizesTable.id, project.bookSizeId))
+    .limit(1);
+  const settings = await getSettings();
+  const totalPriceLek = calcAlbumPriceLek(
+    innerCount,
+    bookSize?.priceBase || settings.basePriceLek,
+    bookSize?.minPages || settings.minPages,
+    bookSize?.pricePerExtraSpread || settings.extraSpreadPriceLek,
+  );
+
+  // Ordered albums keep a frozen checkout total — only refresh pageCount.
+  if (project.status === "ordered") {
+    await db
+      .update(projectsTable)
+      .set({ pageCount: innerCount })
+      .where(eq(projectsTable.id, projectId));
+  } else {
+    await db
+      .update(projectsTable)
+      .set({ pageCount: innerCount, totalPriceLek })
+      .where(eq(projectsTable.id, projectId));
+  }
   return innerCount;
 }
 
@@ -264,7 +286,7 @@ router.post("/projects", requireAuth, async (req, res): Promise<void> => {
   }
 
   const minPages = bookSize.minPages || settings.minPages;
-  const totalPriceLek = calcPrice(
+  const totalPriceLek = calcAlbumPriceLek(
     minPages,
     bookSize.priceBase || settings.basePriceLek,
     minPages,
