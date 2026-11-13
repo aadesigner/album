@@ -3846,15 +3846,30 @@ function OrderModal({project,onClose,lang,flushSave,prepareForPrint}: {
   const {getToken}=useAuth();
   const [st,setSt]=useState<'idle'|'loading'|'done'|'error'>('idle');
   const [errMsg,setErrMsg]=useState<string>('');
+  /** Always keep a tappable WhatsApp URL — auto-open often fails after long photo uploads. */
+  const [waUrl,setWaUrl]=useState<string|null>(null);
 
   const go=async()=>{
     if (st==='loading') return;
     setSt('loading');
     setErrMsg('');
-    // Open the tab synchronously inside the click gesture so popup blockers
-    // don't swallow WhatsApp after the async create-order round-trip.
+    setWaUrl(null);
+    // Placeholder tab must open in the same user gesture. After prepareForPrint
+    // (can take many seconds) browsers often block navigating that tab — we
+    // always show a green Open WhatsApp button as the reliable path.
     const waTab=window.open('about:blank','_blank');
     try{
+      if (waTab && !waTab.closed) {
+        try {
+          waTab.document.title = lang==='sq' ? 'Duke hapur WhatsApp…' : 'Opening WhatsApp…';
+          waTab.document.body.innerHTML = `<p style="font-family:system-ui;padding:24px;color:#444">${
+            lang==='sq'
+              ? 'Ju lutem prisni — po përgatitim porosinë…'
+              : 'Please wait — preparing your order…'
+          }</p>`;
+        } catch { /* cross-origin / restricted about:blank */ }
+      }
+
       // Flush any in-flight autosave first, then upload device photos and
       // persist the rewritten URLs — otherwise a racing autosave can write
       // stale `local-photo:` srcs back and the print PDF comes out blank.
@@ -3878,8 +3893,17 @@ function OrderModal({project,onClose,lang,flushSave,prepareForPrint}: {
         throw new Error((body as any)?.error || `WhatsApp link failed (${waRes.status})`);
       }
       const {url}=await waRes.json() as {url:string};
-      if (waTab && !waTab.closed) waTab.location.href=url;
-      else window.open(url,'_blank');
+      if (!url) throw new Error(lang==='sq'?'Lidhja e WhatsApp mungon.':'WhatsApp link missing.');
+      setWaUrl(url);
+
+      let opened=false;
+      if (waTab && !waTab.closed) {
+        try { waTab.location.href=url; opened=true; } catch { try{waTab.close();}catch{/* ignore */} }
+      }
+      if (!opened) {
+        const w=window.open(url,'_blank','noopener,noreferrer');
+        opened=!!w;
+      }
 
       // Keep project lists / album status in sync for this client immediately.
       void queryClient.invalidateQueries({queryKey:getGetProjectQueryKey(project.id)});
@@ -3939,11 +3963,27 @@ function OrderModal({project,onClose,lang,flushSave,prepareForPrint}: {
           ))}
         </div>
         {st==='done'?(
-          <div className="text-center py-3">
-            <div className="w-11 h-11 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-2"><Check size={22} className="text-green-600"/></div>
-            <p className="font-medium text-green-700 text-sm">{lang==='sq'?'Porosia u dërgua!':'Order sent via WhatsApp!'}</p>
-            <p className="text-xs text-neutral-400 mt-1">{lang==='sq'?'Porosia u regjistrua në sistem.':'Your order is registered in the system.'}</p>
-            <button onClick={onClose} className="mt-4 px-6 py-2 bg-neutral-900 text-white rounded-full text-sm">{lang==='sq'?'Mbyll':'Close'}</button>
+          <div className="text-center py-3 space-y-3">
+            <div className="w-11 h-11 rounded-full bg-green-100 flex items-center justify-center mx-auto"><Check size={22} className="text-green-600"/></div>
+            <p className="font-medium text-green-700 text-sm">{lang==='sq'?'Porosia u regjistrua!':'Order registered!'}</p>
+            <p className="text-xs text-neutral-400">
+              {lang==='sq'
+                ? 'Nëse WhatsApp nuk u hap vetë, prek butonin më poshtë.'
+                : 'If WhatsApp did not open automatically, tap the button below.'}
+            </p>
+            {waUrl && (
+              <a
+                href={waUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-3.5 rounded-xl font-medium text-sm flex items-center justify-center gap-2 text-white"
+                style={{background:'#25D366'}}
+              >
+                <span>📱</span>
+                <span>{lang==='sq'?'Hap WhatsApp':'Open WhatsApp'}</span>
+              </a>
+            )}
+            <button onClick={onClose} className="mt-1 px-6 py-2 bg-neutral-900 text-white rounded-full text-sm">{lang==='sq'?'Mbyll':'Close'}</button>
           </div>
         ):st==='error'?(
           <div className="text-center py-2 space-y-3">
@@ -3958,8 +3998,19 @@ function OrderModal({project,onClose,lang,flushSave,prepareForPrint}: {
               className="w-full py-3.5 rounded-xl font-medium text-sm flex items-center justify-center gap-2 text-white disabled:opacity-60"
               style={{background:'#25D366'}}>
               {st==='loading'?<Loader2 size={18} className="animate-spin"/>:<span>📱</span>}
-              <span>{lang==='sq'?'Porosit via WhatsApp':'Order via WhatsApp'}</span>
+              <span>
+                {st==='loading'
+                  ? (lang==='sq'?'Duke përgatitur…':'Preparing…')
+                  : (lang==='sq'?'Porosit via WhatsApp':'Order via WhatsApp')}
+              </span>
             </button>
+            {st==='loading' && (
+              <p className="text-[11px] text-neutral-400 text-center mt-3 leading-relaxed">
+                {lang==='sq'
+                  ? 'Ngarkimi i fotove mund të zgjasë pak. Mos e mbyllni këtë dritare.'
+                  : 'Uploading photos can take a moment. Please keep this window open.'}
+              </p>
+            )}
           </>
         )}
       </motion.div>

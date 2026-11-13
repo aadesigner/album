@@ -1009,18 +1009,20 @@ router.get("/admin/orders", requireAdmin, async (req, res): Promise<void> => {
   res.json({ data: orders, total: total.count, page, limit });
 });
 
-// DELETE /admin/orders/:orderId/pdf — clear PDF for an order's project
+// DELETE /admin/orders/:orderId/pdf — manual admin clear only (never auto on deploy).
 router.delete(
   "/admin/orders/:orderId/pdf",
   requireAdmin,
   async (req, res): Promise<void> => {
     const orderId = parseInt(req.params.orderId as string, 10);
     if (isNaN(orderId)) { res.status(400).json({ error: "Invalid order ID" }); return; }
-    const [order] = await db.select({ projectId: ordersTable.projectId }).from(ordersTable).where(eq(ordersTable.id, orderId));
+    const [order] = await db
+      .select({ projectId: ordersTable.projectId })
+      .from(ordersTable)
+      .where(eq(ordersTable.id, orderId))
+      .limit(1);
     if (!order) { res.status(404).json({ error: "Order not found" }); return; }
-    // Clear URL + delete the file so the next View/Generate can't serve a
-    // stale print PDF. Never demote status to draft — ordered projects must
-    // stay ordered for delete protection and pending-book accounting.
+    // Manual clear only. Ordered status stays ordered.
     deleteProjectPdfFile(order.projectId);
     await db
       .update(projectsTable)
@@ -1132,12 +1134,18 @@ router.post(
     try {
       await queueProjectPdfGeneration(order.projectId);
     } catch (err) {
-      const isCap = err instanceof Error && err.message.startsWith("TOO_MANY_CONCURRENT_PDFS");
-      if (!isCap) logger.error({ err, orderId, projectId: order.projectId }, "Admin PDF regenerate failed");
+      const msg = err instanceof Error ? err.message : "";
+      const isCap = msg.startsWith("TOO_MANY_CONCURRENT_PDFS");
+      const isMissing = msg.startsWith("MISSING_UPLOADS");
+      if (!isCap && !isMissing) {
+        logger.error({ err, orderId, projectId: order.projectId }, "Admin PDF regenerate failed");
+      }
       res.status(isCap ? 429 : 400).json({
         error: isCap
           ? "Too many PDFs generating right now. Try again in a moment."
-          : "Unable to queue PDF generation",
+          : isMissing
+            ? msg
+            : "Unable to queue PDF generation",
       });
       return;
     }
@@ -1209,11 +1217,10 @@ router.delete(
 
     await db.delete(ordersTable).where(eq(ordersTable.id, orderId));
 
-    // Free the album so the customer can edit / re-order it.
-    deleteProjectPdfFile(order.projectId);
+    // Free the album for re-edit, but keep the print PDF file + pdfUrl forever.
     await db
       .update(projectsTable)
-      .set({ status: "draft", pdfUrl: null, updatedAt: new Date() })
+      .set({ status: "draft", updatedAt: new Date() })
       .where(eq(projectsTable.id, order.projectId));
 
     invalidatePendingBooksLimitCache();
@@ -1683,7 +1690,7 @@ router.patch(
       customDesigns: customDesigns2,
       designDisplay: designDisplay2,
       persistentStorage: hasPersistentStorage(),
-      dataRoot,
+      dataRoot: resolveDataRoot(),
       editorElements: editorElements2,
       adminNotes: adminNotes2,
       requireLoginForPdf: map2["require_login_for_pdf"] === "true",

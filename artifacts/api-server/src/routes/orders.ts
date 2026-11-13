@@ -8,6 +8,7 @@ import { logger } from "../lib/logger";
 import { getSecuritySettings } from "../lib/securitySettings";
 import { findEmptyInnerPageNumbers } from "../lib/projectEditGuard";
 import { invalidateAdminStatsCache } from "../lib/adminStatsCache";
+import { buildWhatsAppOrderMessage, buildWhatsAppSendUrl } from "../lib/whatsappLink";
 
 const router: IRouter = Router();
 
@@ -181,18 +182,36 @@ router.get(
     for (const row of rows) map[row.key] = row.value;
     const whatsappNumber = map["whatsapp_number"] || "+355688755833";
 
-    // Detect lang from Accept-Language header
     const acceptLang = req.headers["accept-language"] || "";
     const isAlbanian =
-      acceptLang.toLowerCase().startsWith("sq") ||
-      req.query.lang === "sq";
+      acceptLang.toLowerCase().startsWith("sq")
+      || req.query.lang === "sq";
 
-    const message = isAlbanian
-      ? `Përshëndetje, dua të porosis këtë album. (Porosia #${order.id})`
-      : `Hello, I would like to order this photobook. (Order #${order.id})`;
+    const [project] = await db
+      .select({ title: projectsTable.title })
+      .from(projectsTable)
+      .where(eq(projectsTable.id, order.projectId))
+      .limit(1);
 
-    const phone = whatsappNumber.replace(/\D/g, "");
-    const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+    const message = buildWhatsAppOrderMessage({
+      orderId: order.id,
+      lang: isAlbanian ? "sq" : "en",
+      albumTitle: project?.title,
+    });
+
+    let url: string;
+    try {
+      url = buildWhatsAppSendUrl(whatsappNumber, message);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Invalid WhatsApp number";
+      logger.error({ err, orderId }, "WhatsApp link build failed");
+      res.status(500).json({
+        error: msg.startsWith("INVALID_WHATSAPP_NUMBER")
+          ? "Studio WhatsApp number is not configured correctly. Please contact support."
+          : "Could not create WhatsApp link",
+      });
+      return;
+    }
 
     res.json({ url, message });
   },

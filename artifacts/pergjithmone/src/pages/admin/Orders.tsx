@@ -139,7 +139,7 @@ function AdminNoteModal({ orderId, initialNote, onClose, onSaved }: {
   );
 }
 
-// ── Delete PDF confirm ────────────────────────────────────────────────────────
+// ── Delete PDF confirm (manual admin only) ────────────────────────────────────
 function DeletePdfConfirm({ orderId, onConfirm, onCancel, loading }: {
   orderId: number; onConfirm: () => void; onCancel: () => void; loading: boolean;
 }) {
@@ -148,7 +148,7 @@ function DeletePdfConfirm({ orderId, onConfirm, onCancel, loading }: {
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xs p-6 text-center">
         <h3 className="font-serif text-lg font-semibold mb-2">Delete PDF?</h3>
         <p className="text-sm text-neutral-500 mb-5">
-          This removes the generated PDF from Order #{orderId}. The order stays registered; you can regenerate the PDF afterward.
+          Removes the print PDF for Order #{orderId} from the server. The order stays registered; you can regenerate afterward if photos are on disk.
         </p>
         <div className="flex gap-3">
           <Button variant="outline" onClick={onCancel} className="flex-1">Cancel</Button>
@@ -184,7 +184,7 @@ function DeleteOrderConfirm({ orderId, customer, album, onConfirm, onCancel, loa
         </p>
         <ul className="text-[12px] text-neutral-500 mb-5 space-y-1 list-disc pl-4">
           <li>Order is deleted from the database</li>
-          <li>Print PDF (if any) is removed</li>
+          <li>Print PDF file stays on the server (use Delete PDF to clear it)</li>
           <li>Album is unlocked back to draft so the customer can edit again</li>
         </ul>
         <div className="flex gap-3">
@@ -230,7 +230,6 @@ export default function AdminOrders() {
   const updateOrder = useUpdateAdminOrder();
   const queryClient = useQueryClient();
   const [regenId, setRegenId] = useState<number | null>(null);
-  const [viewPrepId, setViewPrepId] = useState<number | null>(null);
 
   const orders = (ordersData as any)?.data || [];
   const total = (ordersData as any)?.total || 0;
@@ -250,13 +249,23 @@ export default function AdminOrders() {
     setDeletingPdfId(deletePdf.orderId);
     try {
       const token = getToken();
-      await fetch(`${BASE}/api/admin/orders/${deletePdf.orderId}/pdf`, {
+      const res = await fetch(`${BASE}/api/admin/orders/${deletePdf.orderId}/pdf`, {
         method: 'DELETE',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         credentials: 'include',
       });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        toast({
+          title: 'Could not delete PDF',
+          description: (body as any)?.error || 'Try again',
+          variant: 'destructive',
+        });
+        return;
+      }
       setDeletePdf(null);
       refetch();
+      toast({ title: 'PDF deleted' });
     } finally { setDeletingPdfId(null); }
   };
 
@@ -319,50 +328,13 @@ export default function AdminOrders() {
     return false;
   };
 
-  /** Regenerate from current album pages, then open at print size. */
-  const handleViewFreshPdf = async (order: { id: number; projectId: number; pdfUrl?: string | null }) => {
-    setViewPrepId(order.id);
-    try {
-      const token = getToken();
-      const res = await fetch(`${BASE}/api/admin/orders/${order.id}/regenerate-pdf`, {
-        method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        credentials: 'include',
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        // Fall back to whatever file already exists if regenerate is capped.
-        if (order.pdfUrl) {
-          setPdfModal({
-            url: withCacheBust(authedPdfUrl(order.pdfUrl, token)),
-            orderId: order.id,
-          });
-          toast({
-            title: 'Opening existing PDF',
-            description: (body as any)?.error || 'Could not queue a fresh render',
-          });
-          return;
-        }
-        toast({
-          title: 'PDF unavailable',
-          description: (body as any)?.error || 'Failed to queue PDF',
-          variant: 'destructive',
-        });
-        return;
-      }
-      toast({ title: 'Rendering print PDF…', description: 'Opening when ready (300 DPI, book size).' });
-      const ok = await waitForPdfAndOpen(order.id, order.projectId);
-      if (!ok) {
-        toast({
-          title: 'Still generating',
-          description: 'Refresh the list in a moment and try View again.',
-          variant: 'destructive',
-        });
-        refetch();
-      }
-    } finally {
-      setViewPrepId(null);
-    }
+  /** Open the existing print PDF — never regenerates (regen wiped photos when uploads were missing). */
+  const handleViewPdf = (order: { id: number; pdfUrl?: string | null }) => {
+    if (!order.pdfUrl) return;
+    setPdfModal({
+      url: withCacheBust(authedPdfUrl(order.pdfUrl, getToken())),
+      orderId: order.id,
+    });
   };
 
   const handleRegenPdf = async (orderId: number, projectId?: number) => {
@@ -376,9 +348,14 @@ export default function AdminOrders() {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
+        const msg = String((body as any)?.error || '');
         toast({
-          title: 'Failed to queue PDF',
-          description: (body as any)?.error || 'Try again shortly',
+          title: /MISSING_UPLOADS|missing on disk/i.test(msg)
+            ? 'Photos missing on server'
+            : 'Failed to queue PDF',
+          description: /MISSING_UPLOADS|missing on disk/i.test(msg)
+            ? 'Album photo files are not on the /data volume. The existing PDF was left untouched.'
+            : (msg || 'Try again shortly'),
           variant: 'destructive',
         });
         return;
@@ -515,26 +492,37 @@ export default function AdminOrders() {
                           {o.pdfUrl ? (
                             <>
                               <button
-                                onClick={() => handleViewFreshPdf(o)}
-                                disabled={viewPrepId === o.id || regenId === o.id}
-                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[10px] font-semibold transition-opacity hover:opacity-80 disabled:opacity-50"
+                                type="button"
+                                onClick={() => handleViewPdf(o)}
+                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[10px] font-semibold transition-opacity hover:opacity-80"
                                 style={{ background: ADMIN.blushSoft, color: ADMIN.blushDeep }}
-                                title="Re-render at print size from the current album, then view"
+                                title="Open the saved print PDF (does not re-render)"
                               >
-                                <Eye size={10} /> {viewPrepId === o.id ? 'Rendering…' : 'View'}
+                                <Eye size={10} /> View
                               </button>
                               <button
+                                type="button"
+                                onClick={() => handleRegenPdf(o.id, o.projectId)}
+                                disabled={regenId === o.id}
+                                className="p-1.5 rounded-lg text-neutral-300 hover:bg-amber-50 hover:text-amber-700 transition-colors disabled:opacity-50"
+                                title="Re-render PDF from album (refuses if photos missing on disk)"
+                              >
+                                <RefreshCw size={12} className={regenId === o.id ? 'animate-spin' : ''} />
+                              </button>
+                              <button
+                                type="button"
                                 onClick={() => setDeletePdf({ orderId: o.id })}
                                 className="p-1.5 rounded-lg text-neutral-300 hover:bg-red-50 hover:text-red-400 transition-colors"
-                                title="Delete PDF"
+                                title="Delete PDF from server (manual only)"
                               >
                                 <FileX size={12} />
                               </button>
                             </>
                           ) : (
                             <button
+                              type="button"
                               onClick={() => handleRegenPdf(o.id, o.projectId)}
-                              disabled={regenId === o.id || viewPrepId === o.id}
+                              disabled={regenId === o.id}
                               className="px-2.5 py-1.5 rounded-lg text-[10px] font-semibold bg-amber-50 text-amber-700 hover:bg-amber-100 disabled:opacity-50"
                               title="Queue print PDF generation"
                             >

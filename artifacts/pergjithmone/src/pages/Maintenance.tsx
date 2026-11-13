@@ -16,7 +16,7 @@ export default function Maintenance({ messageAl, messageEn, whatsappNumber }: Ma
     : (messageEn || "We're performing maintenance. We'll be back soon.");
 
   const wa = whatsappNumber || '+355688755833';
-  const waUrl = `https://wa.me/${wa.replace(/\D/g, '')}`;
+  const waUrl = `https://api.whatsapp.com/send?phone=${wa.replace(/\D/g, '')}`;
 
   return (
     <div

@@ -11,7 +11,7 @@ import { eq, and, inArray, count } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { v4 as uuidv4 } from "uuid";
 import { logger } from "../lib/logger";
-import { enqueueProjectPdfGeneration, pdfsDir, isPdfGenerationInFlight, ensureProjectPdfFile, deleteProjectPdfFile } from "../lib/generateProjectPdf";
+import { queueProjectPdfGeneration, pdfsDir, isPdfGenerationInFlight, ensureProjectPdfFile } from "../lib/generateProjectPdf";
 import { getSecuritySettings } from "../lib/securitySettings";
 import {
   getProjectEditBlock,
@@ -449,8 +449,8 @@ router.delete(
       .delete(projectsTable)
       .where(eq(projectsTable.id, projectId));
 
-    // Drop print PDF + any uploaded photos referenced by this album.
-    deleteProjectPdfFile(projectId);
+    // Keep print PDFs on the volume across project delete / redeploys.
+    // Admins can clear a PDF manually from Orders. Still clean up uploads.
     const removed = deleteUploadFiles(uploadFiles);
     if (removed > 0) {
       logger.info({ projectId, removed, candidates: uploadFiles.length }, "Deleted project upload files");
@@ -838,12 +838,16 @@ router.post(
     try {
       await queueProjectPdfGeneration(projectId);
     } catch (err) {
-      const isCapError = err instanceof Error && err.message.startsWith("TOO_MANY_CONCURRENT_PDFS");
-      if (!isCapError) logger.error({ err, projectId }, "Failed to queue PDF generation");
+      const msg = err instanceof Error ? err.message : "";
+      const isCapError = msg.startsWith("TOO_MANY_CONCURRENT_PDFS");
+      const isMissing = msg.startsWith("MISSING_UPLOADS");
+      if (!isCapError && !isMissing) logger.error({ err, projectId }, "Failed to queue PDF generation");
       res.status(isCapError ? 429 : 400).json({
         error: isCapError
           ? "Too many albums are being generated right now. Please try again in a moment."
-          : "Unable to generate PDF for this project",
+          : isMissing
+            ? msg
+            : "Unable to generate PDF for this project",
       });
       return;
     }

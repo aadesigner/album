@@ -57,7 +57,7 @@ function ContactView() {
                       <p className="text-muted-foreground mb-2">
                         <Editable path="whatsapp.note">{p.txt('whatsapp.note')}</Editable>
                       </p>
-                      <a href={`https://wa.me/${waDigits}`} className="text-foreground font-medium underline underline-offset-4 hover:text-foreground/80">
+                      <a href={`https://api.whatsapp.com/send?phone=${waDigits}`} className="text-foreground font-medium underline underline-offset-4 hover:text-foreground/80">
                         <Editable path="whatsapp.number">{whatsapp}</Editable>
                       </a>
                     </div>

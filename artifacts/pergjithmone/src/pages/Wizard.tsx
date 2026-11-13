@@ -516,7 +516,7 @@ export default function Wizard() {
                     : (siteSettings?.bookDisabledNoticeEn || 'Album creation is temporarily unavailable.')}
                   {' '}
                   <a
-                    href={`https://wa.me/${(siteSettings?.whatsappNumber || '+355688755833').replace(/\D/g, '')}`}
+                    href={`https://api.whatsapp.com/send?phone=${(siteSettings?.whatsappNumber || '+355688755833').replace(/\D/g, '')}`}
                     target="_blank" rel="noopener noreferrer"
                     className="underline underline-offset-2 font-medium"
                   >
