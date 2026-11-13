@@ -29,6 +29,14 @@ router.post("/orders", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  if (req.user!.role !== "admin" && (req.user as any).booksDisabled) {
+    res.status(403).json({
+      error: "Ordering is disabled for your account. Please contact support.",
+      code: "BOOKS_DISABLED",
+    });
+    return;
+  }
+
   // Daily order cap is for customers only — admins testing checkout freely.
   if (req.user!.role !== "admin") {
     const capSettings = await getSecuritySettings();

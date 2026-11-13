@@ -352,10 +352,14 @@ export default function AdminOrders() {
         toast({
           title: /MISSING_UPLOADS|missing on disk/i.test(msg)
             ? 'Photos missing on server'
-            : 'Failed to queue PDF',
+            : /UNRESOLVED_DEVICE_PHOTOS|local-photo/i.test(msg)
+              ? 'Photos never reached the server'
+              : 'Failed to queue PDF',
           description: /MISSING_UPLOADS|missing on disk/i.test(msg)
             ? 'Album photo files are not on the /data volume. The existing PDF was left untouched.'
-            : (msg || 'Try again shortly'),
+            : /UNRESOLVED_DEVICE_PHOTOS|local-photo/i.test(msg)
+              ? 'Client must re-order from the phone/PC where they built the album so photos upload first.'
+              : (msg || 'Try again shortly'),
           variant: 'destructive',
         });
         return;

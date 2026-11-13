@@ -181,6 +181,15 @@ router.post("/projects", requireAuth, async (req, res): Promise<void> => {
 
   const isAdmin = req.user!.role === "admin";
 
+  // Per-user soft restrict (admin "Disable albums") — login still works.
+  if (!isAdmin && (req.user as any).booksDisabled) {
+    res.status(403).json({
+      error: "Album creation is disabled for your account. Please contact support.",
+      code: "BOOKS_DISABLED",
+    });
+    return;
+  }
+
   // Abuse caps apply to customers only — admins creating test albums / catalog
   // previews must not trip max-albums or pending-book limits.
   if (!isAdmin) {
@@ -841,11 +850,12 @@ router.post(
       const msg = err instanceof Error ? err.message : "";
       const isCapError = msg.startsWith("TOO_MANY_CONCURRENT_PDFS");
       const isMissing = msg.startsWith("MISSING_UPLOADS");
-      if (!isCapError && !isMissing) logger.error({ err, projectId }, "Failed to queue PDF generation");
+      const isLocal = msg.startsWith("UNRESOLVED_DEVICE_PHOTOS");
+      if (!isCapError && !isMissing && !isLocal) logger.error({ err, projectId }, "Failed to queue PDF generation");
       res.status(isCapError ? 429 : 400).json({
         error: isCapError
           ? "Too many albums are being generated right now. Please try again in a moment."
-          : isMissing
+          : isMissing || isLocal
             ? msg
             : "Unable to generate PDF for this project",
       });

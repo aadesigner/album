@@ -2089,20 +2089,21 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
           document.body,
       )}
 
-      {/* Blank inner page — ask for a layout before photos */}
+      {/* Soft CTA for photos only — must NOT block text / icon stickers on blank inners */}
       {isActive && needsLayout && onRequestLayout && (
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onRequestLayout(); }}
-          className="absolute inset-0 z-20 flex items-center justify-center"
-          style={{ background: 'rgba(20,16,12,0.04)' }}
+          className="absolute left-1/2 z-20 -translate-x-1/2 px-4 py-2 rounded-full text-[11px] md:text-xs font-medium tracking-wide shadow-sm"
+          style={{
+            bottom: 14,
+            background: 'rgba(255,255,255,0.92)',
+            color: 'rgba(80,70,60,0.75)',
+            border: '1px solid rgba(0,0,0,0.08)',
+            pointerEvents: 'auto',
+          }}
         >
-          <span
-            className="pointer-events-none text-center px-6 text-sm md:text-base font-medium tracking-wide"
-            style={{ color: 'rgba(80,70,60,0.45)' }}
-          >
-            {chipLang === 'sq' ? 'Shto paraqitje' : 'Add a layout'}
-          </span>
+          {chipLang === 'sq' ? 'Shto paraqitje për foto' : 'Add a layout for photos'}
         </button>
       )}
 
@@ -2475,8 +2476,8 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
     const needsLayout = !readOnly && page.role === 'inner' && !pageHasPhotoLayout(pageEls);
     return <div style={{cursor:'default'}} onClick={()=>{
       onActiveSide(side);
-      // Selecting / clicking a blank inner opens the layout picker.
-      if (needsLayout) onRequestLayout?.();
+      // Do not force the layout modal on blank click — text/icons are free;
+      // photos still require a layout (chip + photo placement prompts).
     }}>
       <PageCanvas page={page} elements={pageEls}
         selectedId={readOnly ? null : selectedId}
@@ -3557,8 +3558,8 @@ function Sidebar({tab,onTab,photos,onUpload,uploading,onAddPhoto,onAddText,onAdd
           <div className="overflow-y-auto flex-1 p-3">
             <p className="text-[9px] uppercase tracking-widest text-neutral-400 mb-3">
               {lang==='sq'
-                ? 'Apliko në faqen aktive — fotot vendosen vetëm në kuadratet e paraqitjes'
-                : 'Apply to the active page — photos only go in layout slots'}
+                ? 'Apliko në faqen aktive — fotot në kuadratë; teksti/ikonat lirisht'
+                : 'Apply to the active page — photos in slots; text/icons freely'}
             </p>
             {[...new Set(layouts.map(l=>l.category))].map(cat=>(
               <div key={cat} className="pb-4">
@@ -3604,8 +3605,8 @@ function Sidebar({tab,onTab,photos,onUpload,uploading,onAddPhoto,onAddText,onAdd
                   ? 'Kliko për të shtuar foton në kopertinë — lëviz dhe ndrysho madhësinë lirisht.'
                   : 'Tap to place on the cover — move and resize freely.')
                 : (lang==='sq'
-                  ? 'Kliko një foto pastaj një kuadrat të paraqitjes — faqet e brendshme kërkojnë paraqitje.'
-                  : 'Tap a photo, then a layout slot — inside pages need a layout.')}
+                  ? 'Fotot shkojnë vetëm në kuadratë paraqitjeje. Teksti dhe ikonat — lirisht.'
+                  : 'Photos go only in layout slots. Text and icons can be placed freely.')}
             </p>
             {photos.length===0 ? (
               <div className="text-center py-8 text-neutral-300">
@@ -3783,8 +3784,8 @@ function MobileSheet({tab,show,onClose,photos,onUpload,uploading,onAddPhoto,onLa
                       ? 'Trokit për ta vendosur në kopertinë — lëviz dhe ndrysho madhësinë lirisht.'
                       : 'Tap to place on the cover — move and resize freely.')
                     : (lang==='sq'
-                      ? 'Zgjidh një foto pastaj një kuadrat të paraqitjes — faqet e brendshme kërkojnë paraqitje.'
-                      : 'Pick a photo, then a layout slot — inside pages need a layout.')}
+                      ? 'Fotot shkojnë vetëm në kuadratë paraqitjeje. Teksti dhe ikonat — lirisht.'
+                      : 'Photos go only in layout slots. Text and icons can be placed freely.')}
                 </p>
                 <div className="grid grid-cols-3 gap-2">
                   {photos.map((url,i)=>(
@@ -4244,10 +4245,13 @@ export default function Editor() {
   /** Upload on-device photos used in the album so server PDF/print can read them. */
   const prepareForPrint = useCallback(async () => {
     const { pages, replacements } = await materializeLocalPhotosInPages(liveContent.current);
-    if (replacements.size === 0) return;
     liveContent.current = pages;
-    setPagesContent(pages);
-    setPhotos((prev) => prev.map((s) => replacements.get(s) ?? s));
+    if (replacements.size > 0) {
+      setPagesContent(pages);
+      setPhotos((prev) => prev.map((s) => replacements.get(s) ?? s));
+      for (const pid of Object.keys(pages)) dirtyPages.current.add(Number(pid));
+    }
+    // Guaranteed persist before createOrder queues the print PDF.
     for (const pid of Object.keys(pages)) dirtyPages.current.add(Number(pid));
   }, []);
 
@@ -4652,10 +4656,15 @@ export default function Editor() {
       setSelectedId(el.id);
       return;
     }
+    // Inner page without layout slots — open picker (text/icons stay free).
+    if (!pageHasPhotoLayout(els)) {
+      openLayoutPicker();
+      return;
+    }
     alert(lang==='sq'
       ? 'Zgjidhni një kuadrat të paraqitjes për të vendosur foton.'
       : 'Select a layout slot to place the photo.');
-  },[activePageId,activePageRole,selectedId,updatePage,isOrdered,lang,canvasH]);
+  },[activePageId,activePageRole,selectedId,updatePage,isOrdered,lang,canvasH,openLayoutPicker]);
 
   /** Drop a library photo — free on covers; layout slots only on inner pages. */
   const placePhotoInTarget=useCallback((
@@ -4689,10 +4698,15 @@ export default function Editor() {
       return;
     }
 
+    if (!pageHasPhotoLayout(els)) {
+      openLayoutPicker();
+      return;
+    }
+
     alert(lang==='sq'
       ? 'Lëshoni foton mbi një kuadrat të paraqitjes.'
       : 'Drop the photo onto a layout slot.');
-  },[isOrdered, updatePage, pageRoleById, canvasH, lang]);
+  },[isOrdered, updatePage, pageRoleById, canvasH, lang, openLayoutPicker]);
 
   const applyCoverPatch = useCallback((
     patch: Parameters<typeof applyCoverBackground>[2],
@@ -5014,12 +5028,15 @@ export default function Editor() {
     if (isOrdered || !activePageId) return;
     const layout=editorLayouts.find(l=>l.id===layoutId); if(!layout) return;
     const ts=Date.now();
-    const keepStickers=(liveContent.current[activePageId]??[]).filter(e=>e.sticker);
+    // Keep free text + admin icon stickers when swapping layouts (photos use slots).
+    const keepFree=(liveContent.current[activePageId]??[]).filter(e=>
+      e.sticker || e.type==='text' || e.type==='shape',
+    );
     const newEls:EditorElement[]=layout.zones.map((z,i)=>layoutZoneToElement(z,canvasH,{
       id:`${layoutId}-${i}-${ts}`,
       lang,
     }));
-    updatePage(activePageId,[...newEls, ...keepStickers]);
+    updatePage(activePageId,[...newEls, ...keepFree]);
     setSelectedId(null);
     setLayoutGateOpen(false);
     setShowSheet(false);
@@ -5634,8 +5651,8 @@ export default function Editor() {
                     </h3>
                     <p className="text-xs text-neutral-500 mb-4 leading-relaxed">
                       {lang === 'sq'
-                        ? 'Çdo faqe e brendshme duhet një paraqitje para se të shtoni foto.'
-                        : 'Every inside page needs a layout before you can add photos.'}
+                        ? 'Paraqitja nevojitet për foto. Teksti dhe ikonat mund të shtohen lirisht pa paraqitje.'
+                        : 'A layout is required for photos. Text and icons can be added freely without one.'}
                     </p>
                     {[...new Set(editorLayouts.map(l => l.category))].map(cat => (
                       <div key={cat} className="mb-4">

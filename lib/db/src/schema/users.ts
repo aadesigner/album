@@ -29,6 +29,8 @@ export const usersTable = pgTable("users", {
   phone: text("phone").unique(),
   isBanned: boolean("is_banned").notNull().default(false),
   isHidden: boolean("is_hidden").notNull().default(false),
+  /** Soft restrict: user can sign in but cannot create / order albums. */
+  booksDisabled: boolean("books_disabled").notNull().default(false),
   // Internal note admins leave for themselves/each other about this user (e.g. why
   // their name was changed, PDF issues, etc.) — never shown to the user themselves.
   adminNote: text("admin_note"),

@@ -72,6 +72,14 @@ export function assertAlbumUploadsOnDisk(
   contentJsons: Array<string | null | undefined>,
   projectId: number,
 ): void {
+  const unresolved = contentJsons.filter((raw) => pageHasUnresolvedDevicePhotos(raw));
+  if (unresolved.length > 0) {
+    throw new Error(
+      `UNRESOLVED_DEVICE_PHOTOS: project ${projectId} still has device-local photos `
+      + `(local-photo:) that were never uploaded. Client must order again from the `
+      + "device where the album was built so photos upload before print.",
+    );
+  }
   const names = collectUploadFilenamesFromPages(contentJsons);
   if (names.length === 0) return;
   const found = resolveAlbumUploadFiles(names, getUploadsDir());

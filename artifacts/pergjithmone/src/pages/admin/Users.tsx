@@ -7,12 +7,13 @@ import {
   getListAdminUsersQueryKey, getGetAdminStatsQueryKey,
 } from '@workspace/api-client-react-tsconfig';
 import { format } from 'date-fns';
-import { Search, UserPlus, Trash2, ShieldBan, ShieldCheck, RefreshCw, Images, Eye, ExternalLink, Download, X, Pencil, KeyRound, ShoppingBag, FolderOpen, FolderArchive } from 'lucide-react';
+import { Search, UserPlus, Trash2, ShieldBan, ShieldCheck, RefreshCw, Eye, ExternalLink, Download, X, Pencil, KeyRound, ShoppingBag, FolderOpen, FolderArchive, FileX, Ban, BookX, UserCog } from 'lucide-react';
 import { PhoneInput } from '@/components/ui/PhoneInput';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
 
 const BASE = (import.meta as any).env?.BASE_URL?.replace(/\/$/, '') || '';
 
@@ -35,6 +36,12 @@ function authedPdfUrl(
 
 function authedOrderImagesZipUrl(orderId: number, token: string | null): string {
   const path = `${BASE}/api/admin/orders/${orderId}/images-zip`;
+  if (!token) return path;
+  return `${path}?token=${encodeURIComponent(token)}`;
+}
+
+function authedUserPhotosZipUrl(userId: number, token: string | null): string {
+  const path = `${BASE}/api/admin/users/${userId}/photos-zip`;
   if (!token) return path;
   return `${path}?token=${encodeURIComponent(token)}`;
 }
@@ -354,40 +361,173 @@ const STATUS_STYLE: Record<string, string> = {
   cancelled: 'bg-red-50 text-red-600 border-red-200',
 };
 
-// ── User albums/orders modal ────────────────────────────────────────────────
-function UserAlbumsModal({ userId, userName, onClose }: { userId: number; userName: string; onClose: () => void }) {
+// ── Dedicated user manage panel ───────────────────────────────────────────────
+function UserManageModal({
+  userId,
+  userName,
+  onClose,
+  onChanged,
+}: {
+  userId: number;
+  userName: string;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
   const { getToken } = useAuth();
+  const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { data, isLoading, refetch } = useListAdminOrders({ page: 1, limit: 100, userId } as any);
+  const updateUser = useUpdateAdminUser();
   const updateOrder = useUpdateAdminOrder();
-  /** Raw API pdf path (e.g. /api/projects/1/pdf-download) — not the authed URL. */
+  const [detail, setDetail] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState<string | null>(null);
   const [pdfRaw, setPdfRaw] = useState<string | null>(null);
+  const [confirmWipe, setConfirmWipe] = useState(false);
 
-  const orders = (data as any)?.data || [];
   const token = getToken();
   const pdfViewUrl = pdfRaw ? authedPdfUrl(pdfRaw, token) : null;
   const pdfDownloadUrl = pdfRaw ? authedPdfUrl(pdfRaw, token, { download: true }) : null;
 
+  const loadDetail = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${BASE}/api/admin/users/${userId}/detail`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Failed to load');
+      setDetail(await res.json());
+    } catch {
+      toast({ title: 'Could not load user', variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { void loadDetail(); }, [userId]); // eslint-disable-line
+
+  const orders = detail?.orders || [];
+  const projects = detail?.projects || [];
+  const stats = detail?.stats || {};
+  const user = detail?.user;
+
+  const orderByProject = new Map<number, any>();
+  for (const o of orders) orderByProject.set(o.projectId, o);
+
   const handleStatusChange = async (orderId: number, status: string) => {
     await updateOrder.mutateAsync({ orderId, data: { status: status as any } });
     await Promise.all([
-      refetch(),
+      loadDetail(),
       queryClient.invalidateQueries({ queryKey: ['admin-stats'] }),
       queryClient.invalidateQueries({ queryKey: getGetAdminStatsQueryKey() }),
     ]);
   };
 
+  const toggleBooksDisabled = async () => {
+    if (!user) return;
+    setBusy('books');
+    try {
+      await updateUser.mutateAsync({
+        userId,
+        data: { booksDisabled: !user.booksDisabled } as any,
+      });
+      toast({
+        title: user.booksDisabled ? 'Albums re-enabled' : 'Albums disabled',
+        description: user.booksDisabled
+          ? 'User can create and order albums again.'
+          : 'User can sign in but cannot create or order albums.',
+      });
+      await loadDetail();
+      onChanged();
+    } catch {
+      toast({ title: 'Update failed', variant: 'destructive' });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const toggleBan = async () => {
+    if (!user) return;
+    setBusy('ban');
+    try {
+      await updateUser.mutateAsync({
+        userId,
+        data: { isBanned: !user.isBanned },
+      });
+      toast({ title: user.isBanned ? 'User unbanned' : 'User banned' });
+      await loadDetail();
+      onChanged();
+    } catch (err: any) {
+      toast({
+        title: 'Ban update failed',
+        description: err?.data?.error || err?.message || 'Try again',
+        variant: 'destructive',
+      });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const clearPdfs = async () => {
+    if (!window.confirm(`Delete all print PDFs for ${userName}? Orders stay; you can regenerate later.`)) return;
+    setBusy('pdfs');
+    try {
+      const res = await fetch(`${BASE}/api/admin/users/${userId}/pdfs`, {
+        method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: 'include',
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((body as any)?.error || 'Failed');
+      toast({ title: 'PDFs cleared', description: `${(body as any).cleared ?? 0} album PDF(s) removed` });
+      await loadDetail();
+    } catch (e: any) {
+      toast({ title: 'Could not clear PDFs', description: e?.message, variant: 'destructive' });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const wipePhotos = async (withPdfs: boolean) => {
+    setConfirmWipe(false);
+    setBusy('photos');
+    try {
+      const qs = withPdfs ? '?pdfs=1' : '';
+      const res = await fetch(`${BASE}/api/admin/users/${userId}/photos${qs}`, {
+        method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: 'include',
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((body as any)?.error || 'Failed');
+      toast({
+        title: 'Server photos removed',
+        description: `${(body as any).filesRemoved ?? 0} file(s), ${(body as any).slotsCleared ?? 0} album slot(s) cleared.`
+          + ' Device cache on their phone cannot be wiped remotely.',
+      });
+      await loadDetail();
+    } catch (e: any) {
+      toast({ title: 'Could not remove photos', description: e?.message, variant: 'destructive' });
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 sm:p-4" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-rose-50 shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-2xl flex items-center justify-center" style={{ background: ADMIN.blushSoft }}>
-              <Images size={15} style={{ color: ADMIN.blushDeep }} />
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-9 h-9 rounded-2xl flex items-center justify-center shrink-0" style={{ background: ADMIN.blushSoft }}>
+              <UserCog size={16} style={{ color: ADMIN.blushDeep }} />
             </div>
-            <div>
-              <h3 className="font-serif text-lg font-semibold leading-tight">{userName}'s Albums</h3>
-              <p className="text-xs text-neutral-400">{orders.length} order{orders.length === 1 ? '' : 's'}</p>
+            <div className="min-w-0">
+              <h3 className="font-serif text-lg font-semibold leading-tight truncate">Manage · {userName}</h3>
+              <p className="text-xs text-neutral-400 truncate">
+                {user?.phone || displayEmail(user?.email) || `User #${userId}`}
+                {user?.isBanned ? ' · Banned' : ''}
+                {user?.booksDisabled ? ' · Albums off' : ''}
+              </p>
             </div>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-rose-50 text-neutral-400 hover:text-rose-500 transition-colors">
@@ -396,82 +536,191 @@ function UserAlbumsModal({ userId, userName, onClose }: { userId: number; userNa
         </div>
 
         <div className="overflow-y-auto flex-1">
-          {isLoading ? (
+          {loading || !detail ? (
             <div className="p-6 space-y-3">
-              {Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-14 bg-rose-50 rounded-xl animate-pulse" />)}
-            </div>
-          ) : !orders.length ? (
-            <div className="py-16 text-center">
-              <p className="text-sm" style={{ color: ADMIN.muted }}>No albums ordered yet</p>
+              {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-14 bg-rose-50 rounded-xl animate-pulse" />)}
             </div>
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-rose-50 sticky top-0 bg-white">
-                  {['#', 'Album', 'Pages', 'Amount', 'Date', 'Files', 'Status'].map(h => (
-                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-neutral-300 uppercase tracking-wider whitespace-nowrap">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-rose-50/70">
-                {orders.map((o: any) => (
-                  <tr key={o.id} className="hover:bg-rose-50/30 transition-colors">
-                    <td className="px-4 py-3 font-mono text-xs text-neutral-400">#{o.id}</td>
-                    <td className="px-4 py-3 text-xs text-neutral-500 max-w-[140px] truncate">{o.projectTitle || `Proj #${o.projectId}`}</td>
-                    <td className="px-4 py-3 text-xs text-neutral-400 text-center">{o.projectPageCount ?? '—'}</td>
-                    <td className="px-4 py-3 font-semibold text-neutral-700 text-xs whitespace-nowrap">{Number(o.priceLek).toLocaleString()} L</td>
-                    <td className="px-4 py-3 text-xs text-neutral-400 whitespace-nowrap">{format(new Date(o.createdAt), 'MMM d, yy')}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1.5">
-                        {o.pdfUrl ? (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => setPdfRaw(o.pdfUrl)}
-                              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[10px] font-semibold transition-opacity hover:opacity-80"
-                              style={{ background: ADMIN.blushSoft, color: ADMIN.blushDeep }}
-                              title="View PDF"
-                            >
-                              <Eye size={10} /> View
-                            </button>
-                            <a
-                              href={authedPdfUrl(o.pdfUrl, token, { download: true })}
-                              className="p-1.5 rounded-lg text-neutral-300 hover:bg-rose-50 hover:text-rose-500 transition-colors"
-                              title="Download PDF"
-                            >
-                              <Download size={12} />
-                            </a>
-                          </>
-                        ) : (
-                          <span className="text-[10px] text-neutral-300 italic">No PDF</span>
-                        )}
-                        <a
-                          href={authedOrderImagesZipUrl(o.id, token)}
-                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[10px] font-semibold transition-opacity hover:opacity-80"
-                          style={{ background: '#F0F7F4', color: '#2F6B56' }}
-                          title="Download zip of client photos used in this album"
-                        >
-                          <FolderArchive size={10} /> Photos
-                        </a>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <select
-                        value={o.status}
-                        onChange={e => handleStatusChange(o.id, e.target.value)}
-                        className={`px-2.5 py-1.5 rounded-full text-[10px] font-semibold border cursor-pointer focus:outline-none focus:ring-1 focus:ring-rose-300 ${STATUS_STYLE[o.status] || 'bg-neutral-50 text-neutral-500 border-neutral-200'}`}
-                      >
-                        {STATUSES.map(s => (
-                          <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
-                        ))}
-                      </select>
-                    </td>
-                  </tr>
+            <>
+              {/* Stats + restrictions */}
+              <div className="px-5 py-4 grid grid-cols-2 sm:grid-cols-4 gap-2 border-b border-rose-50">
+                {[
+                  { label: 'Albums', value: stats.projectCount ?? 0 },
+                  { label: 'Orders', value: stats.orderCount ?? 0 },
+                  { label: 'PDFs', value: stats.pdfCount ?? 0 },
+                  { label: 'Photo files', value: stats.photoFileCount ?? 0 },
+                ].map((s) => (
+                  <div key={s.label} className="rounded-xl px-3 py-2.5" style={{ background: ADMIN.blushSoft }}>
+                    <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: ADMIN.muted }}>{s.label}</p>
+                    <p className="text-lg font-semibold" style={{ color: ADMIN.ink }}>{s.value}</p>
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+
+              <div className="px-5 py-4 border-b border-rose-50 space-y-3">
+                <p className="text-[10px] uppercase tracking-wider font-semibold text-neutral-400">Restrictions & files</p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={!!busy}
+                    onClick={toggleBan}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-semibold border transition-colors disabled:opacity-50"
+                    style={{
+                      borderColor: user?.isBanned ? '#A7F3D0' : '#FECACA',
+                      background: user?.isBanned ? '#ECFDF5' : '#FEF2F2',
+                      color: user?.isBanned ? '#047857' : '#B91C1C',
+                    }}
+                  >
+                    {user?.isBanned ? <ShieldCheck size={12} /> : <ShieldBan size={12} />}
+                    {busy === 'ban' ? '…' : user?.isBanned ? 'Unban login' : 'Ban login'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!!busy}
+                    onClick={toggleBooksDisabled}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-semibold border transition-colors disabled:opacity-50"
+                    style={{
+                      borderColor: user?.booksDisabled ? '#A7F3D0' : '#FDE68A',
+                      background: user?.booksDisabled ? '#ECFDF5' : '#FFFBEB',
+                      color: user?.booksDisabled ? '#047857' : '#B45309',
+                    }}
+                  >
+                    <BookX size={12} />
+                    {busy === 'books' ? '…' : user?.booksDisabled ? 'Allow albums again' : 'Disable albums / orders'}
+                  </button>
+                  <a
+                    href={authedUserPhotosZipUrl(userId, token)}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-semibold border transition-opacity hover:opacity-80"
+                    style={{ borderColor: '#BBF7D0', background: '#F0F7F4', color: '#2F6B56' }}
+                  >
+                    <FolderArchive size={12} /> Download all photos
+                  </a>
+                  <button
+                    type="button"
+                    disabled={!!busy || !(stats.pdfCount > 0)}
+                    onClick={clearPdfs}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-semibold border border-neutral-200 text-neutral-600 hover:bg-neutral-50 disabled:opacity-40"
+                  >
+                    <FileX size={12} />
+                    {busy === 'pdfs' ? '…' : 'Delete all PDFs'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!!busy}
+                    onClick={() => setConfirmWipe(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-semibold border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-40"
+                  >
+                    <Ban size={12} />
+                    {busy === 'photos' ? '…' : 'Wipe server photos'}
+                  </button>
+                </div>
+                <p className="text-[11px] text-neutral-400 leading-relaxed">
+                  Wipe removes generation files on your server and clears photo slots in their albums.
+                  Photos cached only on their device (IndexedDB) cannot be deleted remotely.
+                </p>
+              </div>
+
+              {/* Albums / orders */}
+              <div className="px-5 py-3">
+                <p className="text-[10px] uppercase tracking-wider font-semibold text-neutral-400 mb-3">Albums & orders</p>
+                {!projects.length && !orders.length ? (
+                  <p className="text-sm text-neutral-400 py-8 text-center">No albums yet</p>
+                ) : (
+                  <div className="overflow-x-auto rounded-xl border border-rose-50">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-rose-50 bg-rose-50/40">
+                          {['Album', 'Status', 'Order', 'Files', 'Updated'].map((h) => (
+                            <th key={h} className="px-3 py-2.5 text-left text-[10px] font-semibold text-neutral-400 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-rose-50/70">
+                        {projects.map((p: any) => {
+                          const o = orderByProject.get(p.id);
+                          return (
+                            <tr key={p.id} className="hover:bg-rose-50/30">
+                              <td className="px-3 py-3">
+                                <p className="text-xs font-medium text-neutral-700 truncate max-w-[160px]">{p.title || `Album #${p.id}`}</p>
+                                <p className="text-[10px] text-neutral-400">{p.pageCount ?? '—'} pages · #{p.id}</p>
+                              </td>
+                              <td className="px-3 py-3 text-[10px] text-neutral-500">{p.status}</td>
+                              <td className="px-3 py-3">
+                                {o ? (
+                                  <select
+                                    value={o.status}
+                                    onChange={e => handleStatusChange(o.id, e.target.value)}
+                                    className={`px-2 py-1 rounded-full text-[10px] font-semibold border cursor-pointer ${STATUS_STYLE[o.status] || 'bg-neutral-50 text-neutral-500 border-neutral-200'}`}
+                                  >
+                                    {STATUSES.map(s => (
+                                      <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <span className="text-[10px] text-neutral-300 italic">No order</span>
+                                )}
+                              </td>
+                              <td className="px-3 py-3">
+                                <div className="flex items-center gap-1">
+                                  {p.pdfUrl ? (
+                                    <>
+                                      <button type="button" onClick={() => setPdfRaw(p.pdfUrl)}
+                                        className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold"
+                                        style={{ background: ADMIN.blushSoft, color: ADMIN.blushDeep }}>
+                                        <Eye size={10} /> PDF
+                                      </button>
+                                      <a href={authedPdfUrl(p.pdfUrl, token, { download: true })}
+                                        className="p-1.5 rounded-lg text-neutral-300 hover:text-rose-500" title="Download PDF">
+                                        <Download size={12} />
+                                      </a>
+                                    </>
+                                  ) : (
+                                    <span className="text-[10px] text-neutral-300 italic">No PDF</span>
+                                  )}
+                                  {o && (
+                                    <a href={authedOrderImagesZipUrl(o.id, token)}
+                                      className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold"
+                                      style={{ background: '#F0F7F4', color: '#2F6B56' }}>
+                                      <FolderArchive size={10} /> Photos
+                                    </a>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-3 py-3 text-[10px] text-neutral-400 whitespace-nowrap">
+                                {format(new Date(p.updatedAt || p.createdAt), 'MMM d, yy')}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </>
           )}
         </div>
+
+        {confirmWipe && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 p-4">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5">
+              <h4 className="font-serif text-lg font-semibold mb-2">Wipe server photos?</h4>
+              <p className="text-sm text-neutral-500 mb-4 leading-relaxed">
+                Deletes uploaded photo files used in this user’s albums and clears those slots in the database.
+                Their phone cache is not affected. Optionally also delete print PDFs.
+              </p>
+              <div className="flex flex-col gap-2">
+                <Button onClick={() => wipePhotos(true)} className="bg-red-600 hover:bg-red-700 text-white">
+                  Wipe photos + PDFs
+                </Button>
+                <Button onClick={() => wipePhotos(false)} variant="outline" className="border-red-200 text-red-600">
+                  Wipe photos only
+                </Button>
+                <Button variant="outline" onClick={() => setConfirmWipe(false)}>Cancel</Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {pdfViewUrl && createPortal(
           <div
@@ -486,10 +735,8 @@ function UserAlbumsModal({ userId, userName, onClose }: { userId: number; userNa
                   <ExternalLink size={12} /> Open in tab
                 </a>
                 {pdfDownloadUrl && (
-                  <a
-                    href={pdfDownloadUrl}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 text-xs font-medium transition-colors"
-                  >
+                  <a href={pdfDownloadUrl}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 text-xs font-medium transition-colors">
                     <Download size={12} /> Download
                   </a>
                 )}
@@ -629,7 +876,7 @@ export default function AdminUsers() {
   const [banTarget, setBanTarget] = useState<{ id: number; name: string; isBanned: boolean } | null>(null);
   const [banningId, setBanningId] = useState<number | null>(null);
   const [banError, setBanError] = useState<string | null>(null);
-  const [albumsTarget, setAlbumsTarget] = useState<{ id: number; name: string } | null>(null);
+  const [manageTarget, setManageTarget] = useState<{ id: number; name: string } | null>(null);
   const [editTarget, setEditTarget] = useState<{ id: number; name: string | null; email: string; phone: string | null; adminNote?: string | null } | null>(null);
 
   const { user: me, getToken } = useAuth();
@@ -714,8 +961,13 @@ export default function AdminUsers() {
   return (
     <AdminLayout>
       {showCreate && <CreateUserModal onClose={() => setShowCreate(false)} onCreated={refetch} />}
-      {albumsTarget && (
-        <UserAlbumsModal userId={albumsTarget.id} userName={albumsTarget.name} onClose={() => setAlbumsTarget(null)} />
+      {manageTarget && (
+        <UserManageModal
+          userId={manageTarget.id}
+          userName={manageTarget.name}
+          onClose={() => setManageTarget(null)}
+          onChanged={refetch}
+        />
       )}
       {editTarget && (
         <EditUserModal targetUser={editTarget} onClose={() => setEditTarget(null)} onSaved={refetch} />
@@ -744,9 +996,9 @@ export default function AdminUsers() {
           <p className="text-[10px] font-semibold tracking-[0.18em] uppercase mb-1.5" style={{ color: ADMIN.blush }}>
             Community
           </p>
-          <h1 className="text-3xl font-serif font-semibold mb-1" style={{ color: ADMIN.ink }}>Members</h1>
+          <h1 className="text-3xl font-serif font-semibold mb-1" style={{ color: ADMIN.ink }}>Users</h1>
           <p className="text-sm" style={{ color: ADMIN.muted }}>
-            {total} {filter === 'all' ? 'registered' : `matching "${USER_FILTERS.find(f => f.id === filter)?.label}"`}
+            {total} {filter === 'all' ? 'registered — open Manage for PDFs, photos, restrictions' : `matching "${USER_FILTERS.find(f => f.id === filter)?.label}"`}
           </p>
         </div>
 
@@ -933,12 +1185,12 @@ export default function AdminUsers() {
                         <td className="px-5 py-3.5">
                           <div className="flex items-center gap-1">
                             <button
-                              onClick={() => setAlbumsTarget({ id: u.id, name: u.name || contact })}
-                              className="p-2 rounded-xl transition-colors hover:bg-[#F3E4E6]"
-                              style={{ color: ADMIN.muted }}
-                              title="View albums & orders"
+                              onClick={() => setManageTarget({ id: u.id, name: u.name || contact })}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[10px] font-semibold transition-colors hover:opacity-90"
+                              style={{ background: ADMIN.blushSoft, color: ADMIN.blushDeep }}
+                              title="Manage user — PDFs, photos, restrictions"
                             >
-                              <Images size={14} />
+                              <UserCog size={12} /> Manage
                             </button>
                             <button
                               onClick={() => setEditTarget({ id: u.id, name: u.name, email: u.email, phone: u.phone ?? null, adminNote: u.adminNote })}

@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { parsePageElements } from "./pdfRenderer";
-import { uploadFilePathCandidates, uploadsDir } from "./dataDir";
+import { uploadFilePathCandidates, getUploadsDir } from "./dataDir";
 
 /**
  * Pull the uploads/files basename from an element src.
@@ -63,7 +63,7 @@ export type ResolvedAlbumUpload = {
 /** Resolve upload filenames to files that exist on disk (volume / cwd / DATA_DIR). */
 export function resolveAlbumUploadFiles(
   filenames: string[],
-  primaryDir = uploadsDir,
+  primaryDir = getUploadsDir(),
 ): ResolvedAlbumUpload[] {
   const out: ResolvedAlbumUpload[] = [];
   for (const filename of filenames) {
@@ -99,4 +99,47 @@ export function safeZipDownloadBasename(title: string | null | undefined, orderI
 /** Zip entry name stays the unique on-disk basename (already collision-free). */
 export function zipEntryName(filename: string): string {
   return path.basename(filename);
+}
+
+/**
+ * Clear client-upload image srcs from page JSON (keeps layout placeholders / stickers / designs).
+ * Returns rewritten JSON string + how many image slots were cleared.
+ */
+export function stripUploadSrcsFromContentJson(raw: string | null | undefined): {
+  contentJson: string;
+  cleared: number;
+} {
+  let els: unknown;
+  try {
+    els = typeof raw === "string" ? JSON.parse(raw || "[]") : [];
+  } catch {
+    return { contentJson: "[]", cleared: 0 };
+  }
+  if (!Array.isArray(els)) return { contentJson: "[]", cleared: 0 };
+
+  let cleared = 0;
+  const next = els.map((item) => {
+    if (!item || typeof item !== "object") return item;
+    const e = item as Record<string, unknown>;
+    if (e.sticker) return item; // admin icon assets stay
+    if (e.type !== "image" && e.type !== "background") return item;
+    const name = extractUploadFilename(typeof e.src === "string" ? e.src : null);
+    if (!name) return item;
+    cleared += 1;
+    if (e.type === "background") {
+      const { src: _s, ...rest } = e;
+      return { ...rest, src: undefined, bgColor: (e.bgColor as string) || "#FFFFFF" };
+    }
+    // Photo slot → empty placeholder so layout frame remains.
+    return {
+      ...e,
+      type: "placeholder",
+      src: undefined,
+      cropFocusX: undefined,
+      cropFocusY: undefined,
+      cropZoom: undefined,
+    };
+  });
+
+  return { contentJson: JSON.stringify(next), cleared };
 }

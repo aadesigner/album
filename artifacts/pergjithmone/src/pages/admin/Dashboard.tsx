@@ -15,6 +15,7 @@ import {
 import { Link } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { authFetch } from '@/lib/authFetch';
+import { useToast } from '@/hooks/use-toast';
 import type { AdminTokens } from '@/lib/adminTheme';
 
 const Charts = React.lazy(() => import('./DashboardCharts'));
@@ -247,6 +248,7 @@ function buildChartSeries(
 function PendingPrintingWidget() {
   const { getToken } = useAuth();
   const { theme } = useAdminTheme();
+  const { toast } = useToast();
   const queryClient = useQueryClient();
   const { data, isLoading, refetch } = useListAdminOrders(
     { page: 1, limit: 12, status: 'pending' },
@@ -254,6 +256,7 @@ function PendingPrintingWidget() {
   );
   const updateOrder = useUpdateAdminOrder();
   const [shippingId, setShippingId] = React.useState<number | null>(null);
+  const [regenId, setRegenId] = React.useState<number | null>(null);
   const orders = (data as any)?.data || [];
 
   const handleShip = async (orderId: number) => {
@@ -264,6 +267,56 @@ function PendingPrintingWidget() {
       await queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
       await queryClient.invalidateQueries({ queryKey: ['admin-pulse'] });
     } finally { setShippingId(null); }
+  };
+
+  /** Queue print PDF when order landed without one (failed / unfinished generation). */
+  const handleGeneratePdf = async (orderId: number, projectId?: number) => {
+    setRegenId(orderId);
+    try {
+      const token = getToken();
+      const res = await fetch(`${BASE}/api/admin/orders/${orderId}/regenerate-pdf`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const msg = String((body as any)?.error || '');
+        toast({
+          title: /MISSING_UPLOADS|missing on disk/i.test(msg)
+            ? 'Photos missing on server'
+            : /UNRESOLVED_DEVICE_PHOTOS|local-photo/i.test(msg)
+              ? 'Photos never reached the server'
+              : 'PDF generation failed',
+          description: msg || 'Try again from Orders',
+          variant: 'destructive',
+        });
+        return;
+      }
+      toast({ title: 'Rendering print PDF…' });
+      if (projectId) {
+        for (let i = 0; i < 60; i++) {
+          await new Promise((r) => setTimeout(r, 1000));
+          try {
+            const stRes = await fetch(`${BASE}/api/projects/${projectId}/pdf-status`, {
+              headers: token ? { Authorization: `Bearer ${token}` } : {},
+              credentials: 'include',
+            });
+            if (!stRes.ok) continue;
+            const body = await stRes.json() as { status?: string; pdfUrl?: string | null };
+            if (body.status === 'ready' && body.pdfUrl) {
+              toast({ title: 'PDF ready' });
+              refetch();
+              return;
+            }
+          } catch { /* keep polling */ }
+        }
+        toast({ title: 'Still generating', description: 'Refresh in a moment or open Orders.' });
+      }
+      refetch();
+    } finally {
+      setRegenId(null);
+    }
   };
 
   const pdfHref = (pdfUrl: string) => {
@@ -316,7 +369,19 @@ function PendingPrintingWidget() {
               <div className="flex items-center gap-2 shrink-0">
                 {o.pdfUrl ? (
                   <a href={pdfHref(o.pdfUrl)} target="_blank" rel="noopener noreferrer" className="text-[10px] font-semibold" style={{ color: theme.accentDeep }}>PDF</a>
-                ) : null}
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleGeneratePdf(o.id, o.projectId)}
+                    disabled={regenId === o.id}
+                    className="inline-flex items-center gap-0.5 text-[10px] font-semibold disabled:opacity-50"
+                    style={{ color: '#B45309' }}
+                    title="Print PDF was never saved — generate now"
+                  >
+                    <RefreshCw size={10} className={regenId === o.id ? 'animate-spin' : ''} />
+                    {regenId === o.id ? '…' : 'Generate PDF'}
+                  </button>
+                )}
                 <a href={photosZipHref(o.id)} className="inline-flex items-center gap-0.5 text-[10px] font-semibold" style={{ color: '#2F6B56' }} title="Download client photos zip">
                   <FolderArchive size={10} /> Photos
                 </a>
@@ -359,7 +424,17 @@ function PendingPrintingWidget() {
                       {o.pdfUrl ? (
                         <a href={pdfHref(o.pdfUrl)} target="_blank" rel="noopener noreferrer" className="text-[10px] font-semibold hover:underline" style={{ color: theme.accentDeep }}>PDF</a>
                       ) : (
-                        <span className="text-[10px] italic" style={{ color: theme.muted }}>No PDF</span>
+                        <button
+                          type="button"
+                          onClick={() => handleGeneratePdf(o.id, o.projectId)}
+                          disabled={regenId === o.id}
+                          className="inline-flex items-center gap-1 text-[10px] font-semibold hover:underline disabled:opacity-50"
+                          style={{ color: '#B45309' }}
+                          title="Print PDF was never saved — generate now"
+                        >
+                          <RefreshCw size={10} className={regenId === o.id ? 'animate-spin' : ''} />
+                          {regenId === o.id ? 'Rendering…' : 'Generate PDF'}
+                        </button>
                       )}
                       <a href={photosZipHref(o.id)} className="inline-flex items-center gap-0.5 text-[10px] font-semibold hover:underline" style={{ color: '#2F6B56' }} title="Download client photos zip">
                         <FolderArchive size={10} /> Photos

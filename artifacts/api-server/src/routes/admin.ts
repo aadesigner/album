@@ -44,8 +44,10 @@ import {
   collectUploadFilenamesFromPages,
   resolveAlbumUploadFiles,
   safeZipDownloadBasename,
+  stripUploadSrcsFromContentJson,
   zipEntryName,
 } from "../lib/albumUploadImages";
+import { deleteUploadFiles } from "../lib/uploadCleanup";
 import { streamStoreZip } from "../lib/zipStoreStream";
 import {
   ADMIN_STATS_TZ,
@@ -686,6 +688,7 @@ router.get("/admin/users", requireAdmin, async (req, res): Promise<void> => {
         phone: sql<string>`${(usersTable as any).phone}`,
         role: usersTable.role,
         isBanned: usersTable.isBanned,
+        booksDisabled: (usersTable as any).booksDisabled,
         lastLoginAt: usersTable.lastLoginAt,
         adminNote: (usersTable as any).adminNote,
         createdAt: usersTable.createdAt,
@@ -792,7 +795,7 @@ router.patch(
       return;
     }
 
-    const { name, email, phone, role, emailVerified, isBanned, adminNote, password } = req.body;
+    const { name, email, phone, role, emailVerified, isBanned, booksDisabled, adminNote, password } = req.body;
 
     if (!(await findVisibleUser(userId))) {
       res.status(404).json({ error: "User not found" });
@@ -885,6 +888,9 @@ router.patch(
         updates.refreshToken = null;
       }
     }
+    if (booksDisabled !== undefined) {
+      (updates as any).booksDisabled = Boolean(booksDisabled);
+    }
     if (adminNote !== undefined) (updates as any).adminNote = adminNote || null;
 
     // Admin-set password: hash with bcrypt (12) and kill all existing sessions.
@@ -915,6 +921,7 @@ router.patch(
           phone: usersTable.phone,
           role: usersTable.role,
           isBanned: usersTable.isBanned,
+          booksDisabled: (usersTable as any).booksDisabled,
           adminNote: (usersTable as any).adminNote,
           createdAt: usersTable.createdAt,
           updatedAt: usersTable.updatedAt,
@@ -938,6 +945,235 @@ router.patch(
       logger.info({ userId, adminId: req.user!.id }, "Admin reset user password");
     }
     res.json({ ...user, email: publicAdminEmail(user.email) ?? "" });
+  },
+);
+
+// GET /admin/users/:userId/detail — albums, orders, photo/pdf counts for manage panel
+router.get(
+  "/admin/users/:userId/detail",
+  requireAdmin,
+  async (req, res): Promise<void> => {
+    const userId = parseInt(String(req.params.userId), 10);
+    if (isNaN(userId)) { res.status(400).json({ error: "Invalid user ID" }); return; }
+    const user = await findVisibleUser(userId);
+    if (!user) { res.status(404).json({ error: "User not found" }); return; }
+
+    const [full] = await db
+      .select({
+        id: usersTable.id,
+        name: usersTable.name,
+        email: usersTable.email,
+        phone: usersTable.phone,
+        role: usersTable.role,
+        isBanned: usersTable.isBanned,
+        booksDisabled: (usersTable as any).booksDisabled,
+        adminNote: (usersTable as any).adminNote,
+        lastLoginAt: usersTable.lastLoginAt,
+        createdAt: usersTable.createdAt,
+      })
+      .from(usersTable)
+      .where(eq(usersTable.id, userId))
+      .limit(1);
+
+    const projects = await db
+      .select({
+        id: projectsTable.id,
+        title: projectsTable.title,
+        status: projectsTable.status,
+        pageCount: projectsTable.pageCount,
+        pdfUrl: projectsTable.pdfUrl,
+        updatedAt: projectsTable.updatedAt,
+        createdAt: projectsTable.createdAt,
+      })
+      .from(projectsTable)
+      .where(eq(projectsTable.userId, userId))
+      .orderBy(desc(projectsTable.updatedAt));
+
+    const orders = await db
+      .select({
+        id: ordersTable.id,
+        projectId: ordersTable.projectId,
+        status: ordersTable.status,
+        priceLek: ordersTable.priceLek,
+        createdAt: ordersTable.createdAt,
+      })
+      .from(ordersTable)
+      .where(eq(ordersTable.userId, userId))
+      .orderBy(desc(ordersTable.createdAt));
+
+    const projectIds = projects.map((p) => p.id);
+    let photoFileCount = 0;
+    let pdfCount = 0;
+    if (projectIds.length > 0) {
+      const pages = await db
+        .select({ contentJson: projectPagesTable.contentJson })
+        .from(projectPagesTable)
+        .where(inArray(projectPagesTable.projectId, projectIds));
+      const names = collectUploadFilenamesFromPages(pages.map((p) => p.contentJson));
+      photoFileCount = resolveAlbumUploadFiles(names).length;
+      pdfCount = projects.filter((p) => p.pdfUrl).length;
+    }
+
+    res.json({
+      user: {
+        ...full,
+        email: publicAdminEmail(full?.email) ?? "",
+      },
+      projects,
+      orders,
+      stats: {
+        projectCount: projects.length,
+        orderCount: orders.length,
+        pdfCount,
+        photoFileCount,
+      },
+    });
+  },
+);
+
+// GET /admin/users/:userId/photos-zip — all client photos across their albums
+router.get(
+  "/admin/users/:userId/photos-zip",
+  (req, _res, next) => {
+    if (!req.headers.authorization && typeof req.query.token === "string" && req.query.token) {
+      req.headers.authorization = `Bearer ${req.query.token}`;
+    }
+    next();
+  },
+  requireAdmin,
+  async (req, res): Promise<void> => {
+    const userId = parseInt(String(req.params.userId), 10);
+    if (isNaN(userId)) { res.status(400).json({ error: "Invalid user ID" }); return; }
+    if (!(await findVisibleUser(userId))) { res.status(404).json({ error: "User not found" }); return; }
+
+    const projects = await db
+      .select({ id: projectsTable.id, title: projectsTable.title })
+      .from(projectsTable)
+      .where(eq(projectsTable.userId, userId));
+    if (!projects.length) {
+      res.status(404).json({ error: "This user has no albums." });
+      return;
+    }
+    const pages = await db
+      .select({ contentJson: projectPagesTable.contentJson })
+      .from(projectPagesTable)
+      .where(inArray(projectPagesTable.projectId, projects.map((p) => p.id)));
+    const names = collectUploadFilenamesFromPages(pages.map((p) => p.contentJson));
+    const files = resolveAlbumUploadFiles(names);
+    if (!files.length) {
+      res.status(404).json({
+        error: names.length
+          ? "Album photos are referenced but missing on disk. Check the /data volume."
+          : "No uploaded client photos found for this user.",
+      });
+      return;
+    }
+
+    const zipName = `user-${userId}-photos.zip`;
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", `attachment; filename="${zipName}"`);
+    res.setHeader("Cache-Control", "private, no-store");
+    await streamStoreZip(
+      res,
+      files.map((f) => ({ name: zipEntryName(f.filename), path: f.path })),
+    );
+  },
+);
+
+// DELETE /admin/users/:userId/pdfs — clear all print PDFs for this user's albums
+router.delete(
+  "/admin/users/:userId/pdfs",
+  requireAdmin,
+  async (req, res): Promise<void> => {
+    const userId = parseInt(String(req.params.userId), 10);
+    if (isNaN(userId)) { res.status(400).json({ error: "Invalid user ID" }); return; }
+    if (!(await findVisibleUser(userId))) { res.status(404).json({ error: "User not found" }); return; }
+
+    const projects = await db
+      .select({ id: projectsTable.id })
+      .from(projectsTable)
+      .where(eq(projectsTable.userId, userId));
+
+    let cleared = 0;
+    for (const p of projects) {
+      deleteProjectPdfFile(p.id);
+      await db
+        .update(projectsTable)
+        .set({ pdfUrl: null })
+        .where(eq(projectsTable.id, p.id));
+      cleared += 1;
+    }
+    logger.info({ userId, cleared, adminId: req.user!.id }, "Admin cleared user PDFs");
+    res.json({ success: true, cleared });
+  },
+);
+
+// DELETE /admin/users/:userId/photos — wipe server photo files + clear album image slots
+router.delete(
+  "/admin/users/:userId/photos",
+  requireAdmin,
+  async (req, res): Promise<void> => {
+    const userId = parseInt(String(req.params.userId), 10);
+    if (isNaN(userId)) { res.status(400).json({ error: "Invalid user ID" }); return; }
+    if (!(await findVisibleUser(userId))) { res.status(404).json({ error: "User not found" }); return; }
+
+    const alsoPdfs = req.query.pdfs === "1" || req.query.pdfs === "true";
+
+    const projects = await db
+      .select({ id: projectsTable.id })
+      .from(projectsTable)
+      .where(eq(projectsTable.userId, userId));
+    const projectIds = projects.map((p) => p.id);
+    if (!projectIds.length) {
+      res.json({ success: true, filesRemoved: 0, slotsCleared: 0, pdfsCleared: 0 });
+      return;
+    }
+
+    const pages = await db
+      .select({
+        id: projectPagesTable.id,
+        contentJson: projectPagesTable.contentJson,
+      })
+      .from(projectPagesTable)
+      .where(inArray(projectPagesTable.projectId, projectIds));
+
+    const names = collectUploadFilenamesFromPages(pages.map((p) => p.contentJson));
+    const filesRemoved = deleteUploadFiles(names);
+
+    let slotsCleared = 0;
+    for (const page of pages) {
+      const { contentJson, cleared } = stripUploadSrcsFromContentJson(page.contentJson);
+      if (cleared <= 0) continue;
+      slotsCleared += cleared;
+      await db
+        .update(projectPagesTable)
+        .set({ contentJson })
+        .where(eq(projectPagesTable.id, page.id));
+    }
+
+    let pdfsCleared = 0;
+    if (alsoPdfs) {
+      for (const p of projects) {
+        deleteProjectPdfFile(p.id);
+        await db
+          .update(projectsTable)
+          .set({ pdfUrl: null })
+          .where(eq(projectsTable.id, p.id));
+        pdfsCleared += 1;
+      }
+    }
+
+    logger.info(
+      { userId, filesRemoved, slotsCleared, pdfsCleared, adminId: req.user!.id },
+      "Admin wiped user album photos",
+    );
+    res.json({
+      success: true,
+      filesRemoved,
+      slotsCleared,
+      pdfsCleared,
+      note: "Device-local IndexedDB photos on the customer's phone/PC cannot be deleted remotely.",
+    });
   },
 );
 
@@ -1137,13 +1373,14 @@ router.post(
       const msg = err instanceof Error ? err.message : "";
       const isCap = msg.startsWith("TOO_MANY_CONCURRENT_PDFS");
       const isMissing = msg.startsWith("MISSING_UPLOADS");
-      if (!isCap && !isMissing) {
+      const isLocal = msg.startsWith("UNRESOLVED_DEVICE_PHOTOS");
+      if (!isCap && !isMissing && !isLocal) {
         logger.error({ err, orderId, projectId: order.projectId }, "Admin PDF regenerate failed");
       }
       res.status(isCap ? 429 : 400).json({
         error: isCap
           ? "Too many PDFs generating right now. Try again in a moment."
-          : isMissing
+          : isMissing || isLocal
             ? msg
             : "Unable to queue PDF generation",
       });
