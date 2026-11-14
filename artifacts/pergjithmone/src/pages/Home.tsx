@@ -154,8 +154,8 @@ function useLiveDesign(id: string): DesignDef | undefined {
 
 const HERO_CYCLE_MS = 3800;
 
-function createAlbumCta(lang: 'sq' | 'en', label: string): string {
-  return lang === 'sq' ? `Krijo Album ${label}` : `Create ${label} album`;
+function createAlbumCta(lang: 'sq' | 'en'): string {
+  return lang === 'sq' ? 'Krijo album' : 'Create album';
 }
 
 function usePrefersReducedMotion() {
@@ -750,7 +750,7 @@ function HeroAlbum({ lang }: { lang: 'sq' | 'en' }) {
             </p>
 
             <div className="flex flex-wrap items-center justify-center md:justify-start gap-2.5 md:gap-3">
-              <Link href={`/krijo?category=${encodeURIComponent(style.key)}&design=${encodeURIComponent(style.designId)}`}>
+              <Link href="/krijo">
                 <motion.button
                   whileHover={reduced ? undefined : { scale: 1.04 }}
                   whileTap={{ scale: 0.97 }}
@@ -882,7 +882,6 @@ function AlbumStarter({ lang }: { lang: 'sq' | 'en' }) {
   const [idx, setIdx] = useState(0);
   const p = usePageFields();
   const style = ALBUM_STYLES[idx];
-  const href = `/krijo?category=${encodeURIComponent(style.key)}&design=${encodeURIComponent(style.designId)}`;
   const { data: settings } = useGetAppSettings();
   const liveLabel = (i: number) => p.txt(`styles.${i}.label`) || ALBUM_STYLES[i].label[lang];
   const liveLine = (i: number) => p.txt(`styles.${i}.line`) || ALBUM_STYLES[i].line[lang];
@@ -1022,7 +1021,7 @@ function AlbumStarter({ lang }: { lang: 'sq' | 'en' }) {
             </div>
 
             <div className="mt-8 md:mt-10 flex flex-col items-stretch md:items-start gap-3">
-              <Link href={href} className="w-full md:w-auto">
+              <Link href="/krijo" className="w-full md:w-auto">
                 <motion.button
                   whileTap={{ scale: 0.98 }}
                   className="w-full md:w-auto px-9 py-4 text-white text-[13px] font-semibold rounded-full"
@@ -1031,7 +1030,7 @@ function AlbumStarter({ lang }: { lang: 'sq' | 'en' }) {
                     boxShadow: `0 12px 28px ${style.spine}35`,
                   }}
                 >
-                  {createAlbumCta(lang, liveLabel(idx))}
+                  {createAlbumCta(lang)}
                 </motion.button>
               </Link>
               <Link

@@ -1060,9 +1060,8 @@ export function generateAlbum(
     x: 0, y: 0, w: DESIGN_W, h: canvasH, rotation: 0,
     bgColor: paper,
   };
-  const insideCover = withIds([
-    { ...paperBg, bgColor: '#FFFFFF' },
-  ], 'inside-cover');
+  // Locked endpapers — never editable; PDF paints hatch + labels separately.
+  const insideCover: EditorElement[] = [];
 
   let storyIdx = 0;
   /** Prefer unused story photos; recycle only to keep every page filled. */

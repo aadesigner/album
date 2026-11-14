@@ -179,8 +179,48 @@ function drawSpacedText(
   }
 }
 
+function paintLockedLiningClient(
+  ctx: CanvasRenderingContext2D,
+  canvasH: number,
+  role?: string,
+): void {
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, DESIGN_W, canvasH);
+  ctx.save();
+  ctx.strokeStyle = 'rgba(120,120,120,0.14)';
+  ctx.lineWidth = 1;
+  const step = 14;
+  for (let x = -canvasH; x < DESIGN_W + canvasH; x += step) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x + canvasH, canvasH);
+    ctx.stroke();
+  }
+  ctx.restore();
+  const isBack = role === 'locked_right' || role === 'inside_back_cover';
+  const titleSq = isBack ? 'Kopertina e pasme e brendshme' : 'Kopertina e brendshme';
+  const titleEn = isBack ? 'Inside back cover' : 'Inside cover';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = 'rgba(90,90,90,0.55)';
+  ctx.font = `${Math.round(DESIGN_W * 0.035)}px Georgia, serif`;
+  ctx.fillText(titleSq, DESIGN_W / 2, canvasH / 2 - DESIGN_W * 0.03);
+  ctx.fillStyle = 'rgba(120,120,120,0.45)';
+  ctx.font = `${Math.round(DESIGN_W * 0.028)}px Arial, sans-serif`;
+  ctx.fillText(titleEn, DESIGN_W / 2, canvasH / 2 + DESIGN_W * 0.02);
+  ctx.fillStyle = 'rgba(140,140,140,0.4)';
+  ctx.font = `${Math.round(DESIGN_W * 0.022)}px Arial, sans-serif`;
+  ctx.fillText('E bllokuar  ·  Not editable', DESIGN_W / 2, canvasH / 2 + DESIGN_W * 0.065);
+}
+
 // ── Render one page to a JPEG data-URL ──────────────────────────────────────
-async function renderPage(elements: PdfElement[], canvasH: number, outW: number, outH: number): Promise<string> {
+async function renderPage(
+  elements: PdfElement[],
+  canvasH: number,
+  outW: number,
+  outH: number,
+  role?: string,
+): Promise<string> {
   const canvas = document.createElement('canvas');
   canvas.width  = outW;
   canvas.height = outH;
@@ -190,6 +230,16 @@ async function renderPage(elements: PdfElement[], canvasH: number, outW: number,
   // Paper base
   ctx.fillStyle = PAPER_COLOR;
   ctx.fillRect(0, 0, DESIGN_W, canvasH);
+
+  if (
+    role === 'locked_left'
+    || role === 'locked_right'
+    || role === 'inside_cover'
+    || role === 'inside_back_cover'
+  ) {
+    paintLockedLiningClient(ctx, canvasH, role);
+    return canvas.toDataURL('image/jpeg', 0.92);
+  }
 
   // Pre-load all images on this page in parallel (photos + wallpaper backgrounds)
   await Promise.allSettled(
@@ -417,7 +467,7 @@ export async function generatePDF(
   for (let i = 0; i < toRender.length; i++) {
     onProgress?.(i + 1, toRender.length);
 
-    const dataURL = await renderPage(toRender[i].elements, canvasH, outW, outH);
+    const dataURL = await renderPage(toRender[i].elements, canvasH, outW, outH, toRender[i].role);
 
     if (i > 0) pdf.addPage([pdfWMm, pdfHMm], orientation);
     pdf.addImage(dataURL, 'JPEG', 0, 0, pdfWMm, pdfHMm);

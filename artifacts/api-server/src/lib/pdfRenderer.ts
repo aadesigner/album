@@ -531,6 +531,46 @@ async function loadPageImages(
   return cache;
 }
 
+/** Locked endpapers — grey hatch + bilingual label (no user content). */
+function paintLockedLiningPage(
+  ctx: ReturnType<Canvas["getContext"]>,
+  canvasH: number,
+  role: string,
+): void {
+  ctx.fillStyle = "#FFFFFF";
+  ctx.fillRect(0, 0, DESIGN_W, canvasH);
+
+  ctx.save();
+  ctx.strokeStyle = "rgba(120,120,120,0.14)";
+  ctx.lineWidth = 1;
+  const step = 14;
+  // 45° hatch across the page
+  for (let x = -canvasH; x < DESIGN_W + canvasH; x += step) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x + canvasH, canvasH);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  const isBack = role === "locked_right" || role === "inside_back_cover";
+  // Print both languages so SQ/EN orders share one plate.
+  const titleSq = isBack ? "Kopertina e pasme e brendshme" : "Kopertina e brendshme";
+  const titleEn = isBack ? "Inside back cover" : "Inside cover";
+
+  ctx.fillStyle = "rgba(90,90,90,0.55)";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `${Math.round(DESIGN_W * 0.035)}px "DejaVu Serif", Georgia, serif`;
+  ctx.fillText(titleSq, DESIGN_W / 2, canvasH / 2 - DESIGN_W * 0.03);
+  ctx.font = `${Math.round(DESIGN_W * 0.028)}px "DejaVu Sans", Arial, sans-serif`;
+  ctx.fillStyle = "rgba(120,120,120,0.45)";
+  ctx.fillText(titleEn, DESIGN_W / 2, canvasH / 2 + DESIGN_W * 0.02);
+  ctx.font = `${Math.round(DESIGN_W * 0.022)}px "DejaVu Sans", Arial, sans-serif`;
+  ctx.fillStyle = "rgba(140,140,140,0.4)";
+  ctx.fillText("E bllokuar  ·  Not editable", DESIGN_W / 2, canvasH / 2 + DESIGN_W * 0.065);
+}
+
 async function renderPageToCanvas(
   page: PdfRenderPage,
   outW: number,
@@ -546,6 +586,16 @@ async function renderPageToCanvas(
 
   ctx.fillStyle = PAPER_COLOR;
   ctx.fillRect(0, 0, DESIGN_W, canvasH);
+
+  if (
+    page.role === "locked_left"
+    || page.role === "locked_right"
+    || page.role === "inside_cover"
+    || page.role === "inside_back_cover"
+  ) {
+    paintLockedLiningPage(ctx, canvasH, page.role);
+    return canvas;
+  }
 
   const images = await loadPageImages(page.elements, uploadsDir);
 

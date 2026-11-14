@@ -99,6 +99,18 @@ import { useCachedImage, bitmapWidth, bitmapHeight } from '@/lib/imageCache';
 
 const PAPER_COLOR = '#FEFDF9';
 const SPINE_W = 1;
+const PAPER_TEXTURE = `url("data:image/svg+xml,<svg viewBox='0 0 300 300' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/></filter><rect width='300' height='300' filter='url(%23n)'/></svg>")`;
+
+function liningLockCopy(role: string, lang: 'sq' | 'en'): { title: string; sub: string } {
+  if (role === 'locked_right') {
+    return lang === 'sq'
+      ? { title: 'Kopertina e pasme e brendshme', sub: 'E bllokuar' }
+      : { title: 'Inside back cover', sub: 'Not editable' };
+  }
+  return lang === 'sq'
+    ? { title: 'Kopertina e brendshme', sub: 'E bllokuar' }
+    : { title: 'Inside cover', sub: 'Not editable' };
+}
 
 /** Survives React Strict Mode remount so wizard design isn't applied twice / lost. */
 const consumedWizardDesignKeys = new Set<string>();
@@ -265,16 +277,15 @@ function readElementDragUrl(dt: DataTransfer): string {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type PageRole = 'front_cover' | 'back_cover' | 'locked_left' | 'inner' | 'locked_right';
-// locked_left / locked_right = inside front/back cover (editable paper; same
-// tools as inners — role names kept for spread pairing / PDF order).
+// locked_left / locked_right = inside front/back cover linings (never editable).
 
 function isInsideLiningRole(role: PageRole | string | null | undefined): boolean {
   return role === 'locked_left' || role === 'locked_right';
 }
 
-/** Inner pages + inside covers — photos need a layout; text/stickers are free. */
+/** Editable content pages only — linings stay locked endpapers. */
 function isEditablePaperRole(role: PageRole | string | null | undefined): boolean {
-  return role === 'inner' || isInsideLiningRole(role);
+  return role === 'inner';
 }
 
 export interface PageDef { dbId: number; role: PageRole; pageNumber?: number; contentJson?: string | null }
@@ -361,9 +372,8 @@ function buildSpreads(pages: any[], lang: 'sq'|'en' = 'sq'): SpreadDef[] {
       right: R?{dbId:R.id,role:'inner',pageNumber:i+2,contentJson:R.contentJson}:null});
   }
 
-  // Inside back cover: editable paper page (same tools as inners), distinct
-  // from the outer back cover. Mirrors how the inside front pairs with the
-  // first inner. With an even inner-page count it fills the trailing empty
+  // Inside back cover: locked lining. Mirrors how the inside front pairs with
+  // the first inner. With an even inner-page count it fills the trailing empty
   // right slot; otherwise it gets its own trailing spread.
   if (insideBack) {
     const insideBackPage = {dbId:insideBack.id,role:'locked_right' as PageRole,contentJson:insideBack.contentJson};
@@ -2510,11 +2520,82 @@ function PageCanvas({page,elements,selectedId,onSelectId,onChangeEl,onOpenPhotos
   );
 }
 
+function LockedPageView({
+  pageW, pageH, role, side, lang,
+}: {
+  pageW: number; pageH: number; role: string; side: 'left' | 'right' | 'solo'; lang: 'sq' | 'en';
+}) {
+  const { title, sub } = liningLockCopy(role, lang);
+  const patternId = `locked-hatch-${side}-${role}`;
+  return (
+    <div
+      style={{
+        position: 'relative', width: pageW, height: pageH, flexShrink: 0,
+        background: '#FFFFFF', overflow: 'hidden',
+      }}
+      aria-label={`${title} — ${sub}`}
+    >
+      <div style={{
+        position: 'absolute', inset: 0, pointerEvents: 'none',
+        backgroundImage: PAPER_TEXTURE, backgroundSize: '256px 256px',
+        opacity: 0.04, mixBlendMode: 'multiply' as any,
+      }} />
+      <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }} aria-hidden>
+        <defs>
+          <pattern id={patternId} width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <line x1="0" y1="0" x2="0" y2="14" stroke="rgba(120,120,120,0.14)" strokeWidth="1" />
+          </pattern>
+        </defs>
+        <rect width="100%" height="100%" fill={`url(#${patternId})`} />
+      </svg>
+      <div style={{
+        position: 'absolute', inset: 0, pointerEvents: 'none',
+        background: 'linear-gradient(180deg, rgba(255,255,255,0.35) 0%, rgba(248,248,248,0.15) 50%, rgba(255,255,255,0.40) 100%)',
+      }} />
+      <div style={{
+        position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', gap: 10, pointerEvents: 'none',
+      }}>
+        <div style={{
+          width: 44, height: 44, borderRadius: '50%',
+          background: 'rgba(255,255,255,0.92)',
+          border: '1px solid rgba(0,0,0,0.08)',
+          boxShadow: '0 4px 14px rgba(0,0,0,0.06)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Lock size={16} color="#9A9A9A" />
+        </div>
+        <p style={{
+          fontSize: 10, color: '#8A8A8A', textTransform: 'uppercase',
+          letterSpacing: '0.14em', fontWeight: 500, margin: 0, textAlign: 'center', padding: '0 12px',
+        }}>
+          {title}
+        </p>
+        <p style={{ fontSize: 9, color: '#B0B0B0', letterSpacing: '0.04em', margin: 0 }}>
+          {sub}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function LockedThumbHatch({ w, h }: { w: number; h: number }) {
+  return (
+    <div
+      style={{
+        width: w, height: h, flexShrink: 0, background: '#FFFFFF',
+        backgroundImage: 'repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(0,0,0,0.06) 3px,rgba(0,0,0,0.06) 4px)',
+      }}
+      aria-hidden
+    />
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Spread View — realistic book
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SpreadView = React.memo(function SpreadView({spread,spreadContent,selectedId,activeSide,onActiveSide,onSelectId,onChangeEl,onOpenPhotos,onDelete,onClearLayout,onClearSlotPhoto,onGestureStart,onElementDragActive,onPageSwipe,onDropPhoto,onDropFiles,onDropSticker,onRequestLayout,pageW,pageH,canvasH,shapeRefs,isMobile,readOnly}: {
+const SpreadView = React.memo(function SpreadView({spread,spreadContent,selectedId,activeSide,onActiveSide,onSelectId,onChangeEl,onOpenPhotos,onDelete,onClearLayout,onClearSlotPhoto,onGestureStart,onElementDragActive,onPageSwipe,onDropPhoto,onDropFiles,onDropSticker,onRequestLayout,pageW,pageH,canvasH,shapeRefs,isMobile,readOnly,lang}: {
   spread:SpreadDef; spreadContent:Record<number,EditorElement[]>;
   selectedId:string|null; activeSide:'left'|'right'; onActiveSide:(s:'left'|'right')=>void;
   onSelectId:(id:string|null)=>void; onChangeEl:(pid:number,eid:string,c:Partial<EditorElement>)=>void;
@@ -2531,7 +2612,9 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
   pageW:number; pageH:number; canvasH:number;
   shapeRefs:React.MutableRefObject<Record<string,any>>; isMobile?:boolean;
   readOnly?:boolean;
+  lang?: 'sq' | 'en';
 }) {
+  const lockLang = lang === 'en' ? 'en' : 'sq';
   const effectiveSpineW = SPINE_W;
   // DOM swipe for locked/empty pages (no Konva stage). Editable pages swipe via PageCanvas.
   const swipeStartRef=useRef<{x:number;y:number;t:number}|null>(null);
@@ -2553,6 +2636,18 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
 
   const renderSide=(page:PageDef|null,side:'left'|'right')=>{
     if (!page) return <div style={{width:pageW,height:pageH,flexShrink:0,background:'#EAE5DC'}}/>;
+    if (isInsideLiningRole(page.role)) {
+      return (
+        <div
+          style={{ cursor: 'default' }}
+          onClick={() => { onActiveSide(side); onSelectId(null); }}
+          onTouchStart={onDomSwipeStart}
+          onTouchEnd={onDomSwipeEnd}
+        >
+          <LockedPageView pageW={pageW} pageH={pageH} role={page.role} side={side} lang={lockLang} />
+        </div>
+      );
+    }
     const pageEls = spreadContent[page.dbId]??[];
     const needsLayout = !readOnly && isEditablePaperRole(page.role) && !pageHasPhotoLayout(pageEls);
     return <div style={{cursor:'default'}} onClick={()=>{
@@ -2636,6 +2731,26 @@ const SpreadView = React.memo(function SpreadView({spread,spreadContent,selected
       return (
         <div style={{width:pageW,height:pageH,background:'#EAE5DC',touchAction:'none'}}
           onTouchStart={onDomSwipeStart} onTouchEnd={onDomSwipeEnd}/>
+      );
+    }
+    if (isInsideLiningRole(page.role)) {
+      return (
+        <div
+          className="flex items-center justify-center"
+          style={{ overflow: 'hidden', touchAction: 'none' }}
+          onTouchStart={onDomSwipeStart}
+          onTouchEnd={onDomSwipeEnd}
+          onClick={() => { onActiveSide(activeSide); onSelectId(null); }}
+        >
+          <div style={{
+            boxShadow: '0 12px 40px rgba(40,32,20,0.12), 0 2px 8px rgba(40,32,20,0.06)',
+            outline: '1px solid rgba(0,0,0,0.08)',
+            outlineOffset: 0,
+            overflow: 'hidden',
+          }}>
+            <LockedPageView pageW={pageW} pageH={pageH} role={page.role} side={activeSide} lang={lockLang} />
+          </div>
+        </div>
       );
     }
     const pageEls = spreadContent[page.dbId]??[];
@@ -3002,6 +3117,7 @@ const SpreadNav = React.memo(function SpreadNav({spreads,current,onChange,onAddS
 
         const renderPageThumb=(page:PageDef|null,w:number,h:number)=>{
           if(!page) return <div style={{width:w,height:h,background:'#EAE5DC',flexShrink:0}}/>;
+          if (isInsideLiningRole(page.role)) return <LockedThumbHatch w={w} h={h} />;
           return (
             <PageThumb
               elements={pagesContent[page.dbId]??[]}
@@ -4860,8 +4976,9 @@ export default function Editor() {
     at: { x: number; y: number },
   )=>{
     if (isOrdered || !url) return;
-    const els=liveContent.current[pageId]??[];
     const role = pageRoleById.get(pageId);
+    if (isInsideLiningRole(role)) return;
+    const els=liveContent.current[pageId]??[];
     const onCover = isOuterCoverRole(role);
 
     if (targetId) {
@@ -5177,7 +5294,7 @@ export default function Editor() {
   },[project,spreads,deletingSpread,minInnerPages,getToken,projectId,lang,refetchProject,isOrdered]);
 
   const addText=useCallback((style?:{fontSize?:number;fontStyle?:string;align?:'left'|'center'|'right'})=>{
-    if (isOrdered || !activePageId) return;
+    if (isOrdered || !activePageId || !isEditablePaperRole(activePageRole)) return;
     const text=lang==='sq'?'Shto tekstin tënd...':'Your text here...';
     const fontSize=style?.fontSize??30;
     const fontFamily='Georgia, serif';
@@ -5192,26 +5309,28 @@ export default function Editor() {
     updatePage(activePageId,[...els,el]);
     // Select only — double-tap opens the keyboard / inline editor.
     setSelectedId(el.id);
-  },[activePageId,lang,updatePage,canvasH,isOrdered]);
+  },[activePageId,activePageRole,lang,updatePage,canvasH,isOrdered]);
 
   const addSticker=useCallback((url:string, at?: {x:number;y:number})=>{
-    if (isOrdered || !activePageId || !url) return;
+    if (isOrdered || !activePageId || !url || !isEditablePaperRole(activePageRole)) return;
     const els=liveContent.current[activePageId]??[];
     const el=makeStickerElement(url, canvasH, at);
     updatePage(activePageId,[...els,el]);
     setSelectedId(el.id);
-  },[activePageId,updatePage,canvasH,isOrdered]);
+  },[activePageId,activePageRole,updatePage,canvasH,isOrdered]);
 
   const placeStickerOnPage=useCallback((pageId:number, url:string, x:number, y:number)=>{
     if (isOrdered || !url) return;
+    const page = spreads.flatMap(s => [s.left, s.right]).find(p => p?.dbId === pageId);
+    if (!page || !isEditablePaperRole(page.role)) return;
     const els=liveContent.current[pageId]??[];
     const el=makeStickerElement(url, canvasH, { x, y });
     updatePage(pageId,[...els,el]);
     setSelectedId(el.id);
-  },[updatePage,canvasH,isOrdered]);
+  },[updatePage,canvasH,isOrdered,spreads]);
 
   const applyLayout=useCallback((layoutId:string)=>{
-    if (isOrdered || !activePageId) return;
+    if (isOrdered || !activePageId || !isEditablePaperRole(activePageRole)) return;
     const layout=editorLayouts.find(l=>l.id===layoutId); if(!layout) return;
     const ts=Date.now();
     // Keep free text + admin icon stickers when swapping layouts (photos use slots).
@@ -5227,15 +5346,16 @@ export default function Editor() {
     setSelectedId(null);
     setLayoutGateOpen(false);
     setShowSheet(false);
-  },[activePageId,lang,updatePage,canvasH,editorLayouts,isOrdered]);
+  },[activePageId,activePageRole,lang,updatePage,canvasH,editorLayouts,isOrdered]);
 
   const clearLayout=useCallback((pageId:number)=>{
     if (isOrdered) return;
+    if (isInsideLiningRole(pageRoleById.get(pageId))) return;
     const els = liveContent.current[pageId] ?? [];
     if (!pageHasPhotoLayout(els)) return;
     updatePage(pageId, stripLayoutSlots(els));
     setSelectedId(null);
-  }, [isOrdered, updatePage]);
+  }, [isOrdered, updatePage, pageRoleById]);
 
   const clearSlotPhoto=useCallback((pageId:number, id:string)=>{
     if (isOrdered) return;
@@ -5249,6 +5369,7 @@ export default function Editor() {
 
   const applyDesign=useCallback((design:DesignDef)=>{
     if (isOrdered) return;
+    // Designs only paint outer covers (+ keep inners white). Linings stay locked.
     // Collect all page defs from spreads
     const allPages=(spreads.flatMap(s=>[s.left,s.right]).filter(Boolean) as PageDef[]);
     const ts=Date.now();
@@ -5261,8 +5382,8 @@ export default function Editor() {
     const frontProjected = projectSide(designFrontElements(design));
     const backProjected = projectSide(designBackElements(design));
 
-    // Inner pages (and inside linings) are ALWAYS white — never inherit the
-    // cover color. Covers keep the design palette; everything else is paper.
+    // Inner pages stay white paper — never inherit the cover color.
+    // Inside linings are locked endpapers (never written here).
     const whiteBg: DE = {
       type: "background",
       x: 0,
@@ -5274,6 +5395,7 @@ export default function Editor() {
     };
 
     for (const page of allPages) {
+      if (isInsideLiningRole(page.role)) continue;
       if (page.role === "front_cover") {
         updates[page.dbId] = frontProjected.map((el, i) => ({
           ...el,
@@ -5284,8 +5406,7 @@ export default function Editor() {
           ...el,
           id: `${design.id}-back-${page.dbId}-${i}-${ts}`,
         }));
-      } else {
-        // Inners + inside covers: keep user content, force white paper under it.
+      } else if (page.role === "inner") {
         const current = liveContent.current[page.dbId] ?? [];
         const withoutBg = current.filter((e) => e.type !== "background");
         updates[page.dbId] = [
@@ -5722,7 +5843,9 @@ export default function Editor() {
                             background: '#F3EEE6',
                           }}
                         >
-                          {!page ? null : (
+                          {!page ? null : isInsideLiningRole(page.role) ? (
+                            <LockedThumbHatch w={thumbW} h={thumbH} />
+                          ) : (
                             <PageThumb
                               elements={spreadContent[page.dbId] ?? []}
                               width={thumbW}
@@ -5823,7 +5946,7 @@ export default function Editor() {
                   onDropSticker={isOrdered ? undefined : placeStickerOnPage}
                   onRequestLayout={isOrdered ? undefined : openLayoutPicker}
                   pageW={pageW} pageH={pageH} canvasH={canvasH} shapeRefs={shapeRefs} isMobile={isMobile}
-                  readOnly={isOrdered}/>
+                  readOnly={isOrdered} lang={lang}/>
               ) : <p className="text-neutral-400 text-sm">No pages found</p>}
 
               {/* Desktop: dim canvas until an inner page has a layout */}

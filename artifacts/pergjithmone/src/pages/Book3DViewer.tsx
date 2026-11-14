@@ -189,9 +189,32 @@ function SpreadBrowser({
     );
   };
 
+  const lockedLiningFace = (role: string) => {
+    const title = role === 'locked_right'
+      ? (lang === 'sq' ? 'brendia e kopertinës së pasme' : 'inside back cover')
+      : (lang === 'sq' ? 'brendia e kopertinës' : 'inside cover');
+    const sub = lang === 'sq' ? 'e bllokuar' : 'not editable';
+    return (
+      <div style={{
+        position: 'absolute', inset: 0, background: '#FFFFFF',
+        backgroundImage: 'repeating-linear-gradient(45deg,transparent,transparent 6px,rgba(0,0,0,0.05) 6px,rgba(0,0,0,0.05) 7px)',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
+      }}>
+        <span style={{ color: 'rgba(0,0,0,0.28)', fontSize: 10, fontFamily: 'Georgia, serif', fontStyle: 'italic', textAlign: 'center', padding: '0 8px' }}>
+          {title}
+        </span>
+        <span style={{ color: 'rgba(0,0,0,0.18)', fontSize: 8, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+          {sub}
+        </span>
+      </div>
+    );
+  };
+
   const renderSpread = (spread: SpreadDef) => {
     const leftEls = spread.left ? (pagesContent[spread.left.dbId] ?? []) : [];
     const rightEls = spread.right ? (pagesContent[spread.right.dbId] ?? []) : [];
+    const leftLocked = spread.left?.role === 'locked_left' || spread.left?.role === 'locked_right';
+    const rightLocked = spread.right?.role === 'locked_left' || spread.right?.role === 'locked_right';
     return (
       <div style={{
         display: 'flex', alignItems: 'stretch',
@@ -205,7 +228,9 @@ function SpreadBrowser({
           transformOrigin: 'right center',
         }}>
           {spread.left ? (
-            <PageMiniRender elements={leftEls} w={pgW} h={pgH} canvasH={canvasH} />
+            leftLocked ? lockedLiningFace(spread.left.role) : (
+              <PageMiniRender elements={leftEls} w={pgW} h={pgH} canvasH={canvasH} />
+            )
           ) : (
             <div style={{ position: 'absolute', inset: 0, background: '#F2EDE5' }} />
           )}
@@ -218,7 +243,9 @@ function SpreadBrowser({
           transformOrigin: 'left center',
         }}>
           {spread.right ? (
-            <PageMiniRender elements={rightEls} w={pgW} h={pgH} canvasH={canvasH} />
+            rightLocked ? lockedLiningFace(spread.right.role) : (
+              <PageMiniRender elements={rightEls} w={pgW} h={pgH} canvasH={canvasH} />
+            )
           ) : (
             <div style={{ position: 'absolute', inset: 0, background: '#F2EDE5' }} />
           )}

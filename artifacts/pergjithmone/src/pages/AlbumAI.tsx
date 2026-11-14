@@ -855,8 +855,9 @@ function AlbumAIView() {
       // Starting every PATCH immediately was flooding the network/CPU/RAM.
       const saveJobs: { pageId: number; elements: any[] }[] = [];
       if (frontCoverPage) saveJobs.push({ pageId: frontCoverPage.id, elements: album.frontCover });
-      if (insideCoverPage) saveJobs.push({ pageId: insideCoverPage.id, elements: album.insideCover });
-      if (insideBackPage) saveJobs.push({ pageId: insideBackPage.id, elements: album.insideCover });
+      // Inside linings stay locked endpapers — clear any leftover editable content.
+      if (insideCoverPage) saveJobs.push({ pageId: insideCoverPage.id, elements: [] });
+      if (insideBackPage) saveJobs.push({ pageId: insideBackPage.id, elements: [] });
       if (backCoverPage) saveJobs.push({ pageId: backCoverPage.id, elements: album.backCover });
       innerPages.forEach((page, i) => {
         if (album.innerPages[i]) saveJobs.push({ pageId: page.id, elements: album.innerPages[i] });
