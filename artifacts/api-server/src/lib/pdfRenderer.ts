@@ -424,6 +424,17 @@ function resolveUploadFile(filename: string, uploadsDir: string): string | null 
   return null;
 }
 
+function isPrivateHost(host: string): boolean {
+  const h = host.toLowerCase();
+  return (
+    h === "localhost"
+    || h === "127.0.0.1"
+    || h === "0.0.0.0"
+    || h === "::1"
+    || h.endsWith(".local")
+  );
+}
+
 function publicApiOrigin(): string | null {
   const raw = (
     process.env.PUBLIC_API_URL
@@ -432,7 +443,36 @@ function publicApiOrigin(): string | null {
     || process.env.VITE_API_URL
     || ""
   ).trim().replace(/\/$/, "");
-  return raw || null;
+  if (raw) {
+    try {
+      const u = new URL(raw.includes("://") ? raw : `https://${raw}`);
+      // Never use a private host as the "public" fallback — PDF fetch would loop
+      // to an unreachable browser-only address from inside the container.
+      if (!isPrivateHost(u.hostname)) return u.origin;
+    } catch {
+      /* fall through to loopback */
+    }
+  }
+  // Same-process serve: relative uploads can still be fetched over loopback.
+  const port = String(process.env.PORT || "").trim();
+  if (/^\d+$/.test(port)) return `http://127.0.0.1:${port}`;
+  return null;
+}
+
+function uploadUrlFallback(filename: string, preferredUrl?: string): { kind: "url"; url: string } | null {
+  const origin = publicApiOrigin();
+  if (origin) {
+    return { kind: "url", url: `${origin}/api/uploads/files/${encodeURIComponent(filename)}` };
+  }
+  if (preferredUrl && /^https?:\/\//i.test(preferredUrl)) {
+    try {
+      const u = new URL(preferredUrl);
+      if (!isPrivateHost(u.hostname)) return { kind: "url", url: preferredUrl };
+    } catch {
+      /* ignore */
+    }
+  }
+  return null;
 }
 
 function resolveImageSource(
@@ -454,10 +494,17 @@ function resolveImageSource(
       pathname = u.pathname;
       const uploadInUrl = pathname.match(/\/api\/uploads\/files\/([^/?#]+)/i);
       if (uploadInUrl) {
-        const filePath = resolveUploadFile(decodeURIComponent(uploadInUrl[1]), uploadsDir);
+        const filename = decodeURIComponent(uploadInUrl[1]);
+        const filePath = resolveUploadFile(filename, uploadsDir);
         if (filePath) return { kind: "file", path: filePath };
-        // Disk miss (volume move / ephemeral) — try the public URL as a last resort.
-        return { kind: "url", url: src };
+        // Prefer a reachable origin over raw localhost / ephemeral browser hosts.
+        const fallback = uploadUrlFallback(filename, isPrivateHost(u.hostname) ? undefined : src);
+        if (fallback) {
+          logger.warn({ src, filename, via: fallback.url }, "PDF render: upload missing on disk — trying HTTP");
+          return fallback;
+        }
+        logger.warn({ src, filename }, "PDF render: upload missing on disk (no reachable origin)");
+        return null;
       }
       const designInUrl = pathname.match(/\/designs\/([^/?#]+)/i);
       if (designInUrl) {
@@ -480,12 +527,12 @@ function resolveImageSource(
     const filename = decodeURIComponent(uploadMatch[1]);
     const filePath = resolveUploadFile(filename, uploadsDir);
     if (filePath) return { kind: "file", path: filePath };
-    const origin = publicApiOrigin();
-    if (origin) {
-      logger.warn({ src, filename }, "PDF render: upload missing on disk — trying public URL");
-      return { kind: "url", url: `${origin}/api/uploads/files/${encodeURIComponent(filename)}` };
+    const fallback = uploadUrlFallback(filename);
+    if (fallback) {
+      logger.warn({ src, filename, via: fallback.url }, "PDF render: upload missing on disk — trying HTTP");
+      return fallback;
     }
-    logger.warn({ src }, "PDF render: upload file missing on disk");
+    logger.warn({ src, filename }, "PDF render: upload file missing on disk");
     return null;
   }
 
@@ -714,11 +761,12 @@ async function renderPageToCanvas(
         ctx.restore();
         ctx.globalCompositeOperation = "source-over";
       } else {
-        ctx.fillStyle = "#D8D0C4";
-        ctx.fillRect(el.x, el.y, el.w, el.h);
-        ctx.strokeStyle = "#B8AFA3";
-        ctx.lineWidth = 2;
-        ctx.strokeRect(el.x + 1, el.y + 1, el.w - 2, el.h - 2);
+        // Missing upload/icon — leave paper showing. The old beige #D8D0C4 plate
+        // looked like a broken cover when a large photo/icon frame failed to load.
+        logger.warn(
+          { src: el.src, sticker: !!el.sticker, objectFit: el.objectFit },
+          "PDF render: image missing — skipping frame (no grey plate)",
+        );
       }
     } else if (el.type === "text" && el.text) {
       // Match KonvaText: padding=6, verticalAlign=top, wrap=word, letterSpacing.

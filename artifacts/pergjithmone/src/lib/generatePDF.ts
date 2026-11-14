@@ -362,9 +362,7 @@ async function renderPage(
         ctx.restore();
         ctx.globalCompositeOperation = 'source-over';
       } else {
-        // Fallback: warm placeholder
-        ctx.fillStyle = '#D8D0C4';
-        ctx.fillRect(el.x, el.y, el.w, el.h);
+        // Missing photo/icon — leave paper. Grey plates looked like broken covers.
       }
     }
 
