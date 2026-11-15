@@ -401,64 +401,41 @@ function Sidebar({
     <div
       className="h-full flex flex-col relative overflow-hidden"
       style={{
-        background: theme.sidebarWash || theme.sidebar,
+        background: theme.sidebar,
         fontFamily: theme.fontSans,
       }}
     >
-      {/* Cloth grain + gold edge — reads as bound album, not SaaS rail */}
       <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-[0.07]"
-        style={{
-          backgroundImage:
-            'repeating-linear-gradient(105deg, transparent 0 2px, rgba(255,255,255,0.35) 2px 3px), repeating-linear-gradient(0deg, transparent 0 11px, rgba(0,0,0,0.18) 11px 12px)',
-        }}
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-y-0 left-0 w-[3px]"
-        style={{ background: theme.accent }}
-      />
-
-      <div
-        className={`relative ${isMobile ? 'px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-4' : 'px-4 pt-6 pb-5'}`}
-        style={{ borderBottom: `1px solid ${theme.sidebarLine}` }}
+        className={`relative flex items-center gap-3 ${isMobile ? 'px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-3' : 'px-4 pt-5 pb-4'}`}
       >
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <p
-              className="text-[9px] font-semibold tracking-[0.28em] uppercase leading-none mb-2.5"
-              style={{ color: theme.accent, fontFamily: theme.fontSans }}
-            >
-              Atelier desk
-            </p>
-            <p
-              className={`leading-[0.95] truncate ${isMobile ? 'text-[1.65rem]' : 'text-[1.45rem]'}`}
-              style={{ color: theme.sidebarTextActive, fontFamily: theme.fontSerif, fontWeight: 600 }}
-            >
-              Përgjithmonë
-            </p>
-          </div>
-          {onClose && (
-            <button
-              type="button"
-              onClick={onClose}
-              className="lg:hidden w-10 h-10 flex items-center justify-center transition-transform active:scale-95 shrink-0"
-              style={{
-                color: theme.ink,
-                background: theme.card,
-                border: `1px solid ${theme.sidebarLine}`,
-                borderRadius: theme.radius,
-              }}
-              aria-label="Close menu"
-            >
-              <X size={18} strokeWidth={2.25} />
-            </button>
-          )}
+        <div
+          className="w-9 h-9 flex items-center justify-center shrink-0 text-[15px] font-semibold"
+          style={{ background: theme.accent, color: theme.accentOn, borderRadius: 12 }}
+        >
+          P
         </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[15px] font-semibold truncate leading-tight" style={{ color: theme.sidebarTextActive }}>
+            Përgjithmonë
+          </p>
+          <p className="text-[11px] truncate mt-0.5" style={{ color: theme.sidebarText, opacity: 0.7 }}>
+            Admin
+          </p>
+        </div>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="lg:hidden w-9 h-9 flex items-center justify-center shrink-0"
+            style={{ color: theme.sidebarTextActive, background: theme.sidebarHover, borderRadius: 10 }}
+            aria-label="Close menu"
+          >
+            <X size={18} strokeWidth={2.25} />
+          </button>
+        )}
       </div>
 
-      <div className={`relative ${isMobile ? 'px-3 pt-3' : 'px-3 pt-3'}`}>
+      <div className={`relative ${isMobile ? 'px-3' : 'px-3'}`}>
         <button
           type="button"
           onClick={() => {
@@ -467,28 +444,25 @@ function Sidebar({
           }}
           className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors"
           style={{
-            borderRadius: 0,
-            background: 'transparent',
+            borderRadius: 12,
+            background: theme.sidebarHover,
             color: theme.sidebarText,
-            borderBottom: `1px solid ${theme.sidebarLine}`,
-            fontFamily: theme.fontSans,
+            border: `1px solid ${theme.sidebarLine}`,
           }}
           aria-label="Search admin pages"
         >
-          <Search size={15} strokeWidth={2} className="shrink-0 opacity-80" />
-          <span className="flex-1 text-[12px] truncate opacity-80" style={{ fontFamily: theme.fontSerif, fontStyle: 'italic' }}>
-            Find a page…
-          </span>
+          <Search size={15} strokeWidth={2} className="shrink-0 opacity-70" />
+          <span className="flex-1 text-[13px] truncate opacity-80">Search…</span>
           <kbd
-            className="hidden sm:inline text-[9px] font-semibold tracking-wide px-1.5 py-0.5"
-            style={{ background: theme.sidebarActive, color: theme.sidebarTextActive, opacity: 0.9 }}
+            className="hidden sm:inline text-[10px] font-medium px-1.5 py-0.5 rounded-md"
+            style={{ background: theme.sidebarActive, color: theme.sidebarTextActive }}
           >
             ⌘K
           </kbd>
         </button>
       </div>
 
-      <nav className={`relative flex-1 overflow-y-auto overscroll-contain ${isMobile ? 'py-3 px-3' : 'py-2.5 px-2'}`}>
+      <nav className={`relative flex-1 overflow-y-auto overscroll-contain ${isMobile ? 'py-3 px-3' : 'py-3 px-2.5'}`}>
         {navGroups.map((group) => {
           const open = openGroups[group.title];
           const groupHasActive = group.items.some(
@@ -498,40 +472,32 @@ function Sidebar({
             ? (pulse?.pending || 0)
             : 0;
           return (
-            <div key={group.title} className={isMobile ? 'mb-1.5' : 'mb-1'}>
+            <div key={group.title} className="mb-3">
               <button
                 type="button"
                 onClick={() => toggleGroup(group.title)}
                 aria-expanded={open}
-                className={`w-full flex items-center gap-2 font-semibold tracking-[0.14em] uppercase transition-colors cursor-pointer ${
-                  isMobile ? 'px-2.5 py-2.5 text-[10px]' : 'px-2 py-2 text-[9.5px]'
-                }`}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[11px] font-medium transition-colors"
                 style={{
-                  borderRadius: theme.radius,
                   color: groupHasActive ? theme.sidebarTextActive : theme.sidebarText,
-                  background: open ? `${theme.sidebarHover}` : 'transparent',
-                  opacity: groupHasActive ? 1 : 0.72,
-                  fontFamily: theme.fontSans,
+                  opacity: 0.85,
                   cursor: PINNED_OPEN_GROUPS.includes(group.title) ? 'default' : 'pointer',
                 }}
               >
                 <span className="flex-1 text-left truncate">{group.title}</span>
                 {!!pendingInGroup && !open && (
                   <span
-                    className="min-w-[1.05rem] h-[1.05rem] px-1 flex items-center justify-center text-[8px] font-bold"
-                    style={{ background: theme.accent, color: theme.accentOn, borderRadius: '999px' }}
+                    className="min-w-[1.1rem] h-[1.1rem] px-1 flex items-center justify-center text-[9px] font-bold rounded-full"
+                    style={{ background: theme.accent, color: theme.accentOn }}
                   >
                     {pendingInGroup > 99 ? '99+' : pendingInGroup}
                   </span>
                 )}
                 <ChevronDown
-                  size={14}
+                  size={13}
                   strokeWidth={2.25}
-                  className="shrink-0 transition-transform duration-200"
-                  style={{
-                    transform: open ? 'rotate(0deg)' : 'rotate(-90deg)',
-                    opacity: 0.7,
-                  }}
+                  className="shrink-0 transition-transform duration-200 opacity-60"
+                  style={{ transform: open ? 'rotate(0deg)' : 'rotate(-90deg)' }}
                 />
               </button>
               <div
@@ -539,7 +505,7 @@ function Sidebar({
                 style={{ display: 'grid', gridTemplateRows: open ? '1fr' : '0fr' }}
               >
                 <div className="min-h-0">
-                  <div className={`${isMobile ? 'space-y-0.5 pb-1.5 pt-0.5' : 'space-y-0.5 pb-1 pt-0.5'}`}>
+                  <div className="space-y-0.5 pt-0.5">
                     {group.items.map(({ href, label, Icon }) => {
                       const isActive = location === href || (href !== '/heyadmin' && location.startsWith(href));
                       const badge = href === '/heyadmin/porosi' ? pulse?.pending : 0;
@@ -548,15 +514,11 @@ function Sidebar({
                           key={href}
                           href={href}
                           onClick={onClose}
-                          className={`flex items-center gap-2.5 font-medium transition-all duration-200 cursor-pointer ${
-                            isMobile
-                              ? 'px-2.5 py-2.5 text-[13.5px]'
-                              : 'px-2 py-2 text-[13px]'
+                          className={`flex items-center gap-2.5 px-2.5 font-medium transition-colors ${
+                            isMobile ? 'py-2.5 text-[13.5px]' : 'py-2 text-[13px]'
                           }`}
                           style={{
-                            borderRadius: 0,
-                            cursor: 'pointer',
-                            borderLeft: isActive ? `2px solid ${theme.accent}` : '2px solid transparent',
+                            borderRadius: 10,
                             background: isActive ? theme.sidebarActive : 'transparent',
                             color: isActive ? theme.sidebarTextActive : theme.sidebarText,
                           }}
@@ -568,18 +530,16 @@ function Sidebar({
                           }}
                         >
                           <Icon
-                            size={isMobile ? 15 : 14}
-                            strokeWidth={isActive ? 2.2 : 1.6}
-                            className="shrink-0 opacity-80"
-                            style={{ color: isActive ? theme.accent : undefined }}
+                            size={16}
+                            strokeWidth={isActive ? 2.2 : 1.7}
+                            className="shrink-0"
+                            style={{ color: isActive ? theme.accent : undefined, opacity: isActive ? 1 : 0.75 }}
                           />
-                          <span className="truncate flex-1" style={{ fontFamily: isActive ? theme.fontSerif : theme.fontSans }}>
-                            {label}
-                          </span>
+                          <span className="truncate flex-1">{label}</span>
                           {!!badge && (
                             <span
-                              className="min-w-[1.15rem] h-[1.15rem] px-1 flex items-center justify-center text-[9px] font-bold shrink-0"
-                              style={{ background: theme.accent, color: theme.accentOn, borderRadius: '999px' }}
+                              className="min-w-[1.2rem] h-[1.2rem] px-1 flex items-center justify-center text-[10px] font-bold rounded-full shrink-0"
+                              style={{ background: theme.accent, color: theme.accentOn }}
                             >
                               {badge > 99 ? '99+' : badge}
                             </span>
@@ -601,71 +561,44 @@ function Sidebar({
       >
         {pulse && (
           <div
-            className={`mb-3 ${isMobile ? 'px-1' : 'px-1'}`}
-            style={{ color: isMobile ? theme.muted : theme.sidebarText }}
+            className="mb-3 px-2.5 py-2 rounded-[10px]"
+            style={{ background: theme.sidebarHover, color: theme.sidebarText }}
           >
-            <p className="text-[10px] leading-relaxed" style={{ opacity: 0.9 }}>
-              <span className="font-semibold" style={{ color: isMobile ? theme.ink : theme.sidebarTextActive }}>
-                {pulse.todayVisitors}
-              </span>
-              {' '}today ·{' '}
-              <span className="font-semibold" style={{ color: isMobile ? theme.ink : theme.sidebarTextActive }}>
-                {pulse.pending}
-              </span>
+            <p className="text-[11px] leading-snug">
+              <span className="font-semibold" style={{ color: theme.sidebarTextActive }}>{pulse.todayVisitors}</span>
+              {' '}today
+              <span className="opacity-40"> · </span>
+              <span className="font-semibold" style={{ color: theme.sidebarTextActive }}>{pulse.pending}</span>
               {' '}to print
-              {pulse.printing ? ` · ${pulse.printing} printing` : ''}
             </p>
           </div>
         )}
-        <div
-          className={`flex items-center gap-3 mb-3 ${isMobile ? 'p-3' : 'px-1'}`}
-          style={isMobile ? {
-            background: theme.card,
-            border: `1px solid ${theme.sidebarLine}`,
-            borderRadius: theme.radius,
-            boxShadow: '0 4px 16px rgba(40,20,30,0.04)',
-          } : undefined}
-        >
+        <div className="flex items-center gap-2.5 px-1 mb-3">
           <div
-            className={`${isMobile ? 'w-10 h-10' : 'w-9 h-9'} flex items-center justify-center text-xs font-semibold shrink-0`}
-            style={{
-              background: theme.accent,
-              color: theme.accentOn,
-              borderRadius: '999px',
-            }}
+            className="w-9 h-9 flex items-center justify-center text-[11px] font-semibold shrink-0 rounded-full"
+            style={{ background: theme.accent, color: theme.accentOn }}
           >
             {initials}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold truncate" style={{ color: isMobile ? theme.ink : theme.sidebarTextActive, fontFamily: theme.fontSans }}>
+            <p className="text-[13px] font-semibold truncate" style={{ color: theme.sidebarTextActive }}>
               {user?.name || 'Admin'}
             </p>
-            <p className="text-[11px] truncate" style={{ color: isMobile ? theme.muted : theme.sidebarText, opacity: isMobile ? 1 : 0.7 }}>
+            <p className="text-[11px] truncate" style={{ color: theme.sidebarText, opacity: 0.7 }}>
               {(user as any)?.phone || 'Administrator'}
             </p>
           </div>
         </div>
 
-        <div className={isMobile ? 'grid grid-cols-2 gap-2' : ''}>
+        <div className={isMobile ? 'grid grid-cols-2 gap-2' : 'space-y-0.5'}>
           <Link
             href="/"
-            className={`flex items-center justify-center gap-2 font-medium transition-colors ${
-              isMobile
-                ? 'px-3 py-3 text-[13px]'
-                : 'px-3 py-2.5 w-full text-[13px] mb-0.5'
+            className={`flex items-center gap-2 font-medium transition-colors ${
+              isMobile ? 'justify-center px-3 py-2.5 text-[13px]' : 'px-2.5 py-2 w-full text-[13px]'
             }`}
-            style={{
-              borderRadius: theme.radius,
-              ...(isMobile
-                ? { color: theme.ink, background: theme.card, border: `1px solid ${theme.sidebarLine}` }
-                : { color: theme.sidebarText }),
-            }}
-            onMouseEnter={(e) => {
-              if (!isMobile) e.currentTarget.style.background = theme.sidebarHover;
-            }}
-            onMouseLeave={(e) => {
-              if (!isMobile) e.currentTarget.style.background = 'transparent';
-            }}
+            style={{ borderRadius: 10, color: theme.sidebarText }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = theme.sidebarHover; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
           >
             <ExternalLink size={15} />
             View site
@@ -673,15 +606,12 @@ function Sidebar({
           <button
             type="button"
             onClick={() => logout()}
-            className={`flex items-center justify-center gap-2 font-medium transition-colors ${
-              isMobile
-                ? 'px-3 py-3 text-[13px] text-white'
-                : 'px-3 py-2.5 w-full text-[13px]'
+            className={`flex items-center gap-2 font-medium transition-colors ${
+              isMobile ? 'justify-center px-3 py-2.5 text-[13px]' : 'px-2.5 py-2 w-full text-[13px]'
             }`}
-            style={{
-              borderRadius: theme.radius,
-              ...(isMobile ? { background: theme.accent, color: theme.accentOn } : { color: theme.accent }),
-            }}
+            style={{ borderRadius: 10, color: theme.sidebarText }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = theme.sidebarHover; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
           >
             <LogOut size={15} />
             Sign out
@@ -961,22 +891,12 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
             style={{
               background: theme.card,
               borderBottom: `1px solid ${theme.line}`,
-              borderTop: `3px solid ${theme.accent}`,
             }}
           >
             <div className="flex items-center gap-2.5">
               <div className="flex items-center gap-2.5 min-w-0 flex-1">
                 <div className="min-w-0">
-                  <p
-                    className="text-[9px] font-semibold tracking-[0.22em] uppercase leading-none"
-                    style={{ color: theme.accent, fontFamily: theme.fontSans }}
-                  >
-                    Atelier
-                  </p>
-                  <p
-                    className="font-semibold text-[1.15rem] leading-tight truncate mt-1"
-                    style={{ color: theme.ink, fontFamily: theme.fontSerif }}
-                  >
+                  <p className="font-semibold text-[1.05rem] leading-tight truncate" style={{ color: theme.ink }}>
                     {currentLabel}
                   </p>
                 </div>

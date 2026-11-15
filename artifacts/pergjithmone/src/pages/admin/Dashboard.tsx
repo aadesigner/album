@@ -141,30 +141,29 @@ function StatCard({
     <div
       className="relative overflow-hidden"
       style={{
-        background: theme.accentSoft,
+        background: theme.card,
         border: `1px solid ${theme.line}`,
-        borderRadius: theme.radius,
+        borderRadius: 14,
         boxShadow: theme.cardShadow,
-        borderLeft: `3px solid ${accent}`,
       }}
     >
-      <div className="p-4 sm:p-5">
+      <div className="p-4 sm:p-[1.15rem]">
         <div className="flex items-start justify-between gap-2 mb-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em]" style={{ color: theme.muted }}>{label}</p>
+          <p className="text-[12px] font-medium" style={{ color: theme.muted }}>{label}</p>
           <span
-            className="w-7 h-7 flex items-center justify-center shrink-0"
-            style={{ background: theme.card, color: accent, borderRadius: `calc(${theme.radius} - 4px)` }}
+            className="w-8 h-8 flex items-center justify-center shrink-0"
+            style={{ background: theme.accentSoft, color: accent, borderRadius: 10 }}
           >
             {icon}
           </span>
         </div>
-        <p className="text-[1.85rem] sm:text-[2.1rem] font-semibold leading-none tracking-tight" style={{ color: theme.ink, fontFamily: theme.fontSerif }}>
+        <p className="text-[1.65rem] sm:text-[1.85rem] font-semibold leading-none tracking-tight" style={{ color: theme.ink }}>
           {value}
         </p>
         <div className="mt-3 flex items-end justify-between gap-2 min-h-[26px]">
           <div className="min-w-0">
             <Delta value={delta} theme={theme} />
-            {sub && <p className="text-[10px] mt-0.5 truncate" style={{ color: theme.muted }}>{sub}</p>}
+            {sub && <p className="text-[11px] mt-0.5 truncate" style={{ color: theme.muted }}>{sub}</p>}
           </div>
           {spark && spark.some((n) => n > 0) && <Sparkline values={spark} color={accent} />}
         </div>
@@ -368,7 +367,7 @@ function PendingPrintingWidget() {
   };
 
   return (
-    <div className="overflow-hidden" style={{ background: theme.accentSoft, border: `1px solid ${theme.line}`, borderRadius: theme.radius, boxShadow: theme.cardShadow }}>
+    <div className="overflow-hidden" style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: 14, boxShadow: theme.cardShadow }}>
       <div className="flex items-center justify-between gap-3 px-4 py-3.5" style={{ borderBottom: `1px solid ${theme.line}`, background: theme.card }}>
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-8 h-8 flex items-center justify-center shrink-0" style={{ background: theme.accentSoft, borderRadius: theme.radius }}>
@@ -620,67 +619,42 @@ export default function AdminDashboard() {
 
   return (
     <AdminLayout>
-      <div className="p-3 sm:p-5 md:p-7 max-w-screen-xl mx-auto pb-16">
-        {/* Editorial masthead — tinted to theme accent */}
-        <div
-          className="mb-6 sm:mb-8 relative overflow-hidden"
-          style={{
-            background: theme.accentSoft,
-            border: `1px solid ${theme.line}`,
-            borderLeft: `4px solid ${theme.accent}`,
-            borderRadius: theme.radius,
-            padding: '1.25rem 1.35rem 1.4rem',
-          }}
-        >
-          <div
-            aria-hidden
-            className="pointer-events-none absolute -right-8 -top-10 w-40 h-40 opacity-[0.12]"
-            style={{ background: `radial-gradient(circle, ${theme.accent}, transparent 70%)` }}
-          />
-          <div className="relative flex flex-col lg:flex-row lg:items-end justify-between gap-4">
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold tracking-[0.28em] uppercase mb-2" style={{ color: theme.accent }}>
-                Print desk
-              </p>
-              <h1
-                className="text-[2.35rem] sm:text-[2.85rem] md:text-[3.25rem] font-semibold leading-[0.95] tracking-tight"
-                style={{ color: theme.ink, fontFamily: theme.fontSerif }}
-              >
-                {format(new Date(), 'EEEE')}
-              </h1>
-              <p className="text-base sm:text-lg mt-2" style={{ color: theme.muted, fontFamily: theme.fontSerif, fontStyle: 'italic' }}>
-                {format(new Date(), 'd MMMM yyyy')} · {s?.rangeLabel || 'This month'}
-              </p>
-            </div>
-            <div className="flex items-center gap-3 flex-wrap shrink-0">
-              <span className="text-[11px]" style={{ color: theme.muted }}>
-                <Clock size={11} className="inline mr-1 -mt-0.5" />
-                {cacheHint}
-              </span>
-              <button
-                type="button"
-                onClick={handleRefresh}
-                disabled={isFetching}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold disabled:opacity-50"
-                style={{
-                  background: theme.accent,
-                  color: theme.accentOn,
-                  borderRadius: 0,
-                }}
-              >
-                <RefreshCw size={12} className={isFetching ? 'animate-spin' : ''} />
-                Refresh
-              </button>
-            </div>
+      <div className="p-4 sm:p-6 md:p-8 max-w-screen-xl mx-auto pb-16">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+          <div className="min-w-0">
+            <h1 className="text-[1.55rem] sm:text-[1.75rem] font-semibold tracking-tight" style={{ color: theme.ink }}>
+              Dashboard
+            </h1>
+            <p className="text-[13px] mt-1" style={{ color: theme.muted }}>
+              {format(new Date(), 'EEE, d MMM')} · {s?.rangeLabel || 'This month'}
+              <span className="opacity-50"> · </span>
+              {cacheHint}
+            </p>
           </div>
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={isFetching}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-[13px] font-medium disabled:opacity-50 self-start sm:self-auto"
+            style={{
+              background: theme.card,
+              color: theme.ink,
+              border: `1px solid ${theme.line}`,
+              borderRadius: 10,
+            }}
+          >
+            <RefreshCw size={13} className={isFetching ? 'animate-spin' : ''} />
+            Refresh
+          </button>
         </div>
 
         <div
-          className="flex gap-0 overflow-x-auto mb-5 -mx-3 px-3 sm:mx-0 sm:px-0 sticky top-[3.4rem] lg:top-0 z-10"
+          className="flex gap-1 overflow-x-auto mb-5 p-1 sticky top-[3.4rem] lg:top-0 z-10"
           style={{
             WebkitOverflowScrolling: 'touch',
-            background: theme.bg,
-            borderBottom: `1px solid ${theme.line}`,
+            background: theme.card,
+            border: `1px solid ${theme.line}`,
+            borderRadius: 12,
           }}
         >
           {RANGES.map((r) => {
@@ -690,12 +664,11 @@ export default function AdminDashboard() {
                 key={r.id}
                 type="button"
                 onClick={() => setRange(r.id)}
-                className="shrink-0 px-3.5 py-2.5 text-[12px] font-semibold transition-colors"
+                className="shrink-0 px-3 py-1.5 text-[12px] font-medium transition-colors"
                 style={{
-                  color: active ? theme.ink : theme.muted,
-                  borderBottom: active ? `2px solid ${theme.accent}` : '2px solid transparent',
-                  background: 'transparent',
-                  fontFamily: active ? theme.fontSerif : theme.fontSans,
+                  color: active ? theme.accentOn : theme.muted,
+                  background: active ? theme.accent : 'transparent',
+                  borderRadius: 8,
                 }}
               >
                 {r.label}
@@ -706,29 +679,37 @@ export default function AdminDashboard() {
 
         {actionItems.length > 0 && (
           <div
-            className="flex flex-wrap items-baseline gap-x-4 gap-y-2 px-0 py-3 mb-5"
-            style={{ borderBottom: `1px solid ${theme.line}` }}
+            className="flex flex-wrap items-center gap-2 px-3.5 py-3 mb-5"
+            style={{
+              background: theme.card,
+              border: `1px solid ${theme.line}`,
+              borderRadius: 12,
+            }}
           >
-            <span className="text-[11px] font-semibold uppercase tracking-[0.2em]" style={{ color: theme.accentDeep }}>
-              Do next
+            <span className="text-[12px] font-medium" style={{ color: theme.muted }}>
+              Next
             </span>
             {actionItems.map((item) => (
               <Link
                 key={item.key}
                 href={item.href}
-                className="inline-flex items-center gap-1.5 text-[13px] font-medium transition-opacity hover:opacity-80"
-                style={{ color: theme.ink, fontFamily: theme.fontSerif }}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-medium transition-opacity hover:opacity-85"
+                style={{
+                  background: theme.accentSoft,
+                  color: theme.ink,
+                  borderRadius: 8,
+                }}
               >
                 {item.label}
-                {item.detail ? <span style={{ color: theme.muted, fontFamily: theme.fontSans }}>· {item.detail}</span> : null}
-                <ArrowUpRight size={12} style={{ color: theme.accent }} />
+                {item.detail ? <span style={{ color: theme.muted }}>· {item.detail}</span> : null}
+                <ArrowUpRight size={12} style={{ color: theme.accentDeep }} />
               </Link>
             ))}
           </div>
         )}
 
-        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] mb-3" style={{ color: theme.muted }}>
-          Period ledger
+        <p className="text-[13px] font-medium mb-3" style={{ color: theme.muted }}>
+          Overview
         </p>
 
         {isLoading && !s ? (
@@ -795,7 +776,7 @@ export default function AdminDashboard() {
                 key={m.label}
                 href={m.href}
                 className="block px-3 py-2.5 transition-opacity hover:opacity-90"
-                style={{ background: theme.accentSoft, border: `1px solid ${theme.line}`, borderRadius: theme.radius }}
+                style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: 12, boxShadow: theme.cardShadow }}
               >
                 {body}
               </Link>
@@ -803,7 +784,7 @@ export default function AdminDashboard() {
               <div
                 key={m.label}
                 className="px-3 py-2.5"
-                style={{ background: theme.accentSoft, border: `1px solid ${theme.line}`, borderRadius: theme.radius }}
+                style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: 12, boxShadow: theme.cardShadow }}
               >
                 {body}
               </div>
@@ -811,12 +792,12 @@ export default function AdminDashboard() {
           })}
         </div>
 
-        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] mb-2" style={{ color: theme.muted }}>
-          Order pipeline
+        <p className="text-[13px] font-medium mb-3" style={{ color: theme.muted }}>
+          Pipeline
         </p>
         <div
           className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-2 mb-5"
-          style={{ background: theme.accentSoft, border: `1px solid ${theme.line}`, borderRadius: theme.radius }}
+          style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: 14, boxShadow: theme.cardShadow }}
         >
           {PIPELINE_STEPS.map((st) => {
             const count = Number(pipeline[st.key]?.count || 0);
@@ -848,13 +829,13 @@ export default function AdminDashboard() {
           <PendingPrintingWidget />
         </div>
 
-        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] mb-2" style={{ color: theme.muted }}>
+        <p className="text-[13px] font-medium mb-3" style={{ color: theme.muted }}>
           Charts
         </p>
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-5">
           <div
             className="xl:col-span-2 p-4"
-            style={{ background: theme.accentSoft, border: `1px solid ${theme.line}`, borderRadius: theme.radius, boxShadow: theme.cardShadow }}
+            style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: 14, boxShadow: theme.cardShadow }}
           >
             <div className="flex items-center justify-between mb-3">
               <div>
@@ -874,7 +855,7 @@ export default function AdminDashboard() {
 
           <div
             className="p-4"
-            style={{ background: theme.accentSoft, border: `1px solid ${theme.line}`, borderRadius: theme.radius }}
+            style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: 14, boxShadow: theme.cardShadow }}
           >
             <h2 className="font-semibold mb-1" style={{ color: theme.ink, fontFamily: theme.fontSerif }}>Order mix</h2>
             <p className="text-xs mb-3" style={{ color: theme.muted }}>Status in this period</p>
@@ -918,7 +899,7 @@ export default function AdminDashboard() {
         {desktop && (
           <div
             className="p-4 mb-5"
-            style={{ background: theme.accentSoft, border: `1px solid ${theme.line}`, borderRadius: theme.radius }}
+            style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: 14, boxShadow: theme.cardShadow }}
           >
             <div className="flex items-center justify-between mb-3">
               <div>
@@ -934,15 +915,16 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] mb-2" style={{ color: theme.muted }}>
-          All-time totals
+        <p className="text-[13px] font-medium mb-3" style={{ color: theme.muted }}>
+          All time
         </p>
         <div
           className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5 p-4"
           style={{
-            background: theme.accentSoft,
+            background: theme.card,
             border: `1px solid ${theme.line}`,
-            borderRadius: theme.radius,
+            borderRadius: 14,
+            boxShadow: theme.cardShadow,
           }}
         >
           {[
@@ -958,11 +940,11 @@ export default function AdminDashboard() {
           ))}
         </div>
 
-        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] mb-2" style={{ color: theme.muted }}>
-          Recent activity
+        <p className="text-[13px] font-medium mb-3" style={{ color: theme.muted }}>
+          Activity
         </p>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="lg:col-span-2 overflow-hidden" style={{ background: theme.accentSoft, border: `1px solid ${theme.line}`, borderRadius: theme.radius }}>
+          <div className="lg:col-span-2 overflow-hidden" style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: 14, boxShadow: theme.cardShadow }}>
             <div className="flex items-center justify-between px-4 py-3.5" style={{ borderBottom: `1px solid ${theme.line}`, background: theme.card }}>
               <h2 className="font-semibold" style={{ color: theme.ink, fontFamily: theme.fontSerif }}>Orders in period</h2>
               <Link href="/heyadmin/porosi" className="text-xs font-medium" style={{ color: theme.accentDeep }}>View all →</Link>
@@ -1014,7 +996,7 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <div className="overflow-hidden" style={{ background: theme.accentSoft, border: `1px solid ${theme.line}`, borderRadius: theme.radius }}>
+          <div className="overflow-hidden" style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: 14, boxShadow: theme.cardShadow }}>
             <div className="flex items-center justify-between px-4 py-3.5" style={{ borderBottom: `1px solid ${theme.line}`, background: theme.card }}>
               <h2 className="font-semibold" style={{ color: theme.ink, fontFamily: theme.fontSerif }}>New members</h2>
               <Link href="/heyadmin/perdorues" className="text-xs font-medium" style={{ color: theme.accentDeep }}>View all →</Link>

@@ -122,8 +122,8 @@ export const ADMIN_PALETTES: AdminPalette[] = [
     swatches: ['#F4F4F5', '#18181B', '#A1A1AA'],
     tokens: mono({
       paper: '#F4F4F5',
-      card: '#ECECEE',
-      line: '#D4D4D8',
+      card: '#FFFFFF',
+      line: '#E4E4E7',
       ink: '#18181B',
       muted: '#71717A',
       accent: '#18181B',
@@ -152,8 +152,8 @@ export const ADMIN_PALETTES: AdminPalette[] = [
     swatches: ['#F7F1F2', '#7A1F35', '#3A101C'],
     tokens: mono({
       paper: '#F7F1F2',
-      card: '#F0E4E7',
-      line: '#E0C8CE',
+      card: '#FFFFFF',
+      line: '#E8D5DA',
       ink: '#2A1018',
       muted: '#8A5864',
       accent: '#7A1F35',
@@ -182,8 +182,8 @@ export const ADMIN_PALETTES: AdminPalette[] = [
     swatches: ['#F0F3F8', '#1E3A5F', '#0F1C2E'],
     tokens: mono({
       paper: '#F0F3F8',
-      card: '#E2E8F2',
-      line: '#C5D0E0',
+      card: '#FFFFFF',
+      line: '#D0D8E6',
       ink: '#0F1C2E',
       muted: '#5A6E88',
       accent: '#1E3A5F',
@@ -212,8 +212,8 @@ export const ADMIN_PALETTES: AdminPalette[] = [
     swatches: ['#F2F5F0', '#4A6B52', '#1A261C'],
     tokens: mono({
       paper: '#F2F5F0',
-      card: '#E4EBE2',
-      line: '#C8D4C4',
+      card: '#FFFFFF',
+      line: '#D2DDD0',
       ink: '#1A261C',
       muted: '#5E7060',
       accent: '#4A6B52',
@@ -242,8 +242,8 @@ export const ADMIN_PALETTES: AdminPalette[] = [
     swatches: ['#F6F1EA', '#A85C2E', '#2A1C12'],
     tokens: mono({
       paper: '#F6F1EA',
-      card: '#EDE4D8',
-      line: '#DBCDB8',
+      card: '#FFFFFF',
+      line: '#E2D6C6',
       ink: '#2A1C12',
       muted: '#8A7058',
       accent: '#A85C2E',
@@ -272,8 +272,8 @@ export const ADMIN_PALETTES: AdminPalette[] = [
     swatches: ['#FAFAF9', '#3F3F46', '#E7E5E4'],
     tokens: mono({
       paper: '#F5F5F4',
-      card: '#E7E5E4',
-      line: '#D6D3D1',
+      card: '#FFFFFF',
+      line: '#E7E5E4',
       ink: '#1C1917',
       muted: '#78716C',
       accent: '#3F3F46',
@@ -298,7 +298,7 @@ export const ADMIN_PALETTES: AdminPalette[] = [
 ];
 
 /** v7 — full skin redesign (graphite / burgundy / …). */
-export const ADMIN_PALETTE_STORAGE_KEY = 'perg_admin_palette_v7';
+export const ADMIN_PALETTE_STORAGE_KEY = 'perg_admin_palette_v8';
 export const DEFAULT_ADMIN_PALETTE_ID: AdminPaletteId = 'graphite';
 
 const LEGACY_PALETTE_MAP: Record<string, AdminPaletteId> = {
@@ -342,6 +342,7 @@ export function readStoredAdminPaletteId(): AdminPaletteId {
     const raw = localStorage.getItem(ADMIN_PALETTE_STORAGE_KEY);
     if (raw && ADMIN_PALETTES.some((p) => p.id === raw)) return raw as AdminPaletteId;
     for (const key of [
+      'perg_admin_palette_v7',
       'perg_admin_palette_v6',
       'perg_admin_palette_v5',
       'perg_admin_palette_v4',

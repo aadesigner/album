@@ -450,61 +450,49 @@ export default function AdminOrders() {
       )}
 
       <div className="p-3 sm:p-5 md:p-7 max-w-screen-xl mx-auto">
-        <div
-          className="mb-6 relative"
-          style={{
-            background: ADMIN.accentSoft,
-            border: `1px solid ${ADMIN.line}`,
-            borderLeft: `4px solid ${ADMIN.accent}`,
-            borderRadius: ADMIN.radius,
-            padding: '1.2rem 1.35rem 1.35rem',
-          }}
-        >
-          <p className="text-[10px] font-semibold tracking-[0.28em] uppercase mb-2" style={{ color: ADMIN.accent }}>
-            Fulfillment ledger
-          </p>
-          <h1 className="text-[2.4rem] sm:text-[2.85rem] font-semibold leading-[0.95]" style={{ color: ADMIN.ink, fontFamily: ADMIN.fontSerif }}>
-            Orders
-          </h1>
-          <p className="text-sm mt-2" style={{ color: ADMIN.muted, fontFamily: ADMIN.fontSerif, fontStyle: 'italic' }}>
-            {total} in the book
-          </p>
+        <div className="mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h1 className="text-[1.55rem] sm:text-[1.75rem] font-semibold tracking-tight" style={{ color: ADMIN.ink }}>
+              Orders
+            </h1>
+            <p className="text-[13px] mt-1" style={{ color: ADMIN.muted }}>{total} total</p>
+          </div>
+          <button
+            onClick={() => refetch()}
+            className="self-start inline-flex items-center gap-1.5 px-3.5 py-2 text-[13px] font-medium"
+            style={{ background: ADMIN.card, color: ADMIN.ink, border: `1px solid ${ADMIN.line}`, borderRadius: 10 }}
+            aria-label="Refresh"
+          >
+            <RefreshCw size={14} />
+            Refresh
+          </button>
         </div>
 
         <div
-          className="flex items-end gap-0 mb-5 overflow-x-auto"
-          style={{ borderBottom: `1px solid ${ADMIN.line}` }}
+          className="flex gap-1 overflow-x-auto mb-5 p-1"
+          style={{ background: ADMIN.card, border: `1px solid ${ADMIN.line}`, borderRadius: 12 }}
         >
           {STATUSES.map(s => (
             <button
               key={s}
               onClick={() => setStatusFilter(s)}
-              className="px-3.5 py-2.5 text-xs font-semibold whitespace-nowrap transition-colors shrink-0"
+              className="px-3 py-1.5 text-[12px] font-medium whitespace-nowrap transition-colors shrink-0"
               style={{
-                color: statusFilter === s ? ADMIN.ink : ADMIN.muted,
-                borderBottom: statusFilter === s ? `2px solid ${ADMIN.accent}` : '2px solid transparent',
-                background: 'transparent',
-                fontFamily: statusFilter === s ? ADMIN.fontSerif : undefined,
+                color: statusFilter === s ? ADMIN.accentOn : ADMIN.muted,
+                background: statusFilter === s ? ADMIN.accent : 'transparent',
+                borderRadius: 8,
               }}
             >
               {s === 'all' ? 'All' : statusLabel(s)}
             </button>
           ))}
-          <button
-            onClick={() => refetch()}
-            className="ml-auto p-2.5 transition-colors shrink-0"
-            style={{ color: ADMIN.muted }}
-            aria-label="Refresh"
-          >
-            <RefreshCw size={14} />
-          </button>
         </div>
 
-        <div className="overflow-hidden" style={{ background: ADMIN.accentSoft, border: `1px solid ${ADMIN.line}`, borderRadius: ADMIN.radius }}>
+        <div className="overflow-hidden" style={{ background: ADMIN.card, border: `1px solid ${ADMIN.line}`, borderRadius: 14, boxShadow: ADMIN.cardShadow }}>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr style={{ borderBottom: `1px solid ${ADMIN.line}`, background: ADMIN.card }}>
+                <tr style={{ borderBottom: `1px solid ${ADMIN.line}`, background: ADMIN.bg }}>
                   {['#', 'Customer', 'Album', 'Pages', 'Amount', 'Date', 'Files', 'Status', 'Note', 'Admin Note', ''].map(h => (
                     <th key={h || 'actions'} className="px-3 sm:px-4 py-3.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] whitespace-nowrap" style={{ color: ADMIN.muted }}>{h}</th>
                   ))}
