@@ -153,7 +153,8 @@ router.get("/admin/stats", requireAdmin, async (req, res): Promise<void> => {
       const { start, end, grain, label: rangeLabel } = bounds;
       const prev = previousStatsRange(bounds);
 
-      const earnedStatuses = inArray(ordersTable.status, ["shipped", "delivered"]);
+      // Confirmed onward counts as earned; cancelled never does (status flip deducts automatically).
+      const earnedStatuses = inArray(ordersTable.status, ["confirmed", "printing", "shipped", "delivered"]);
       const activeOrder = ne(ordersTable.status, "cancelled");
       const openStatuses = inArray(ordersTable.status, ["pending", "confirmed", "printing", "shipped"]);
       const orderAmountSql = sql<number>`coalesce(nullif(${ordersTable.priceLek}, 0), ${projectsTable.totalPriceLek}, 0)`;

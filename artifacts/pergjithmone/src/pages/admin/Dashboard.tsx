@@ -17,6 +17,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { authFetch } from '@/lib/authFetch';
 import { useToast } from '@/hooks/use-toast';
 import type { AdminTokens } from '@/lib/adminTheme';
+import { orderStatusInline } from '@/lib/orderStatus';
 
 const Charts = React.lazy(() => import('./DashboardCharts'));
 
@@ -34,16 +35,6 @@ const RANGES = [
 
 type RangeId = (typeof RANGES)[number]['id'];
 
-/** Status chips — opacity ladder on accent tokens (set inline where theme is available). */
-const STATUS_TONE: Record<string, number> = {
-  pending: 0.55,
-  confirmed: 0.7,
-  printing: 0.85,
-  shipped: 1,
-  delivered: 0.9,
-  cancelled: 0.35,
-};
-
 const PIPELINE_STEPS = [
   { key: 'pending', label: 'Pending' },
   { key: 'confirmed', label: 'Confirmed' },
@@ -52,7 +43,108 @@ const PIPELINE_STEPS = [
 ] as const;
 
 function fmtLek(n: number) {
-  return `${Number(n || 0).toLocaleString()} L`;
+  return `${Math.round(Number(n || 0)).toLocaleString()} L`;
+}
+
+function easeOutExpo(t: number) {
+  return t >= 1 ? 1 : 1 - Math.pow(2, -10 * t);
+}
+
+function usePrefersReducedMotion() {
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const on = () => setReduced(mq.matches);
+    on();
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  return reduced;
+}
+
+/** Grow a number from 0 → target (eased). Re-runs when target changes. */
+function useCountUp(target: number, opts?: { duration?: number; delay?: number }) {
+  const duration = opts?.duration ?? 1100;
+  const delay = opts?.delay ?? 0;
+  const reduced = usePrefersReducedMotion();
+  const [display, setDisplay] = useState(0);
+  const targetSafe = Number.isFinite(target) ? target : 0;
+
+  useEffect(() => {
+    if (reduced) {
+      setDisplay(targetSafe);
+      return;
+    }
+    let raf = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    setDisplay(0);
+    const start = () => {
+      const t0 = performance.now();
+      const tick = (now: number) => {
+        const p = Math.min(1, (now - t0) / duration);
+        setDisplay(targetSafe * easeOutExpo(p));
+        if (p < 1) raf = requestAnimationFrame(tick);
+        else setDisplay(targetSafe);
+      };
+      raf = requestAnimationFrame(tick);
+    };
+    if (delay > 0) timer = setTimeout(start, delay);
+    else start();
+    return () => {
+      if (timer) clearTimeout(timer);
+      cancelAnimationFrame(raf);
+    };
+  }, [targetSafe, duration, delay, reduced]);
+
+  return display;
+}
+
+function CountUp({
+  value,
+  format,
+  duration,
+  delay,
+}: {
+  value: number;
+  format?: (n: number) => string;
+  duration?: number;
+  delay?: number;
+}) {
+  const n = useCountUp(value, { duration, delay });
+  const fmt = format ?? ((x: number) => Math.round(x).toLocaleString());
+  return <>{fmt(n)}</>;
+}
+
+function GrowBar({
+  pct,
+  color,
+  delay = 0,
+}: {
+  pct: number;
+  color: string;
+  delay?: number;
+}) {
+  const [w, setW] = useState(0);
+  const reduced = usePrefersReducedMotion();
+  useEffect(() => {
+    if (reduced) {
+      setW(pct);
+      return;
+    }
+    setW(0);
+    const t = setTimeout(() => setW(pct), Math.max(16, delay));
+    return () => clearTimeout(t);
+  }, [pct, delay, reduced]);
+  return (
+    <div
+      className="h-full rounded-full"
+      style={{
+        width: `${Math.max(0, Math.min(100, w))}%`,
+        background: color,
+        transition: reduced ? undefined : 'width 950ms cubic-bezier(0.22, 1, 0.36, 1)',
+      }}
+    />
+  );
 }
 
 function useIsDesktop() {
@@ -119,15 +211,17 @@ function Delta({ value, theme }: { value: number | null | undefined; theme: Admi
 }
 
 function StatCard({
-  label, value, icon, sub, tone = 'default', delta, spark,
+  label, value, icon, sub, tone = 'default', delta, spark, format, delay = 0,
 }: {
   label: string;
-  value: string | number;
+  value: number;
   icon: React.ReactNode;
   sub?: string;
   tone?: 'default' | 'accent' | 'success' | 'warm';
   delta?: number | null;
   spark?: number[];
+  format?: (n: number) => string;
+  delay?: number;
 }) {
   const { theme } = useAdminTheme();
   const accents = {
@@ -145,6 +239,8 @@ function StatCard({
         border: `1px solid ${theme.line}`,
         borderRadius: 14,
         boxShadow: theme.cardShadow,
+        animation: 'adminStatIn 520ms cubic-bezier(0.22, 1, 0.36, 1) both',
+        animationDelay: `${delay}ms`,
       }}
     >
       <div className="p-4 sm:p-[1.15rem]">
@@ -157,8 +253,8 @@ function StatCard({
             {icon}
           </span>
         </div>
-        <p className="text-[1.65rem] sm:text-[1.85rem] font-semibold leading-none tracking-tight" style={{ color: theme.ink }}>
-          {value}
+        <p className="text-[1.65rem] sm:text-[1.85rem] font-semibold leading-none tracking-tight tabular-nums" style={{ color: theme.ink }}>
+          <CountUp value={Number(value || 0)} format={format} delay={delay} duration={1150} />
         </p>
         <div className="mt-3 flex items-end justify-between gap-2 min-h-[26px]">
           <div className="min-w-0">
@@ -258,6 +354,8 @@ function PendingPrintingWidget() {
   const [shippingId, setShippingId] = React.useState<number | null>(null);
   const [regenId, setRegenId] = React.useState<number | null>(null);
   const orders = (data as any)?.data || [];
+  const pendingTone = orderStatusInline('pending');
+  const shippedTone = orderStatusInline('shipped');
 
   const handleShip = async (orderId: number) => {
     setShippingId(orderId);
@@ -370,8 +468,8 @@ function PendingPrintingWidget() {
     <div className="overflow-hidden" style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: 14, boxShadow: theme.cardShadow }}>
       <div className="flex items-center justify-between gap-3 px-4 py-3.5" style={{ borderBottom: `1px solid ${theme.line}`, background: theme.card }}>
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-8 h-8 flex items-center justify-center shrink-0" style={{ background: theme.accentSoft, borderRadius: theme.radius }}>
-            <Printer size={14} style={{ color: theme.accentDeep }} />
+          <div className="w-8 h-8 flex items-center justify-center shrink-0" style={{ background: pendingTone.bg, borderRadius: theme.radius }}>
+            <Printer size={14} style={{ color: pendingTone.color }} />
           </div>
           <div className="min-w-0">
             <h2 className="font-semibold text-[15px]" style={{ color: theme.ink, fontFamily: theme.fontSerif }}>Print queue</h2>
@@ -427,8 +525,13 @@ function PendingPrintingWidget() {
                 <button
                   onClick={() => handleShip(o.id)}
                   disabled={shippingId === o.id}
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-semibold disabled:opacity-50"
-                  style={{ background: theme.accentSoft, color: theme.accentDeep, borderRadius: theme.radius }}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-semibold disabled:opacity-50 border"
+                  style={{
+                    background: shippedTone.bg,
+                    color: shippedTone.color,
+                    borderColor: shippedTone.border,
+                    borderRadius: theme.radius,
+                  }}
                 >
                   <Truck size={11} /> {shippingId === o.id ? '…' : 'Ship'}
                 </button>
@@ -493,7 +596,12 @@ function PendingPrintingWidget() {
                       onClick={() => handleShip(o.id)}
                       disabled={shippingId === o.id}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-semibold disabled:opacity-50"
-                      style={{ background: theme.accentSoft, color: theme.accentDeep, borderRadius: theme.radius, border: `1px solid ${theme.line}` }}
+                      style={{
+                        background: shippedTone.bg,
+                        color: shippedTone.color,
+                        borderRadius: theme.radius,
+                        border: `1px solid ${shippedTone.border}`,
+                      }}
                     >
                       <Truck size={11} /> {shippingId === o.id ? '…' : 'Shipped'}
                     </button>
@@ -602,12 +710,35 @@ export default function AdminDashboard() {
       : null,
   ].filter(Boolean) as Array<{ key: string; label: string; href: string; detail: string | null }>;
 
-  const secondaryMetrics = [
-    { label: 'WA clicks', value: s?.wpClicks ?? 0, icon: <MessageCircle size={13} />, tip: 'This period', href: null as string | null },
-    { label: 'Avg order', value: fmtLek(s?.avgOrderValue ?? 0), icon: <Target size={13} />, tip: 'Non-cancelled', href: null },
-    { label: 'Conversion', value: `${s?.conversionRate ?? 0}%`, icon: <Activity size={13} />, tip: 'Orders / visitors', href: null },
+  const secondaryMetrics: Array<{
+    label: string;
+    value: number;
+    format?: (n: number) => string;
+    icon: React.ReactNode;
+    tip: string;
+    href: string | null;
+    animate?: boolean;
+  }> = [
+    { label: 'WA clicks', value: s?.wpClicks ?? 0, icon: <MessageCircle size={13} />, tip: 'This period', href: null },
+    { label: 'Avg order', value: s?.avgOrderValue ?? 0, format: fmtLek, icon: <Target size={13} />, tip: 'Non-cancelled', href: null },
+    {
+      label: 'Conversion',
+      value: s?.conversionRate ?? 0,
+      format: (n) => `${Math.round(n * 10) / 10}%`,
+      icon: <Activity size={13} />,
+      tip: 'Orders / visitors',
+      href: null,
+    },
     { label: 'Buyers', value: s?.uniqueBuyers ?? 0, icon: <Users size={13} />, tip: s?.repeatCustomers ? `${s.repeatCustomers} repeat` : 'Unique buyers', href: '/heyadmin/perdorues?filter=ordered' },
-    { label: 'Fulfillment', value: s?.fulfillmentHours ? `${s.fulfillmentHours}h` : '—', icon: <Clock size={13} />, tip: 'Avg to ship', href: '/heyadmin/porosi' },
+    {
+      label: 'Fulfillment',
+      value: s?.fulfillmentHours ?? 0,
+      format: (n) => (n > 0 ? `${Math.round(n * 10) / 10}h` : '—'),
+      icon: <Clock size={13} />,
+      tip: 'Avg to ship',
+      href: '/heyadmin/porosi',
+      animate: (s?.fulfillmentHours ?? 0) > 0,
+    },
     {
       label: 'Open albums',
       value: s?.draftProjects ?? 0,
@@ -619,6 +750,18 @@ export default function AdminDashboard() {
 
   return (
     <AdminLayout>
+      <style>{`
+        @keyframes adminStatIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          @keyframes adminStatIn {
+            from { opacity: 1; transform: none; }
+            to { opacity: 1; transform: none; }
+          }
+        }
+      `}</style>
       <div className="p-4 sm:p-6 md:p-8 max-w-screen-xl mx-auto pb-16">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
           <div className="min-w-0">
@@ -689,22 +832,26 @@ export default function AdminDashboard() {
             <span className="text-[12px] font-medium" style={{ color: theme.muted }}>
               Next
             </span>
-            {actionItems.map((item) => (
-              <Link
-                key={item.key}
-                href={item.href}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-medium transition-opacity hover:opacity-85"
-                style={{
-                  background: theme.accentSoft,
-                  color: theme.ink,
-                  borderRadius: 8,
-                }}
-              >
-                {item.label}
-                {item.detail ? <span style={{ color: theme.muted }}>· {item.detail}</span> : null}
-                <ArrowUpRight size={12} style={{ color: theme.accentDeep }} />
-              </Link>
-            ))}
+            {actionItems.map((item) => {
+              const st = orderStatusInline(item.key);
+              return (
+                <Link
+                  key={item.key}
+                  href={item.href}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-medium border transition-opacity hover:opacity-85"
+                  style={{
+                    background: st.bg,
+                    color: st.color,
+                    borderColor: st.border,
+                    borderRadius: 8,
+                  }}
+                >
+                  {item.label}
+                  {item.detail ? <span style={{ opacity: 0.75 }}>· {item.detail}</span> : null}
+                  <ArrowUpRight size={12} />
+                </Link>
+              );
+            })}
           </div>
         )}
 
@@ -727,6 +874,7 @@ export default function AdminDashboard() {
               sub={`${s?.pageViews ?? 0} page views`}
               delta={s?.deltas?.visitors}
               spark={chartData.map((d) => d.visitors)}
+              delay={0}
             />
             <StatCard
               label="Orders"
@@ -736,15 +884,18 @@ export default function AdminDashboard() {
               sub={`${fmtLek(s?.revenuePeriod ?? 0)} pipeline`}
               delta={s?.deltas?.orders}
               spark={chartData.map((d) => d.orders)}
+              delay={70}
             />
             <StatCard
               label="Earned"
-              value={fmtLek(s?.earnedPeriod ?? 0)}
+              value={s?.earnedPeriod ?? 0}
+              format={fmtLek}
               icon={<Wallet size={14} />}
               tone="success"
-              sub="Shipped / delivered"
+              sub="Confirmed → shipped"
               delta={s?.deltas?.revenue}
               spark={chartData.map((d) => d.revenue)}
+              delay={140}
             />
             <StatCard
               label="New members"
@@ -753,19 +904,26 @@ export default function AdminDashboard() {
               sub={`${s?.newProjects ?? 0} albums started`}
               delta={s?.deltas?.newUsers}
               spark={chartData.map((d) => d.registrations)}
+              delay={210}
             />
           </div>
         )}
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 mb-5">
-          {secondaryMetrics.map((m) => {
+          {secondaryMetrics.map((m, i) => {
             const body = (
               <>
                 <div className="flex items-center gap-1.5 mb-1" style={{ color: theme.accent }}>
                   {m.icon}
                   <span className="text-[9px] font-semibold uppercase tracking-wider" style={{ color: theme.muted }}>{m.label}</span>
                 </div>
-                <p className="text-[16px] font-semibold leading-none" style={{ color: theme.ink, fontFamily: theme.fontSerif }}>{m.value}</p>
+                <p className="text-[16px] font-semibold leading-none tabular-nums" style={{ color: theme.ink, fontFamily: theme.fontSerif }}>
+                  {m.animate === false ? (
+                    (m.format ?? ((n: number) => Math.round(n).toLocaleString()))(m.value)
+                  ) : (
+                    <CountUp value={m.value} format={m.format} delay={180 + i * 45} duration={1000} />
+                  )}
+                </p>
                 <p className="text-[10px] mt-1" style={{ color: theme.muted }}>
                   {m.tip}{m.href ? ' · open →' : ''}
                 </p>
@@ -776,7 +934,14 @@ export default function AdminDashboard() {
                 key={m.label}
                 href={m.href}
                 className="block px-3 py-2.5 transition-opacity hover:opacity-90"
-                style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: 12, boxShadow: theme.cardShadow }}
+                style={{
+                  background: theme.card,
+                  border: `1px solid ${theme.line}`,
+                  borderRadius: 12,
+                  boxShadow: theme.cardShadow,
+                  animation: 'adminStatIn 480ms cubic-bezier(0.22, 1, 0.36, 1) both',
+                  animationDelay: `${180 + i * 45}ms`,
+                }}
               >
                 {body}
               </Link>
@@ -784,7 +949,14 @@ export default function AdminDashboard() {
               <div
                 key={m.label}
                 className="px-3 py-2.5"
-                style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: 12, boxShadow: theme.cardShadow }}
+                style={{
+                  background: theme.card,
+                  border: `1px solid ${theme.line}`,
+                  borderRadius: 12,
+                  boxShadow: theme.cardShadow,
+                  animation: 'adminStatIn 480ms cubic-bezier(0.22, 1, 0.36, 1) both',
+                  animationDelay: `${180 + i * 45}ms`,
+                }}
               >
                 {body}
               </div>
@@ -799,27 +971,34 @@ export default function AdminDashboard() {
           className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-2 mb-5"
           style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: 14, boxShadow: theme.cardShadow }}
         >
-          {PIPELINE_STEPS.map((st) => {
+          {PIPELINE_STEPS.map((st, i) => {
             const count = Number(pipeline[st.key]?.count || 0);
             const revenue = Number(pipeline[st.key]?.revenue || 0);
+            const stColor = orderStatusInline(st.key);
+            const barPct = Math.round((count / pipelineMax) * 100);
             return (
               <Link
                 key={st.key}
                 href={`/heyadmin/porosi?status=${st.key}`}
                 className="block px-2.5 py-2 rounded-lg transition-colors hover:bg-[color:var(--hover)]"
-                style={{ ['--hover' as any]: theme.accentSoft }}
+                style={{
+                  ['--hover' as any]: stColor.bg,
+                  animation: 'adminStatIn 480ms cubic-bezier(0.22, 1, 0.36, 1) both',
+                  animationDelay: `${260 + i * 55}ms`,
+                }}
               >
                 <div className="flex items-center justify-between mb-1.5">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: theme.muted }}>{st.label}</p>
-                  <p className="text-sm font-semibold" style={{ color: theme.ink, fontFamily: theme.fontSerif }}>{count}</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: stColor.color }}>{st.label}</p>
+                  <p className="text-sm font-semibold tabular-nums" style={{ color: theme.ink, fontFamily: theme.fontSerif }}>
+                    <CountUp value={count} delay={260 + i * 55} duration={950} />
+                  </p>
                 </div>
-                <div className="h-1.5 rounded-full overflow-hidden" style={{ background: theme.accentSoft }}>
-                  <div
-                    className="h-full rounded-full"
-                    style={{ width: `${Math.round((count / pipelineMax) * 100)}%`, background: theme.accent }}
-                  />
+                <div className="h-1.5 rounded-full overflow-hidden" style={{ background: stColor.bg }}>
+                  <GrowBar pct={barPct} color={stColor.color} delay={260 + i * 55} />
                 </div>
-                <p className="text-[10px] mt-1" style={{ color: theme.muted }}>{fmtLek(revenue)}</p>
+                <p className="text-[10px] mt-1 tabular-nums" style={{ color: theme.muted }}>
+                  <CountUp value={revenue} format={fmtLek} delay={260 + i * 55} duration={950} />
+                </p>
               </Link>
             );
           })}
@@ -928,14 +1107,27 @@ export default function AdminDashboard() {
           }}
         >
           {[
-            { label: 'Pipeline revenue', value: fmtLek(s?.revenue ?? 0) },
-            { label: 'Earned', value: fmtLek(s?.earned ?? 0) },
+            { label: 'Pipeline revenue', value: s?.revenue ?? 0, format: fmtLek },
+            { label: 'Earned', value: s?.earned ?? 0, format: fmtLek },
             { label: 'WA clicks', value: s?.wpClicksTotal ?? 0 },
             { label: 'Orders', value: s?.totalOrders ?? 0 },
-          ].map((x) => (
-            <div key={x.label}>
+          ].map((x, i) => (
+            <div
+              key={x.label}
+              style={{
+                animation: 'adminStatIn 480ms cubic-bezier(0.22, 1, 0.36, 1) both',
+                animationDelay: `${320 + i * 50}ms`,
+              }}
+            >
               <p className="text-[9px] font-semibold uppercase tracking-wider mb-1" style={{ color: theme.muted }}>{x.label}</p>
-              <p className="text-lg font-semibold" style={{ color: theme.ink, fontFamily: theme.fontSerif }}>{x.value}</p>
+              <p className="text-lg font-semibold tabular-nums" style={{ color: theme.ink, fontFamily: theme.fontSerif }}>
+                <CountUp
+                  value={Number(x.value || 0)}
+                  format={x.format}
+                  delay={320 + i * 50}
+                  duration={1100}
+                />
+              </p>
             </div>
           ))}
         </div>
@@ -976,17 +1168,22 @@ export default function AdminDashboard() {
                         <td className="px-4 py-3 text-xs truncate max-w-[120px]" style={{ color: theme.muted }}>{o.projectTitle || `Proj #${o.projectId}`}</td>
                         <td className="px-4 py-3 font-semibold text-xs" style={{ color: theme.ink }}>{fmtLek(o.priceLek)}</td>
                         <td className="px-4 py-3">
-                          <span
-                            className="px-2 py-0.5 text-[10px] font-semibold capitalize"
-                            style={{
-                              background: theme.accentSoft,
-                              color: theme.accentDeep,
-                              borderRadius: theme.radius,
-                              opacity: STATUS_TONE[o.status] ?? 0.7,
-                            }}
-                          >
-                            {o.status}
-                          </span>
+                          {(() => {
+                            const st = orderStatusInline(o.status);
+                            return (
+                              <span
+                                className="px-2 py-0.5 text-[10px] font-semibold capitalize border"
+                                style={{
+                                  background: st.bg,
+                                  color: st.color,
+                                  borderColor: st.border,
+                                  borderRadius: 999,
+                                }}
+                              >
+                                {o.status}
+                              </span>
+                            );
+                          })()}
                         </td>
                       </tr>
                     ))

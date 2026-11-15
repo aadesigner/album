@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { orderStatusClass } from '@/lib/orderStatus';
 
 const BASE = (import.meta as any).env?.BASE_URL?.replace(/\/$/, '') || '';
 
@@ -352,15 +353,6 @@ function EditUserModal({ targetUser, onClose, onSaved }: {
 
 const STATUSES = ['pending', 'confirmed', 'printing', 'shipped', 'delivered', 'cancelled'] as const;
 
-const STATUS_STYLE: Record<string, string> = {
-  pending:   'bg-[color-mix(in_srgb,var(--admin-accent)_12%,white)] text-[var(--admin-accent-deep)] border-[color-mix(in_srgb,var(--admin-accent)_22%,white)]',
-  confirmed: 'bg-[color-mix(in_srgb,var(--admin-accent)_16%,white)] text-[var(--admin-accent-deep)] border-[color-mix(in_srgb,var(--admin-accent)_28%,white)]',
-  printing:  'bg-[color-mix(in_srgb,var(--admin-accent)_20%,white)] text-[var(--admin-accent-deep)] border-[color-mix(in_srgb,var(--admin-accent)_32%,white)]',
-  shipped:   'bg-[color-mix(in_srgb,var(--admin-accent)_14%,white)] text-[var(--admin-accent-deep)] border-[color-mix(in_srgb,var(--admin-accent)_26%,white)]',
-  delivered: 'bg-[color-mix(in_srgb,var(--admin-accent)_10%,white)] text-[var(--admin-accent-deep)] border-[color-mix(in_srgb,var(--admin-accent)_22%,white)]',
-  cancelled: 'bg-neutral-100 text-neutral-500 border-neutral-200',
-};
-
 // ── Dedicated user manage panel ───────────────────────────────────────────────
 function UserManageModal({
   userId,
@@ -650,7 +642,7 @@ function UserManageModal({
                                   <select
                                     value={o.status}
                                     onChange={e => handleStatusChange(o.id, e.target.value)}
-                                    className={`px-2 py-1 rounded-full text-[10px] font-semibold border cursor-pointer ${STATUS_STYLE[o.status] || 'bg-neutral-50 text-neutral-500 border-neutral-200'}`}
+                                    className={`px-2 py-1 rounded-full text-[10px] font-semibold border cursor-pointer ${orderStatusClass(o.status)}`}
                                   >
                                     {STATUSES.map(s => (
                                       <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>

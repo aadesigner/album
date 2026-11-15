@@ -8,19 +8,11 @@ import { Button } from '@/components/ui/button';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { orderStatusClass, orderStatusInline } from '@/lib/orderStatus';
 
 const BASE = (import.meta as any).env?.BASE_URL?.replace(/\/$/, '') || '';
 
 const STATUSES = ['all', 'pending', 'confirmed', 'printing', 'shipped', 'delivered', 'cancelled'] as const;
-
-const STATUS_STYLE: Record<string, string> = {
-  pending:   'bg-[color-mix(in_srgb,var(--admin-accent)_12%,white)] text-[var(--admin-accent-deep)] border-[color-mix(in_srgb,var(--admin-accent)_22%,white)]',
-  confirmed: 'bg-[color-mix(in_srgb,var(--admin-accent)_16%,white)] text-[var(--admin-accent-deep)] border-[color-mix(in_srgb,var(--admin-accent)_28%,white)]',
-  printing:  'bg-[color-mix(in_srgb,var(--admin-accent)_20%,white)] text-[var(--admin-accent-deep)] border-[color-mix(in_srgb,var(--admin-accent)_32%,white)]',
-  shipped:   'bg-[color-mix(in_srgb,var(--admin-accent)_14%,white)] text-[var(--admin-accent-deep)] border-[color-mix(in_srgb,var(--admin-accent)_26%,white)]',
-  delivered: 'bg-[color-mix(in_srgb,var(--admin-accent)_10%,white)] text-[var(--admin-accent-deep)] border-[color-mix(in_srgb,var(--admin-accent)_22%,white)]',
-  cancelled: 'bg-neutral-100 text-neutral-500 border-neutral-200',
-};
 
 function statusLabel(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1);
@@ -472,20 +464,32 @@ export default function AdminOrders() {
           className="flex gap-1 overflow-x-auto mb-5 p-1"
           style={{ background: ADMIN.card, border: `1px solid ${ADMIN.line}`, borderRadius: 12 }}
         >
-          {STATUSES.map(s => (
-            <button
-              key={s}
-              onClick={() => setStatusFilter(s)}
-              className="px-3 py-1.5 text-[12px] font-medium whitespace-nowrap transition-colors shrink-0"
-              style={{
-                color: statusFilter === s ? ADMIN.accentOn : ADMIN.muted,
-                background: statusFilter === s ? ADMIN.accent : 'transparent',
-                borderRadius: 8,
-              }}
-            >
-              {s === 'all' ? 'All' : statusLabel(s)}
-            </button>
-          ))}
+          {STATUSES.map(s => {
+            const active = statusFilter === s;
+            const st = s === 'all' ? null : orderStatusInline(s);
+            return (
+              <button
+                key={s}
+                onClick={() => setStatusFilter(s)}
+                className="px-3 py-1.5 text-[12px] font-medium whitespace-nowrap transition-colors shrink-0 border"
+                style={{
+                  color: active
+                    ? (st?.color ?? ADMIN.accentOn)
+                    : (st?.color ?? ADMIN.muted),
+                  background: active
+                    ? (st?.bg ?? ADMIN.accent)
+                    : 'transparent',
+                  borderColor: active
+                    ? (st?.border ?? 'transparent')
+                    : 'transparent',
+                  borderRadius: 8,
+                  opacity: active || !st ? 1 : 0.72,
+                }}
+              >
+                {s === 'all' ? 'All' : statusLabel(s)}
+              </button>
+            );
+          })}
         </div>
 
         <div className="overflow-hidden" style={{ background: ADMIN.card, border: `1px solid ${ADMIN.line}`, borderRadius: 14, boxShadow: ADMIN.cardShadow }}>
@@ -624,7 +628,7 @@ export default function AdminOrders() {
                         <select
                           value={o.status}
                           onChange={e => handleStatusChange(o.id, e.target.value)}
-                          className={`px-2.5 py-1.5 rounded-full text-[10px] font-semibold border cursor-pointer focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--admin-accent)_45%,transparent)] ${STATUS_STYLE[o.status] || 'bg-neutral-50 text-neutral-500 border-neutral-200'}`}
+                          className={`px-2.5 py-1.5 rounded-full text-[10px] font-semibold border cursor-pointer focus:outline-none focus:ring-1 focus:ring-sky-200 ${orderStatusClass(o.status)}`}
                         >
                           {STATUSES.slice(1).map(s => (
                             <option key={s} value={s}>{statusLabel(s)}</option>

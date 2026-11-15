@@ -895,6 +895,18 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
           >
             <div className="flex items-center gap-2.5">
               <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                <a
+                  href="/"
+                  className="shrink-0 flex items-center"
+                  aria-label="Përgjithmonë — go to main site"
+                >
+                  <img
+                    src="/logo-nav.png"
+                    alt="Përgjithmonë"
+                    className="h-7 w-auto"
+                    style={{ objectFit: 'contain', objectPosition: 'left center', display: 'block' }}
+                  />
+                </a>
                 <div className="min-w-0">
                   <p className="font-semibold text-[1.05rem] leading-tight truncate" style={{ color: theme.ink }}>
                     {currentLabel}
