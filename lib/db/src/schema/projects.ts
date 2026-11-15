@@ -43,6 +43,8 @@ export const projectsTable = pgTable("projects", {
   title: text("title").notNull(),
   status: projectStatusEnum("status").notNull().default("draft"),
   pdfUrl: text("pdf_url"),
+  /** Set when Auto Wiper removed print PDF + album photo files for an ordered album. */
+  printAssetsWipedAt: timestamp("print_assets_wiped_at", { withTimezone: true }),
   shareToken: text("share_token").unique(),
   pageCount: integer("page_count").notNull().default(32),
   totalPriceLek: integer("total_price_lek").notNull().default(3000),
@@ -55,6 +57,7 @@ export const projectsTable = pgTable("projects", {
     .$onUpdate(() => new Date()),
 }, (t) => [
   index("projects_user_id_idx").on(t.userId),
+  index("projects_print_assets_wiped_at_idx").on(t.printAssetsWipedAt),
 ]);
 
 export const projectPagesTable = pgTable("project_pages", {

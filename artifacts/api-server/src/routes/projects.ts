@@ -922,6 +922,7 @@ router.get(
         userId: projectsTable.userId,
         title: projectsTable.title,
         status: projectsTable.status,
+        printAssetsWipedAt: projectsTable.printAssetsWipedAt,
       })
       .from(projectsTable)
       .where(eq(projectsTable.id, projectId))
@@ -929,6 +930,14 @@ router.get(
 
     if (!project || (project.userId !== req.user!.id && req.user!.role !== "admin")) {
       res.status(404).json({ error: "Project not found" });
+      return;
+    }
+
+    if (project.printAssetsWipedAt) {
+      res.status(410).json({
+        error: "Print assets were removed by Auto Wiper. PDF is no longer available.",
+        code: "PRINT_ASSETS_WIPED",
+      });
       return;
     }
 

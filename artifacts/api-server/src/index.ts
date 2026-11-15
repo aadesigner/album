@@ -51,4 +51,8 @@ app.listen(port, (err) => {
   Promise.all([seedCatalog(), seedSuperAdmin(), backfillLastLoginAt()]).catch((seedErr) => {
     logger.error({ err: seedErr }, "Failed during startup seed");
   });
+
+  import("./lib/autoWiper")
+    .then((m) => m.startAutoWiper())
+    .catch((err) => logger.error({ err }, "Failed to start Auto Wiper"));
 });

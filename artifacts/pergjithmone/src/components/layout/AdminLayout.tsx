@@ -5,7 +5,7 @@ import { Link, useLocation } from 'wouter';
 import {
   LayoutDashboard, Users, ShoppingBag, FolderOpen, Image,
   Grid, Ruler, Settings, LogOut, X, Sparkles, ExternalLink, ShieldAlert, Check, Palette,
-  FileText, Sticker, ChevronDown, Paintbrush,
+  FileText, Sticker, ChevronDown, Paintbrush, Search,
 } from 'lucide-react';
 import { authFetch } from '@/lib/authFetch';
 import {
@@ -20,6 +20,7 @@ import {
   type AdminTokens,
 } from '@/lib/adminTheme';
 import { AdminStickyNotes } from '@/components/admin/AdminStickyNotes';
+import { AdminCommandSearch, type AdminSearchEntry } from '@/components/admin/AdminCommandSearch';
 
 /** Mutable theme bag — pages import this; palette switch mutates + re-renders admin shell. */
 export const ADMIN: AdminTokens = { ...getAdminPalette(DEFAULT_ADMIN_PALETTE_ID).tokens };
@@ -63,6 +64,14 @@ const NAV_GROUP_ORDER: NavGroupTitle[] = ['Overview', 'Catalog', 'Website', 'Sys
 const navGroups = NAV_GROUP_ORDER.map((title) => ({
   title,
   items: navItems.filter((i) => i.group === title),
+}));
+
+const ADMIN_SEARCH_ENTRIES: AdminSearchEntry[] = navItems.map((i) => ({
+  href: i.href,
+  label: i.label,
+  group: i.group,
+  Icon: i.Icon,
+  keywords: [i.label, i.group, i.href.replace('/heyadmin/', '').replace(/\//g, ' ')],
 }));
 
 const SIDEBAR_OPEN_KEY = 'admin-nav-open-groups';
@@ -248,7 +257,7 @@ function ThemeSwitcher({
           <div className="p-2.5 grid grid-cols-2 gap-2 max-h-[min(26rem,58vh)] overflow-y-auto overscroll-contain">
             {ADMIN_PALETTES.map((p) => {
               const isActive = p.id === paletteId;
-              const isStandard = p.id === 'standard';
+              const isStandard = p.id === DEFAULT_ADMIN_PALETTE_ID;
               return (
                 <button
                   key={p.id}
@@ -340,11 +349,12 @@ function ThemeSwitcher({
 }
 
 function Sidebar({
-  onClose, theme, variant = 'desktop',
+  onClose, theme, variant = 'desktop', onOpenSearch,
 }: {
   onClose?: () => void;
   theme: AdminTokens;
   variant?: 'desktop' | 'mobile';
+  onOpenSearch?: () => void;
 }) {
   const { user, logout } = useAuth();
   const [location] = useLocation();
@@ -461,6 +471,34 @@ function Sidebar({
             <X size={18} strokeWidth={2.25} />
           </button>
         )}
+      </div>
+
+      <div className={`relative ${isMobile ? 'px-3 pt-3' : 'px-2 pt-2.5'}`}>
+        <button
+          type="button"
+          onClick={() => {
+            onOpenSearch?.();
+            if (onClose && isMobile) onClose();
+          }}
+          className="w-full flex items-center gap-2 px-2.5 py-2 text-left transition-colors"
+          style={{
+            borderRadius: theme.radius,
+            background: `${theme.sidebarHover}`,
+            color: theme.sidebarText,
+            border: `1px solid ${theme.sidebarLine}`,
+            fontFamily: theme.fontSans,
+          }}
+          aria-label="Search admin pages"
+        >
+          <Search size={14} strokeWidth={2} className="shrink-0 opacity-80" />
+          <span className="flex-1 text-[12px] truncate opacity-80">Search pages…</span>
+          <kbd
+            className="hidden sm:inline text-[9px] font-semibold tracking-wide px-1.5 py-0.5 rounded"
+            style={{ background: `${theme.sidebarActive}`, color: theme.sidebarTextActive, opacity: 0.85 }}
+          >
+            ⌘K
+          </kbd>
+        </button>
       </div>
 
       <nav className={`relative flex-1 overflow-y-auto overscroll-contain ${isMobile ? 'py-3 px-3' : 'py-2.5 px-2'}`}>
@@ -745,6 +783,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
   const [location] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const { data: pulse } = useAdminPulse(user?.role === 'admin');
   const [paletteId, setPaletteIdState] = useState<AdminPaletteId>(DEFAULT_ADMIN_PALETTE_ID);
   const [ready, setReady] = useState(false);
@@ -860,6 +899,13 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
           ['--admin-font-serif' as string]: theme.fontSerif,
           ['--admin-font-sans' as string]: theme.fontSans,
           ['--admin-radius' as string]: theme.radius,
+          ['--admin-accent' as string]: theme.accent,
+          ['--admin-accent-soft' as string]: theme.accentSoft,
+          ['--admin-accent-deep' as string]: theme.accentDeep,
+          ['--admin-accent-on' as string]: theme.accentOn,
+          ['--admin-bg' as string]: theme.bg,
+          ['--admin-ink' as string]: theme.ink,
+          ['--admin-line' as string]: theme.line,
         }}
         data-admin-palette={paletteId}
       >
@@ -868,8 +914,16 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
           className="w-[15rem] fixed inset-y-0 left-0 z-30 hidden lg:block"
           style={{ borderRight: `1px solid ${theme.sidebarLine}`, boxShadow: `4px 0 24px ${theme.accent}14` }}
         >
-          <Sidebar theme={theme} variant="desktop" />
+          <Sidebar theme={theme} variant="desktop" onOpenSearch={() => setSearchOpen(true)} />
         </aside>
+
+        <AdminCommandSearch
+          theme={theme}
+          entries={ADMIN_SEARCH_ENTRIES}
+          open={searchOpen}
+          onOpenChange={setSearchOpen}
+          hideTrigger
+        />
 
         {/* Mobile: dimmed backdrop */}
         <div
@@ -902,6 +956,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
             theme={theme}
             onClose={() => setSidebarOpen(false)}
             variant="mobile"
+            onOpenSearch={() => setSearchOpen(true)}
           />
         </aside>
 
@@ -962,6 +1017,21 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
                   </p>
                 </div>
               </div>
+
+              <button
+                type="button"
+                onClick={() => setSearchOpen(true)}
+                className="w-9 h-9 flex items-center justify-center shrink-0"
+                style={{
+                  color: theme.ink,
+                  background: theme.card,
+                  border: `1px solid ${theme.line}`,
+                  borderRadius: theme.radius,
+                }}
+                aria-label="Search admin pages"
+              >
+                <Search size={16} strokeWidth={2} />
+              </button>
 
               {!hideThemeSwitcher && (
                 <ThemeSwitcher

@@ -79,6 +79,7 @@ const DEFAULT_SETTINGS: Array<{ key: string; value: string }> = [
   { key: "offer_bar_button_text", value: "#8C3A2E" },
   { key: "clarity_enabled", value: "false" },
   { key: "clarity_project_id", value: "" },
+  { key: "auto_wiper_retention", value: "off" },
 ];
 
 /**

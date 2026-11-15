@@ -130,6 +130,11 @@ function buildSettingsPayload(values: any, hiddenIds: Set<string>) {
     offerBarButtonText: sanitizeHexColor(values.offerBarButtonText, OFFER_BAR_DEFAULTS.buttonText),
     clarityEnabled:     Boolean(values.clarityEnabled),
     clarityProjectId:   extractClarityProjectId(values.clarityProjectId),
+    autoWiperRetention: (() => {
+      const v = String(values.autoWiperRetention || 'off').toLowerCase();
+      if (v === '7d' || v === '14d' || v === '30d') return v;
+      return 'off';
+    })(),
   };
 }
 
@@ -193,6 +198,11 @@ export default function AdminSettings() {
       offerBarButtonText: s?.offerBarButtonText || OFFER_BAR_DEFAULTS.buttonText,
       clarityEnabled:     s?.clarityEnabled     ?? false,
       clarityProjectId:   s?.clarityProjectId   || '',
+      autoWiperRetention: (() => {
+        const v = String(s?.autoWiperRetention || 'off').toLowerCase();
+        if (v === '7d' || v === '14d' || v === '30d') return v;
+        return 'off';
+      })(),
     },
   });
 
@@ -624,6 +634,35 @@ export default function AdminSettings() {
                     </div>
                   );
                 })()}
+              </div>
+
+              <div className={cardClass} style={cardStyle}>
+                <SectionHeader
+                  icon={FileLock2}
+                  title="Auto Wiper"
+                  desc="After an order ages past retention, delete the print PDF and uploaded photo files from the server. Admin downloads lock. Customer albums stay viewable (locked); drafts and device caches are never touched."
+                />
+                <FormField control={form.control} name="autoWiperRetention" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Retention</FormLabel>
+                    <FormControl>
+                      <select
+                        value={field.value || 'off'}
+                        onChange={(e) => field.onChange(e.target.value)}
+                        className="w-full h-10 rounded-xl border bg-white px-3 text-sm"
+                        style={{ borderColor: ADMIN.line, color: ADMIN.ink }}
+                      >
+                        <option value="off">Off — keep forever</option>
+                        <option value="7d">1 week after order</option>
+                        <option value="14d">2 weeks after order</option>
+                        <option value="30d">1 month after order</option>
+                      </select>
+                    </FormControl>
+                    <FormDescription>
+                      Only albums that were ordered. Unordered drafts stay; phone/browser photo cache is never deleted by us.
+                    </FormDescription>
+                  </FormItem>
+                )} />
               </div>
 
               <div className={cardClass} style={cardStyle}>

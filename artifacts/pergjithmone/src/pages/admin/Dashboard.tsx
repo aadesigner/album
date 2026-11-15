@@ -10,7 +10,7 @@ import {
   TrendingUp, Users, ShoppingBag, Eye, MessageCircle,
   UserPlus, Printer, Truck, FolderOpen, RefreshCw,
   Target, Wallet, Activity, Clock, ArrowUpRight, ArrowDownRight,
-  Minus, BookOpen, FolderArchive,
+  Minus, BookOpen, FolderArchive, Lock,
 } from 'lucide-react';
 import { Link } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
@@ -34,13 +34,14 @@ const RANGES = [
 
 type RangeId = (typeof RANGES)[number]['id'];
 
-const STATUS_COLORS: Record<string, string> = {
-  pending: 'bg-amber-50 text-amber-800',
-  confirmed: 'bg-sky-50 text-sky-800',
-  printing: 'bg-[#F3E4E6] text-[#A85C66]',
-  shipped: 'bg-teal-50 text-teal-800',
-  delivered: 'bg-emerald-50 text-emerald-800',
-  cancelled: 'bg-red-50 text-red-700',
+/** Status chips — opacity ladder on accent tokens (set inline where theme is available). */
+const STATUS_TONE: Record<string, number> = {
+  pending: 0.55,
+  confirmed: 0.7,
+  printing: 0.85,
+  shipped: 1,
+  delivered: 0.9,
+  cancelled: 0.35,
 };
 
 const PIPELINE_STEPS = [
@@ -288,12 +289,16 @@ function PendingPrintingWidget() {
       if (!res.ok) {
         const msg = String(body.error || '');
         toast({
-          title: /MISSING_UPLOADS|missing on disk/i.test(msg)
-            ? 'Photos missing on server'
-            : /UNRESOLVED_DEVICE_PHOTOS|device-local|local-photo/i.test(msg)
-              ? 'Photos never reached the server'
-              : 'PDF generation failed',
-          description: msg || 'Try again from Orders',
+          title: /PRINT_ASSETS_WIPED|Auto Wiper/i.test(msg)
+            ? 'Print assets wiped'
+            : /MISSING_UPLOADS|missing on disk/i.test(msg)
+              ? 'Photos missing on server'
+              : /UNRESOLVED_DEVICE_PHOTOS|device-local|local-photo/i.test(msg)
+                ? 'Photos never reached the server'
+                : 'PDF generation failed',
+          description: /PRINT_ASSETS_WIPED|Auto Wiper/i.test(msg)
+            ? 'PDF and photos were removed by Auto Wiper.'
+            : (msg || 'Try again from Orders'),
           variant: 'destructive',
         });
         return;
@@ -363,7 +368,7 @@ function PendingPrintingWidget() {
   };
 
   return (
-    <div className="overflow-hidden" style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: theme.radius, boxShadow: '0 8px 24px rgba(40,16,28,0.045)' }}>
+    <div className="overflow-hidden" style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: theme.radius, boxShadow: theme.cardShadow }}>
       <div className="flex items-center justify-between gap-3 px-4 py-3.5" style={{ borderBottom: `1px solid ${theme.line}` }}>
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-8 h-8 flex items-center justify-center shrink-0" style={{ background: theme.accentSoft, borderRadius: theme.radius }}>
@@ -394,29 +399,37 @@ function PendingPrintingWidget() {
                 <p className="text-[11px] truncate" style={{ color: theme.muted }}>{o.projectTitle || `Proj #${o.projectId}`} · {fmtLek(o.priceLek)}</p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                {o.pdfUrl ? (
-                  <a href={pdfHref(o.pdfUrl)} target="_blank" rel="noopener noreferrer" className="text-[10px] font-semibold" style={{ color: theme.accentDeep }}>PDF</a>
+                {o.printAssetsWipedAt ? (
+                  <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold" style={{ color: theme.muted }} title="Removed by Auto Wiper">
+                    <Lock size={10} /> Wiped
+                  </span>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={() => handleGeneratePdf(o.id, o.projectId)}
-                    disabled={regenId === o.id}
-                    className="inline-flex items-center gap-0.5 text-[10px] font-semibold disabled:opacity-50"
-                    style={{ color: '#B45309' }}
-                    title="Print PDF was never saved — generate now"
-                  >
-                    <RefreshCw size={10} className={regenId === o.id ? 'animate-spin' : ''} />
-                    {regenId === o.id ? '…' : 'Generate PDF'}
-                  </button>
+                  <>
+                    {o.pdfUrl ? (
+                      <a href={pdfHref(o.pdfUrl)} target="_blank" rel="noopener noreferrer" className="text-[10px] font-semibold" style={{ color: theme.accentDeep }}>PDF</a>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleGeneratePdf(o.id, o.projectId)}
+                        disabled={regenId === o.id}
+                        className="inline-flex items-center gap-0.5 text-[10px] font-semibold disabled:opacity-50"
+                        style={{ color: theme.accentDeep }}
+                        title="Print PDF was never saved — generate now"
+                      >
+                        <RefreshCw size={10} className={regenId === o.id ? 'animate-spin' : ''} />
+                        {regenId === o.id ? '…' : 'Generate PDF'}
+                      </button>
+                    )}
+                    <a href={photosZipHref(o.id)} className="inline-flex items-center gap-0.5 text-[10px] font-semibold" style={{ color: theme.accentDeep }} title="Download client photos zip">
+                      <FolderArchive size={10} /> Photos
+                    </a>
+                  </>
                 )}
-                <a href={photosZipHref(o.id)} className="inline-flex items-center gap-0.5 text-[10px] font-semibold" style={{ color: '#2F6B56' }} title="Download client photos zip">
-                  <FolderArchive size={10} /> Photos
-                </a>
                 <button
                   onClick={() => handleShip(o.id)}
                   disabled={shippingId === o.id}
                   className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-semibold disabled:opacity-50"
-                  style={{ background: theme.accentSoft, color: theme.accentDeep, borderRadius: '999px' }}
+                  style={{ background: theme.accentSoft, color: theme.accentDeep, borderRadius: theme.radius }}
                 >
                   <Truck size={11} /> {shippingId === o.id ? '…' : 'Ship'}
                 </button>
@@ -448,24 +461,32 @@ function PendingPrintingWidget() {
                   <td className="px-4 sm:px-5 py-3 font-semibold text-xs whitespace-nowrap" style={{ color: theme.ink }}>{fmtLek(o.priceLek)}</td>
                   <td className="px-4 sm:px-5 py-3">
                     <div className="flex items-center gap-2">
-                      {o.pdfUrl ? (
-                        <a href={pdfHref(o.pdfUrl)} target="_blank" rel="noopener noreferrer" className="text-[10px] font-semibold hover:underline" style={{ color: theme.accentDeep }}>PDF</a>
+                      {o.printAssetsWipedAt ? (
+                        <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold" style={{ color: theme.muted }} title="Removed by Auto Wiper">
+                          <Lock size={10} /> Wiped
+                        </span>
                       ) : (
-                        <button
-                          type="button"
-                          onClick={() => handleGeneratePdf(o.id, o.projectId)}
-                          disabled={regenId === o.id}
-                          className="inline-flex items-center gap-1 text-[10px] font-semibold hover:underline disabled:opacity-50"
-                          style={{ color: '#B45309' }}
-                          title="Print PDF was never saved — generate now"
-                        >
-                          <RefreshCw size={10} className={regenId === o.id ? 'animate-spin' : ''} />
-                          {regenId === o.id ? 'Rendering…' : 'Generate PDF'}
-                        </button>
+                        <>
+                          {o.pdfUrl ? (
+                            <a href={pdfHref(o.pdfUrl)} target="_blank" rel="noopener noreferrer" className="text-[10px] font-semibold hover:underline" style={{ color: theme.accentDeep }}>PDF</a>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleGeneratePdf(o.id, o.projectId)}
+                              disabled={regenId === o.id}
+                              className="inline-flex items-center gap-1 text-[10px] font-semibold hover:underline disabled:opacity-50"
+                              style={{ color: theme.accentDeep }}
+                              title="Print PDF was never saved — generate now"
+                            >
+                              <RefreshCw size={10} className={regenId === o.id ? 'animate-spin' : ''} />
+                              {regenId === o.id ? 'Rendering…' : 'Generate PDF'}
+                            </button>
+                          )}
+                          <a href={photosZipHref(o.id)} className="inline-flex items-center gap-0.5 text-[10px] font-semibold hover:underline" style={{ color: theme.accentDeep }} title="Download client photos zip">
+                            <FolderArchive size={10} /> Photos
+                          </a>
+                        </>
                       )}
-                      <a href={photosZipHref(o.id)} className="inline-flex items-center gap-0.5 text-[10px] font-semibold hover:underline" style={{ color: '#2F6B56' }} title="Download client photos zip">
-                        <FolderArchive size={10} /> Photos
-                      </a>
                     </div>
                   </td>
                   <td className="px-4 sm:px-5 py-3 text-right">
@@ -473,7 +494,7 @@ function PendingPrintingWidget() {
                       onClick={() => handleShip(o.id)}
                       disabled={shippingId === o.id}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-semibold disabled:opacity-50"
-                      style={{ background: theme.accentSoft, color: theme.accentDeep, borderRadius: '999px', border: `1px solid ${theme.line}` }}
+                      style={{ background: theme.accentSoft, color: theme.accentDeep, borderRadius: theme.radius, border: `1px solid ${theme.line}` }}
                     >
                       <Truck size={11} /> {shippingId === o.id ? '…' : 'Shipped'}
                     </button>
@@ -817,7 +838,7 @@ export default function AdminDashboard() {
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-5">
           <div
             className="xl:col-span-2 p-4"
-            style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: theme.radius, boxShadow: '0 8px 24px rgba(40,16,28,0.045)' }}
+            style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: theme.radius, boxShadow: theme.cardShadow }}
           >
             <div className="flex items-center justify-between mb-3">
               <div>
@@ -957,7 +978,15 @@ export default function AdminDashboard() {
                         <td className="px-4 py-3 text-xs truncate max-w-[120px]" style={{ color: theme.muted }}>{o.projectTitle || `Proj #${o.projectId}`}</td>
                         <td className="px-4 py-3 font-semibold text-xs" style={{ color: theme.ink }}>{fmtLek(o.priceLek)}</td>
                         <td className="px-4 py-3">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${STATUS_COLORS[o.status] || 'bg-neutral-100 text-neutral-500'}`}>
+                          <span
+                            className="px-2 py-0.5 text-[10px] font-semibold capitalize"
+                            style={{
+                              background: theme.accentSoft,
+                              color: theme.accentDeep,
+                              borderRadius: theme.radius,
+                              opacity: STATUS_TONE[o.status] ?? 0.7,
+                            }}
+                          >
                             {o.status}
                           </span>
                         </td>

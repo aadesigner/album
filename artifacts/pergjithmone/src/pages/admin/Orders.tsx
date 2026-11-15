@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { AdminLayout, ADMIN } from '@/components/layout/AdminLayout';
 import { useListAdminOrders, useUpdateAdminOrder, getListAdminOrdersQueryKey, getGetAdminStatsQueryKey } from '@workspace/api-client-react-tsconfig';
 import { format } from 'date-fns';
-import { RefreshCw, Eye, FileX, ExternalLink, X, Download, StickyNote, Trash2, FolderArchive } from 'lucide-react';
+import { RefreshCw, Eye, FileX, ExternalLink, X, Download, StickyNote, Trash2, FolderArchive, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
@@ -13,12 +13,12 @@ const BASE = (import.meta as any).env?.BASE_URL?.replace(/\/$/, '') || '';
 const STATUSES = ['all', 'pending', 'confirmed', 'printing', 'shipped', 'delivered', 'cancelled'] as const;
 
 const STATUS_STYLE: Record<string, string> = {
-  pending:   'bg-amber-50 text-amber-800 border-amber-200',
-  confirmed: 'bg-sky-50 text-sky-800 border-sky-200',
-  printing:  'bg-[#F3E4E6] text-[#A85C66] border-[#E8C9CD]',
-  shipped:   'bg-teal-50 text-teal-800 border-teal-200',
-  delivered: 'bg-emerald-50 text-emerald-800 border-emerald-200',
-  cancelled: 'bg-red-50 text-red-600 border-red-200',
+  pending:   'bg-[color-mix(in_srgb,var(--admin-accent)_12%,white)] text-[var(--admin-accent-deep)] border-[color-mix(in_srgb,var(--admin-accent)_22%,white)]',
+  confirmed: 'bg-[color-mix(in_srgb,var(--admin-accent)_16%,white)] text-[var(--admin-accent-deep)] border-[color-mix(in_srgb,var(--admin-accent)_28%,white)]',
+  printing:  'bg-[color-mix(in_srgb,var(--admin-accent)_20%,white)] text-[var(--admin-accent-deep)] border-[color-mix(in_srgb,var(--admin-accent)_32%,white)]',
+  shipped:   'bg-[color-mix(in_srgb,var(--admin-accent)_14%,white)] text-[var(--admin-accent-deep)] border-[color-mix(in_srgb,var(--admin-accent)_26%,white)]',
+  delivered: 'bg-[color-mix(in_srgb,var(--admin-accent)_10%,white)] text-[var(--admin-accent-deep)] border-[color-mix(in_srgb,var(--admin-accent)_22%,white)]',
+  cancelled: 'bg-neutral-100 text-neutral-500 border-neutral-200',
 };
 
 function statusLabel(s: string) {
@@ -304,16 +304,20 @@ export default function AdminOrders() {
 
   const pdfFailToast = (msg: string) => {
     toast({
-      title: /MISSING_UPLOADS|missing on disk/i.test(msg)
-        ? 'Photos missing on server'
-        : /UNRESOLVED_DEVICE_PHOTOS|device-local|local-photo/i.test(msg)
-          ? 'Photos never reached the server'
-          : 'PDF generation failed',
-      description: /MISSING_UPLOADS|missing on disk/i.test(msg)
-        ? 'Album photo files are not on the /data volume. Mount/restore uploads before regenerating.'
-        : /UNRESOLVED_DEVICE_PHOTOS|device-local|local-photo/i.test(msg)
-          ? 'Client must re-order from the phone/PC where they built the album so photos upload first.'
-          : (msg || 'Try again shortly'),
+      title: /PRINT_ASSETS_WIPED|Auto Wiper/i.test(msg)
+        ? 'Print assets wiped'
+        : /MISSING_UPLOADS|missing on disk/i.test(msg)
+          ? 'Photos missing on server'
+          : /UNRESOLVED_DEVICE_PHOTOS|device-local|local-photo/i.test(msg)
+            ? 'Photos never reached the server'
+            : 'PDF generation failed',
+      description: /PRINT_ASSETS_WIPED|Auto Wiper/i.test(msg)
+        ? 'PDF and photos were removed by Auto Wiper. Downloads stay locked.'
+        : /MISSING_UPLOADS|missing on disk/i.test(msg)
+          ? 'Album photo files are not on the /data volume. Mount/restore uploads before regenerating.'
+          : /UNRESOLVED_DEVICE_PHOTOS|device-local|local-photo/i.test(msg)
+            ? 'Client must re-order from the phone/PC where they built the album so photos upload first.'
+            : (msg || 'Try again shortly'),
       variant: 'destructive',
     });
   };
@@ -525,61 +529,73 @@ export default function AdminOrders() {
                       {/* PDF + photos zip */}
                       <td className="px-4 py-3.5">
                         <div className="flex items-center gap-1.5">
-                          {o.pdfUrl ? (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => handleViewPdf(o)}
-                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[10px] font-semibold transition-opacity hover:opacity-80"
-                                style={{ background: ADMIN.blushSoft, color: ADMIN.blushDeep }}
-                                title="Open the saved print PDF"
-                              >
-                                <Eye size={10} /> View
-                              </button>
-                              <a
-                                href={authedPdfUrl(o.pdfUrl, getToken(), { download: true })}
-                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[10px] font-semibold bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
-                                title="Download the print PDF"
-                              >
-                                <Download size={10} /> Download
-                              </a>
-                              <button
-                                type="button"
-                                onClick={() => handleRegenPdf(o.id, o.projectId)}
-                                disabled={regenId === o.id}
-                                className="p-1.5 rounded-lg text-neutral-300 hover:bg-amber-50 hover:text-amber-700 transition-colors disabled:opacity-50"
-                                title="Re-render PDF from album (uses photos on server; blank if missing)"
-                              >
-                                <RefreshCw size={12} className={regenId === o.id ? 'animate-spin' : ''} />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setDeletePdf({ orderId: o.id })}
-                                className="p-1.5 rounded-lg text-neutral-300 hover:bg-red-50 hover:text-red-400 transition-colors"
-                                title="Delete PDF from server (manual only)"
-                              >
-                                <FileX size={12} />
-                              </button>
-                            </>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => handleRegenPdf(o.id, o.projectId)}
-                              disabled={regenId === o.id}
-                              className="px-2.5 py-1.5 rounded-lg text-[10px] font-semibold bg-amber-50 text-amber-700 hover:bg-amber-100 disabled:opacity-50"
-                              title="Generate print PDF for this order"
+                          {(o as any).printAssetsWipedAt ? (
+                            <span
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[10px] font-semibold"
+                              style={{ background: ADMIN.bg, color: ADMIN.muted, border: `1px solid ${ADMIN.line}` }}
+                              title="Print PDF and photos were removed by Auto Wiper"
                             >
-                              {regenId === o.id ? 'Rendering…' : 'Generate PDF'}
-                            </button>
+                              <Lock size={10} /> Wiped
+                            </span>
+                          ) : (
+                            <>
+                              {o.pdfUrl ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleViewPdf(o)}
+                                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[10px] font-semibold transition-opacity hover:opacity-80"
+                                    style={{ background: ADMIN.blushSoft, color: ADMIN.blushDeep }}
+                                    title="Open the saved print PDF"
+                                  >
+                                    <Eye size={10} /> View
+                                  </button>
+                                  <a
+                                    href={authedPdfUrl(o.pdfUrl, getToken(), { download: true })}
+                                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[10px] font-semibold bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
+                                    title="Download the print PDF"
+                                  >
+                                    <Download size={10} /> Download
+                                  </a>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRegenPdf(o.id, o.projectId)}
+                                    disabled={regenId === o.id}
+                                    className="p-1.5 rounded-lg text-neutral-300 hover:bg-amber-50 hover:text-amber-700 transition-colors disabled:opacity-50"
+                                    title="Re-render PDF from album (uses photos on server; blank if missing)"
+                                  >
+                                    <RefreshCw size={12} className={regenId === o.id ? 'animate-spin' : ''} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setDeletePdf({ orderId: o.id })}
+                                    className="p-1.5 rounded-lg text-neutral-300 hover:bg-red-50 hover:text-red-400 transition-colors"
+                                    title="Delete PDF from server (manual only)"
+                                  >
+                                    <FileX size={12} />
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRegenPdf(o.id, o.projectId)}
+                                  disabled={regenId === o.id}
+                                  className="px-2.5 py-1.5 rounded-lg text-[10px] font-semibold bg-amber-50 text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+                                  title="Generate print PDF for this order"
+                                >
+                                  {regenId === o.id ? 'Rendering…' : 'Generate PDF'}
+                                </button>
+                              )}
+                              <a
+                                href={authedOrderImagesZipUrl(o.id, getToken())}
+                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[10px] font-semibold transition-opacity hover:opacity-80"
+                                style={{ background: '#F0F7F4', color: '#2F6B56' }}
+                                title="Download zip of client photos used in this album"
+                              >
+                                <FolderArchive size={10} /> Photos
+                              </a>
+                            </>
                           )}
-                          <a
-                            href={authedOrderImagesZipUrl(o.id, getToken())}
-                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[10px] font-semibold transition-opacity hover:opacity-80"
-                            style={{ background: '#F0F7F4', color: '#2F6B56' }}
-                            title="Download zip of client photos used in this album"
-                          >
-                            <FolderArchive size={10} /> Photos
-                          </a>
                         </div>
                       </td>
 
@@ -588,7 +604,7 @@ export default function AdminOrders() {
                         <select
                           value={o.status}
                           onChange={e => handleStatusChange(o.id, e.target.value)}
-                          className={`px-2.5 py-1.5 rounded-full text-[10px] font-semibold border cursor-pointer focus:outline-none focus:ring-1 focus:ring-rose-300 ${STATUS_STYLE[o.status] || 'bg-neutral-50 text-neutral-500 border-neutral-200'}`}
+                          className={`px-2.5 py-1.5 rounded-full text-[10px] font-semibold border cursor-pointer focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--admin-accent)_45%,transparent)] ${STATUS_STYLE[o.status] || 'bg-neutral-50 text-neutral-500 border-neutral-200'}`}
                         >
                           {STATUSES.slice(1).map(s => (
                             <option key={s} value={s}>{statusLabel(s)}</option>

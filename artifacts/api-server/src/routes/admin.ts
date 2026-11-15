@@ -38,6 +38,7 @@ import { readWebThemeSettings, normalizeWebThemeWrite } from "../lib/webThemeSet
 import { parseEditorElements, EDITOR_ELEMENTS_MAX } from "../lib/editorElements";
 import { invalidateIpBlocklistCache } from "../lib/ipBlocklist";
 import { queueAndWaitProjectPdfGeneration, deleteProjectPdfFile } from "../lib/generateProjectPdf";
+import { assertPrintAssetsAvailable } from "../lib/autoWiper";
 import { logger } from "../lib/logger";
 import { hasPersistentStorage, resolveDataRoot } from "../lib/dataDir";
 import {
@@ -982,6 +983,7 @@ router.get(
         status: projectsTable.status,
         pageCount: projectsTable.pageCount,
         pdfUrl: projectsTable.pdfUrl,
+        printAssetsWipedAt: projectsTable.printAssetsWipedAt,
         updatedAt: projectsTable.updatedAt,
         createdAt: projectsTable.createdAt,
       })
@@ -1228,6 +1230,7 @@ router.get("/admin/orders", requireAdmin, async (req, res): Promise<void> => {
         projectTitle: projectsTable.title,
         projectPageCount: projectsTable.pageCount,
         pdfUrl: projectsTable.pdfUrl,
+        printAssetsWipedAt: projectsTable.printAssetsWipedAt,
       })
       .from(ordersTable)
       .innerJoin(usersTable, eq(ordersTable.userId, usersTable.id))
@@ -1302,6 +1305,19 @@ router.get(
       return;
     }
 
+    try {
+      await assertPrintAssetsAvailable(order.projectId);
+    } catch (err) {
+      if ((err as any)?.code === "PRINT_ASSETS_WIPED" || (err instanceof Error && err.message === "PRINT_ASSETS_WIPED")) {
+        res.status(410).json({
+          error: "Print assets were removed by Auto Wiper. Photos zip is no longer available.",
+          code: "PRINT_ASSETS_WIPED",
+        });
+        return;
+      }
+      throw err;
+    }
+
     const pages = await db
       .select({ contentJson: projectPagesTable.contentJson })
       .from(projectPagesTable)
@@ -1360,6 +1376,19 @@ router.post(
       .where(eq(ordersTable.id, orderId))
       .limit(1);
     if (!order) { res.status(404).json({ error: "Order not found" }); return; }
+
+    try {
+      await assertPrintAssetsAvailable(order.projectId);
+    } catch (err) {
+      if ((err as any)?.code === "PRINT_ASSETS_WIPED" || (err instanceof Error && err.message === "PRINT_ASSETS_WIPED")) {
+        res.status(410).json({
+          error: "Print assets were removed by Auto Wiper. Regenerate is locked.",
+          code: "PRINT_ASSETS_WIPED",
+        });
+        return;
+      }
+      throw err;
+    }
 
     // Ensure checkout status sticks even if an older PDF job demoted it.
     await db
@@ -1730,6 +1759,11 @@ router.get(
       basePriceLek: parseInt(map["base_price_lek"] || "3000", 10),
       minPages: parseInt(map["min_pages"] || "30", 10),
       extraSpreadPriceLek: parseInt(map["extra_spread_price_lek"] || "200", 10),
+      autoWiperRetention: (() => {
+        const v = String(map["auto_wiper_retention"] || "off").toLowerCase();
+        if (v === "7d" || v === "14d" || v === "30d") return v;
+        return "off";
+      })(),
       siteName: map["site_name"] || "Përgjithmonë",
       siteTaglineAl: map["site_tagline_al"] || "Kujtime që mbeten",
       siteTaglineEn: map["site_tagline_en"] || "Memories that last",
@@ -1769,6 +1803,7 @@ router.patch(
       basePriceLek: "base_price_lek",
       minPages: "min_pages",
       extraSpreadPriceLek: "extra_spread_price_lek",
+      autoWiperRetention: "auto_wiper_retention",
       siteName: "site_name",
       siteTaglineAl: "site_tagline_al",
       siteTaglineEn: "site_tagline_en",
@@ -1848,6 +1883,11 @@ router.patch(
             }
           }
           value = JSON.stringify(list);
+        }
+
+        if (jsKey === "autoWiperRetention") {
+          const v = String(raw || "off").toLowerCase();
+          value = v === "7d" || v === "14d" || v === "30d" ? v : "off";
         }
 
         if (jsKey === "editorElements") {
@@ -1932,6 +1972,11 @@ router.patch(
       basePriceLek: parseInt(map2["base_price_lek"] || "3000", 10),
       minPages: parseInt(map2["min_pages"] || "30", 10),
       extraSpreadPriceLek: parseInt(map2["extra_spread_price_lek"] || "200", 10),
+      autoWiperRetention: (() => {
+        const v = String(map2["auto_wiper_retention"] || "off").toLowerCase();
+        if (v === "7d" || v === "14d" || v === "30d") return v;
+        return "off";
+      })(),
       siteName: map2["site_name"] || "Përgjithmonë",
       siteTaglineAl: map2["site_tagline_al"] || "Kujtime që mbeten",
       siteTaglineEn: map2["site_tagline_en"] || "Memories that last",
@@ -2204,6 +2249,7 @@ router.get(
           title: projectsTable.title,
           status: projectsTable.status,
           pdfUrl: projectsTable.pdfUrl,
+          printAssetsWipedAt: projectsTable.printAssetsWipedAt,
           shareToken: projectsTable.shareToken,
           pageCount: projectsTable.pageCount,
           totalPriceLek: projectsTable.totalPriceLek,

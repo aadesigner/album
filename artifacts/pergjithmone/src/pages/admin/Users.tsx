@@ -7,7 +7,7 @@ import {
   getListAdminUsersQueryKey, getGetAdminStatsQueryKey,
 } from '@workspace/api-client-react-tsconfig';
 import { format } from 'date-fns';
-import { Search, UserPlus, Trash2, ShieldBan, ShieldCheck, RefreshCw, Eye, ExternalLink, Download, X, Pencil, KeyRound, ShoppingBag, FolderOpen, FolderArchive, FileX, Ban, BookX, UserCog } from 'lucide-react';
+import { Search, UserPlus, Trash2, ShieldBan, ShieldCheck, RefreshCw, Eye, ExternalLink, Download, X, Pencil, KeyRound, ShoppingBag, FolderOpen, FolderArchive, FileX, Ban, BookX, UserCog, Lock } from 'lucide-react';
 import { PhoneInput } from '@/components/ui/PhoneInput';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -353,12 +353,12 @@ function EditUserModal({ targetUser, onClose, onSaved }: {
 const STATUSES = ['pending', 'confirmed', 'printing', 'shipped', 'delivered', 'cancelled'] as const;
 
 const STATUS_STYLE: Record<string, string> = {
-  pending:   'bg-amber-50 text-amber-800 border-amber-200',
-  confirmed: 'bg-sky-50 text-sky-800 border-sky-200',
-  printing:  'bg-[#F3E4E6] text-[#A85C66] border-[#E8C9CD]',
-  shipped:   'bg-teal-50 text-teal-800 border-teal-200',
-  delivered: 'bg-emerald-50 text-emerald-800 border-emerald-200',
-  cancelled: 'bg-red-50 text-red-600 border-red-200',
+  pending:   'bg-[color-mix(in_srgb,var(--admin-accent)_12%,white)] text-[var(--admin-accent-deep)] border-[color-mix(in_srgb,var(--admin-accent)_22%,white)]',
+  confirmed: 'bg-[color-mix(in_srgb,var(--admin-accent)_16%,white)] text-[var(--admin-accent-deep)] border-[color-mix(in_srgb,var(--admin-accent)_28%,white)]',
+  printing:  'bg-[color-mix(in_srgb,var(--admin-accent)_20%,white)] text-[var(--admin-accent-deep)] border-[color-mix(in_srgb,var(--admin-accent)_32%,white)]',
+  shipped:   'bg-[color-mix(in_srgb,var(--admin-accent)_14%,white)] text-[var(--admin-accent-deep)] border-[color-mix(in_srgb,var(--admin-accent)_26%,white)]',
+  delivered: 'bg-[color-mix(in_srgb,var(--admin-accent)_10%,white)] text-[var(--admin-accent-deep)] border-[color-mix(in_srgb,var(--admin-accent)_22%,white)]',
+  cancelled: 'bg-neutral-100 text-neutral-500 border-neutral-200',
 };
 
 // ── Dedicated user manage panel ───────────────────────────────────────────────
@@ -662,27 +662,39 @@ function UserManageModal({
                               </td>
                               <td className="px-3 py-3">
                                 <div className="flex items-center gap-1">
-                                  {p.pdfUrl ? (
-                                    <>
-                                      <button type="button" onClick={() => setPdfRaw(p.pdfUrl)}
-                                        className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold"
-                                        style={{ background: ADMIN.blushSoft, color: ADMIN.blushDeep }}>
-                                        <Eye size={10} /> PDF
-                                      </button>
-                                      <a href={authedPdfUrl(p.pdfUrl, token, { download: true })}
-                                        className="p-1.5 rounded-lg text-neutral-300 hover:text-rose-500" title="Download PDF">
-                                        <Download size={12} />
-                                      </a>
-                                    </>
+                                  {p.printAssetsWipedAt ? (
+                                    <span
+                                      className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold"
+                                      style={{ background: ADMIN.bg, color: ADMIN.muted, border: `1px solid ${ADMIN.line}` }}
+                                      title="Print assets removed by Auto Wiper"
+                                    >
+                                      <Lock size={10} /> Wiped
+                                    </span>
                                   ) : (
-                                    <span className="text-[10px] text-neutral-300 italic">No PDF</span>
-                                  )}
-                                  {o && (
-                                    <a href={authedOrderImagesZipUrl(o.id, token)}
-                                      className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold"
-                                      style={{ background: '#F0F7F4', color: '#2F6B56' }}>
-                                      <FolderArchive size={10} /> Photos
-                                    </a>
+                                    <>
+                                      {p.pdfUrl ? (
+                                        <>
+                                          <button type="button" onClick={() => setPdfRaw(p.pdfUrl)}
+                                            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold"
+                                            style={{ background: ADMIN.blushSoft, color: ADMIN.blushDeep }}>
+                                            <Eye size={10} /> PDF
+                                          </button>
+                                          <a href={authedPdfUrl(p.pdfUrl, token, { download: true })}
+                                            className="p-1.5 rounded-lg text-neutral-300 hover:text-rose-500" title="Download PDF">
+                                            <Download size={12} />
+                                          </a>
+                                        </>
+                                      ) : (
+                                        <span className="text-[10px] text-neutral-300 italic">No PDF</span>
+                                      )}
+                                      {o && (
+                                        <a href={authedOrderImagesZipUrl(o.id, token)}
+                                          className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold"
+                                          style={{ background: ADMIN.blushSoft, color: ADMIN.blushDeep }}>
+                                          <FolderArchive size={10} /> Photos
+                                        </a>
+                                      )}
+                                    </>
                                   )}
                                 </div>
                               </td>
