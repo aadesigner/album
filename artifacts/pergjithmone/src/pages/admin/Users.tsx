@@ -736,7 +736,7 @@ function UserManageModal({
 
         {pdfViewUrl && createPortal(
           <div
-            className="fixed inset-0 z-[80] flex flex-col bg-black/80"
+            className="fixed inset-0 z-[100] flex flex-col bg-black/80"
             onClick={e => e.target === e.currentTarget && setPdfRaw(null)}
           >
             <div className="flex items-center justify-between px-5 py-3 bg-white border-b border-rose-100 shrink-0">

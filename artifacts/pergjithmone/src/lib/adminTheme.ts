@@ -298,16 +298,19 @@ export const ADMIN_PALETTES: AdminPalette[] = [
   },
 ];
 
-export const ADMIN_PALETTE_STORAGE_KEY = 'perg_admin_palette_v5';
+/** v6 — atelier desk revamp; do not silently keep old rose rail as “default”. */
+export const ADMIN_PALETTE_STORAGE_KEY = 'perg_admin_palette_v6';
 export const DEFAULT_ADMIN_PALETTE_ID: AdminPaletteId = 'atelier';
 
 const LEGACY_PALETTE_MAP: Record<string, AdminPaletteId> = {
-  standard: 'rosecloth',
-  peony: 'rosecloth',
-  ballet: 'rosecloth',
-  roseate: 'rosecloth',
-  blush: 'rosecloth',
-  petal: 'rosecloth',
+  // Old pink defaults → new parchment atelier (visible change on refresh)
+  standard: 'atelier',
+  peony: 'atelier',
+  ballet: 'atelier',
+  roseate: 'atelier',
+  blush: 'atelier',
+  petal: 'atelier',
+  rosecloth: 'atelier',
   orchid: 'merlot',
   lilac: 'merlot',
   honey: 'atelier',
@@ -335,7 +338,12 @@ export function readStoredAdminPaletteId(): AdminPaletteId {
   try {
     const raw = localStorage.getItem(ADMIN_PALETTE_STORAGE_KEY);
     if (raw && ADMIN_PALETTES.some((p) => p.id === raw)) return raw as AdminPaletteId;
-    for (const key of ['perg_admin_palette_v4', 'perg_admin_palette_v3', 'perg_admin_palette_v2']) {
+    for (const key of [
+      'perg_admin_palette_v5',
+      'perg_admin_palette_v4',
+      'perg_admin_palette_v3',
+      'perg_admin_palette_v2',
+    ]) {
       const legacy = localStorage.getItem(key);
       if (!legacy) continue;
       const mapped =

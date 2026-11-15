@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AdminLayout, ADMIN } from '@/components/layout/AdminLayout';
 import { useListAdminOrders, useUpdateAdminOrder, getListAdminOrdersQueryKey, getGetAdminStatsQueryKey } from '@workspace/api-client-react-tsconfig';
 import { format } from 'date-fns';
@@ -27,8 +28,8 @@ function statusLabel(s: string) {
 
 // ── PDF Viewer Modal ──────────────────────────────────────────────────────────
 function PdfViewerModal({ url, orderId, onClose }: { url: string; orderId: number; onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-black/80" onClick={e => e.target === e.currentTarget && onClose()}>
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex flex-col bg-black/80" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="flex items-center justify-between px-4 sm:px-5 py-3 bg-white" style={{ borderBottom: `1px solid ${ADMIN.line}` }}>
         <div className="flex items-center gap-2 min-w-0">
           <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0" style={{ background: ADMIN.blushSoft }}>
@@ -57,7 +58,8 @@ function PdfViewerModal({ url, orderId, onClose }: { url: string; orderId: numbe
       <div className="flex-1 overflow-hidden">
         <iframe src={url} className="w-full h-full border-0" title={`Order #${orderId} PDF`} />
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -107,8 +109,8 @@ function AdminNoteModal({ orderId, initialNote, onClose, onSaved }: {
     } finally { setSaving(false); }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={e => e.target === e.currentTarget && onClose()}>
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
         <div className="flex items-center gap-2 mb-5">
           <div className="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center">
@@ -136,7 +138,8 @@ function AdminNoteModal({ orderId, initialNote, onClose, onSaved }: {
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -144,8 +147,8 @@ function AdminNoteModal({ orderId, initialNote, onClose, onSaved }: {
 function DeletePdfConfirm({ orderId, onConfirm, onCancel, loading }: {
   orderId: number; onConfirm: () => void; onCancel: () => void; loading: boolean;
 }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={e => e.target === e.currentTarget && onCancel()}>
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" onClick={e => e.target === e.currentTarget && onCancel()}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xs p-6 text-center">
         <h3 className="font-serif text-lg font-semibold mb-2">Delete PDF?</h3>
         <p className="text-sm text-neutral-500 mb-5">
@@ -158,7 +161,8 @@ function DeletePdfConfirm({ orderId, onConfirm, onCancel, loading }: {
           </Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -167,8 +171,8 @@ function DeleteOrderConfirm({ orderId, customer, album, onConfirm, onCancel, loa
   orderId: number; customer: string; album: string;
   onConfirm: () => void; onCancel: () => void; loading: boolean;
 }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={e => e.target === e.currentTarget && onCancel()}>
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" onClick={e => e.target === e.currentTarget && onCancel()}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
         <div className="flex items-center gap-2 mb-4">
           <div className="w-9 h-9 rounded-xl bg-red-50 flex items-center justify-center">
@@ -195,7 +199,8 @@ function DeleteOrderConfirm({ orderId, customer, album, onConfirm, onCancel, loa
           </Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -444,50 +449,70 @@ export default function AdminOrders() {
         />
       )}
 
-      <div className="p-3 sm:p-4 md:p-5 max-w-screen-xl mx-auto">
-        <div className="mb-6">
-          <p className="text-[10px] font-semibold tracking-[0.18em] uppercase mb-1.5" style={{ color: ADMIN.blush }}>
-            Fulfillment
+      <div className="p-3 sm:p-5 md:p-7 max-w-screen-xl mx-auto">
+        <div
+          className="mb-6 relative"
+          style={{
+            background: ADMIN.card,
+            border: `1px solid ${ADMIN.line}`,
+            borderLeft: `4px solid ${ADMIN.accent}`,
+            padding: '1.2rem 1.35rem 1.35rem',
+          }}
+        >
+          <p className="text-[10px] font-semibold tracking-[0.28em] uppercase mb-2" style={{ color: ADMIN.accent }}>
+            Fulfillment ledger
           </p>
-          <h1 className="text-3xl font-serif font-semibold mb-1" style={{ color: ADMIN.ink }}>Orders</h1>
-          <p className="text-sm" style={{ color: ADMIN.muted }}>{total} total</p>
+          <h1 className="text-[2.4rem] sm:text-[2.85rem] font-semibold leading-[0.95]" style={{ color: ADMIN.ink, fontFamily: ADMIN.fontSerif }}>
+            Orders
+          </h1>
+          <p className="text-sm mt-2" style={{ color: ADMIN.muted, fontFamily: ADMIN.fontSerif, fontStyle: 'italic' }}>
+            {total} in the book
+          </p>
         </div>
 
-        <div className="flex items-center gap-2 mb-5 overflow-x-auto pb-1 -mx-1 px-1">
+        <div
+          className="flex items-end gap-0 mb-5 overflow-x-auto"
+          style={{ borderBottom: `1px solid ${ADMIN.line}` }}
+        >
           {STATUSES.map(s => (
             <button
               key={s}
               onClick={() => setStatusFilter(s)}
-              className="px-3.5 sm:px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all border"
-              style={
-                statusFilter === s
-                  ? { background: ADMIN.blush, color: '#fff', borderColor: ADMIN.blush }
-                  : { background: ADMIN.card, color: ADMIN.muted, borderColor: ADMIN.line }
-              }
+              className="px-3.5 py-2.5 text-xs font-semibold whitespace-nowrap transition-colors shrink-0"
+              style={{
+                color: statusFilter === s ? ADMIN.ink : ADMIN.muted,
+                borderBottom: statusFilter === s ? `2px solid ${ADMIN.accent}` : '2px solid transparent',
+                background: 'transparent',
+                fontFamily: statusFilter === s ? ADMIN.fontSerif : undefined,
+              }}
             >
               {s === 'all' ? 'All' : statusLabel(s)}
             </button>
           ))}
-          <button onClick={() => refetch()} className="ml-auto p-2.5 rounded-2xl border transition-colors shrink-0"
-            style={{ borderColor: ADMIN.line, color: ADMIN.muted }}>
+          <button
+            onClick={() => refetch()}
+            className="ml-auto p-2.5 transition-colors shrink-0"
+            style={{ color: ADMIN.muted }}
+            aria-label="Refresh"
+          >
             <RefreshCw size={14} />
           </button>
         </div>
 
-        <div className="rounded-2xl shadow-sm overflow-hidden" style={{ background: ADMIN.card, border: `1px solid ${ADMIN.line}` }}>
+        <div className="overflow-hidden" style={{ background: ADMIN.card, border: `1px solid ${ADMIN.line}` }}>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr style={{ borderBottom: `1px solid ${ADMIN.line}` }}>
+                <tr style={{ borderBottom: `1px solid ${ADMIN.line}`, background: ADMIN.bg }}>
                   {['#', 'Customer', 'Album', 'Pages', 'Amount', 'Date', 'Files', 'Status', 'Note', 'Admin Note', ''].map(h => (
-                    <th key={h || 'actions'} className="px-3 sm:px-4 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider whitespace-nowrap" style={{ color: ADMIN.muted }}>{h}</th>
+                    <th key={h || 'actions'} className="px-3 sm:px-4 py-3.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] whitespace-nowrap" style={{ color: ADMIN.muted }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {isLoading ? (
                   Array.from({ length: 8 }).map((_, i) => (
-                    <tr key={i}><td colSpan={11} className="px-4 py-4"><div className="h-4 rounded animate-pulse" style={{ background: ADMIN.blushSoft }} /></td></tr>
+                    <tr key={i}><td colSpan={11} className="px-4 py-4"><div className="h-4 animate-pulse" style={{ background: ADMIN.blushSoft }} /></td></tr>
                   ))
                 ) : !orders.length ? (
                   <tr>
@@ -497,33 +522,39 @@ export default function AdminOrders() {
                   </tr>
                 ) : (
                   orders.map((o: any) => (
-                    <tr key={o.id} className="transition-colors hover:bg-[#FBF7F5]" style={{ borderTop: `1px solid ${ADMIN.line}` }}>
+                    <tr
+                      key={o.id}
+                      className="transition-colors"
+                      style={{ borderTop: `1px solid ${ADMIN.line}` }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = ADMIN.accentSoft; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                    >
                       {/* ID */}
-                      <td className="px-4 py-3.5 font-mono text-xs text-neutral-400">#{o.id}</td>
+                      <td className="px-4 py-3.5 font-mono text-xs" style={{ color: ADMIN.muted }}>#{o.id}</td>
 
                       {/* Customer */}
                       <td className="px-4 py-3.5">
-                        <p className="font-semibold text-neutral-700 text-xs">{o.userName || 'Guest'}</p>
-                        <p className="text-[10px] text-neutral-400 truncate max-w-[140px]">{(o as any).userPhone || '—'}</p>
+                        <p className="font-semibold text-xs" style={{ color: ADMIN.ink }}>{o.userName || 'Guest'}</p>
+                        <p className="text-[10px] truncate max-w-[140px]" style={{ color: ADMIN.muted }}>{(o as any).userPhone || '—'}</p>
                       </td>
 
                       {/* Album */}
-                      <td className="px-4 py-3.5 text-xs text-neutral-500 max-w-[120px] truncate">
+                      <td className="px-4 py-3.5 text-xs max-w-[120px] truncate" style={{ color: ADMIN.muted }}>
                         {o.projectTitle || `Proj #${o.projectId}`}
                       </td>
 
                       {/* Pages */}
-                      <td className="px-4 py-3.5 text-xs text-neutral-400 text-center">{o.projectPageCount ?? '—'}</td>
+                      <td className="px-4 py-3.5 text-xs text-center" style={{ color: ADMIN.muted }}>{o.projectPageCount ?? '—'}</td>
 
                       {/* Amount */}
-                      <td className="px-4 py-3.5 font-semibold text-neutral-700 text-xs whitespace-nowrap">
+                      <td className="px-4 py-3.5 font-semibold text-xs whitespace-nowrap" style={{ color: ADMIN.ink, fontFamily: ADMIN.fontSerif }}>
                         {Number(o.priceLek).toLocaleString()} L
                       </td>
 
                       {/* Date */}
-                      <td className="px-4 py-3.5 text-xs text-neutral-400 whitespace-nowrap">
+                      <td className="px-4 py-3.5 text-xs whitespace-nowrap" style={{ color: ADMIN.muted }}>
                         {format(new Date(o.createdAt), 'MMM d, yy')}
-                        <p className="text-[9px] text-neutral-300">{format(new Date(o.createdAt), 'HH:mm')}</p>
+                        <p className="text-[9px]" style={{ opacity: 0.75 }}>{format(new Date(o.createdAt), 'HH:mm')}</p>
                       </td>
 
                       {/* PDF + photos zip */}

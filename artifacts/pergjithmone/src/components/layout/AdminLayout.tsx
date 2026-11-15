@@ -405,96 +405,89 @@ function Sidebar({
         fontFamily: theme.fontSans,
       }}
     >
-      {/* Soft accent orb — subtle atmosphere */}
+      {/* Cloth grain + gold edge — reads as bound album, not SaaS rail */}
       <div
         aria-hidden
-        className="pointer-events-none absolute -top-20 -right-16 w-52 h-52 rounded-full blur-3xl opacity-30"
+        className="pointer-events-none absolute inset-0 opacity-[0.07]"
+        style={{
+          backgroundImage:
+            'repeating-linear-gradient(105deg, transparent 0 2px, rgba(255,255,255,0.35) 2px 3px), repeating-linear-gradient(0deg, transparent 0 11px, rgba(0,0,0,0.18) 11px 12px)',
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-y-0 left-0 w-[3px]"
         style={{ background: theme.accent }}
       />
-      {isMobile && (
-        <div
-          aria-hidden
-          className="pointer-events-none absolute bottom-24 -left-12 w-40 h-40 rounded-full blur-3xl opacity-20"
-          style={{ background: theme.accent }}
-        />
-      )}
 
       <div
-        className={`relative flex items-center justify-between ${isMobile ? 'px-4 pt-[max(0.85rem,env(safe-area-inset-top))] pb-3' : 'px-3.5 py-4'}`}
+        className={`relative ${isMobile ? 'px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-4' : 'px-4 pt-6 pb-5'}`}
         style={{ borderBottom: `1px solid ${theme.sidebarLine}` }}
       >
-        <div className="flex items-center gap-3 min-w-0">
-          <div
-            className={`${isMobile ? 'w-11 h-11' : 'w-10 h-10'} flex items-center justify-center shrink-0 shadow-sm`}
-            style={{
-              background: theme.accent,
-              color: theme.accentOn,
-              borderRadius: theme.radius,
-            }}
-          >
-            <span
-              className={`font-semibold ${isMobile ? 'text-lg' : 'text-[17px]'}`}
-              style={{ fontFamily: theme.fontSerif }}
-            >
-              P
-            </span>
-          </div>
+        <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p
-              className="text-[9px] font-semibold tracking-[0.2em] uppercase leading-none"
-              style={{ color: theme.sidebarText, opacity: 0.65, fontFamily: theme.fontSans }}
+              className="text-[9px] font-semibold tracking-[0.28em] uppercase leading-none mb-2.5"
+              style={{ color: theme.accent, fontFamily: theme.fontSans }}
             >
-              Studio
+              Atelier desk
             </p>
             <p
-              className={`font-semibold leading-tight mt-1 truncate ${isMobile ? 'text-[17px]' : 'text-[15px]'}`}
-              style={{ color: theme.sidebarTextActive, fontFamily: theme.fontSerif }}
+              className={`leading-[0.95] truncate ${isMobile ? 'text-[1.65rem]' : 'text-[1.45rem]'}`}
+              style={{ color: theme.sidebarTextActive, fontFamily: theme.fontSerif, fontWeight: 600 }}
             >
               Përgjithmonë
             </p>
+            <p
+              className="text-[11px] mt-2 leading-snug"
+              style={{ color: theme.sidebarText, opacity: 0.75, fontFamily: theme.fontSans }}
+            >
+              Print studio · one hue
+            </p>
           </div>
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="lg:hidden w-10 h-10 flex items-center justify-center transition-transform active:scale-95 shrink-0"
+              style={{
+                color: theme.ink,
+                background: theme.card,
+                border: `1px solid ${theme.sidebarLine}`,
+                borderRadius: theme.radius,
+              }}
+              aria-label="Close menu"
+            >
+              <X size={18} strokeWidth={2.25} />
+            </button>
+          )}
         </div>
-        {onClose && (
-          <button
-            type="button"
-            onClick={onClose}
-            className="lg:hidden w-10 h-10 flex items-center justify-center transition-transform active:scale-95"
-            style={{
-              color: theme.ink,
-              background: theme.card,
-              border: `1px solid ${theme.sidebarLine}`,
-              borderRadius: theme.radius,
-              boxShadow: '0 4px 14px rgba(40,20,30,0.06)',
-            }}
-            aria-label="Close menu"
-          >
-            <X size={18} strokeWidth={2.25} />
-          </button>
-        )}
       </div>
 
-      <div className={`relative ${isMobile ? 'px-3 pt-3' : 'px-2 pt-2.5'}`}>
+      <div className={`relative ${isMobile ? 'px-3 pt-3' : 'px-3 pt-3'}`}>
         <button
           type="button"
           onClick={() => {
             onOpenSearch?.();
             if (onClose && isMobile) onClose();
           }}
-          className="w-full flex items-center gap-2 px-2.5 py-2 text-left transition-colors"
+          className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors"
           style={{
-            borderRadius: theme.radius,
-            background: `${theme.sidebarHover}`,
+            borderRadius: 0,
+            background: 'transparent',
             color: theme.sidebarText,
-            border: `1px solid ${theme.sidebarLine}`,
+            borderBottom: `1px solid ${theme.sidebarLine}`,
             fontFamily: theme.fontSans,
           }}
           aria-label="Search admin pages"
         >
-          <Search size={14} strokeWidth={2} className="shrink-0 opacity-80" />
-          <span className="flex-1 text-[12px] truncate opacity-80">Search pages…</span>
+          <Search size={15} strokeWidth={2} className="shrink-0 opacity-80" />
+          <span className="flex-1 text-[12px] truncate opacity-80" style={{ fontFamily: theme.fontSerif, fontStyle: 'italic' }}>
+            Find a page…
+          </span>
           <kbd
-            className="hidden sm:inline text-[9px] font-semibold tracking-wide px-1.5 py-0.5 rounded"
-            style={{ background: `${theme.sidebarActive}`, color: theme.sidebarTextActive, opacity: 0.85 }}
+            className="hidden sm:inline text-[9px] font-semibold tracking-wide px-1.5 py-0.5"
+            style={{ background: theme.sidebarActive, color: theme.sidebarTextActive, opacity: 0.9 }}
           >
             ⌘K
           </kbd>
@@ -561,21 +554,17 @@ function Sidebar({
                           key={href}
                           href={href}
                           onClick={onClose}
-                          className={`flex items-center gap-2 font-medium transition-all duration-200 cursor-pointer ${
+                          className={`flex items-center gap-2.5 font-medium transition-all duration-200 cursor-pointer ${
                             isMobile
-                              ? 'px-2.5 py-2 text-[13px]'
-                              : 'px-2 py-1.5 text-[12.5px]'
+                              ? 'px-2.5 py-2.5 text-[13.5px]'
+                              : 'px-2 py-2 text-[13px]'
                           }`}
                           style={{
-                            borderRadius: theme.radius,
+                            borderRadius: 0,
                             cursor: 'pointer',
-                            ...(isActive
-                              ? {
-                                  background: theme.sidebarActive,
-                                  color: theme.sidebarTextActive,
-                                  boxShadow: `inset 3px 0 0 ${theme.accent}`,
-                                }
-                              : { color: theme.sidebarText }),
+                            borderLeft: isActive ? `2px solid ${theme.accent}` : '2px solid transparent',
+                            background: isActive ? theme.sidebarActive : 'transparent',
+                            color: isActive ? theme.sidebarTextActive : theme.sidebarText,
                           }}
                           onMouseEnter={(e) => {
                             if (!isActive) e.currentTarget.style.background = theme.sidebarHover;
@@ -584,23 +573,15 @@ function Sidebar({
                             if (!isActive) e.currentTarget.style.background = 'transparent';
                           }}
                         >
-                          <span
-                            className={`flex items-center justify-center shrink-0 ${isMobile ? 'w-8 h-8' : 'w-6.5 h-6.5'}`}
-                            style={{
-                              width: isMobile ? 32 : 26,
-                              height: isMobile ? 32 : 26,
-                              borderRadius: `calc(${theme.radius} - 4px)`,
-                              background: isActive ? `${theme.accent}22` : 'transparent',
-                              color: isActive ? theme.accent : theme.sidebarText,
-                            }}
-                          >
-                            <Icon
-                              size={isMobile ? 16 : 14}
-                              strokeWidth={isActive ? 2.35 : 1.75}
-                              className="shrink-0"
-                            />
+                          <Icon
+                            size={isMobile ? 15 : 14}
+                            strokeWidth={isActive ? 2.2 : 1.6}
+                            className="shrink-0 opacity-80"
+                            style={{ color: isActive ? theme.accent : undefined }}
+                          />
+                          <span className="truncate flex-1" style={{ fontFamily: isActive ? theme.fontSerif : theme.fontSans }}>
+                            {label}
                           </span>
-                          <span className="truncate flex-1" style={{ fontFamily: theme.fontSans }}>{label}</span>
                           {!!badge && (
                             <span
                               className="min-w-[1.15rem] h-[1.15rem] px-1 flex items-center justify-center text-[9px] font-bold shrink-0"
@@ -911,7 +892,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
       >
         {/* Desktop: left rail */}
         <aside
-          className="w-[15rem] fixed inset-y-0 left-0 z-30 hidden lg:block"
+          className="w-[15rem] fixed inset-y-0 left-0 z-20 hidden lg:block"
           style={{ borderRight: `1px solid ${theme.sidebarLine}`, boxShadow: `4px 0 24px ${theme.accent}14` }}
         >
           <Sidebar theme={theme} variant="desktop" onOpenSearch={() => setSearchOpen(true)} />
@@ -964,10 +945,11 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
           {/* Desktop: sticky theme control, top-right — floats so pages keep full width */}
           {!hideThemeSwitcher && (
             <div
-              className="hidden lg:block fixed z-40"
+              className="hidden lg:block fixed"
               style={{
                 top: '1rem',
                 right: '1.25rem',
+                zIndex: 25,
               }}
             >
               <ThemeSwitcher
@@ -981,36 +963,24 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
 
           {/* Mobile top bar */}
           <header
-            className="lg:hidden sticky top-0 z-30 px-3.5 pt-[max(0.55rem,env(safe-area-inset-top))] pb-2.5"
+            className="lg:hidden sticky top-0 z-20 px-3.5 pt-[max(0.55rem,env(safe-area-inset-top))] pb-2.5"
             style={{
-              background: `linear-gradient(180deg, ${theme.card}f8 0%, ${theme.bg}f2 100%)`,
+              background: theme.card,
               borderBottom: `1px solid ${theme.line}`,
-              backdropFilter: 'blur(16px)',
-              WebkitBackdropFilter: 'blur(16px)',
+              borderTop: `3px solid ${theme.accent}`,
             }}
           >
             <div className="flex items-center gap-2.5">
               <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                <div
-                  className="w-9 h-9 flex items-center justify-center shrink-0 font-semibold text-sm shadow-sm"
-                  style={{
-                    background: theme.accent,
-                    color: theme.accentOn,
-                    borderRadius: theme.radius,
-                    fontFamily: theme.fontSerif,
-                  }}
-                >
-                  P
-                </div>
                 <div className="min-w-0">
                   <p
-                    className="text-[9px] font-semibold tracking-[0.16em] uppercase leading-none"
-                    style={{ color: theme.muted, fontFamily: theme.fontSans }}
+                    className="text-[9px] font-semibold tracking-[0.22em] uppercase leading-none"
+                    style={{ color: theme.accent, fontFamily: theme.fontSans }}
                   >
-                    Studio
+                    Atelier
                   </p>
                   <p
-                    className="font-semibold text-[15px] leading-tight truncate mt-0.5"
+                    className="font-semibold text-[1.15rem] leading-tight truncate mt-1"
                     style={{ color: theme.ink, fontFamily: theme.fontSerif }}
                   >
                     {currentLabel}
@@ -1084,7 +1054,8 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
                 font-family: var(--admin-font-serif) !important;
               }
             `}</style>
-            <div className="relative z-[1]">{children}</div>
+            {/* No z-index here — overlays must portal / use z≥100 so they cover the rail + theme chip */}
+            <div className="relative">{children}</div>
           </div>
 
           <AdminStickyNotes />

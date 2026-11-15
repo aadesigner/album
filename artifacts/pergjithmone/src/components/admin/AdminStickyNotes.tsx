@@ -167,7 +167,7 @@ export function AdminStickyNotes() {
 
   return (
     <div
-      className="fixed z-40 flex flex-col items-end gap-2 pointer-events-none"
+      className="fixed z-[25] flex flex-col items-end gap-2 pointer-events-none"
       style={{
         right: 'max(0.85rem, env(safe-area-inset-right))',
         bottom: 'max(0.85rem, env(safe-area-inset-bottom))',

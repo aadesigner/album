@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { ADMIN } from '@/components/layout/AdminLayout';
 
@@ -49,9 +50,9 @@ export function AdminModal({
     };
   }, [onClose, closeOnEscape]);
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4"
+      className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4"
       style={{ background: 'rgba(20, 12, 16, 0.46)' }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
@@ -108,6 +109,7 @@ export function AdminModal({
           </footer>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
