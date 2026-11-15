@@ -453,9 +453,10 @@ export default function AdminOrders() {
         <div
           className="mb-6 relative"
           style={{
-            background: ADMIN.card,
+            background: ADMIN.accentSoft,
             border: `1px solid ${ADMIN.line}`,
             borderLeft: `4px solid ${ADMIN.accent}`,
+            borderRadius: ADMIN.radius,
             padding: '1.2rem 1.35rem 1.35rem',
           }}
         >
@@ -499,11 +500,11 @@ export default function AdminOrders() {
           </button>
         </div>
 
-        <div className="overflow-hidden" style={{ background: ADMIN.card, border: `1px solid ${ADMIN.line}` }}>
+        <div className="overflow-hidden" style={{ background: ADMIN.accentSoft, border: `1px solid ${ADMIN.line}`, borderRadius: ADMIN.radius }}>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr style={{ borderBottom: `1px solid ${ADMIN.line}`, background: ADMIN.bg }}>
+                <tr style={{ borderBottom: `1px solid ${ADMIN.line}`, background: ADMIN.card }}>
                   {['#', 'Customer', 'Album', 'Pages', 'Amount', 'Date', 'Files', 'Status', 'Note', 'Admin Note', ''].map(h => (
                     <th key={h || 'actions'} className="px-3 sm:px-4 py-3.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] whitespace-nowrap" style={{ color: ADMIN.muted }}>{h}</th>
                   ))}

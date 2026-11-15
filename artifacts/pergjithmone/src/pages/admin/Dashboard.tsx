@@ -141,17 +141,22 @@ function StatCard({
     <div
       className="relative overflow-hidden"
       style={{
-        background: theme.card,
+        background: theme.accentSoft,
         border: `1px solid ${theme.line}`,
-        borderRadius: 0,
-        boxShadow: 'none',
+        borderRadius: theme.radius,
+        boxShadow: theme.cardShadow,
         borderLeft: `3px solid ${accent}`,
       }}
     >
       <div className="p-4 sm:p-5">
         <div className="flex items-start justify-between gap-2 mb-3">
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em]" style={{ color: theme.muted }}>{label}</p>
-          <span style={{ color: accent }}>{icon}</span>
+          <span
+            className="w-7 h-7 flex items-center justify-center shrink-0"
+            style={{ background: theme.card, color: accent, borderRadius: `calc(${theme.radius} - 4px)` }}
+          >
+            {icon}
+          </span>
         </div>
         <p className="text-[1.85rem] sm:text-[2.1rem] font-semibold leading-none tracking-tight" style={{ color: theme.ink, fontFamily: theme.fontSerif }}>
           {value}
@@ -363,8 +368,8 @@ function PendingPrintingWidget() {
   };
 
   return (
-    <div className="overflow-hidden" style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: theme.radius, boxShadow: theme.cardShadow }}>
-      <div className="flex items-center justify-between gap-3 px-4 py-3.5" style={{ borderBottom: `1px solid ${theme.line}` }}>
+    <div className="overflow-hidden" style={{ background: theme.accentSoft, border: `1px solid ${theme.line}`, borderRadius: theme.radius, boxShadow: theme.cardShadow }}>
+      <div className="flex items-center justify-between gap-3 px-4 py-3.5" style={{ borderBottom: `1px solid ${theme.line}`, background: theme.card }}>
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-8 h-8 flex items-center justify-center shrink-0" style={{ background: theme.accentSoft, borderRadius: theme.radius }}>
             <Printer size={14} style={{ color: theme.accentDeep }} />
@@ -616,13 +621,14 @@ export default function AdminDashboard() {
   return (
     <AdminLayout>
       <div className="p-3 sm:p-5 md:p-7 max-w-screen-xl mx-auto pb-16">
-        {/* Editorial masthead — reads as print desk, not analytics SaaS */}
+        {/* Editorial masthead — tinted to theme accent */}
         <div
           className="mb-6 sm:mb-8 relative overflow-hidden"
           style={{
-            background: theme.card,
+            background: theme.accentSoft,
             border: `1px solid ${theme.line}`,
             borderLeft: `4px solid ${theme.accent}`,
+            borderRadius: theme.radius,
             padding: '1.25rem 1.35rem 1.4rem',
           }}
         >
@@ -789,7 +795,7 @@ export default function AdminDashboard() {
                 key={m.label}
                 href={m.href}
                 className="block px-3 py-2.5 transition-opacity hover:opacity-90"
-                style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: 0 }}
+                style={{ background: theme.accentSoft, border: `1px solid ${theme.line}`, borderRadius: theme.radius }}
               >
                 {body}
               </Link>
@@ -797,7 +803,7 @@ export default function AdminDashboard() {
               <div
                 key={m.label}
                 className="px-3 py-2.5"
-                style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: 0 }}
+                style={{ background: theme.accentSoft, border: `1px solid ${theme.line}`, borderRadius: theme.radius }}
               >
                 {body}
               </div>
@@ -810,7 +816,7 @@ export default function AdminDashboard() {
         </p>
         <div
           className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-2 mb-5"
-          style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: theme.radius }}
+          style={{ background: theme.accentSoft, border: `1px solid ${theme.line}`, borderRadius: theme.radius }}
         >
           {PIPELINE_STEPS.map((st) => {
             const count = Number(pipeline[st.key]?.count || 0);
@@ -848,7 +854,7 @@ export default function AdminDashboard() {
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-5">
           <div
             className="xl:col-span-2 p-4"
-            style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: theme.radius, boxShadow: theme.cardShadow }}
+            style={{ background: theme.accentSoft, border: `1px solid ${theme.line}`, borderRadius: theme.radius, boxShadow: theme.cardShadow }}
           >
             <div className="flex items-center justify-between mb-3">
               <div>
@@ -868,7 +874,7 @@ export default function AdminDashboard() {
 
           <div
             className="p-4"
-            style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: theme.radius }}
+            style={{ background: theme.accentSoft, border: `1px solid ${theme.line}`, borderRadius: theme.radius }}
           >
             <h2 className="font-semibold mb-1" style={{ color: theme.ink, fontFamily: theme.fontSerif }}>Order mix</h2>
             <p className="text-xs mb-3" style={{ color: theme.muted }}>Status in this period</p>
@@ -912,7 +918,7 @@ export default function AdminDashboard() {
         {desktop && (
           <div
             className="p-4 mb-5"
-            style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: theme.radius }}
+            style={{ background: theme.accentSoft, border: `1px solid ${theme.line}`, borderRadius: theme.radius }}
           >
             <div className="flex items-center justify-between mb-3">
               <div>
@@ -934,7 +940,7 @@ export default function AdminDashboard() {
         <div
           className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5 p-4"
           style={{
-            background: theme.card,
+            background: theme.accentSoft,
             border: `1px solid ${theme.line}`,
             borderRadius: theme.radius,
           }}
@@ -956,8 +962,8 @@ export default function AdminDashboard() {
           Recent activity
         </p>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="lg:col-span-2 overflow-hidden" style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: theme.radius }}>
-            <div className="flex items-center justify-between px-4 py-3.5" style={{ borderBottom: `1px solid ${theme.line}` }}>
+          <div className="lg:col-span-2 overflow-hidden" style={{ background: theme.accentSoft, border: `1px solid ${theme.line}`, borderRadius: theme.radius }}>
+            <div className="flex items-center justify-between px-4 py-3.5" style={{ borderBottom: `1px solid ${theme.line}`, background: theme.card }}>
               <h2 className="font-semibold" style={{ color: theme.ink, fontFamily: theme.fontSerif }}>Orders in period</h2>
               <Link href="/heyadmin/porosi" className="text-xs font-medium" style={{ color: theme.accentDeep }}>View all →</Link>
             </div>
@@ -1008,8 +1014,8 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <div className="overflow-hidden" style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: theme.radius }}>
-            <div className="flex items-center justify-between px-4 py-3.5" style={{ borderBottom: `1px solid ${theme.line}` }}>
+          <div className="overflow-hidden" style={{ background: theme.accentSoft, border: `1px solid ${theme.line}`, borderRadius: theme.radius }}>
+            <div className="flex items-center justify-between px-4 py-3.5" style={{ borderBottom: `1px solid ${theme.line}`, background: theme.card }}>
               <h2 className="font-semibold" style={{ color: theme.ink, fontFamily: theme.fontSerif }}>New members</h2>
               <Link href="/heyadmin/perdorues" className="text-xs font-medium" style={{ color: theme.accentDeep }}>View all →</Link>
             </div>

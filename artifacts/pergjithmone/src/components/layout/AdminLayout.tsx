@@ -438,12 +438,6 @@ function Sidebar({
             >
               Përgjithmonë
             </p>
-            <p
-              className="text-[11px] mt-2 leading-snug"
-              style={{ color: theme.sidebarText, opacity: 0.75, fontFamily: theme.fontSans }}
-            >
-              Print studio · one hue
-            </p>
           </div>
           {onClose && (
             <button
