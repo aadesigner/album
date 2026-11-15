@@ -1,12 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  useGetAdminSettings,
-  useUpdateAdminSettings,
-  getGetAdminSettingsQueryKey,
-} from '@workspace/api-client-react-tsconfig';
-import { useQueryClient } from '@tanstack/react-query';
-import { StickyNote, Plus, Trash2, X, Loader2, Check, ChevronDown } from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { StickyNote, Plus, Trash2, X, Check, ChevronDown } from 'lucide-react';
 import { useAdminTheme } from '@/components/layout/AdminLayout';
+import { useAuth } from '@/contexts/AuthContext';
 import type { AdminTokens } from '@/lib/adminTheme';
 
 export type AdminStickyNote = {
@@ -16,9 +11,13 @@ export type AdminStickyNote = {
   updatedAt?: string;
 };
 
-const OPEN_KEY = 'admin-sticky-notes-open';
+const OPEN_KEY = 'admin-personal-notes-open';
 const MAX_NOTES = 40;
 const MAX_LEN = 2000;
+
+function storageKey(userId: number | string | undefined) {
+  return `admin-personal-notes-v1:${userId ?? 'anon'}`;
+}
 
 function parseNotes(raw: unknown): AdminStickyNote[] {
   if (!Array.isArray(raw)) return [];
@@ -33,6 +32,24 @@ function parseNotes(raw: unknown): AdminStickyNote[] {
     }));
 }
 
+function readNotes(userId: number | string | undefined): AdminStickyNote[] {
+  try {
+    const raw = localStorage.getItem(storageKey(userId));
+    if (!raw) return [];
+    return parseNotes(JSON.parse(raw));
+  } catch {
+    return [];
+  }
+}
+
+function writeNotes(userId: number | string | undefined, notes: AdminStickyNote[]) {
+  try {
+    localStorage.setItem(storageKey(userId), JSON.stringify(notes.slice(0, MAX_NOTES)));
+  } catch {
+    // private mode / quota
+  }
+}
+
 function formatWhen(iso: string) {
   try {
     const d = new Date(iso);
@@ -44,16 +61,11 @@ function formatWhen(iso: string) {
   }
 }
 
+/** Personal reminders for the signed-in admin only (local to this browser). */
 export function AdminStickyNotes() {
   const theme = useAdminTheme().theme;
-  const { data: settings, isLoading } = useGetAdminSettings();
-  const updateSettings = useUpdateAdminSettings();
-  const queryClient = useQueryClient();
-
-  const serverNotes = useMemo(
-    () => parseNotes((settings as any)?.adminNotes),
-    [settings],
-  );
+  const { user } = useAuth();
+  const userId = (user as any)?.id as number | undefined;
 
   const [open, setOpen] = useState(() => {
     try { return localStorage.getItem(OPEN_KEY) === '1'; } catch { return false; }
@@ -62,21 +74,15 @@ export function AdminStickyNotes() {
   const [draft, setDraft] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
-  const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const hydratedRef = useRef(false);
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
   const draftRef = useRef<HTMLTextAreaElement>(null);
+  const saveFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!settings) return;
-    // Don't clobber local edits while a save is in flight
-    if (saving) return;
-    setNotes(serverNotes);
-    hydratedRef.current = true;
-  }, [serverNotes, settings, saving]);
+    setNotes(readNotes(userId));
+    setEditingId(null);
+    setEditText('');
+  }, [userId]);
 
   useEffect(() => {
     try { localStorage.setItem(OPEN_KEY, open ? '1' : '0'); } catch { /* ignore */ }
@@ -91,52 +97,34 @@ export function AdminStickyNotes() {
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
 
-  const persist = useCallback(async (next: AdminStickyNote[]) => {
-    setSaving(true);
-    setError(null);
-    try {
-      await updateSettings.mutateAsync({
-        data: { adminNotes: next } as any,
-      });
-      await queryClient.invalidateQueries({ queryKey: getGetAdminSettingsQueryKey() });
-      setSavedFlash(true);
-      window.setTimeout(() => setSavedFlash(false), 1600);
-    } catch (err: any) {
-      setError(err?.data?.error || err?.message || 'Failed to save notes');
-    } finally {
-      setSaving(false);
-    }
-  }, [updateSettings, queryClient]);
-
-  const schedulePersist = useCallback((next: AdminStickyNote[]) => {
-    setNotes(next);
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => { void persist(next); }, 450);
-  }, [persist]);
-
   useEffect(() => () => {
-    if (saveTimer.current) clearTimeout(saveTimer.current);
+    if (saveFlashTimer.current) clearTimeout(saveFlashTimer.current);
   }, []);
+
+  const persist = useCallback((next: AdminStickyNote[]) => {
+    setNotes(next);
+    writeNotes(userId, next);
+    setSavedFlash(true);
+    if (saveFlashTimer.current) clearTimeout(saveFlashTimer.current);
+    saveFlashTimer.current = setTimeout(() => setSavedFlash(false), 1200);
+  }, [userId]);
 
   const addNote = () => {
     const text = draft.trim();
     if (!text) return;
-    if (notes.length >= MAX_NOTES) {
-      setError(`Max ${MAX_NOTES} notes`);
-      return;
-    }
+    if (notes.length >= MAX_NOTES) return;
     const note: AdminStickyNote = {
       id: `note-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       text: text.slice(0, MAX_LEN),
       createdAt: new Date().toISOString(),
     };
     setDraft('');
-    schedulePersist([note, ...notes]);
+    persist([note, ...notes]);
     draftRef.current?.focus();
   };
 
   const removeNote = (id: string) => {
-    schedulePersist(notes.filter((n) => n.id !== id));
+    persist(notes.filter((n) => n.id !== id));
     if (editingId === id) {
       setEditingId(null);
       setEditText('');
@@ -156,7 +144,7 @@ export function AdminStickyNotes() {
       return;
     }
     const now = new Date().toISOString();
-    schedulePersist(notes.map((n) =>
+    persist(notes.map((n) =>
       n.id === editingId ? { ...n, text: text.slice(0, MAX_LEN), updatedAt: now } : n,
     ));
     setEditingId(null);
@@ -173,41 +161,40 @@ export function AdminStickyNotes() {
         bottom: 'max(0.85rem, env(safe-area-inset-bottom))',
       }}
     >
-      {/* Expanded panel */}
       {open && (
         <div
-          ref={panelRef}
           className="pointer-events-auto w-[min(22rem,calc(100vw-1.7rem))] max-h-[min(70dvh,520px)] flex flex-col overflow-hidden shadow-2xl"
           style={{
             background: t.card,
             border: `1px solid ${t.line}`,
-            borderRadius: `calc(${t.radius} + 6px)`,
-            boxShadow: '0 18px 48px rgba(20,12,16,0.18), 0 4px 12px rgba(20,12,16,0.08)',
+            borderRadius: 16,
+            boxShadow: '0 18px 48px rgba(20,12,16,0.16)',
           }}
           role="dialog"
-          aria-label="Admin notes"
+          aria-label="Personal notes"
         >
           <div
             className="flex items-center gap-2 px-3.5 py-2.5 shrink-0"
-            style={{ borderBottom: `1px solid ${t.line}`, background: t.accentSoft }}
+            style={{ borderBottom: `1px solid ${t.line}` }}
           >
-            <StickyNote size={15} style={{ color: t.accentDeep }} />
+            <StickyNote size={15} style={{ color: t.accent }} />
             <div className="min-w-0 flex-1">
-              <p className="text-[12px] font-semibold leading-tight" style={{ color: t.ink, fontFamily: t.fontSerif }}>
-                Team notes
+              <p className="text-[13px] font-semibold leading-tight" style={{ color: t.ink }}>
+                Notes
               </p>
               <p className="text-[10px] leading-tight mt-0.5" style={{ color: t.muted }}>
-                Shared across all admin pages
+                Private · only you, on this device
               </p>
             </div>
-            <span className="text-[10px] tabular-nums px-1.5 py-0.5 rounded-full font-semibold"
-              style={{ background: t.bg, color: t.muted }}>
+            <span
+              className="text-[10px] tabular-nums px-1.5 py-0.5 rounded-full font-semibold"
+              style={{ background: t.bg, color: t.muted }}
+            >
               {notes.length}
             </span>
-            {(saving || savedFlash) && (
-              <span className="text-[10px] flex items-center gap-1" style={{ color: savedFlash ? t.success : t.muted }}>
-                {saving ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
-                {saving ? 'Saving' : 'Saved'}
+            {savedFlash && (
+              <span className="text-[10px] flex items-center gap-1" style={{ color: t.muted }}>
+                <Check size={11} /> Saved
               </span>
             )}
             <button
@@ -222,13 +209,9 @@ export function AdminStickyNotes() {
           </div>
 
           <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2.5 space-y-2 overscroll-contain">
-            {isLoading && !hydratedRef.current ? (
-              <div className="flex items-center justify-center gap-2 py-10 text-[12px]" style={{ color: t.muted }}>
-                <Loader2 size={14} className="animate-spin" /> Loading…
-              </div>
-            ) : notes.length === 0 ? (
+            {notes.length === 0 ? (
               <p className="text-[12px] text-center py-8 px-4 leading-relaxed" style={{ color: t.muted }}>
-                No notes yet. Add a reminder for the team — it stays here on every admin page.
+                Add a personal reminder — only you will see it.
               </p>
             ) : (
               notes.map((n) => (
@@ -249,9 +232,6 @@ export function AdminStickyNotes() {
           </div>
 
           <div className="shrink-0 px-3 pb-3 pt-1" style={{ borderTop: `1px solid ${t.line}` }}>
-            {error && (
-              <p className="text-[11px] mb-2 px-1" style={{ color: '#8B3A3A' }}>{error}</p>
-            )}
             <div className="flex gap-2 items-end">
               <textarea
                 ref={draftRef}
@@ -263,13 +243,13 @@ export function AdminStickyNotes() {
                     addNote();
                   }
                 }}
-                placeholder="Write a note…"
+                placeholder="Remind yourself…"
                 rows={2}
                 className="flex-1 min-w-0 resize-none text-[13px] leading-snug px-3 py-2 outline-none"
                 style={{
                   background: t.bg,
                   border: `1px solid ${t.line}`,
-                  borderRadius: t.radius,
+                  borderRadius: 10,
                   color: t.ink,
                   fontFamily: t.fontSans,
                 }}
@@ -277,11 +257,11 @@ export function AdminStickyNotes() {
               <button
                 type="button"
                 onClick={addNote}
-                disabled={!draft.trim() || saving}
+                disabled={!draft.trim() || notes.length >= MAX_NOTES}
                 className="shrink-0 h-10 w-10 flex items-center justify-center text-white disabled:opacity-40 transition-opacity"
                 style={{
-                  background: `linear-gradient(145deg, ${t.accent}, ${t.accentDeep})`,
-                  borderRadius: t.radius,
+                  background: t.accent,
+                  borderRadius: 10,
                 }}
                 aria-label="Add note"
                 title="Add note (Ctrl/⌘+Enter)"
@@ -296,17 +276,14 @@ export function AdminStickyNotes() {
         </div>
       )}
 
-      {/* FAB */}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         className="pointer-events-auto relative flex items-center gap-2 pl-3.5 pr-3.5 h-11 text-white shadow-lg active:scale-[0.97] transition-transform"
         style={{
-          background: open
-            ? t.ink
-            : `linear-gradient(145deg, ${t.accent}, ${t.accentDeep})`,
+          background: open ? t.ink : t.accent,
           borderRadius: 999,
-          boxShadow: '0 10px 28px rgba(20,12,16,0.22)',
+          boxShadow: '0 10px 28px rgba(20,12,16,0.18)',
           fontFamily: t.fontSans,
         }}
         aria-expanded={open}
@@ -348,7 +325,7 @@ function NoteCard({
       style={{
         background: t.bg,
         border: `1px solid ${t.line}`,
-        borderRadius: t.radius,
+        borderRadius: 10,
         borderLeft: `3px solid ${t.accent}`,
       }}
     >
@@ -370,7 +347,7 @@ function NoteCard({
             style={{
               background: t.card,
               border: `1px solid ${t.line}`,
-              borderRadius: `calc(${t.radius} - 2px)`,
+              borderRadius: 8,
               color: t.ink,
             }}
           />
@@ -380,16 +357,12 @@ function NoteCard({
               style={{ color: t.muted }}>Cancel</button>
             <button type="button" onClick={onCommitEdit}
               className="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-white"
-              style={{ background: t.accentDeep }}>Save</button>
+              style={{ background: t.accent }}>Save</button>
           </div>
         </div>
       ) : (
         <>
-          <button
-            type="button"
-            onClick={onStartEdit}
-            className="w-full text-left"
-          >
+          <button type="button" onClick={onStartEdit} className="w-full text-left">
             <p className="text-[13px] leading-snug whitespace-pre-wrap break-words" style={{ color: t.ink }}>
               {note.text}
             </p>
