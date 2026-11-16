@@ -1010,7 +1010,6 @@ export function generateAlbum(
   const cat = categoryKey || 'Modern';
   const pool = shuffle(designsForCategory(cat, catalogDesigns));
   const canvasH = getCanvasHeight(bookSize?.widthCm, bookSize?.heightCm);
-  const paper = (CATEGORY_TONES[cat] ?? CATEGORY_TONES.Modern).paper;
   const { frontUrl, backUrl, story: storyBase } = splitPhotoRoles(photoUrls);
 
   const takeOnce = (url?: string): (() => string | undefined) => {
@@ -1055,10 +1054,12 @@ export function generateAlbum(
     ? [...storyBase, backUrl]
     : storyBase;
 
+  // Inner empty margins are always pure white — never category cream/tint.
+  const whitePaper = '#FFFFFF';
   const paperBg: DE = {
     type: 'background',
     x: 0, y: 0, w: DESIGN_W, h: canvasH, rotation: 0,
-    bgColor: paper,
+    bgColor: whitePaper,
   };
   // Locked endpapers — never editable; PDF paints hatch + labels separately.
   const insideCover: EditorElement[] = [];
@@ -1106,7 +1107,6 @@ export function generateAlbum(
     return line;
   };
 
-  const whitePaper = '#FFFFFF';
   const usedHeadlines = new Set<string>();
   const innerPages: EditorElement[][] = [];
   for (let p = 0; p < safePageCount; p++) {
@@ -1128,7 +1128,7 @@ export function generateAlbum(
                   src: url, cropZoom: 1,
                 },
               ]
-            : [{ ...paperBg, bgColor: whitePaper }],
+            : [paperBg],
           `inner-${p}`,
         ));
         continue;
@@ -1165,7 +1165,7 @@ export function generateAlbum(
       elementsForLayout(
         layout,
         canvasH,
-        paper,
+        whitePaper,
         nextStoryPhoto,
         hasTextZone ? nextCaption : undefined,
       ),

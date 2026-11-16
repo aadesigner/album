@@ -744,13 +744,6 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
     [paletteId, setPaletteId, theme],
   );
 
-  const currentLabel = useMemo(() => {
-    const match = navItems.find(
-      (i) => location === i.href || (i.href !== '/heyadmin' && location.startsWith(i.href)),
-    );
-    return match?.label || 'Dashboard';
-  }, [location]);
-
   const hideThemeSwitcher =
     location === '/heyadmin/dizajne' || location.startsWith('/heyadmin/dizajne/')
     || location === '/heyadmin/site' || location.startsWith('/heyadmin/site/');
@@ -893,25 +886,20 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
               borderBottom: `1px solid ${theme.line}`,
             }}
           >
-            <div className="flex items-center gap-2.5">
-              <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                <a
-                  href="/"
+            <div className="flex items-center gap-2">
+              <div className="flex items-center min-w-0 flex-1">
+                <Link
+                  href="/heyadmin"
                   className="shrink-0 flex items-center"
-                  aria-label="Përgjithmonë — go to main site"
+                  aria-label="Përgjithmonë Admin"
                 >
                   <img
                     src="/logo-nav.png"
                     alt="Përgjithmonë"
-                    className="h-7 w-auto"
+                    className="h-7 w-auto max-w-[9.5rem]"
                     style={{ objectFit: 'contain', objectPosition: 'left center', display: 'block' }}
                   />
-                </a>
-                <div className="min-w-0">
-                  <p className="font-semibold text-[1.05rem] leading-tight truncate" style={{ color: theme.ink }}>
-                    {currentLabel}
-                  </p>
-                </div>
+                </Link>
               </div>
 
               <button

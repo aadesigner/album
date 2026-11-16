@@ -17,7 +17,8 @@ import type { ShapeKind } from './shapes';
 // elements (from DESIGNS/LAYOUTS) onto it without distortion.
 export const DESIGN_W = 600;
 export const DESIGN_H = 800;
-export const PAPER_COLOR = '#FEFDF9';
+/** Album page paper — empty spacing around photos is always pure white. */
+export const PAPER_COLOR = '#FFFFFF';
 
 /** Axis-aligned bounds of a rect rotated around its top-left (Konva default). */
 export function rotatedRectAabb(

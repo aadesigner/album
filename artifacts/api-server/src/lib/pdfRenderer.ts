@@ -110,7 +110,12 @@ function resolveFontFamily(family?: string): string {
 // ── Must match the editor's design canvas exactly ───────────────────────────
 const DESIGN_W = 600;
 const DESIGN_H = 800;
-const PAPER_COLOR = "#FEFDF9";
+/** Print paper — empty spacing around photos must stay pure white (not cream/tint). */
+const PAPER_COLOR = "#FFFFFF";
+
+function isCoverRole(role?: string): boolean {
+  return role === "front_cover" || role === "back_cover";
+}
 const PRINT_DPI = 300;
 const CM_TO_INCH = 1 / 2.54;
 /** Print JPEG quality — 90 is visually fine at 300 DPI and cheaper on CPU/RAM/disk than 94+. */
@@ -688,7 +693,9 @@ async function renderPageToCanvas(
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, DESIGN_W, canvasH);
       } else {
-        ctx.fillStyle = el.bgColor || PAPER_COLOR;
+        // Inner / content pages: empty margins are always white (never category cream).
+        // Covers keep their intentional solid plate color.
+        ctx.fillStyle = isCoverRole(page.role) ? (el.bgColor || PAPER_COLOR) : PAPER_COLOR;
         ctx.fillRect(0, 0, DESIGN_W, canvasH);
       }
     } else if (el.type === "shape") {
@@ -733,6 +740,9 @@ async function renderPageToCanvas(
         ctx.rect(el.x, el.y, el.w, el.h);
         ctx.clip();
         if (coverImageLetterbox(el)) {
+          // Letterbox gaps inside the frame stay white.
+          ctx.fillStyle = PAPER_COLOR;
+          ctx.fillRect(el.x, el.y, el.w, el.h);
           const fit = Math.min(
             el.w / Math.max(1, img.width),
             el.h / Math.max(1, img.height),
@@ -822,7 +832,8 @@ async function renderPageToCanvas(
       }
       ctx.restore();
     } else if (el.type === "placeholder") {
-      ctx.fillStyle = "#EDE8E0";
+      // Empty photo slots — white plate (matches print paper)
+      ctx.fillStyle = PAPER_COLOR;
       ctx.fillRect(el.x, el.y, el.w, el.h);
     }
 

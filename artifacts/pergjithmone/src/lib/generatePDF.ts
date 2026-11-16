@@ -12,7 +12,12 @@ import { loadCachedImage, bitmapWidth, bitmapHeight, type CachedBitmap } from '.
 // ── Must match Editor constants exactly ──────────────────────────────────────
 const DESIGN_W   = 600;
 const DESIGN_H   = 800; // 3:4 reference height — see getCanvasHeight()
-const PAPER_COLOR = '#FEFDF9';
+/** Print paper — empty spacing around photos must stay pure white (not cream/tint). */
+const PAPER_COLOR = '#FFFFFF';
+
+function isCoverRole(role?: string): boolean {
+  return role === 'front_cover' || role === 'back_cover';
+}
 
 // Fallback PDF page size (3:4 ratio, 150×200mm) used only if no real book
 // dimensions are supplied — callers should always pass the project's actual
@@ -296,7 +301,9 @@ async function renderPage(
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, DESIGN_W, canvasH);
       } else {
-        ctx.fillStyle = el.bgColor || PAPER_COLOR;
+        // Inner / content pages: empty margins are always white (never category cream).
+        // Covers keep their intentional solid plate color.
+        ctx.fillStyle = isCoverRole(role) ? (el.bgColor || PAPER_COLOR) : PAPER_COLOR;
         ctx.fillRect(0, 0, DESIGN_W, canvasH);
       }
     }
@@ -338,6 +345,9 @@ async function renderPage(
         const iw = bitmapWidth(img);
         const ih = bitmapHeight(img);
         if (coverImageLetterbox(el)) {
+          // Letterbox gaps inside the frame stay white.
+          ctx.fillStyle = PAPER_COLOR;
+          ctx.fillRect(el.x, el.y, el.w, el.h);
           const s = Math.min(el.w / iw, el.h / ih);
           const dw = iw * s;
           const dh = ih * s;
@@ -416,9 +426,9 @@ async function renderPage(
       ctx.restore();
     }
 
-    // Placeholders: render as empty warm box so PDF looks intentional
+    // Empty photo slots — white plate (matches print paper)
     else if (el.type === 'placeholder') {
-      ctx.fillStyle = '#EDE8E0';
+      ctx.fillStyle = PAPER_COLOR;
       ctx.fillRect(el.x, el.y, el.w, el.h);
     }
 

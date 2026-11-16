@@ -97,7 +97,7 @@ import { useEditorFontsReady, ensureEditorFonts, normalizeEditorFont, isEditorSi
 import { FontPicker } from '@/components/FontPicker';
 import { useCachedImage, bitmapWidth, bitmapHeight } from '@/lib/imageCache';
 
-const PAPER_COLOR = '#FEFDF9';
+const PAPER_COLOR = '#FFFFFF';
 const SPINE_W = 1;
 const PAPER_TEXTURE = `url("data:image/svg+xml,<svg viewBox='0 0 300 300' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/></filter><rect width='300' height='300' filter='url(%23n)'/></svg>")`;
 
