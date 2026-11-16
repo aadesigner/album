@@ -50,8 +50,8 @@ export function uploadErrorMessage(err: unknown, lang: 'sq' | 'en'): string {
   if (err instanceof ImageTooLargeError) {
     const mb = (err.sizeBytes / (1024 * 1024)).toFixed(1);
     return lang === 'sq'
-      ? `Fotoja është ${mb}MB edhe pas ngjeshjes (limiti 3MB). Provoni një foto më të vogël.`
-      : `Photo is ${mb}MB even after compression (limit 3MB). Try a smaller photo.`;
+      ? `Fotoja është ${mb}MB edhe pas ngjeshjes (limiti 4MB). Provoni një foto më të vogël.`
+      : `Photo is ${mb}MB even after compression (limit 4MB). Try a smaller photo.`;
   }
   if (err instanceof ImageUndecodableError) {
     return lang === 'sq'

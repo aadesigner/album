@@ -979,17 +979,28 @@ router.get(
       req.query.download === "1"
       || req.query.download === "true"
       || String(req.query.disposition || "").toLowerCase() === "attachment";
+    // Already-compressed page JPEGs — never gzip; let sendFile serve byte ranges.
+    (req as { headers: Record<string, unknown> }).headers["x-no-compression"] = "1";
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Cache-Control", "private, no-store");
+    res.setHeader("Accept-Ranges", "bytes");
+    // Print PDFs are immutable once written (new render → new file / regenerate).
+    res.setHeader("Cache-Control", "private, max-age=86400, immutable");
+    const resolved = path.resolve(filePath);
     if (wantDownload) {
-      res.download(filePath, filename);
+      res.download(resolved, filename);
       return;
     }
     res.setHeader(
       "Content-Disposition",
       `inline; filename="${filename.replace(/"/g, "")}"`,
     );
-    res.sendFile(path.resolve(filePath));
+    res.sendFile(resolved, {
+      acceptRanges: true,
+      cacheControl: false, // we set Cache-Control above
+      headers: {
+        "Content-Type": "application/pdf",
+      },
+    });
   },
 );
 

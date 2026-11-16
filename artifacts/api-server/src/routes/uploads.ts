@@ -100,66 +100,75 @@ const CONVERTIBLE_FORMATS = new Set(Object.keys(SHARP_FORMAT_TO_MIME));
 // sharp enough to print later; nothing in this app needs the original
 // multi-megabyte phone-camera file. Capping the longest edge and
 // re-encoding keeps disk usage (and later, PDF render time) sane.
-const MAX_DIMENSION = 3200; // px, longest edge — enough for 21×28 cm @ 300 DPI
-const JPEG_QUALITY = 85;
+// 21×28 cm @ 300 DPI needs ~2480×3307 — keep headroom so full-bleed never upscales.
+const MAX_DIMENSION = 3400;
+const JPEG_QUALITY = 88;
+
+/** Serialize sharp compress so multi-upload bursts don't spike Railway RAM. */
+let compressChain: Promise<unknown> = Promise.resolve();
+function withCompressLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = compressChain.then(fn, fn);
+  compressChain = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
 
 async function compressUpload(
   filePath: string,
   detectedFormat: string,
 ): Promise<{ finalPath: string; width: number; height: number }> {
-  const dir = path.dirname(filePath);
-  const base = path.basename(filePath, path.extname(filePath));
-  const image = sharp(filePath, { failOn: "none" }).rotate(); // auto-orient from EXIF, then strip it
+  return withCompressLock(async () => {
+    const dir = path.dirname(filePath);
+    const base = path.basename(filePath, path.extname(filePath));
+    const image = sharp(filePath, { failOn: "none", sequentialRead: true }).rotate(); // auto-orient from EXIF, then strip it
 
-  const metadata = await image.metadata();
-  const hasAlpha = !!metadata.hasAlpha;
-  const format = detectedFormat || metadata.format || "jpeg";
+    const metadata = await image.metadata();
+    const hasAlpha = !!metadata.hasAlpha;
+    const format = detectedFormat || metadata.format || "jpeg";
 
-  // Keep PNG / WebP / GIF as themselves. Convert HEIC/AVIF/TIFF/BMP to JPEG
-  // (or PNG when they have transparency).
-  let outputExt = ".jpg";
-  if (hasAlpha || format === "png") outputExt = ".png";
-  else if (format === "webp") outputExt = ".webp";
-  else if (format === "gif") outputExt = ".gif";
-  else if (format === "jpeg") outputExt = ".jpg";
+    // Photos → JPEG. Keep PNG only when transparency is required (stickers / art).
+    // GIF without alpha stays as-is (animation). Everything else becomes JPEG.
+    let outputExt = ".jpg";
+    if (format === "gif" && !hasAlpha) {
+      return {
+        finalPath: filePath,
+        width: metadata.width || 0,
+        height: metadata.height || 0,
+      };
+    }
+    if (hasAlpha) outputExt = ".png";
+    else outputExt = ".jpg";
 
-  if (format === "gif" && !hasAlpha) {
-    return {
-      finalPath: filePath,
-      width: metadata.width || 0,
-      height: metadata.height || 0,
-    };
-  }
+    const outputPath = path.join(dir, `${base}${outputExt}`);
+    const tmpPath = `${outputPath}.tmp`;
 
-  const outputPath = path.join(dir, `${base}${outputExt}`);
-  const tmpPath = `${outputPath}.tmp`;
+    let pipeline = image.resize({
+      width: MAX_DIMENSION,
+      height: MAX_DIMENSION,
+      fit: "inside",
+      withoutEnlargement: true,
+    });
+    if (outputExt === ".png") {
+      // Never palette-quantize PNGs. sharp's `quality` / palette path can flatten
+      // or bake alpha into grey — bad for category icons and mini-template art.
+      pipeline = pipeline.png({ compressionLevel: 9 });
+    } else {
+      pipeline = pipeline.jpeg({ quality: JPEG_QUALITY, mozjpeg: true, chromaSubsampling: "4:2:0" });
+    }
 
-  let pipeline = image.resize({
-    width: MAX_DIMENSION,
-    height: MAX_DIMENSION,
-    fit: "inside",
-    withoutEnlargement: true,
+    const info = await pipeline.toFile(tmpPath);
+
+    // Only now remove the original and put the compressed file in its place —
+    // if compression failed above, the original upload is left untouched.
+    if (outputPath !== filePath && fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+    fs.renameSync(tmpPath, outputPath);
+
+    return { finalPath: outputPath, width: info.width, height: info.height };
   });
-  if (outputExt === ".png") {
-    // Never palette-quantize PNGs. sharp's `quality` / palette path can flatten
-    // or bake alpha into grey — bad for category icons and mini-template art.
-    pipeline = pipeline.png({ compressionLevel: 9 });
-  } else if (outputExt === ".webp") {
-    pipeline = pipeline.webp({ quality: JPEG_QUALITY, alphaQuality: hasAlpha ? 100 : undefined });
-  } else {
-    pipeline = pipeline.jpeg({ quality: JPEG_QUALITY, mozjpeg: true });
-  }
-
-  const info = await pipeline.toFile(tmpPath);
-
-  // Only now remove the original and put the compressed file in its place —
-  // if compression failed above, the original upload is left untouched.
-  if (outputPath !== filePath && fs.existsSync(filePath)) {
-    fs.unlinkSync(filePath);
-  }
-  fs.renameSync(tmpPath, outputPath);
-
-  return { finalPath: outputPath, width: info.width, height: info.height };
 }
 
 /** Block uploads onto ephemeral disk in production — otherwise Design Studio /

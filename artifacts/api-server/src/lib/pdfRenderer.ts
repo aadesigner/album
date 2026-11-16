@@ -1,5 +1,6 @@
 import { createCanvas, GlobalFonts, loadImage, Path2D, type Canvas, type Image } from "@napi-rs/canvas";
 import { PDFDocument } from "pdf-lib";
+import sharp from "sharp";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -118,8 +119,35 @@ function isCoverRole(role?: string): boolean {
 }
 const PRINT_DPI = 300;
 const CM_TO_INCH = 1 / 2.54;
-/** Print JPEG quality — 90 is visually fine at 300 DPI and cheaper on CPU/RAM/disk than 94+. */
+/** Print JPEG quality — same as before (90); mozjpeg shrinks bytes without a second lossy pass. */
 const PRINT_JPEG_QUALITY = 90;
+
+/**
+ * Single-pass page encode: raw RGBA → sharp mozjpeg.
+ * Avoids double JPEG (canvas then sharp), which softens print quality.
+ */
+async function pageCanvasToJpeg(canvas: Canvas): Promise<Buffer> {
+  try {
+    const rgba = canvas.data();
+    return await sharp(rgba, {
+      raw: {
+        width: canvas.width,
+        height: canvas.height,
+        channels: 4,
+      },
+      sequentialRead: true,
+    })
+      .jpeg({
+        quality: PRINT_JPEG_QUALITY,
+        mozjpeg: true,
+        chromaSubsampling: "4:2:0",
+      })
+      .toBuffer();
+  } catch (err) {
+    logger.warn({ err }, "PDF page mozjpeg encode failed — falling back to canvas JPEG");
+    return canvas.toBuffer("image/jpeg", PRINT_JPEG_QUALITY);
+  }
+}
 
 /** Mirrors designs.ts getCanvasHeight() — keep formula identical. */
 export function getCanvasHeight(bookWidthCm: number, bookHeightCm: number): number {
@@ -896,7 +924,7 @@ export async function renderProjectPdf(params: {
     // memory (outside V8 heap / NODE_OPTIONS). Drop refs ASAP so GC can reclaim
     // before the next page — concurrent albums are capped separately.
     let canvas: Canvas | null = await renderPageToCanvas(page, outW, outH, canvasH, uploadsDir);
-    const jpegBuffer = canvas.toBuffer("image/jpeg", { quality: PRINT_JPEG_QUALITY });
+    const jpegBuffer = await pageCanvasToJpeg(canvas);
     canvas = null;
     const jpegImage = await pdf.embedJpg(jpegBuffer);
     const pdfPage = pdf.addPage([pageWidthPt, pageHeightPt]);

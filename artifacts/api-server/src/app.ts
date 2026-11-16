@@ -35,6 +35,9 @@ app.use(helmet({
 app.use(compression({
   filter: (req, res) => {
     if (req.headers["x-no-compression"]) return false;
+    // PDFs are already compressed page JPEGs — gzip wastes CPU and breaks ranges.
+    const type = String(res.getHeader("Content-Type") || "");
+    if (/application\/pdf/i.test(type) || /\.pdf(\?|$)/i.test(req.url || "")) return false;
     // Default compressible() check (skip zip/jpeg/png/etc.).
     return compression.filter(req, res);
   },

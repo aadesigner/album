@@ -4,21 +4,22 @@ import { SAFE_IMAGE_NAME } from './acceptedImages';
 // before any order-time server upload.
 //
 // Why: phone cameras routinely produce 8-20MB photos. Shrinking to
-// print-quality dimensions and a high-quality JPEG keeps the device cache
+// print-quality dimensions (3400px longest edge, matching server sharp —
+// covers 21×28 cm @ 300 DPI) and a high-quality JPEG keeps the device cache
 // small and order uploads fast, without visible quality loss for screen
 // editing + print PDF export.
 //
 // Builder photos stay on-device (IndexedDB). We MUST store a browser-displayable
 // JPEG/PNG/WebP — never raw HEIC passthrough — or the album canvas goes blank.
 
-const MAX_DIMENSION = 2600;
-const HARD_LIMIT_BYTES = 3 * 1024 * 1024; // 3MB per photo after we can re-encode
+const MAX_DIMENSION = 3400;
+const HARD_LIMIT_BYTES = 4 * 1024 * 1024; // 4MB — room for 3400px print JPEGs
 const PASSTHROUGH_LIMIT_BYTES = 20 * 1024 * 1024;
-const QUALITY_STEPS = [0.92, 0.85, 0.78, 0.7, 0.6, 0.5];
+const QUALITY_STEPS = [0.92, 0.88, 0.85, 0.78, 0.7, 0.6];
 
 export class ImageTooLargeError extends Error {
   constructor(public sizeBytes: number) {
-    super(`Photo is ${(sizeBytes / (1024 * 1024)).toFixed(1)}MB even after compression (limit 3MB).`);
+    super(`Photo is ${(sizeBytes / (1024 * 1024)).toFixed(1)}MB even after compression (limit 4MB).`);
     this.name = 'ImageTooLargeError';
   }
 }
