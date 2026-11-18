@@ -178,7 +178,7 @@ function ThemeSwitcher({
         aria-expanded={open}
         aria-haspopup="listbox"
         aria-label={`Theme: ${active.name}`}
-        className="group flex items-center gap-2.5 pl-1.5 pr-3 py-1.5 transition-all active:scale-[0.98] focus:outline-none"
+        className="group flex items-center gap-2.5 sm:pl-1.5 sm:pr-3 p-0 sm:py-1.5 transition-all active:scale-[0.98] focus:outline-none"
         style={{
           background: theme.card,
           border: `1px solid ${theme.line}`,
@@ -188,8 +188,15 @@ function ThemeSwitcher({
             : theme.cardShadow,
         }}
       >
+        {/* Mobile: palette icon only. Desktop: Aa type chip + name. */}
         <span
-          className="relative w-8 h-8 overflow-hidden shrink-0 flex items-center justify-center"
+          className="sm:hidden w-9 h-9 flex items-center justify-center shrink-0"
+          style={{ color: theme.ink }}
+        >
+          <Palette size={16} strokeWidth={2} />
+        </span>
+        <span
+          className="relative w-8 h-8 overflow-hidden shrink-0 hidden sm:flex items-center justify-center"
           style={{
             borderRadius: `calc(${theme.radius} - 4px)`,
             background: active.tokens.accent,
@@ -214,7 +221,6 @@ function ThemeSwitcher({
             {active.tokens.typePair.split(' · ')[0]}
           </span>
         </span>
-        <Palette size={14} className="sm:hidden shrink-0" style={{ color: theme.accent }} />
       </button>
 
       {open && (
