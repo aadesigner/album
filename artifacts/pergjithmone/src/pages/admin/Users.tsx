@@ -15,6 +15,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { orderStatusClass } from '@/lib/orderStatus';
+import { AdminPdfViewer, pdfViewSourceUrl } from '@/components/admin/AdminPdfViewer';
 
 const BASE = (import.meta as any).env?.BASE_URL?.replace(/\/$/, '') || '';
 
@@ -377,8 +378,9 @@ function UserManageModal({
   const [confirmWipe, setConfirmWipe] = useState(false);
 
   const token = getToken();
-  const pdfViewUrl = pdfRaw ? authedPdfUrl(pdfRaw, token) : null;
-  const pdfDownloadUrl = pdfRaw ? authedPdfUrl(pdfRaw, token, { download: true }) : null;
+  const pdfSourceUrl = pdfRaw ? pdfViewSourceUrl(pdfRaw, BASE) : null;
+  const pdfViewUrl = pdfSourceUrl ? authedPdfUrl(pdfSourceUrl, token) : null;
+  const pdfDownloadUrl = pdfSourceUrl ? authedPdfUrl(pdfSourceUrl, token, { download: true }) : null;
 
   const loadDetail = async () => {
     setLoading(true);
@@ -750,7 +752,7 @@ function UserManageModal({
               </div>
             </div>
             <div className="flex-1 overflow-hidden min-h-0">
-              <iframe src={pdfViewUrl} className="w-full h-full border-0" title="Order PDF" />
+              <AdminPdfViewer url={pdfSourceUrl!} token={token} title="Order PDF" />
             </div>
           </div>,
           document.body,

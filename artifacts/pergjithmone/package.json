@@ -78,6 +78,7 @@
     "heic-to": "^1.6.7",
     "jspdf": "^4.2.1",
     "konva": "^10.3.0",
+    "pdfjs-dist": "^6.5.438",
     "react-helmet-async": "^3.0.0",
     "react-konva": "^19.2.5"
   }

@@ -9,6 +9,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { orderStatusClass, orderStatusInline } from '@/lib/orderStatus';
+import { AdminPdfViewer, pdfViewSourceUrl } from '@/components/admin/AdminPdfViewer';
 
 const BASE = (import.meta as any).env?.BASE_URL?.replace(/\/$/, '') || '';
 
@@ -20,9 +21,15 @@ function statusLabel(s: string) {
 
 // ── PDF Viewer Modal ──────────────────────────────────────────────────────────
 function PdfViewerModal({ url, orderId, onClose }: { url: string; orderId: number; onClose: () => void }) {
+  const { getToken } = useAuth();
+  const token = getToken();
+  const viewUrl = pdfViewSourceUrl(url, BASE);
+  const openUrl = authedPdfUrl(viewUrl, token);
+  const downloadUrl = authedPdfUrl(viewUrl, token, { download: true });
+
   return createPortal(
     <div className="fixed inset-0 z-[100] flex flex-col bg-black/80" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="flex items-center justify-between px-4 sm:px-5 py-3 bg-white" style={{ borderBottom: `1px solid ${ADMIN.line}` }}>
+      <div className="flex items-center justify-between px-4 sm:px-5 py-3 bg-white shrink-0" style={{ borderBottom: `1px solid ${ADMIN.line}` }}>
         <div className="flex items-center gap-2 min-w-0">
           <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0" style={{ background: ADMIN.blushSoft }}>
             <Eye size={13} style={{ color: ADMIN.blushDeep }} />
@@ -30,25 +37,25 @@ function PdfViewerModal({ url, orderId, onClose }: { url: string; orderId: numbe
           <span className="font-serif font-semibold text-sm truncate" style={{ color: ADMIN.ink }}>PDF — Order #{orderId}</span>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <a href={url} target="_blank" rel="noopener noreferrer"
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-colors"
+          <a href={openUrl} target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-colors"
             style={{ background: ADMIN.blushSoft, color: ADMIN.blushDeep }}>
-            <ExternalLink size={12} /> Open
+            <ExternalLink size={12} /> <span className="hidden sm:inline">Open</span>
           </a>
           <a
-            href={url.includes('download=') ? url : `${url}${url.includes('?') ? '&' : '?'}download=1`}
+            href={downloadUrl}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-white transition-opacity hover:opacity-90"
             style={{ background: ADMIN.blushDeep }}
           >
-            <Download size={12} /> Download
+            <Download size={12} /> <span className="hidden sm:inline">Download</span>
           </a>
-          <button onClick={onClose} className="p-1.5 rounded-xl transition-colors" style={{ color: ADMIN.muted }}>
+          <button type="button" onClick={onClose} className="p-1.5 rounded-xl transition-colors" style={{ color: ADMIN.muted }} aria-label="Close">
             <X size={16} />
           </button>
         </div>
       </div>
-      <div className="flex-1 overflow-hidden">
-        <iframe src={url} className="w-full h-full border-0" title={`Order #${orderId} PDF`} />
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <AdminPdfViewer url={viewUrl} token={token} title={`Order #${orderId} PDF`} />
       </div>
     </div>,
     document.body,
@@ -337,7 +344,8 @@ export default function AdminOrders() {
         };
         if (body.status === 'ready' && body.pdfUrl) {
           setPdfModal({
-            url: withCacheBust(authedPdfUrl(body.pdfUrl, token)),
+            // Bust cache only after a fresh generate so we don't show a stale file.
+            url: withCacheBust(pdfViewSourceUrl(body.pdfUrl, BASE)),
             orderId,
           });
           refetch();
@@ -358,8 +366,9 @@ export default function AdminOrders() {
   /** Open the existing print PDF — never regenerates (regen wiped photos when uploads were missing). */
   const handleViewPdf = (order: { id: number; pdfUrl?: string | null }) => {
     if (!order.pdfUrl) return;
+    // No cache-bust on normal view — re-downloading a 300 DPI print PDF every click is why it felt so slow.
     setPdfModal({
-      url: withCacheBust(authedPdfUrl(order.pdfUrl, getToken())),
+      url: pdfViewSourceUrl(order.pdfUrl, BASE),
       orderId: order.id,
     });
   };
@@ -384,8 +393,10 @@ export default function AdminOrders() {
         return;
       }
       if (body.status === 'ready' && body.pdfUrl) {
-        const url = withCacheBust(authedPdfUrl(body.pdfUrl, token));
-        setPdfModal({ url, orderId });
+        setPdfModal({
+          url: withCacheBust(pdfViewSourceUrl(body.pdfUrl, BASE)),
+          orderId,
+        });
         toast({
           title: 'PDF ready',
           description: 'Use Download in the viewer or the Download button on the order row.',

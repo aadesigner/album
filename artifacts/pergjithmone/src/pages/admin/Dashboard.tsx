@@ -233,27 +233,40 @@ function StatCard({
   const accent = accents[tone];
   return (
     <div
-      className="relative overflow-hidden"
+      className="relative overflow-hidden group"
       style={{
-        background: theme.card,
-        border: `1px solid ${theme.line}`,
-        borderRadius: 14,
-        boxShadow: theme.cardShadow,
+        background: `linear-gradient(165deg, ${theme.card} 0%, color-mix(in srgb, ${theme.accentSoft} 55%, ${theme.card}) 100%)`,
+        border: `1px solid color-mix(in srgb, ${theme.line} 80%, ${theme.accent} 20%)`,
+        borderRadius: 22,
+        boxShadow: `0 12px 32px color-mix(in srgb, ${theme.ink} 5%, transparent), ${theme.cardShadow}`,
         animation: 'adminStatIn 520ms cubic-bezier(0.22, 1, 0.36, 1) both',
         animationDelay: `${delay}ms`,
       }}
     >
-      <div className="p-4 sm:p-[1.15rem]">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -right-6 -top-8 w-28 h-28 rounded-full opacity-70"
+        style={{
+          background: `radial-gradient(circle, color-mix(in srgb, ${accent} 22%, transparent) 0%, transparent 70%)`,
+        }}
+      />
+      <div className="relative p-4 sm:p-[1.2rem]">
         <div className="flex items-start justify-between gap-2 mb-3">
           <p className="text-[12px] font-medium" style={{ color: theme.muted }}>{label}</p>
           <span
-            className="w-8 h-8 flex items-center justify-center shrink-0"
-            style={{ background: theme.accentSoft, color: accent, borderRadius: 10 }}
+            className="w-9 h-9 flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-105"
+            style={{
+              background: `color-mix(in srgb, ${theme.accentSoft} 80%, white)`,
+              color: accent,
+              borderRadius: 999,
+              border: `1px solid color-mix(in srgb, ${accent} 14%, transparent)`,
+              boxShadow: `0 6px 14px color-mix(in srgb, ${accent} 12%, transparent)`,
+            }}
           >
             {icon}
           </span>
         </div>
-        <p className="text-[1.65rem] sm:text-[1.85rem] font-semibold leading-none tracking-tight tabular-nums" style={{ color: theme.ink }}>
+        <p className="text-[1.7rem] sm:text-[1.9rem] font-semibold leading-none tracking-tight tabular-nums" style={{ color: theme.ink, fontFamily: theme.fontSerif }}>
           <CountUp value={Number(value || 0)} format={format} delay={delay} duration={1150} />
         </p>
         <div className="mt-3 flex items-end justify-between gap-2 min-h-[26px]">
@@ -263,6 +276,97 @@ function StatCard({
           </div>
           {spark && spark.some((n) => n > 0) && <Sparkline values={spark} color={accent} />}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** Palette-tinted hero — soft gradient + floating orbs (not a flat classic bar). */
+function DashboardHero({
+  rangeLabel,
+  cacheHint,
+  onRefresh,
+  refreshing,
+}: {
+  rangeLabel: string;
+  cacheHint: string;
+  onRefresh: () => void;
+  refreshing: boolean;
+}) {
+  const { theme } = useAdminTheme();
+  return (
+    <div
+      className="relative overflow-hidden mb-5"
+      style={{
+        borderRadius: 28,
+        border: `1px solid color-mix(in srgb, ${theme.line} 70%, ${theme.accent} 30%)`,
+        background: `
+          linear-gradient(135deg,
+            color-mix(in srgb, ${theme.accent} 16%, ${theme.card}) 0%,
+            ${theme.card} 42%,
+            color-mix(in srgb, ${theme.accentSoft} 90%, ${theme.card}) 100%)
+        `,
+        boxShadow: `0 18px 48px color-mix(in srgb, ${theme.accent} 10%, transparent)`,
+      }}
+    >
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -left-10 -top-14 w-48 h-48 rounded-full adminOrbDriftA"
+        style={{
+          background: `radial-gradient(circle, color-mix(in srgb, ${theme.accent} 28%, transparent) 0%, transparent 68%)`,
+          filter: 'blur(2px)',
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -right-8 top-0 w-40 h-40 rounded-full adminOrbDriftB"
+        style={{
+          background: `radial-gradient(circle, color-mix(in srgb, ${theme.accentDeep} 18%, transparent) 0%, transparent 70%)`,
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute right-16 -bottom-10 w-32 h-32 rounded-full"
+        style={{
+          background: `radial-gradient(circle, color-mix(in srgb, ${theme.accent} 14%, transparent) 0%, transparent 72%)`,
+        }}
+      />
+
+      <div className="relative flex flex-col sm:flex-row sm:items-end justify-between gap-4 px-5 sm:px-7 pt-6 pb-5">
+        <div className="min-w-0">
+          <p
+            className="text-[11px] font-semibold uppercase tracking-[0.16em] mb-2"
+            style={{ color: theme.accentDeep }}
+          >
+            Atelier overview
+          </p>
+          <h1
+            className="text-[1.85rem] sm:text-[2.15rem] font-semibold tracking-tight leading-none"
+            style={{ color: theme.ink, fontFamily: theme.fontSerif }}
+          >
+            Dashboard
+          </h1>
+          <p className="text-[13px] mt-2.5" style={{ color: theme.muted }}>
+            {format(new Date(), 'EEE, d MMM')} · {rangeLabel}
+            <span className="opacity-45"> · </span>
+            {cacheHint}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onRefresh}
+          disabled={refreshing}
+          className="inline-flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-semibold disabled:opacity-50 self-start sm:self-auto transition-transform active:scale-[0.98]"
+          style={{
+            background: theme.accent,
+            color: theme.accentOn,
+            borderRadius: 999,
+            boxShadow: `0 10px 22px color-mix(in srgb, ${theme.accent} 28%, transparent)`,
+          }}
+        >
+          <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
+          Refresh
+        </button>
       </div>
     </div>
   );
@@ -465,10 +569,18 @@ function PendingPrintingWidget() {
   };
 
   return (
-    <div className="overflow-hidden" style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: 14, boxShadow: theme.cardShadow }}>
-      <div className="flex items-center justify-between gap-3 px-4 py-3.5" style={{ borderBottom: `1px solid ${theme.line}`, background: theme.card }}>
+    <div
+      className="overflow-hidden"
+      style={{
+        background: `linear-gradient(165deg, ${theme.card}, color-mix(in srgb, ${pendingTone.bg} 35%, ${theme.card}))`,
+        border: `1px solid color-mix(in srgb, ${theme.line} 75%, ${pendingTone.border} 25%)`,
+        borderRadius: 24,
+        boxShadow: `0 14px 36px color-mix(in srgb, ${theme.ink} 5%, transparent)`,
+      }}
+    >
+      <div className="flex items-center justify-between gap-3 px-4 py-3.5" style={{ borderBottom: `1px solid ${theme.line}` }}>
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-8 h-8 flex items-center justify-center shrink-0" style={{ background: pendingTone.bg, borderRadius: theme.radius }}>
+          <div className="w-9 h-9 flex items-center justify-center shrink-0" style={{ background: pendingTone.bg, borderRadius: 999, border: `1px solid ${pendingTone.border}` }}>
             <Printer size={14} style={{ color: pendingTone.color }} />
           </div>
           <div className="min-w-0">
@@ -752,52 +864,43 @@ export default function AdminDashboard() {
     <AdminLayout>
       <style>{`
         @keyframes adminStatIn {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
+          from { opacity: 0; transform: translateY(12px) scale(0.98); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
         }
+        @keyframes adminOrbDriftA {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          50% { transform: translate(12px, 8px) scale(1.06); }
+        }
+        @keyframes adminOrbDriftB {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          50% { transform: translate(-10px, 6px) scale(1.08); }
+        }
+        .adminOrbDriftA { animation: adminOrbDriftA 9s ease-in-out infinite; }
+        .adminOrbDriftB { animation: adminOrbDriftB 11s ease-in-out infinite; }
         @media (prefers-reduced-motion: reduce) {
           @keyframes adminStatIn {
             from { opacity: 1; transform: none; }
             to { opacity: 1; transform: none; }
           }
+          .adminOrbDriftA, .adminOrbDriftB { animation: none; }
         }
       `}</style>
       <div className="p-4 sm:p-6 md:p-8 max-w-screen-xl mx-auto pb-16">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
-          <div className="min-w-0">
-            <h1 className="text-[1.55rem] sm:text-[1.75rem] font-semibold tracking-tight" style={{ color: theme.ink }}>
-              Dashboard
-            </h1>
-            <p className="text-[13px] mt-1" style={{ color: theme.muted }}>
-              {format(new Date(), 'EEE, d MMM')} · {s?.rangeLabel || 'This month'}
-              <span className="opacity-50"> · </span>
-              {cacheHint}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={handleRefresh}
-            disabled={isFetching}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-[13px] font-medium disabled:opacity-50 self-start sm:self-auto"
-            style={{
-              background: theme.card,
-              color: theme.ink,
-              border: `1px solid ${theme.line}`,
-              borderRadius: 10,
-            }}
-          >
-            <RefreshCw size={13} className={isFetching ? 'animate-spin' : ''} />
-            Refresh
-          </button>
-        </div>
+        <DashboardHero
+          rangeLabel={s?.rangeLabel || 'This month'}
+          cacheHint={cacheHint}
+          onRefresh={handleRefresh}
+          refreshing={isFetching}
+        />
 
         <div
-          className="flex gap-1 overflow-x-auto mb-5 p-1 sticky top-[3.4rem] lg:top-0 z-10"
+          className="flex gap-1 overflow-x-auto mb-5 p-1.5 sticky top-[3.4rem] lg:top-0 z-10 backdrop-blur-md"
           style={{
             WebkitOverflowScrolling: 'touch',
-            background: theme.card,
-            border: `1px solid ${theme.line}`,
-            borderRadius: 12,
+            background: `color-mix(in srgb, ${theme.card} 88%, transparent)`,
+            border: `1px solid color-mix(in srgb, ${theme.line} 85%, ${theme.accent} 15%)`,
+            borderRadius: 999,
+            boxShadow: `0 10px 28px color-mix(in srgb, ${theme.ink} 4%, transparent)`,
           }}
         >
           {RANGES.map((r) => {
@@ -807,11 +910,14 @@ export default function AdminDashboard() {
                 key={r.id}
                 type="button"
                 onClick={() => setRange(r.id)}
-                className="shrink-0 px-3 py-1.5 text-[12px] font-medium transition-colors"
+                className="shrink-0 px-3.5 py-1.5 text-[12px] font-semibold transition-all"
                 style={{
                   color: active ? theme.accentOn : theme.muted,
-                  background: active ? theme.accent : 'transparent',
-                  borderRadius: 8,
+                  background: active
+                    ? `linear-gradient(135deg, ${theme.accent}, ${theme.accentDeep})`
+                    : 'transparent',
+                  borderRadius: 999,
+                  boxShadow: active ? `0 6px 14px color-mix(in srgb, ${theme.accent} 30%, transparent)` : undefined,
                 }}
               >
                 {r.label}
@@ -822,14 +928,18 @@ export default function AdminDashboard() {
 
         {actionItems.length > 0 && (
           <div
-            className="flex flex-wrap items-center gap-2 px-3.5 py-3 mb-5"
+            className="flex flex-wrap items-center gap-2 px-4 py-3.5 mb-5"
             style={{
-              background: theme.card,
+              background: `linear-gradient(120deg, ${theme.card}, color-mix(in srgb, ${theme.accentSoft} 65%, ${theme.card}))`,
               border: `1px solid ${theme.line}`,
-              borderRadius: 12,
+              borderRadius: 20,
+              boxShadow: theme.cardShadow,
             }}
           >
-            <span className="text-[12px] font-medium" style={{ color: theme.muted }}>
+            <span
+              className="text-[11px] font-semibold uppercase tracking-[0.12em]"
+              style={{ color: theme.muted }}
+            >
               Next
             </span>
             {actionItems.map((item) => {
@@ -838,12 +948,12 @@ export default function AdminDashboard() {
                 <Link
                   key={item.key}
                   href={item.href}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-medium border transition-opacity hover:opacity-85"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold border transition-transform hover:-translate-y-0.5"
                   style={{
                     background: st.bg,
                     color: st.color,
                     borderColor: st.border,
-                    borderRadius: 8,
+                    borderRadius: 999,
                   }}
                 >
                   {item.label}
@@ -855,7 +965,7 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        <p className="text-[13px] font-medium mb-3" style={{ color: theme.muted }}>
+        <p className="text-[12px] font-semibold uppercase tracking-[0.14em] mb-3" style={{ color: theme.muted }}>
           Overview
         </p>
 
@@ -929,47 +1039,42 @@ export default function AdminDashboard() {
                 </p>
               </>
             );
+            const chipStyle: React.CSSProperties = {
+              background: `linear-gradient(160deg, ${theme.card}, color-mix(in srgb, ${theme.accentSoft} 50%, ${theme.card}))`,
+              border: `1px solid color-mix(in srgb, ${theme.line} 85%, ${theme.accent} 15%)`,
+              borderRadius: 18,
+              boxShadow: `0 8px 20px color-mix(in srgb, ${theme.ink} 4%, transparent)`,
+              animation: 'adminStatIn 480ms cubic-bezier(0.22, 1, 0.36, 1) both',
+              animationDelay: `${180 + i * 45}ms`,
+            };
             return m.href ? (
               <Link
                 key={m.label}
                 href={m.href}
-                className="block px-3 py-2.5 transition-opacity hover:opacity-90"
-                style={{
-                  background: theme.card,
-                  border: `1px solid ${theme.line}`,
-                  borderRadius: 12,
-                  boxShadow: theme.cardShadow,
-                  animation: 'adminStatIn 480ms cubic-bezier(0.22, 1, 0.36, 1) both',
-                  animationDelay: `${180 + i * 45}ms`,
-                }}
+                className="block px-3.5 py-3 transition-transform hover:-translate-y-0.5"
+                style={chipStyle}
               >
                 {body}
               </Link>
             ) : (
-              <div
-                key={m.label}
-                className="px-3 py-2.5"
-                style={{
-                  background: theme.card,
-                  border: `1px solid ${theme.line}`,
-                  borderRadius: 12,
-                  boxShadow: theme.cardShadow,
-                  animation: 'adminStatIn 480ms cubic-bezier(0.22, 1, 0.36, 1) both',
-                  animationDelay: `${180 + i * 45}ms`,
-                }}
-              >
+              <div key={m.label} className="px-3.5 py-3" style={chipStyle}>
                 {body}
               </div>
             );
           })}
         </div>
 
-        <p className="text-[13px] font-medium mb-3" style={{ color: theme.muted }}>
+        <p className="text-[12px] font-semibold uppercase tracking-[0.14em] mb-3" style={{ color: theme.muted }}>
           Pipeline
         </p>
         <div
-          className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-2 mb-5"
-          style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: 14, boxShadow: theme.cardShadow }}
+          className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-2.5 mb-5"
+          style={{
+            background: `linear-gradient(160deg, ${theme.card}, color-mix(in srgb, ${theme.accentSoft} 40%, ${theme.card}))`,
+            border: `1px solid color-mix(in srgb, ${theme.line} 80%, ${theme.accent} 20%)`,
+            borderRadius: 24,
+            boxShadow: `0 14px 36px color-mix(in srgb, ${theme.ink} 5%, transparent)`,
+          }}
         >
           {PIPELINE_STEPS.map((st, i) => {
             const count = Number(pipeline[st.key]?.count || 0);
@@ -980,9 +1085,10 @@ export default function AdminDashboard() {
               <Link
                 key={st.key}
                 href={`/heyadmin/porosi?status=${st.key}`}
-                className="block px-2.5 py-2 rounded-lg transition-colors hover:bg-[color:var(--hover)]"
+                className="block px-3 py-2.5 transition-transform hover:-translate-y-0.5"
                 style={{
-                  ['--hover' as any]: stColor.bg,
+                  background: `color-mix(in srgb, ${stColor.bg} 55%, ${theme.card})`,
+                  borderRadius: 18,
                   animation: 'adminStatIn 480ms cubic-bezier(0.22, 1, 0.36, 1) both',
                   animationDelay: `${260 + i * 55}ms`,
                 }}
@@ -1008,13 +1114,18 @@ export default function AdminDashboard() {
           <PendingPrintingWidget />
         </div>
 
-        <p className="text-[13px] font-medium mb-3" style={{ color: theme.muted }}>
+        <p className="text-[12px] font-semibold uppercase tracking-[0.14em] mb-3" style={{ color: theme.muted }}>
           Charts
         </p>
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-5">
           <div
-            className="xl:col-span-2 p-4"
-            style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: 14, boxShadow: theme.cardShadow }}
+            className="xl:col-span-2 p-4 sm:p-5 relative overflow-hidden"
+            style={{
+              background: theme.card,
+              border: `1px solid color-mix(in srgb, ${theme.line} 85%, ${theme.accent} 15%)`,
+              borderRadius: 24,
+              boxShadow: `0 14px 36px color-mix(in srgb, ${theme.ink} 5%, transparent)`,
+            }}
           >
             <div className="flex items-center justify-between mb-3">
               <div>
@@ -1033,8 +1144,13 @@ export default function AdminDashboard() {
           </div>
 
           <div
-            className="p-4"
-            style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: 14, boxShadow: theme.cardShadow }}
+            className="p-4 sm:p-5"
+            style={{
+              background: `linear-gradient(165deg, ${theme.card}, color-mix(in srgb, ${theme.accentSoft} 45%, ${theme.card}))`,
+              border: `1px solid color-mix(in srgb, ${theme.line} 85%, ${theme.accent} 15%)`,
+              borderRadius: 24,
+              boxShadow: `0 14px 36px color-mix(in srgb, ${theme.ink} 5%, transparent)`,
+            }}
           >
             <h2 className="font-semibold mb-1" style={{ color: theme.ink, fontFamily: theme.fontSerif }}>Order mix</h2>
             <p className="text-xs mb-3" style={{ color: theme.muted }}>Status in this period</p>
@@ -1077,8 +1193,13 @@ export default function AdminDashboard() {
 
         {desktop && (
           <div
-            className="p-4 mb-5"
-            style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: 14, boxShadow: theme.cardShadow }}
+            className="p-4 sm:p-5 mb-5"
+            style={{
+              background: theme.card,
+              border: `1px solid color-mix(in srgb, ${theme.line} 85%, ${theme.accent} 15%)`,
+              borderRadius: 24,
+              boxShadow: `0 14px 36px color-mix(in srgb, ${theme.ink} 5%, transparent)`,
+            }}
           >
             <div className="flex items-center justify-between mb-3">
               <div>
@@ -1094,16 +1215,16 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        <p className="text-[13px] font-medium mb-3" style={{ color: theme.muted }}>
+        <p className="text-[12px] font-semibold uppercase tracking-[0.14em] mb-3" style={{ color: theme.muted }}>
           All time
         </p>
         <div
-          className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5 p-4"
+          className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5 p-4 sm:p-5"
           style={{
-            background: theme.card,
-            border: `1px solid ${theme.line}`,
-            borderRadius: 14,
-            boxShadow: theme.cardShadow,
+            background: `linear-gradient(135deg, color-mix(in srgb, ${theme.accent} 10%, ${theme.card}), ${theme.card} 50%, color-mix(in srgb, ${theme.accentSoft} 70%, ${theme.card}))`,
+            border: `1px solid color-mix(in srgb, ${theme.line} 80%, ${theme.accent} 20%)`,
+            borderRadius: 24,
+            boxShadow: `0 14px 36px color-mix(in srgb, ${theme.accent} 8%, transparent)`,
           }}
         >
           {[
@@ -1136,7 +1257,15 @@ export default function AdminDashboard() {
           Activity
         </p>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="lg:col-span-2 overflow-hidden" style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: 14, boxShadow: theme.cardShadow }}>
+          <div
+            className="lg:col-span-2 overflow-hidden"
+            style={{
+              background: theme.card,
+              border: `1px solid color-mix(in srgb, ${theme.line} 85%, ${theme.accent} 15%)`,
+              borderRadius: 24,
+              boxShadow: `0 14px 36px color-mix(in srgb, ${theme.ink} 5%, transparent)`,
+            }}
+          >
             <div className="flex items-center justify-between px-4 py-3.5" style={{ borderBottom: `1px solid ${theme.line}`, background: theme.card }}>
               <h2 className="font-semibold" style={{ color: theme.ink, fontFamily: theme.fontSerif }}>Orders in period</h2>
               <Link href="/heyadmin/porosi" className="text-xs font-medium" style={{ color: theme.accentDeep }}>View all →</Link>
@@ -1193,8 +1322,16 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <div className="overflow-hidden" style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: 14, boxShadow: theme.cardShadow }}>
-            <div className="flex items-center justify-between px-4 py-3.5" style={{ borderBottom: `1px solid ${theme.line}`, background: theme.card }}>
+          <div
+            className="overflow-hidden"
+            style={{
+              background: `linear-gradient(165deg, ${theme.card}, color-mix(in srgb, ${theme.accentSoft} 40%, ${theme.card}))`,
+              border: `1px solid color-mix(in srgb, ${theme.line} 85%, ${theme.accent} 15%)`,
+              borderRadius: 24,
+              boxShadow: `0 14px 36px color-mix(in srgb, ${theme.ink} 5%, transparent)`,
+            }}
+          >
+            <div className="flex items-center justify-between px-4 py-3.5" style={{ borderBottom: `1px solid ${theme.line}` }}>
               <h2 className="font-semibold" style={{ color: theme.ink, fontFamily: theme.fontSerif }}>New members</h2>
               <Link href="/heyadmin/perdorues" className="text-xs font-medium" style={{ color: theme.accentDeep }}>View all →</Link>
             </div>
