@@ -223,7 +223,7 @@ function StatCard({
   format?: (n: number) => string;
   delay?: number;
 }) {
-  const { theme } = useAdminTheme();
+  const { theme, paletteId } = useAdminTheme();
   const accents = {
     default: theme.accent,
     accent: theme.accent,
@@ -233,6 +233,7 @@ function StatCard({
   const accent = accents[tone];
   return (
     <div
+      key={`stat-${paletteId}-${label}`}
       className="relative overflow-hidden group"
       style={{
         background: `linear-gradient(165deg, ${theme.card} 0%, color-mix(in srgb, ${theme.accentSoft} 55%, ${theme.card}) 100%)`,
@@ -266,7 +267,7 @@ function StatCard({
             {icon}
           </span>
         </div>
-        <p className="text-[1.7rem] sm:text-[1.9rem] font-semibold leading-none tracking-tight tabular-nums" style={{ color: theme.ink, fontFamily: theme.fontSerif }}>
+        <p className="text-[1.95rem] sm:text-[2.2rem] font-semibold leading-none tracking-tight tabular-nums" style={{ color: theme.ink, fontFamily: theme.fontSerif }}>
           <CountUp value={Number(value || 0)} format={format} delay={delay} duration={1150} />
         </p>
         <div className="mt-3 flex items-end justify-between gap-2 min-h-[26px]">
@@ -334,12 +335,6 @@ function DashboardHero({
 
       <div className="relative flex flex-col sm:flex-row sm:items-end justify-between gap-4 px-5 sm:px-7 pt-6 pb-5">
         <div className="min-w-0">
-          <p
-            className="text-[11px] font-semibold uppercase tracking-[0.16em] mb-2"
-            style={{ color: theme.accentDeep }}
-          >
-            Atelier overview
-          </p>
           <h1
             className="text-[1.85rem] sm:text-[2.15rem] font-semibold tracking-tight leading-none"
             style={{ color: theme.ink, fontFamily: theme.fontSerif }}
@@ -733,7 +728,7 @@ function ChartFallback({ theme, height }: { theme: AdminTokens; height: number }
 }
 
 export default function AdminDashboard() {
-  const { theme } = useAdminTheme();
+  const { theme, paletteId } = useAdminTheme();
   const desktop = useIsDesktop();
   const [range, setRange] = useState<RangeId>('month');
   const forceRefresh = useRef(false);
@@ -894,11 +889,12 @@ export default function AdminDashboard() {
         />
 
         <div
-          className="flex gap-1 overflow-x-auto mb-5 p-1.5 sticky top-[3.4rem] lg:top-0 z-10 backdrop-blur-md"
+          key={`range-bar-${paletteId}`}
+          className="flex gap-1 overflow-x-auto mb-5 p-1.5 sticky top-[3.4rem] lg:top-0 z-10"
           style={{
             WebkitOverflowScrolling: 'touch',
-            background: `color-mix(in srgb, ${theme.card} 88%, transparent)`,
-            border: `1px solid color-mix(in srgb, ${theme.line} 85%, ${theme.accent} 15%)`,
+            background: 'color-mix(in srgb, var(--admin-card, #fff) 92%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--admin-line, #e8e8ea) 85%, var(--admin-accent) 15%)',
             borderRadius: 999,
             boxShadow: `0 10px 28px color-mix(in srgb, ${theme.ink} 4%, transparent)`,
           }}
@@ -907,17 +903,19 @@ export default function AdminDashboard() {
             const active = range === r.id;
             return (
               <button
-                key={r.id}
+                key={`${paletteId}-${r.id}`}
                 type="button"
                 onClick={() => setRange(r.id)}
-                className="shrink-0 px-3.5 py-1.5 text-[12px] font-semibold transition-all"
+                className="shrink-0 px-3.5 py-1.5 text-[12px] font-semibold"
                 style={{
-                  color: active ? theme.accentOn : theme.muted,
+                  color: active ? 'var(--admin-accent-on)' : theme.muted,
                   background: active
-                    ? `linear-gradient(135deg, ${theme.accent}, ${theme.accentDeep})`
+                    ? 'linear-gradient(135deg, var(--admin-accent), var(--admin-accent-deep))'
                     : 'transparent',
                   borderRadius: 999,
-                  boxShadow: active ? `0 6px 14px color-mix(in srgb, ${theme.accent} 30%, transparent)` : undefined,
+                  boxShadow: active
+                    ? '0 6px 14px color-mix(in srgb, var(--admin-accent) 30%, transparent)'
+                    : undefined,
                 }}
               >
                 {r.label}
@@ -1027,7 +1025,7 @@ export default function AdminDashboard() {
                   {m.icon}
                   <span className="text-[9px] font-semibold uppercase tracking-wider" style={{ color: theme.muted }}>{m.label}</span>
                 </div>
-                <p className="text-[16px] font-semibold leading-none tabular-nums" style={{ color: theme.ink, fontFamily: theme.fontSerif }}>
+                <p className="text-[19px] font-semibold leading-none tabular-nums" style={{ color: theme.ink, fontFamily: theme.fontSerif }}>
                   {m.animate === false ? (
                     (m.format ?? ((n: number) => Math.round(n).toLocaleString()))(m.value)
                   ) : (
@@ -1095,7 +1093,7 @@ export default function AdminDashboard() {
               >
                 <div className="flex items-center justify-between mb-1.5">
                   <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: stColor.color }}>{st.label}</p>
-                  <p className="text-sm font-semibold tabular-nums" style={{ color: theme.ink, fontFamily: theme.fontSerif }}>
+                  <p className="text-[1.05rem] font-semibold tabular-nums" style={{ color: theme.ink, fontFamily: theme.fontSerif }}>
                     <CountUp value={count} delay={260 + i * 55} duration={950} />
                   </p>
                 </div>
@@ -1241,7 +1239,7 @@ export default function AdminDashboard() {
               }}
             >
               <p className="text-[9px] font-semibold uppercase tracking-wider mb-1" style={{ color: theme.muted }}>{x.label}</p>
-              <p className="text-lg font-semibold tabular-nums" style={{ color: theme.ink, fontFamily: theme.fontSerif }}>
+              <p className="text-[1.35rem] font-semibold tabular-nums" style={{ color: theme.ink, fontFamily: theme.fontSerif }}>
                 <CountUp
                   value={Number(x.value || 0)}
                   format={x.format}

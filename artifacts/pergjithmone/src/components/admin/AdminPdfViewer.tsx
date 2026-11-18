@@ -40,22 +40,43 @@ export function AdminPdfViewer({ url, token, className, title }: Props) {
 
       try {
         const pdfjs = await import('pdfjs-dist');
-        const workerSrc = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default;
-        pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
+        // Prefer bundled worker; fall back to CDN if the hashed .mjs asset fails
+        // (wrong MIME on static host, stale deploy, etc.).
+        const version = (pdfjs as { version?: string }).version || '6.5.438';
+        const cdnWorker = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${version}/build/pdf.worker.min.mjs`;
+        try {
+          const bundled = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default as string;
+          pdfjs.GlobalWorkerOptions.workerSrc = bundled || cdnWorker;
+        } catch {
+          pdfjs.GlobalWorkerOptions.workerSrc = cdnWorker;
+        }
 
         // Prefer Authorization header so the PDF URL stays cacheable (no ?token= / ?t=).
         const headers: Record<string, string> = {};
         if (token) headers.Authorization = `Bearer ${token}`;
 
-        loadingTask = pdfjs.getDocument({
-          url,
-          httpHeaders: Object.keys(headers).length ? headers : undefined,
-          withCredentials: true,
-          disableRange: false,
-          disableStream: false,
-        }) as typeof loadingTask;
+        const openDoc = async (workerSrc: string) => {
+          pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
+          const task = pdfjs.getDocument({
+            url,
+            httpHeaders: Object.keys(headers).length ? headers : undefined,
+            withCredentials: true,
+            disableRange: false,
+            disableStream: false,
+          });
+          loadingTask = task as typeof loadingTask;
+          return task.promise;
+        };
 
-        const pdf = await loadingTask!.promise;
+        let pdf: any;
+        try {
+          pdf = await openDoc(pdfjs.GlobalWorkerOptions.workerSrc);
+        } catch (workerErr) {
+          // Bundled worker fetch often fails when .mjs is served as octet-stream.
+          console.warn('PDF worker failed, retrying via CDN', workerErr);
+          pdf = await openDoc(cdnWorker);
+        }
+
         if (cancelled) {
           await pdf.cleanup();
           return;

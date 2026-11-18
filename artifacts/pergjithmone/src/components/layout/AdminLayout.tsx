@@ -967,6 +967,20 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
               .admin-content .font-serif {
                 font-family: var(--admin-font-serif) !important;
               }
+              .admin-shell a,
+              .admin-shell button,
+              .admin-shell [role="button"],
+              .admin-shell [role="link"],
+              .admin-content a,
+              .admin-content button,
+              .admin-content [role="button"],
+              .admin-content [role="link"] {
+                cursor: pointer;
+              }
+              .admin-shell button:disabled,
+              .admin-content button:disabled {
+                cursor: not-allowed;
+              }
             `}</style>
             {/* No z-index here — overlays must portal / use z≥100 so they cover the rail + theme chip */}
             <div className="relative">{children}</div>

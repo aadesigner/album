@@ -3,6 +3,29 @@
 /* Hide reCAPTCHA v3 badge sitewide — v3 is invisible by design.
    Disclosure is in the Privacy Policy per Google's usage requirements. */
 .grecaptcha-badge { visibility: hidden !important; }
+
+/* Clickable affordance — browsers don't always show pointer on <a> / buttons */
+a,
+button,
+[role="button"],
+[role="link"],
+summary,
+label[for],
+input[type="button"],
+input[type="submit"],
+input[type="reset"],
+input[type="checkbox"],
+input[type="radio"],
+input[type="file"],
+select {
+  cursor: pointer;
+}
+button:disabled,
+input:disabled,
+select:disabled,
+a[aria-disabled="true"] {
+  cursor: not-allowed;
+}
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @plugin "@tailwindcss/typography";

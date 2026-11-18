@@ -30,6 +30,8 @@ const apiUrl = normalizeApiUrl(process.env.API_URL || process.env.VITE_API_URL);
 const MIME = {
   ".html": "text/html; charset=utf-8",
   ".js": "application/javascript; charset=utf-8",
+  // Vite emits pdf.js worker as *.mjs — browsers reject module import if this is octet-stream.
+  ".mjs": "application/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".json": "application/json; charset=utf-8",
   ".svg": "image/svg+xml",
@@ -44,6 +46,7 @@ const MIME = {
   ".ttf": "font/ttf",
   ".map": "application/json",
   ".txt": "text/plain; charset=utf-8",
+  ".pdf": "application/pdf",
 };
 
 function sendJson(res, status, body) {
