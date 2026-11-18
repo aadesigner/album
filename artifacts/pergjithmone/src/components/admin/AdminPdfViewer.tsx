@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 
+const BASE = (import.meta as any).env?.BASE_URL?.replace(/\/$/, '') || '';
+
 type Props = {
   /** PDF URL without cache-bust; auth via token header when provided. */
   url: string;
@@ -14,6 +16,10 @@ type Props = {
  * Native iframe PDF plugins on iOS/Android often show only the first page.
  * pdf.js renders every page into a scrollable stack and paints the first page
  * before the rest finish decoding — much faster perceived load.
+ *
+ * Worker is NEVER loaded from Vite’s hashed /assets/*.mjs chunk — our static
+ * host used to serve .mjs as octet-stream and module import failed. We ship
+ * the worker as /pdf.worker.min.js (public/) and fall back to jsDelivr.
  */
 export function AdminPdfViewer({ url, token, className, title }: Props) {
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -40,22 +46,14 @@ export function AdminPdfViewer({ url, token, className, title }: Props) {
 
       try {
         const pdfjs = await import('pdfjs-dist');
-        // Prefer bundled worker; fall back to CDN if the hashed .mjs asset fails
-        // (wrong MIME on static host, stale deploy, etc.).
         const version = (pdfjs as { version?: string }).version || '6.5.438';
+        const localWorker = `${BASE}/pdf.worker.min.js`;
         const cdnWorker = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${version}/build/pdf.worker.min.mjs`;
-        try {
-          const bundled = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default as string;
-          pdfjs.GlobalWorkerOptions.workerSrc = bundled || cdnWorker;
-        } catch {
-          pdfjs.GlobalWorkerOptions.workerSrc = cdnWorker;
-        }
 
-        // Prefer Authorization header so the PDF URL stays cacheable (no ?token= / ?t=).
         const headers: Record<string, string> = {};
         if (token) headers.Authorization = `Bearer ${token}`;
 
-        const openDoc = async (workerSrc: string) => {
+        const openDoc = (workerSrc: string) => {
           pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
           const task = pdfjs.getDocument({
             url,
@@ -68,12 +66,12 @@ export function AdminPdfViewer({ url, token, className, title }: Props) {
           return task.promise;
         };
 
+        // Try same-origin public worker first, then CDN — never Vite /assets/*.mjs.
         let pdf: any;
         try {
-          pdf = await openDoc(pdfjs.GlobalWorkerOptions.workerSrc);
-        } catch (workerErr) {
-          // Bundled worker fetch often fails when .mjs is served as octet-stream.
-          console.warn('PDF worker failed, retrying via CDN', workerErr);
+          pdf = await openDoc(localWorker);
+        } catch (localErr) {
+          console.warn('Local PDF worker failed, trying CDN', localErr);
           pdf = await openDoc(cdnWorker);
         }
 
@@ -93,7 +91,6 @@ export function AdminPdfViewer({ url, token, className, title }: Props) {
           if (cancelled) break;
 
           const base = page.getViewport({ scale: 1 });
-          // Cap DPR so 300 DPI print pages don't allocate huge canvases on phones.
           const dpr = Math.min(window.devicePixelRatio || 1, 1.75);
           const fitScale = (maxCssWidth * dpr) / Math.max(1, base.width);
           const viewport = page.getViewport({ scale: fitScale });
@@ -126,7 +123,6 @@ export function AdminPdfViewer({ url, token, className, title }: Props) {
           if (cancelled) break;
           setPagesReady(pageNum);
 
-          // Let the browser paint page 1 before decoding the rest.
           await new Promise((r) => setTimeout(r, 0));
         }
       } catch (err) {
